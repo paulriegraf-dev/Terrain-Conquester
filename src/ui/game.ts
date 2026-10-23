@@ -302,6 +302,10 @@ export class Game {
           if (ev.owner === human) this.hud.log(s, `Notfallverlegung: ${ev.moved} Fabrik(en) im Rückraum, ${ev.stunned} Gegner betäubt`, 'good');
           else this.hud.log(s, `Der Gegner verlegt seine Basis – ${ev.stunned} eigene Verbände betäubt`, 'warn');
           break;
+        case 'protocol':
+          if (ev.ascend && ev.owner === human) this.hud.log(s, `Netz: Ein Verband erbt ${PROTOCOLS[ev.protocol].name} und steigt auf`, 'good');
+          else if (ev.ascend && human !== null && world.players[human].vision.isVisible(Math.floor(ev.to.x), Math.floor(ev.to.y))) this.hud.log(s, 'Ein gegnerischer Netz-Verband steigt auf', 'warn');
+          break;
         case 'rejected':
           if (ev.owner === human) {
             this.hud.log(s, `Nicht möglich: ${ev.reason}`, 'bad');

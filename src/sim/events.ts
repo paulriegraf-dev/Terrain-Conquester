@@ -1,3 +1,4 @@
+import type { ProtocolId, UnitId } from '../data/units';
 import type { PartId } from '../data/market';
 import type { EntityKind } from './entity';
 import type { PlayerId, Route, Vec2 } from './types';
@@ -35,12 +36,22 @@ export type SimEventData =
   | { type: 'site'; kind: 'sensor' | 'junction'; owner: PlayerId | null; what: 'captured' | 'neutral' | 'fortified'; pos: Vec2 }
   /** Terra-Former: Ein Terraformer hat eine Spezialeinheit gerufen. */
   | { type: 'summon'; owner: PlayerId; name: string; pos: Vec2 }
+  /** Myriaden: Gelege geschlüpft, Wurf gestartet, Wurf gelandet. */
+  | { type: 'hatch'; owner: PlayerId; count: number; pos: Vec2 }
+  | { type: 'launch'; owner: PlayerId; unit: UnitId; from: Vec2; to: Vec2; land: number }
+  | { type: 'land'; owner: PlayerId; unit: UnitId; pos: Vec2 }
+  /** Terra-Former: Schlammmonster schlüpfen aus einem Matschfeld. */
+  | { type: 'mudlings'; owner: PlayerId; count: number; pos: Vec2 }
   /** Terra-Former: Frostwelle eines Lawinenrufers. */
   | { type: 'frost'; owner: PlayerId; pos: Vec2; radius: number }
   /** Terra-Former: Ein Hainhüter springt durchs Wurzelnetz. */
   | { type: 'roots'; owner: PlayerId; from: Vec2; to: Vec2 }
   /** Terra-Former: Der Landformer verschmilzt Gelände oder kopiert eine Einheit. */
   | { type: 'landform'; owner: PlayerId; what: 'merge' | 'copy'; pos: Vec2 }
+  /** Technoclan: Ein Verband tritt einem Netz bei (Linie zum nächsten Mitglied). */
+  | { type: 'link'; owner: PlayerId; from: Vec2; to: Vec2 }
+  /** Technoclan: Ein Mitglied erbt ein Protokoll eines gefallenen Mitglieds (ascend = steigt dadurch auf). */
+  | { type: 'protocol'; owner: PlayerId; protocol: ProtocolId; from: Vec2; to: Vec2; ascend: boolean }
   /** Ein Spähbericht ist angekommen. */
   | { type: 'scout'; owner: PlayerId }
   | { type: 'gameOver'; winner: PlayerId | null; reason: 'hq' };

@@ -7,7 +7,9 @@ import type { UnitId } from '../src/data/units';
 import { World } from '../src/sim/world';
 import type { Entity } from '../src/sim/entity';
 import { assignSlots, holdAnchor } from '../src/sim/systems/formation';
-import { cmd, lastBuilding, openMap, stepTimes } from './fixtures';
+import { controllerAt } from '../src/sim/systems/influence';
+import { defenseOf } from '../src/sim/systems/hitmath';
+import { cmd, lastBuilding, openMap, smallBases, stepTimes } from './fixtures';
 
 const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoclan'] };
 
@@ -36,22 +38,24 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.ok(world.events.some((e) => e.type === 'rejected' && /Fraktion/.test(e.reason)));
   });
 
-  it('der Terraformer formt einen 2×2-Block an der Frontkante und ruft dann die Spezialeinheit', () => {
+  it('der Terraformer formt die Kacheln in seiner Umgebung (2 s je Kachel) und ruft auf einem fertigen 2×2-Block', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
     const summoned = (): boolean => world.entities.some((e) => e.alive && e.defId === 'specialForest');
     while (!summoned() && world.tick < 40 * world.tps) world.step();
+    const keeper = world.entities.find((e) => e.alive && e.defId === 'specialForest');
+    assert.ok(keeper, 'ein Hainhüter wurde gerufen');
+    // Nach 4 Kacheln (8 s) und dem Ritual (4 s): etwa 12 s
+    assert.ok(world.tick / world.tps <= 16, `gerufen nach ${(world.tick / world.tps).toFixed(1)} s`);
+    stepTimes(world, 20 * world.tps);
     const formed = [...world.formed].map((v, i) => (v === 1 ? i : -1)).filter((i) => i >= 0);
-    assert.equal(formed.length, 4, 'vier Kacheln geformt, dann gerufen');
+    assert.ok(formed.length >= 8, `er formt weiter die Umgebung (${formed.length} Kacheln)`);
     for (const i of formed) {
       assert.equal(world.grid.terrain[i], TERRAIN_INDEX.forest);
       assert.notEqual(world.map.buildZone[i], 1, 'nie in der Basis-Bauzone');
     }
-    const keeper = world.entities.find((e) => e.alive && e.defId === 'specialForest');
-    assert.ok(keeper, 'ein Hainhüter wurde gerufen');
-    assert.ok(former.alive, 'der Terraformer lebt weiter und sucht den nächsten Block');
+    assert.ok(former.alive);
   });
-
   it('ist das Einheitenlimit voll, wartet der Terraformer auf seinem Block mit dem Rufen', () => {
     const world = new World({ map: openMap, seed: 1, rules: { unitCap: 2 }, ...tf });
     const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
@@ -67,22 +71,21 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.equal(former.tf!.waiting, false);
   });
 
-  it('formt der Gegner eine Kachel um, ist sie sein Boden – für eine Beschwörung bleibt sie verbraucht', () => {
+  it('nach dem Ruf haben die vier Kacheln 90 s Abklingzeit – formt der Gegner eine um, ist sie sein Boden', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     unit(world, 0, 'formerMud', 7.5, 7.5, false);
     while (!world.entities.some((e) => e.alive && e.defId === 'specialMud') && world.tick < 40 * world.tps) world.step();
-    const i = [...world.consumed].findIndex((v) => (v & 1) !== 0);
-    assert.ok(i >= 0, 'die Kacheln der Beschwörung sind verbraucht');
-    const x = i % world.map.width;
-    const y = Math.floor(i / world.map.width);
-    world.players[1].energy = 200;
-    world.step([cmd(1, { type: 'swapTerrain', x, y, terrain: 'meadow' })]);
-    stepTimes(world, 4 * world.tps);
-    assert.equal(world.grid.terrain[i], TERRAIN_INDEX.meadow);
+    const n = world.formed.length;
+    const cooled = [...world.formed.keys()].filter((i) => world.tileCooldown[i]! > world.tick);
+    assert.equal(cooled.length, 4, 'vier Kacheln mit Abklingzeit');
+    const i = cooled[0]!;
+    assert.ok(world.tileCooldown[i]! >= world.tick + 85 * world.tps, 'etwa 90 s');
+    assert.equal(world.tileCooldown[n + i], 0, 'nur für diesen Spieler');
+    // Der Gegner formt die Kachel um (wie ein fertiger Umbau aus „Gelände formen“)
+    world.swaps.push({ owner: 1, batch: 999, index: i, target: TERRAIN_INDEX.meadow, startTick: world.tick, doneTick: world.tick + 1 });
+    stepTimes(world, 3);
     assert.equal(world.formed[i], 2, 'jetzt Boden des Gegners');
-    assert.notEqual(world.consumed[i]! & 1, 0, 'verbraucht bleibt verbraucht');
   });
-
   it('Gelände formen zählt als eigener Boden (Schlucht nicht)', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     world.players[0].energy = 400;
@@ -92,7 +95,7 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.equal(world.grid.terrain[world.grid.index(4, 7)], TERRAIN_INDEX.forest);
   });
 
-  it('auf selbst vorbereitetem Boden ruft der Terraformer nach einem kurzen Ritual – natürlicher Boden muss erst umgeformt werden', () => {
+  it('auf selbst vorbereitetem Boden ruft der Terraformer nach dem Ritual (4 s) – natürlicher Boden muss erst umgeformt werden', () => {
     const timeToSummon = (prepared: boolean): number => {
       const world = new World({ map: openMap, seed: 1, ...tf });
       for (let x = 8; x <= 9; x++) {
@@ -108,10 +111,9 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     };
     const prepared = timeToSummon(true);
     const natural = timeToSummon(false);
-    assert.ok(prepared <= 6, `vorbereitet: ${prepared} s`);
-    assert.ok(natural >= 15, `natürlicher Wald: ${natural} s`);
+    assert.ok(prepared <= 5, `vorbereitet: ${prepared} s`);
+    assert.ok(natural >= 10, `natürlicher Wald: ${natural} s`);
   });
-
   it('selbst geformten Boden weiter vorn auf der Route sieht er und zieht gezielt dorthin', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     world.players[0].stance.mid = 'push';
@@ -150,7 +152,7 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.ok(keepers(0) >= 2);
   });
 
-  it('eine Kachel trägt je Spieler nur eine Beschwörung', () => {
+  it('Kacheln mit Abklingzeit tragen keine zweite Beschwörung – er braucht neue Kacheln', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     for (let x = 8; x <= 9; x++) {
       for (let y = 7; y <= 8; y++) {
@@ -160,24 +162,48 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     }
     unit(world, 0, 'formerForest', 9.0, 8.0, false);
     const keepers = (): number => world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;
-    while (keepers() < 2 && world.tick < 60 * world.tps) world.step();
+    while (keepers() < 2 && world.tick < 90 * world.tps) world.step();
     assert.equal(keepers(), 2);
-    const spent = [...world.consumed].filter((v) => (v & 1) !== 0).length;
-    assert.equal(spent, 8, 'zwei Beschwörungen, acht verschiedene Kacheln');
+    const cooled = [...world.formed.keys()].filter((i) => world.tileCooldown[i]! > world.tick).length;
+    assert.equal(cooled, 8, 'zwei Beschwörungen, acht verschiedene Kacheln');
+  });
+
+  it('er formt auch eigenen Boden anderer Linien um (ohne Abklingzeit)', () => {
+    const world = new World({ map: openMap, seed: 1, ...tf });
+    for (let x = 6; x <= 8; x++) {
+      for (let y = 6; y <= 8; y++) {
+        setTerrain(world, x, y, 'mud');
+        world.formed[world.grid.index(x, y)] = 1;
+      }
+    }
+    const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
+    former.mover!.speed = 0;
+    stepTimes(world, 12 * world.tps);
+    const forest = [...world.formed.keys()].filter((i) => world.formed[i] === 1 && world.grid.terrain[i] === TERRAIN_INDEX.forest).length;
+    assert.ok(forest >= 4, `Matsch wurde zu Wald (${forest})`);
+  });
+
+  it('beim Halten rückt er höchstens kurz hinter die eigene Grenze vor', () => {
+    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+    const former = unit(world, 0, 'formerSnow', 4.5, 7.5, false);
+    former.hp = former.maxHp = 1e6;
+    stepTimes(world, 150 * world.tps);
+    let edge = 0;
+    for (let x = 0; x < world.map.width; x++) if (controllerAt(world, world.grid.index(x, Math.floor(former.pos.y))) === 0) edge = x;
+    assert.ok(former.pos.x <= edge + 0.5 + world.rules.terraform.frontOffset + 1, `x ${former.pos.x.toFixed(1)}, Grenze ${edge}`);
   });
 });
 
 describe('Terra-Former: eigener Boden', () => {
-  it('Halmwächter: auf eigener Wiese +1 Reichweite, im gegnerischen Gebiet nicht', () => {
+  it('Halmläufer: auf eigener Wiese schneller, im gegnerischen Gebiet nicht', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     const w = unit(world, 0, 'wardMeadow', 4.5, 7.5);
     world.step();
-    assert.equal(w.weapon!.def.range, UNITS.wardMeadow.weapon!.range + 1);
+    assert.equal(w.tf!.gb?.speed, UNITS.wardMeadow.groundBonus!.speed);
     w.pos = { x: 16.5, y: 7.5 };
     world.step();
-    assert.equal(w.weapon!.def.range, UNITS.wardMeadow.weapon!.range);
+    assert.equal(w.tf!.gb, null);
   });
-
   it('Borkenwächter: im eigenen Wald getarnt – erst aus 2 Kacheln zu sehen', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     setTerrain(world, 6, 7, 'forest');
@@ -190,17 +216,27 @@ describe('Terra-Former: eigener Boden', () => {
     assert.equal(world.isVisibleTo(1, w), true, 'aus 1,5 Kacheln zu sehen');
   });
 
-  it('Felsbastion: auf eigenem Geröll eingegraben – unbeweglich, halber Schaden', () => {
+  it('Frontbrecher: auf eigenem Geröll Rüstung +1', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     for (let x = 3; x <= 5; x++) for (let y = 6; y <= 8; y++) setTerrain(world, x, y, 'rubble');
-    const bastion = unit(world, 0, 'specialRubble', 4.5, 7.5, false);
+    const breaker = unit(world, 0, 'specialRubble', 4.5, 7.5);
     world.step();
-    const pos = { ...bastion.pos };
-    stepTimes(world, 2 * world.tps);
-    assert.deepEqual(bastion.pos, pos, 'bewegt sich nicht');
-    assert.ok(bastion.tf!.onGround);
+    assert.equal(defenseOf(world, breaker).save, UNITS.specialRubble.save - 1);
   });
 
+  it('Hainhüter als Gestaltwandler: auf eigenem Schnee bremsen seine Treffer, im eigenen Wald ist er getarnt', () => {
+    const world = new World({ map: openMap, seed: 1, ...tf });
+    setTerrain(world, 4, 7, 'snow');
+    world.formed[world.grid.index(4, 7)] = 1;
+    setTerrain(world, 6, 7, 'forest');
+    world.formed[world.grid.index(6, 7)] = 1;
+    const keeper = unit(world, 0, 'specialForest', 4.5, 7.5);
+    world.step();
+    assert.ok(keeper.tf!.gb?.hitSlow, 'auf Schnee: Frost-Treffer des Frostwächters');
+    keeper.pos = { x: 6.5, y: 7.5 };
+    world.step();
+    assert.equal(keeper.tf!.gb?.camouflage, UNITS.wardForest.groundBonus!.camouflage, 'im Wald: Tarnung des Borkenschützen');
+  });
   it('Lawinenrufer: Frostwelle friert Gegner auf Schnee ein', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     for (let x = 5; x <= 8; x++) for (let y = 6; y <= 8; y++) setTerrain(world, x, y, 'snow');
@@ -212,24 +248,27 @@ describe('Terra-Former: eigener Boden', () => {
     assert.ok(world.events.some((e) => e.type === 'frost'));
   });
 
-  it('Wurzelnetz: der Hainhüter springt zu einer eigenen Waldfläche, an der Gegner stehen', () => {
-    const world = new World({ map: openMap, seed: 1, ...tf });
-    // Eigene, geformte Waldfläche unten (Route „unten“), der Hainhüter steht in der Mitte
-    for (let x = 6; x <= 7; x++) {
-      for (let y = 7; y <= 8; y++) {
-        setTerrain(world, x, y, 'forest');
-        world.formed[world.grid.index(x, y)] = 1;
+  it('Wurzelnetz nur mit zwei Wald-Lanes: dann springt der Hainhüter zu einer eigenen Waldfläche, an der Gegner stehen', () => {
+    const jumped = (twoLanes: boolean): boolean => {
+      const world = new World({ map: openMap, seed: 1, ...tf });
+      // Eigene, geformte Waldflächen: unten (Route „unten“) und – für die Synergie – oben
+      const rows = twoLanes ? [0, 1, 7, 8] : [7, 8];
+      for (const y of rows) {
+        for (let x = 2; x <= 9; x++) {
+          if (world.grid.structure[world.grid.index(x, y)] !== 0) continue;
+          setTerrain(world, x, y, 'forest');
+          world.formed[world.grid.index(x, y)] = 1;
+        }
       }
-    }
-    const keeper = unit(world, 0, 'specialForest', 4.5, 4.5);
-    assert.equal(keeper.mover!.route, 'mid');
-    const enemy = unit(world, 1, 'gunner', 8.0, 7.5);
-    enemy.weapon = undefined;
-    stepTimes(world, world.tps + 1);
-    assert.equal(keeper.mover!.route, 'bottom', 'ist auf die Route „unten“ gesprungen');
-    assert.ok(keeper.pos.y >= 7, `steht jetzt im Wald unten (y ${keeper.pos.y})`);
+      const keeper = unit(world, 0, 'specialForest', 4.5, 4.5);
+      const enemy = unit(world, 1, 'gunner', 8.0, 7.5);
+      enemy.weapon = undefined;
+      stepTimes(world, world.tps + 1);
+      return keeper.mover!.route === 'bottom';
+    };
+    assert.equal(jumped(true), true, 'mit Synergie: gesprungen');
+    assert.equal(jumped(false), false, 'ohne: kein Wurzelnetz');
   });
-
   it('Forschung der Linie gilt auch für ihre gerufene Spezialeinheit', () => {
     const toughness = (lineResearch: boolean): number => {
       const world = new World({ map: openMap, seed: 1, ...tf });

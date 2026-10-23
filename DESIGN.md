@@ -1237,7 +1237,7 @@ Alle Optionen auf dem Endstand, je Paarung 12 Partien (6 Seeds, alle Karten) –
 - **Terra-Former-KI bereitet den Boden ihrer Eröffnungs-Linien vor** (`tfPrep`, 24 Partien je Paarung): gegen den Technoclan schlechter (8 : 16 statt 14 : 9 auf denselben Seeds) – sie legt sich auf zwei Linien fest, bevor sie weiß, was der Gegner baut. Bleibt aus; für den Spieler ist die Vorbereitung trotzdem ein starker Zug.
 - **Terra-Former gegen Terra-Former** (Endstand, 36 Partien): 18 : 15, Median 17:11, 67 % im Ziel – die ausgeglichenste und zielgenaueste Paarung.
 
-## Entschieden (23.10. nachmittags): Myriaden-Umbau – Gelege, Drohnen-Werfer, Verspotter (noch nicht gebaut)
+## Entschieden (23.10. nachmittags): Myriaden-Umbau – Gelege, Drohnen-Werfer, Verspotter (gebaut 23.10. abends – siehe „Umgesetzt (23.10. abends)“)
 
 Anlass (Nutzer): Im Aufbau fühlt es sich falsch an, Drohnen zu halten, sie dabei zerfallen zu lassen und dann mit zu wenigen, angeschlagenen Verbänden anzugreifen. Der Schwarm soll als Schwarm auftreten. Kanone und Katapult sollen Myrs **transportieren**, statt selbst Schaden zu machen. Wird zusammen mit den noch ausstehenden Terra-Former-Änderungen in einem Rutsch gebaut; alles steuert die KI bzw. das Einheitenverhalten, keine neuen Spielerbefehle.
 
@@ -1266,7 +1266,7 @@ Anlass (Nutzer): Im Aufbau fühlt es sich falsch an, Drohnen zu halten, sie dabe
 
 **Erwartung:** Die Kanone erreicht die Terraformer hinter den Wächtern – laut Diagnose (Nacht zum 23.10.) die Quelle der Gerufenen, die die Paarung Terra-Former gegen Myriaden tragen. Gegen den Technoclan werden Artillerie und Heiler verwundbarer. Die Myriaden verlieren den Flächenschaden der Kanone gegen Infanterie – im Test prüfen.
 
-## Entschieden (23.10. abends): Terra-Former-Umbau – Terraformer, Linien, Gerufene, Lane-Synergien (noch nicht gebaut)
+## Entschieden (23.10. abends): Terra-Former-Umbau – Terraformer, Linien, Gerufene, Lane-Synergien (gebaut 23.10. abends – siehe „Umgesetzt (23.10. abends)“)
 
 Wird zusammen mit dem Myriaden-Umbau in einem Rutsch gebaut und dann über alle Paarungen und Karten getestet.
 
@@ -1301,7 +1301,38 @@ Eine Lane gilt als „X“, wenn dort mindestens 12 eigene geformte Kacheln lieg
 | **Geröll** | Geröllhagel: Schaden über Zeit in den Feldern | *Steinwald:* Hagel auch im eigenen Wald, Wächter dort +1 Rüstung | *Eisschlag:* Hagel bremst die Getroffenen | *Treibsand:* Gegner im Hagel kommen im Matsch kaum voran | – | *Steinfeld:* Wiesen-Jäger +1 Durchschlag |
 | **Wiese** | Werte-Bonus für Einheiten und schnellere Produktion | *Lichtung:* der Bonus gilt auch für Gerufene im Wald | *Kufen:* Wiesen-Einheiten auf Schnee ungebremst und schneller | *Weide:* auch die Schlammmonster-Gelege füllen sich schneller | *Ansturm:* Frontbrecher erhalten den Tempo-Bonus der Wiese | – |
 
-Offen: Alle drei Lanes gleich – dieselbe Synergie verstärkt (Vorschlag) oder nichts Besonderes?
+Entschieden (Nutzer, 23.10.): Alle drei Lanes gleich = dieselbe Synergie verstärkt (×1,5).
+
+## Umgesetzt (23.10. abends): Myriaden- und Terra-Former-Umbau, Lane-Synergien, Netz-Hinweise
+
+Gebaut wie in den beiden Abschnitten davor entschieden; hier nur die gewählten Zahlen und was davon abweicht.
+
+**Myriaden**
+- **Gelege:** Brut-Stufe I/II/III sammelt 6/8/10 Verbände (`clutch` an der Brut). Eier zählen aufs Einheitenlimit, die Lebensuhr startet beim Schlüpfen. Notschlupf automatisch, sobald ein Gegner im Umkreis 8 der Brut ist (`clutchAlarmRadius`); fällt die Brut, schlüpft alles. Über der eigenen Brut zeigen gefüllte und hohle Eier den Stand, die Fabrik-Info „Gelege k / N“.
+- **Myr-Kanone:** 3 Ladungen à 3 Modelle gratis, +1 Ladung je 30 s, leer nimmt sie 3 Modelle aus einem Drohnen-Verband im Umkreis 3. Wurf: Reichweite 7, Flugzeit 1,5 s, alle 4 s. Ziele: nur Einheiten, nie schwere (Panzer bekommen Steine). Weiche Ziele bis 4 Kacheln jenseits ihrer Suchweite locken sie nach vorn – nur bis an eine Wurfstelle auf eigener Seite der Front (`launcherAdvance`). Ohne Drohnen wirft sie **Steine**: 3 Schuss, Stärke 6, Durchschlag 1, Schaden 12, Flächenschaden 1,0.
+- **Katapult:** 2 Verspotter Ladung, +1 je 40 s, Reichweite 7,5, alle 6 s; Aufprall Radius 1,5, 30 Schaden. Ohne Verspotter Steine (Belagerung, 55 Schaden, Gebäude ×2).
+- **Myr-Verspotter:** schwer, 300 Leben, Widerstand 8, Rüstung 4+, kaum Waffe, Verspotten im Umkreis 3 (Gegner werten ihn als Ziel 4-mal höher), nach 60 s tot. Ein halber Platz im Einheitenlimit.
+- **Verschmelzen:** Drohnen-Verbände im Abstand 1,5 vereinen sich jede Sekunde (der vollere nimmt auf, bis zum Lebens-Deckel).
+- **Schmelze:** unverändert; die zerfallende Sphäre speist ihre Drohnen in das Verschmelzen ein.
+
+**Terra-Former**
+- **Terraformer:** Tempo 0,6. Er formt im Umkreis 2 Kachel um Kachel (je 2 s, er bleibt dafür stehen), auch Boden anderer eigener Linien ohne Abklingzeit, nie in der Basis-Zone. Liegt ein 2×2-Block eigenen Bodens ohne Abklingzeit bei ihm oder vorbereitet bis 16 Kacheln voraus auf der Route, geht er hin: Ritual 4 s → Gerufene, die vier Kacheln 90 s Abklingzeit. Sonst rückt er 1,5 Kacheln vor – beim Halten höchstens 2 Kacheln über die eigene Grenze.
+- **Linien-Einheiten** (alle Terraformer-Linien: Formen wie oben):
+  - Halmläufer (Wiese): 4 Modelle, Tempo 1,5, 2 Schuss Stärke 4, Schaden 6; auf Wiese +30 % Tempo.
+  - Borkenschützen (Wald): 4 Modelle, Reichweite 5, Stärke 5; im eigenen Wald getarnt.
+  - Schlammwerfer (Matsch): 3 Modelle, Reichweite 5, Flächenschaden 1,2, gegen Infanterie verwunden auf 4+; auf eigenem Matsch ein Bremsfeld.
+  - Frostwächter (Schnee): 120 Leben, Reichweite 2,5; Treffer bremsen (×0,75, auf Schnee ×0,55), **Schild** für eigene Verbände im Umkreis 2,5 (−15 % Schaden).
+  - Steinwächter (Geröll): schwer, 240 Leben, Tempo 0,6, Stärke 8, Durchschlag 3, Schaden 30, gegen Schwere verwunden auf 3+.
+- **Gerufene:** Steppenjäger (Tempo 2, 3 Schuss, Schaden 16), Hainhüter (380 Leben, Widerstand 8, kaum Waffe, **Gestaltwandler**: bekommt den Boden-Bonus der Linie, auf deren Boden er steht), Schlammschleuder (Reichweite 5,5, Flächenschaden 1,6, Getroffene 3 s langsamer ×0,6 und schwächer ×0,75), Lawinenrufer (Frostwelle, Flächenschaden 1,4), Frontbrecher (schwer, 420 Leben, Schaden 80 alle 2,5 s, Flächenschaden 0,8).
+- **Schlammmonster:** Eine 3×3-Zelle mit mindestens 7 eigenen Matsch-Kacheln legt alle 10 s ein Ei; bei 3 Eiern schlüpfen 3 Schlammmonster (30 Leben, 3 Modelle, Tempo 1,4, kein Platz im Limit, höchstens 15 je Spieler). Leine 4 Kacheln um eigenen Matsch; ist ihr Feld weg, zerfallen sie.
+- **Lane-Synergien:** Lane = Kartendrittel, gezählt ab 12 eigenen geformten Kacheln, alle 5 s neu bestimmt; Wirkungen wie in der Tabelle oben. Zahlen: Schneesturm 10 % Bremse je Sekunde im Feld bis 60 %; Geröllhagel 3 Schaden je Sekunde; Blühende Wiese Linien-Einheiten +10 % Schaden und Tempo, Produktion +15 %; Matsch-Doppel: Gelege doppelt so schnell, Leine +3. Alle drei Lanes gleich: Grundwirkung ×1,5. Die Kommando-Anzeige (ohne Auswahl) nennt die aktive Synergie und den Boden je Lane.
+
+**Technoclan: Hinweise auf Netz und Aufrüstung** (Wunsch des Nutzers – die eigentliche Grafik kommt später)
+- Netz-Linien mit weichem Schein; auf jeder Verbindung pendelt ein heller Datenpunkt. Tritt ein Verband bei, blitzt die neue Verbindung kurz auf.
+- Erbt ein Verband ein Protokoll, fliegt ein Punkt in der Farbe des Protokolls vom Gefallenen zum Erben, dort ein Ring (beim Aufstieg größer, mit Meldung im Lagebericht).
+- Aufgerüstete Verbände tragen **Eck-Klammern** und je geerbtem Protokoll einen farbigen Punkt (orange Panzerbrecher, gelb Fläche, rot Zielmarkierung, grün Reichweite, violett Durchschlag, türkis Reparatur, grau Panzerung). Beim Aufstieg kreisen drei Funken um den pulsierenden Ring.
+
+**Weitere Anzeigen:** Würfe der Myriaden fliegen sichtbar im Bogen (Flugbahn gepunktet, Schatten, Landepunkt), Schlüpfen und Landen mit kurzem Ring.
 
 ## Roadmap
 

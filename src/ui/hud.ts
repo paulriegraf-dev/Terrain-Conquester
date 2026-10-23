@@ -18,6 +18,8 @@ import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
 import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
 import { productionSpeed } from '../sim/systems/production';
+import { clutchSize } from '../sim/systems/myr';
+import { synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
 import { siegeMultiplier } from '../sim/systems/front';
 import type { PlayerId } from '../sim/types';
@@ -392,7 +394,8 @@ export class Hud {
         `<p>Erdwall: ${wallLeft ? `lädt noch ${Math.ceil(wallLeft / world.tps)} s` : p.energy >= WALL.cost ? 'bereit' : `bereit, braucht ${WALL.cost} Energie`}</p>` +
         `<div class="cooldown"><i style="width:${(1 - wallLeft / (WALL.cooldown * world.tps)) * 100}%"></i></div>` +
         (busy ? `<p>Gelände: ${busy} von ${SWAP.maxParallel} Flächen im Umbau</p>` : '') +
-        (p.research.length ? `<p class="muted">Erforscht: ${p.research.length}</p>` : '');
+        (p.research.length ? `<p class="muted">Erforscht: ${p.research.length}</p>` : '') +
+        synergyLine(world, me);
     } else {
       html = `<p class="muted">${session.mode === 'replay' ? 'Replay: Nebel aus, du siehst beide Seiten.' : 'Vorschau läuft – starte eine eigene Runde.'} Klicke auf Gebäude, um ihre Wege zu sehen.</p>`;
     }
@@ -662,6 +665,7 @@ function buildingInfo(e: Entity, world: World): string {
   const counters = counterInfo(pr.unit, enemy);
   return `${hpLine(e)}
     <p>Stufe ${pr.level} · baut <strong>${escapeHtml(unit.name)}</strong></p>
+    ${pr.clutch ? `<p>Gelege <strong>${pr.clutch.length} / ${clutchSize(world, e) ?? pr.clutch.length}</strong> – schlüpft gemeinsam (bei Gefahr sofort)</p>` : ''}
     <p class="counters">stark gegen <strong>${escapeHtml(counters.strong)}</strong> · schwach gegen <strong>${escapeHtml(counters.weak)}</strong></p>
     <div class="progress${job ? ' job' : ''}"><i style="width:${Math.min(100, bar * 100)}%"></i></div>
     <p class="${(pr.blockedBy !== 'none' && !pr.paused) || job ? 'warn' : ''}">${escapeHtml(status)}</p>
@@ -669,6 +673,17 @@ function buildingInfo(e: Entity, world: World): string {
     <p class="muted">${where}</p>
     ${price > 1.01 ? `<p class="warn">Markt: ${PARTS[unit.part].name} ${MARKET_LEVELS[marketLevel(price)]} – ${Math.round((1 - 1 / price) * 100)} % langsamer</p>` : ''}
     ${disguised}`;
+}
+
+/** Terra-Former: aktive Lane-Synergie (2 gleiche Lanes + Färbung durch die dritte). */
+function synergyLine(world: World, me: PlayerId): string {
+  if (world.players[me].faction.id !== 'terraformer') return '';
+  const s = world.synergy[me];
+  const label = synergyLabel(s);
+  const lanes = s.lanes.map((g) => (g ? TERRAIN_LIST[TERRAIN_INDEX[g]]!.name : '–')).join(' · ');
+  return label
+    ? `<p>Synergie: <strong>${escapeHtml(label)}</strong>${s.triple ? ' (verstärkt)' : ''}</p><p class="muted">Lanes: ${escapeHtml(lanes)}</p>`
+    : `<p class="muted">Synergie: keine – zwei Lanes mit gleichem Boden formen (Lanes: ${escapeHtml(lanes)})</p>`;
 }
 
 function hpLine(e: Entity): string {

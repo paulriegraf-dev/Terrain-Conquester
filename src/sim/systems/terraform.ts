@@ -1,88 +1,114 @@
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
+import type { TerrainId } from '../../data/terrain';
 import { UNITS } from '../../data/units';
-import type { UnitDef, UnitId } from '../../data/units';
+import type { GroundBonus, UnitDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { BUILD_ZONE } from '../map';
-import type { CellRect, PlayerId, Route } from '../types';
+import type { CellRect, PlayerId, Route, Vec2 } from '../types';
+import { PLAYERS } from '../types';
 import type { World } from '../world';
 import { controllerAt } from './influence';
+import {
+  hasSynergy, laneOfRow, mudClutchRate, mudLeash, synergyCamouflage, synergyPower, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
+} from './synergy';
 
 /**
- * Terra-Former (Entwurf des Nutzers, 22.10.): „Meine Einheiten werden stärker, wenn der Boden unter
- * ihnen mir gehört.“ Alles hier läuft automatisch – der Spieler steuert nur die Bedingungen
- * (Fabriken, Routen, Haltungen).
+ * Terra-Former (Entwurf des Nutzers, 22.10., Umbau 23.10. abends): „Meine Einheiten werden stärker, wenn der Boden
+ * unter ihnen mir gehört.“ Alles läuft automatisch – der Spieler steuert nur die Bedingungen.
  *
- * - **Eigener Boden:** Bodenart der Linie (UnitDef.ground) auf einer Kachel im eigenen oder
- *   umkämpften Gebiet (Bremse gegen den Schneeball: wer über die Front hinaus formt, hat dort erst
- *   etwas davon, wenn das Gebiet nachzieht). Dort wirkt UnitDef.groundBonus.
- * - **Terraformer:** ziehen auf ihrer Route nach vorn (offensive Route) und suchen 2×2-Blöcke aus
- *   unverbrauchten Kacheln, formen sie Kachel für Kachel um (rules.terraform.formSeconds) und rufen in der
- *   Mitte die Spezialeinheit ihrer Linie – dann ziehen sie weiter. Eigener Boden zählt sofort: was der Spieler
- *   selbst umgeformt hat (Gelände formen, Vorbereitung) oder seine Terraformer (world.formed); auf fertigem
- *   Boden dauert das Rufen nur ein Ritual von formSeconds. Jede Kachel trägt je Spieler nur eine Beschwörung
- *   (world.consumed). Ins gegnerische Gebiet gehen sie nur mit, wenn ihre Route vorstößt. Stirbt ein
- *   Terraformer, bleibt der Boden. Gerufene zählen aufs Einheitenlimit; ist es voll, wartet er auf seinem Block.
- *   Formt der Gegner eine Kachel um, ist sie dessen Boden – verbraucht bleibt sie trotzdem.
- * - **Wurzelnetz (Wald):** Der Hainhüter springt zu einer eigenen Waldfläche auf einer anderen Route –
- *   mit einer Chance in festem Takt oder sofort, wenn dort Gegner stehen (Hilferuf).
- * - **Landformer (Held):** viele eigene Verbände → verschmilzt Gelände (in seiner Nähe zählt jeder
- *   Boden als eigener), wenige → kopiert eine gerufene Einheit in seiner Nähe.
+ * - **Eigener Boden:** Bodenart der Linie auf einer Kachel, die der Spieler selbst umgeformt hat (Gelände formen,
+ *   Vorbereitung, Terraformer – world.formed), im eigenen oder umkämpften Gebiet. Dort wirkt UnitDef.groundBonus.
+ *   Der Hainhüter ist Gestaltwandler: auf jedem eigenen Boden bekommt er den Bonus des Wächters dieser Art.
+ * - **Terraformer:** langsam, stets ein Stück nach vorn (beim Halten höchstens bis kurz hinter die eigene Grenze).
+ *   Er formt möglichst viele Kacheln in seiner Umgebung (je Kachel rules.terraform.formSeconds), auch Kacheln
+ *   anderer eigener Linien ohne Abklingzeit. Liegt ein 2×2-Block eigener Kacheln seiner Art ohne Abklingzeit bei
+ *   ihm, ruft er nach einem Ritual die Spezialeinheit seiner Linie; die Kacheln haben danach eine Abklingzeit
+ *   (world.tileCooldown) – der nächste Terraformer muss weiter nach vorn.
+ * - **Schlammmonster:** Eigene Matschfelder (3×3) legen Eier; ein volles Gelege schlüpft. Schlammmonster bleiben
+ *   an der Leine – in der Nähe eigenen Matschs.
+ * - **Lane-Synergien:** siehe synergy.ts (Wurzelnetz nur mit zwei Wald-Lanes).
+ * - **Landformer (Held):** viele eigene Verbände → verschmilzt Gelände (dort zählt jeder Boden als eigener),
+ *   wenige → kopiert eine gerufene Einheit in seiner Nähe.
  */
 export function updateTerraform(world: World): void {
   if (world.merges.length > 0) world.merges = world.merges.filter((m) => world.tick < m.until);
+  updateSynergy(world);
   updateGround(world);
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
     if (def.former) updateFormer(world, e, def);
-    const gb = def.groundBonus;
-    if (gb?.frostWave && e.tf.onGround) frostWave(world, e, gb.frostWave);
-    if (gb?.roots) roots(world, e, gb.roots);
+    if (def.leash) updateLeashed(world, e, def);
+    const gb = e.tf.gb;
+    if (gb?.frostWave) frostWave(world, e, gb.frostWave);
+    const roots = rootsFor(world, e);
+    if (roots) rootsJump(world, e, roots);
     if (def.landformer) landformer(world, e, def);
   }
+  updateMudNests(world);
+  synergyTick(world);
 }
 
 // ------------------------------------------------------------------ Eigener Boden
 
-/** Steht e auf eigenem Boden seiner Linie (oder in einer Verschmelzung seines Helden)? */
-export function onOwnGround(world: World, e: Entity): boolean {
+/** Wächter einer Bodenart (für den Gestaltwandler). */
+const WARD_OF: Partial<Record<TerrainId, UnitId>> = { meadow: 'wardMeadow', forest: 'wardForest', mud: 'wardMud', snow: 'wardSnow', rubble: 'wardRubble' };
+
+/**
+ * Boden-Bonus, der für e gerade wirkt (null = keiner): eigener Boden seiner Linie im eigenen oder umkämpften
+ * Gebiet (oder in einer Verschmelzung seines Helden). Gestaltwandler: Bonus des Wächters der Bodenart unter ihm.
+ */
+export function activeBonus(world: World, e: Entity): GroundBonus | null {
   const def = UNITS[e.defId as UnitId];
-  if (!def.ground) return false;
+  if (!def.ground) return null;
   const x = Math.floor(e.pos.x);
   const y = Math.floor(e.pos.y);
   const cell = world.grid.index(x, y);
   const mine = world.contested[cell] === 1 || controllerAt(world, cell) === e.owner;
-  if (!mine) return false;
-  if (world.grid.terrain[cell] === TERRAIN_INDEX[def.ground]) return true;
-  return world.merges.some((m) => m.owner === e.owner && world.tick < m.until && (e.pos.x - m.x) * (e.pos.x - m.x) + (e.pos.y - m.y) * (e.pos.y - m.y) <= m.r * m.r);
+  if (!mine) return null;
+  const merged = world.merges.some((m) => m.owner === e.owner && world.tick < m.until && (e.pos.x - m.x) * (e.pos.x - m.x) + (e.pos.y - m.y) * (e.pos.y - m.y) <= m.r * m.r);
+  if (def.shapeshift) {
+    if (world.formed[cell] !== e.owner + 1) return merged ? (UNITS[WARD_OF[def.ground]!].groundBonus ?? null) : null;
+    const id = TERRAIN_LIST[world.grid.terrain[cell]!]!.id;
+    const ward = WARD_OF[id];
+    return ward ? (UNITS[ward].groundBonus ?? null) : null;
+  }
+  if (!def.groundBonus) return null;
+  if (world.grid.terrain[cell] === TERRAIN_INDEX[def.ground] && world.formed[cell] === e.owner + 1) return def.groundBonus;
+  // Natürlicher Boden der eigenen Art zählt im eigenen Gebiet weiterhin (wie bisher)
+  if (world.grid.terrain[cell] === TERRAIN_INDEX[def.ground]) return def.groundBonus;
+  return merged ? def.groundBonus : null;
+}
+
+/** Steht e auf eigenem Boden (ein Bonus wirkt)? */
+export function onOwnGround(world: World, e: Entity): boolean {
+  return activeBonus(world, e) !== null;
 }
 
 /**
  * Boden-Boni einmal pro Tick: Reichweite (Waffe neu berechnen, nur bei Wechsel), Auren auf Gegner.
- * Tempo, Rüstung, Tarnung, Hinterhalt und Eingraben lesen `tf.onGround` an ihrer Stelle.
+ * Tempo, Rüstung, Tarnung, Hinterhalt und Treffer lesen `tf.gb` an ihrer Stelle.
  */
 function updateGround(world: World): void {
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
-    const gb = def.groundBonus;
+    if (!def.groundBonus && !def.shapeshift) continue;
+    const gb = activeBonus(world, e);
+    const prevRange = e.tf.gb?.range ?? 0;
+    e.tf.gb = gb;
+    e.tf.onGround = gb !== null;
+    const range = gb?.range ?? 0;
+    if (range !== prevRange && e.weapon) e.weapon.def = range ? { ...e.weapon.baseDef, range: e.weapon.baseDef.range + range } : e.weapon.baseDef;
     if (!gb) continue;
-    const on = onOwnGround(world, e);
-    if (on !== e.tf.onGround) {
-      e.tf.onGround = on;
-      if (gb.range && e.weapon) e.weapon.def = on ? { ...e.weapon.baseDef, range: e.weapon.baseDef.range + gb.range } : e.weapon.baseDef;
-    }
-    if (!on) continue;
     const aura = gb.slowAura ?? gb.pullAura;
     if (!aura) continue;
-    const ground = TERRAIN_INDEX[def.ground!];
     const r2 = aura.radius * aura.radius;
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === e.owner || !o.mover) continue;
       const dx = o.pos.x - e.pos.x;
       const dy = o.pos.y - e.pos.y;
       if (dx * dx + dy * dy > r2) continue;
-      if (world.grid.terrain[world.grid.index(Math.floor(o.pos.x), Math.floor(o.pos.y))] !== ground) continue;
       slowDown(world, o, world.tick + 2, aura.factor);
       if (gb.pullAura) o.pull = { x: e.pos.x, y: e.pos.y, until: world.tick + 2, speed: gb.pullAura.pull / world.tps };
     }
@@ -95,38 +121,40 @@ export function slowDown(world: World, o: Entity, until: number, factor: number)
   o.slow = cur && world.tick < cur.until ? { until: Math.max(cur.until, until), factor: Math.min(cur.factor, factor) } : { until, factor };
 }
 
-/** Tempo-Faktor durch Boden und Bremsen (für die Bewegung). */
+/** Tempo-Faktor durch Boden, Bremsen, Schwächung und Synergien (für die Bewegung). Bremsen zusammen höchstens 60 %. */
 export function groundSpeedFactor(world: World, e: Entity): number {
-  let f = 1;
-  if (e.slow && world.tick < e.slow.until) f *= e.slow.factor;
-  if (e.tf?.onGround) {
-    const gb = UNITS[e.defId as UnitId].groundBonus;
-    if (gb?.speed) f *= gb.speed;
-    if (gb?.dugIn) f = 0;
-  }
+  let slow = 1;
+  if (e.slow && world.tick < e.slow.until) slow *= e.slow.factor;
+  if (e.weaken && world.tick < e.weaken.until) slow *= e.weaken.speed;
+  const syn = synergySpeedFactor(world, e);
+  let f = Math.max(0.4, slow * Math.min(1, syn)) * Math.max(1, syn);
+  const gb = e.tf?.gb;
+  if (gb?.speed) f *= gb.speed;
+  if (gb?.dugIn) f = 0;
   return f;
 }
 
-/** Eingegraben (Felsbastion auf eigenem Geröll): Anteil des Schadens, den sie nimmt (1 = normal). */
+/** Eingegraben (auf eigenem Geröll): Anteil des Schadens, den die Einheit nimmt (1 = normal). */
 export function dugInFactor(e: Entity): number {
-  return e.tf?.onGround ? (UNITS[e.defId as UnitId].groundBonus?.dugIn?.damageTaken ?? 1) : 1;
+  return e.tf?.gb?.dugIn?.damageTaken ?? 1;
 }
 
-/** Rüstungsbonus auf eigenem Boden (Steinwächter). */
-export function groundSaveBonus(e: Entity): number {
-  return e.tf?.onGround ? (UNITS[e.defId as UnitId].groundBonus?.save ?? 0) : 0;
+/** Rüstungsbonus auf eigenem Boden (Steinwächter, Frontbrecher) und aus Synergien. */
+export function groundSaveBonus(world: World, e: Entity): number {
+  return (e.tf?.gb?.save ?? 0) + (e.tf ? synergySaveBonus(world, e) : 0);
 }
 
-/** Tarnung auf eigenem Boden: Der Gegner sieht e nur aus so vielen Kacheln (null = normal sichtbar). */
-export function camouflageRange(e: Entity): number | null {
-  return e.tf?.onGround ? (UNITS[e.defId as UnitId].groundBonus?.camouflage ?? null) : null;
+/** Tarnung: Der Gegner sieht e nur aus so vielen Kacheln (null = normal sichtbar). */
+export function camouflageRange(world: World, e: Entity): number | null {
+  if (!e.tf) return null;
+  return e.tf.gb?.camouflage ?? synergyCamouflage(world, e);
 }
 
 // ------------------------------------------------------------------ Terraformer
 
-/** Bit eines Spielers in world.consumed: Die Kachel hat ihm schon eine Beschwörung getragen. */
-function bit(p: PlayerId): number {
-  return p === 0 ? 1 : 2;
+/** Abklingzeit: Bis zu diesem Tick trägt die Kachel Spieler p keine Beschwörung (und wird nicht umgeformt). */
+export function cooling(world: World, i: number, p: PlayerId): boolean {
+  return world.tileCooldown[p * world.formed.length + i]! > world.tick;
 }
 
 /**
@@ -138,21 +166,17 @@ export function ownGroundTile(world: World, i: number, p: PlayerId, ground: numb
 }
 
 /**
- * Kann ein Terraformer von p diese Kachel umformen? Fester Boden, keine Bauten, keine Basis-Zone, kein
- * laufender Umbau – und nicht schon von p selbst umgeformt (eigener Boden einer anderen Linie bleibt).
+ * Kann ein Terraformer von p (Linie `ground`) diese Kachel umformen? Fester Boden, keine Bauten, keine Basis-Zone,
+ * kein laufender Umbau, keine Abklingzeit – und nicht schon eigener Boden seiner Art. Kacheln anderer eigener
+ * Linien darf er umformen (Synergie-Tricks).
  */
-export function formable(world: World, i: number, p: PlayerId): boolean {
+export function convertible(world: World, i: number, p: PlayerId, ground: number): boolean {
   const g = world.grid;
-  if (world.formed[i] === p + 1 || world.locked[i] || g.structure[i] !== 0) return false;
+  if (ownGroundTile(world, i, p, ground) || world.locked[i] || g.structure[i] !== 0) return false;
   if (!TERRAIN_LIST[g.terrain[i]!]!.solid || g.terrain[i] === TERRAIN_INDEX.wall) return false;
   if (world.map.buildZone[i] === BUILD_ZONE.base) return false;
+  if (cooling(world, i, p)) return false;
   return !world.swaps.some((s) => s.index === i);
-}
-
-/** Taugt die Kachel für eine Beschwörung von p (Linie `ground`)? Unverbraucht – und eigener Boden oder umformbar. */
-function usable(world: World, i: number, p: PlayerId, ground: number): boolean {
-  if ((world.consumed[i]! & bit(p)) !== 0) return false;
-  return ownGroundTile(world, i, p, ground) || formable(world, i, p);
 }
 
 function blockCells(world: World, r: CellRect): number[] {
@@ -161,39 +185,50 @@ function blockCells(world: World, r: CellRect): number[] {
   return out;
 }
 
+/** Block für eine Beschwörung: vier eigene Kacheln seiner Art ohne Abklingzeit. */
+function readyBlock(world: World, r: CellRect, p: PlayerId, ground: number): boolean {
+  return blockCells(world, r).every((i) => ownGroundTile(world, i, p, ground) && !cooling(world, i, p));
+}
+
+/** Richtung nach vorn (zum Gegner) für Spieler p: +1 oder −1 in x. */
+function forward(world: World, p: PlayerId): number {
+  return world.map.hq[p].x < world.map.width / 2 ? 1 : -1;
+}
+
+/** Stößt die Route des Terraformers vor (dann darf er auch ins gegnerische Gebiet)? */
+function pushing(world: World, e: Entity): boolean {
+  return e.mover!.committed || world.players[e.owner].stance[e.mover!.route] === 'push';
+}
+
 /**
- * Nächster Block auf dem Weg nach vorn (offensive Route): vier unverbrauchte Kacheln, möglichst weit Richtung
- * Gegner, nah und auf Höhe der eigenen Route. Schon fertiger eigener Boden spart Zeit (je Kachel 4 s) und
- * zählt deshalb mit. Ins gegnerische Gebiet geht der Terraformer nur mit, wenn seine Route vorstößt.
+ * Fertiger Block (Ritual): in der Nähe (Umkreis workRadius + 1) oder – vom Spieler vorbereitet – bis preparedRadius
+ * voraus auf der eigenen Route. Am liebsten weit vorn und nah.
  */
-function chooseBlock(world: World, e: Entity, ground: number): CellRect | null {
+function findReadyBlock(world: World, e: Entity, ground: number): CellRect | null {
   const g = world.grid;
+  const p = e.owner;
   const cx = Math.floor(e.pos.x);
   const cy = Math.floor(e.pos.y);
-  const p = e.owner;
   const routeY = world.map.waypoints[e.mover!.route].y;
-  const enemy = p === 0 ? 1 : 0;
-  const pushing = e.mover!.committed || world.players[p].stance[e.mover!.route] === 'push';
+  const enemy: PlayerId = p === 0 ? 1 : 0;
+  const push = pushing(world, e);
+  const dir = forward(world, p);
+  const near = Math.ceil(world.rules.terraform.workRadius) + 1;
+  const RP = Math.max(near, world.rules.terraform.preparedRadius);
   let best: CellRect | null = null;
   let bestScore = -Infinity;
-  const R = world.rules.terraform.searchRadius;
-  // Vorbereiteter Boden (vom Spieler selbst geformt) wird weiter voraus gesehen, aber nur entlang der Route.
-  const RP = Math.max(R, world.rules.terraform.preparedRadius);
   for (let y = cy - RP; y <= cy + RP; y++) {
     for (let x = cx - RP; x <= cx + RP; x++) {
       if (!g.inBounds(x, y) || !g.inBounds(x + 1, y + 1)) continue;
-      const far = Math.abs(x - cx) > R || Math.abs(y - cy) > R;
-      if (far && Math.abs(y + 1 - routeY) > R) continue;
+      const far = Math.abs(x - cx) > near || Math.abs(y - cy) > near;
+      if (far && (Math.abs(y + 1 - routeY) > 6 || (x + 1 - e.pos.x) * dir < -1)) continue; // weit weg nur voraus auf der Route
       const r = { x, y, w: 2, h: 2 };
-      const cells = blockCells(world, r);
-      if (far && !cells.every((i) => ownGroundTile(world, i, p, ground))) continue;
-      if (!cells.every((i) => usable(world, i, p, ground) && (pushing || controllerAt(world, i) !== enemy))) continue;
-      const own = cells.filter((i) => ownGroundTile(world, i, p, ground)).length;
+      if (!readyBlock(world, r, p, ground)) continue;
+      if (!push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
       const mx = x + 1;
       const my = y + 1;
-      const forward = p === 0 ? mx : g.width - mx;
       const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
-      const score = forward - 0.5 * d - 0.3 * Math.abs(my - routeY) + 2 * own;
+      const score = (mx - e.pos.x) * dir - 0.5 * d;
       if (score > bestScore + 1e-9) {
         bestScore = score;
         best = r;
@@ -203,66 +238,146 @@ function chooseBlock(world: World, e: Entity, ground: number): CellRect | null {
   return best;
 }
 
+/** Nächste umformbare Kachel im Umkreis: zuerst Kacheln, die noch nicht eigener Boden sind; bei Gleichstand weiter vorn. */
+function nextWorkCell(world: World, e: Entity, ground: number, radius: number): number | null {
+  const g = world.grid;
+  const p = e.owner;
+  const dir = forward(world, p);
+  const enemy: PlayerId = p === 0 ? 1 : 0;
+  const push = pushing(world, e);
+  const r = Math.ceil(radius);
+  const cx = Math.floor(e.pos.x);
+  const cy = Math.floor(e.pos.y);
+  let best = -1;
+  let bestScore = Infinity;
+  for (let y = cy - r; y <= cy + r; y++) {
+    for (let x = cx - r; x <= cx + r; x++) {
+      if (!g.inBounds(x, y)) continue;
+      const dx = x + 0.5 - e.pos.x;
+      const dy = y + 0.5 - e.pos.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > radius * radius) continue;
+      const i = g.index(x, y);
+      if (!convertible(world, i, p, ground)) continue;
+      if (!push && controllerAt(world, i) === enemy) continue;
+      const ownOther = world.formed[i] === p + 1 ? 2 : 0; // eigene andere Linie erst, wenn nichts anderes da ist
+      const score = Math.sqrt(d2) + ownOther - 0.3 * dx * dir;
+      if (score < bestScore - 1e-9) {
+        bestScore = score;
+        best = i;
+      }
+    }
+  }
+  return best >= 0 ? best : null;
+}
+
+/** Wie weit darf ein haltender Terraformer vor (x-Koordinate)? Bis frontOffset Kacheln hinter die eigene Grenze in seiner Zeile. */
+function advanceLimit(world: World, e: Entity): number | null {
+  if (pushing(world, e)) return null;
+  const g = world.grid;
+  const p = e.owner;
+  const dir = forward(world, p);
+  const y = Math.min(g.height - 1, Math.max(0, Math.floor(e.pos.y)));
+  let edge = dir > 0 ? 0 : g.width - 1;
+  for (let k = 0; k < g.width; k++) {
+    const x = dir > 0 ? k : g.width - 1 - k;
+    if (controllerAt(world, g.index(x, y)) === p) edge = x;
+  }
+  return edge + 0.5 + dir * world.rules.terraform.frontOffset;
+}
+
 /**
- * Terraformer: zum Block, dann Kachel für Kachel umformen (rules.terraform.formSeconds je Kachel) und rufen,
- * sobald alle vier eigener Boden sind. Ist der Block schon fertig vorbereitet, dauert das Rufen ein Ritual
- * von formSeconds. Gerufen wird nur auf unverbrauchten Kacheln; danach sind sie für diesen Spieler verbraucht.
+ * Terraformer (Umbau 23.10.): Ritual auf einem fertigen Block → sonst die nächste Kachel in der Umgebung umformen
+ * (er bleibt dafür stehen) → sonst ein Stück vorrücken (beim Halten nicht über die Grenze hinaus).
  */
 function updateFormer(world: World, e: Entity, def: UnitDef): void {
   const tf = e.tf!;
   const m = e.mover!;
   const p = e.owner;
   const ground = TERRAIN_INDEX[def.ground!];
-  const own = (i: number): boolean => ownGroundTile(world, i, p, ground);
+  const rules = world.rules.terraform;
+  const here: Vec2 = { x: e.pos.x, y: e.pos.y };
+  // 1. Ritual auf einem fertigen Block
   if (tf.block) {
-    const cells = blockCells(world, tf.block);
-    if (!cells.every((i) => usable(world, i, p, ground))) {
+    if (!readyBlock(world, tf.block, p, ground)) {
       tf.block = null;
-      tf.done = 0;
       tf.workTick = 0;
       m.goal = null;
     } else {
       const center = { x: tf.block.x + 1, y: tf.block.y + 1 };
       m.goal = center;
-      tf.done = cells.filter(own).length;
+      tf.done = 4;
       const near = (e.pos.x - center.x) * (e.pos.x - center.x) + (e.pos.y - center.y) * (e.pos.y - center.y) <= 1.2 * 1.2;
       if (!near) {
         tf.workTick = 0;
         return;
       }
-      const step = Math.round(world.rules.terraform.formSeconds * world.tps);
-      if (tf.workTick === 0) tf.workTick = world.tick + step; // erste Kachel umformen – oder das Ritual auf fertigem Boden
+      if (tf.workTick === 0) tf.workTick = world.tick + Math.round(rules.ritualSeconds * world.tps);
       if (world.tick < tf.workTick) return;
-      const next = cells.find((i) => !own(i));
-      if (next !== undefined) {
-        world.grid.setTerrain(next, ground);
-        world.formed[next] = p + 1;
-        world.players[p].vision.learn(next);
-        tf.done = cells.filter(own).length;
-        tf.workTick = world.tick + step;
-      }
-      if (cells.every(own)) {
-        // Das Einheitenlimit gilt auch für Gerufene: Ist es voll, wartet der Terraformer auf seinem Block.
-        tf.waiting = !hasRoom(world, p, def.former!.special);
-        if (tf.waiting) return;
-        for (const i of cells) world.consumed[i] = world.consumed[i]! | bit(p);
-        summon(world, e, def.former!.special, center, tf.level);
-        tf.summons = (tf.summons ?? 0) + 1;
-        tf.block = null;
-        tf.done = 0;
-        tf.workTick = 0;
-        m.goal = null;
-      }
+      // Das Einheitenlimit gilt auch für Gerufene: Ist es voll, wartet der Terraformer auf seinem Block.
+      tf.waiting = !hasRoom(world, p, def.former!.special);
+      if (tf.waiting) return;
+      const until = world.tick + Math.round(rules.cooldownSeconds * world.tps);
+      for (const i of blockCells(world, tf.block)) world.tileCooldown[p * world.formed.length + i] = until;
+      summon(world, e, def.former!.special, center, tf.level);
+      tf.summons = (tf.summons ?? 0) + 1;
+      tf.nextSummon = world.tick + Math.round(rules.summonEvery * world.tps);
+      tf.block = null;
+      tf.done = 0;
+      tf.workTick = 0;
+      m.goal = null;
       return;
     }
   }
-  // Kraft verbraucht (rules.terraform.maxSummons): kein neuer Block mehr, er zieht mit seiner Route.
-  const cap = world.rules.terraform.maxSummons;
-  if (cap > 0 && (tf.summons ?? 0) >= cap) return;
-  // Neuen Block suchen (nicht jeden Tick – das ist eine Flächensuche).
-  if ((world.tick + e.id) % 10 !== 0) return;
-  tf.block = chooseBlock(world, e, ground);
-  m.goal = tf.block ? { x: tf.block.x + 1, y: tf.block.y + 1 } : null;
+  // Rufen nur, solange die Kraft reicht (rules.terraform.maxSummons) und seine eigene Pause (summonEvery) um ist –
+  // sonst formt er nur weiter Boden (für Linien-Boni und Synergien).
+  const canSummon = (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
+  // 2. Kachel in Arbeit
+  if (tf.workCell !== undefined && tf.workCell >= 0) {
+    const i = tf.workCell;
+    if (!convertible(world, i, p, ground)) {
+      tf.workCell = -1;
+    } else if (world.tick >= tf.workTick) {
+      world.grid.setTerrain(i, ground);
+      world.formed[i] = p + 1;
+      world.players[p].vision.learn(i);
+      tf.workCell = -1;
+    } else {
+      m.goal = here; // bleibt stehen, solange er formt
+      return;
+    }
+  }
+  // Neue Arbeit nur alle paar Ticks suchen (Flächensuche)
+  if ((world.tick + e.id) % 5 !== 0 && tf.workCell !== undefined) return;
+  const block = canSummon ? findReadyBlock(world, e, ground) : null;
+  if (block) {
+    tf.block = block;
+    tf.workTick = 0;
+    tf.workCell = -1;
+    m.goal = { x: block.x + 1, y: block.y + 1 };
+    return;
+  }
+  const cell = nextWorkCell(world, e, ground, rules.workRadius);
+  tf.done = 0;
+  if (cell !== null) {
+    tf.workCell = cell;
+    tf.workTick = world.tick + Math.round(rules.formSeconds * world.tps);
+    m.goal = here;
+    return;
+  }
+  tf.workCell = -1;
+  // 3. Vorrücken – stets ein Stück nach vorn, beim Halten nicht über die Grenze hinaus
+  const dir = forward(world, p);
+  const limit = advanceLimit(world, e);
+  const routeY = world.map.waypoints[m.route].y;
+  const ahead = { x: e.pos.x + dir * rules.advanceStep, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 0.5) };
+  if (limit !== null && (ahead.x - limit) * dir > 0) {
+    // An der Grenze: weiter weg nach Arbeit suchen, sonst stehen bleiben.
+    const far = nextWorkCell(world, e, ground, rules.workRadius + 2);
+    m.goal = far !== null ? { x: (far % world.grid.width) + 0.5, y: Math.floor(far / world.grid.width) + 0.5 } : here;
+    return;
+  }
+  m.goal = ahead;
 }
 
 /** Ist im Einheitenlimit noch Platz für diese Einheit? */
@@ -283,22 +398,122 @@ function summon(world: World, former: Entity, unit: UnitId, at: { x: number; y: 
   return s;
 }
 
+// ------------------------------------------------------------------ Schlammmonster
+
+/** Größe der Matschfeld-Zellen (3×3 Kacheln). */
+const NEST = 3;
+
+/** Schlammmonster-Gelege: je eigenem Matschfeld (3×3-Zelle mit genug eigenem Matsch) Eier sammeln und schlüpfen lassen. */
+function updateMudNests(world: World): void {
+  if (world.tick % world.tps !== 0) return;
+  const g = world.grid;
+  const mud = TERRAIN_INDEX.mud;
+  const rules = world.rules.mud;
+  const cols = Math.ceil(g.width / NEST);
+  const rows = Math.ceil(g.height / NEST);
+  for (const p of PLAYERS) {
+    if (world.players[p].faction.id !== 'terraformer') continue;
+    const nests = world.mudNests[p];
+    const rate = mudClutchRate(world, p);
+    let alive = 0;
+    for (const e of world.entities) if (e.alive && e.owner === p && e.defId === 'mudling') alive++;
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        let n = 0;
+        for (let y = cy * NEST; y < Math.min(g.height, cy * NEST + NEST); y++) {
+          for (let x = cx * NEST; x < Math.min(g.width, cx * NEST + NEST); x++) {
+            const i = g.index(x, y);
+            if (world.formed[i] === p + 1 && g.terrain[i] === mud) n++;
+          }
+        }
+        const key = cy * cols + cx;
+        if (n < rules.fieldMin) {
+          nests.delete(key);
+          continue;
+        }
+        const sec = (nests.get(key) ?? 0) + rate;
+        if (sec < rules.eggSeconds * rules.clutch) {
+          nests.set(key, sec);
+          continue;
+        }
+        nests.set(key, 0);
+        if (alive >= rules.max) continue;
+        const home = { x: cx * NEST + NEST / 2, y: cy * NEST + NEST / 2 };
+        const count = Math.min(rules.clutch, rules.max - alive);
+        for (let k = 0; k < count; k++) {
+          const off = (k - (count - 1) / 2) * 0.5;
+          const u = world.addUnit(p, UNITS.mudling, { x: home.x + (p === 0 ? off : -off), y: home.y + off * 0.5 }, laneOfRow(world, Math.floor(home.y)));
+          u.tf!.home = home;
+          alive++;
+        }
+        world.emit({ type: 'mudlings', owner: p, count, pos: home });
+      }
+    }
+  }
+}
+
+/** Liegt eigener Boden dieser Art im Umkreis r um (x, y)? */
+export function nearOwnGround(world: World, p: PlayerId, ground: number, x: number, y: number, r: number): boolean {
+  const g = world.grid;
+  const r2 = r * r;
+  const x0 = Math.max(0, Math.floor(x - r));
+  const x1 = Math.min(g.width - 1, Math.floor(x + r));
+  const y0 = Math.max(0, Math.floor(y - r));
+  const y1 = Math.min(g.height - 1, Math.floor(y + r));
+  for (let yy = y0; yy <= y1; yy++) {
+    for (let xx = x0; xx <= x1; xx++) {
+      const dx = xx + 0.5 - x;
+      const dy = yy + 0.5 - y;
+      if (dx * dx + dy * dy > r2) continue;
+      const i = yy * g.width + xx;
+      if (world.formed[i] === p + 1 && g.terrain[i] === ground) return true;
+    }
+  }
+  return false;
+}
+
+/** Leine (Schlammmonster): Ziel nur in der Nähe eigenen Matschs; ohne Ziel zurück zum Nest. */
+export function leashOk(world: World, e: Entity, t: Entity): boolean {
+  const def = UNITS[e.defId as UnitId];
+  if (!def.leash || !def.ground) return true;
+  return nearOwnGround(world, e.owner, TERRAIN_INDEX[def.ground], t.pos.x, t.pos.y, mudLeash(world, e.owner, def.leash.radius));
+}
+
+function updateLeashed(world: World, e: Entity, def: UnitDef): void {
+  if ((world.tick + e.id) % 10 !== 0) return;
+  const home = e.tf!.home;
+  const target = e.weapon && e.weapon.targetId ? world.get(e.weapon.targetId) : undefined;
+  if (target && target.alive) return;
+  if (!home) return;
+  // Kein eigener Matsch mehr in der Nähe: zerfällt (das Feld ist weg).
+  if (!nearOwnGround(world, e.owner, TERRAIN_INDEX[def.ground!], home.x, home.y, 3)) {
+    world.destroy(e, null);
+    return;
+  }
+  const d2 = (e.pos.x - home.x) * (e.pos.x - home.x) + (e.pos.y - home.y) * (e.pos.y - home.y);
+  e.mover!.goal = d2 > 1 ? home : { x: e.pos.x, y: e.pos.y };
+}
+
 // ------------------------------------------------------------------ Fähigkeiten
 
-/** Frostwelle (Lawinenrufer): Gegner auf Schnee im Radius kurz einfrieren. */
+/** Frostwelle (Lawinenrufer): Gegner auf Schnee im Radius kurz einfrieren (Raureif: auch im eigenen Wald, länger). */
 function frostWave(world: World, e: Entity, f: { every: number; radius: number; stun: number }): void {
   const tf = e.tf!;
   if (world.tick < tf.nextAbility) return;
   const r2 = f.radius * f.radius;
   const snow = TERRAIN_INDEX.snow;
+  const forest = TERRAIN_INDEX.forest;
+  const rime = hasSynergy(world, e.owner, 'forest', 'snow');
   let hit = 0;
   for (const o of world.entities) {
     if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
     const dx = o.pos.x - e.pos.x;
     const dy = o.pos.y - e.pos.y;
     if (dx * dx + dy * dy > r2) continue;
-    if (world.grid.terrain[world.grid.index(Math.floor(o.pos.x), Math.floor(o.pos.y))] !== snow) continue;
-    o.stunnedUntil = Math.max(o.stunnedUntil ?? 0, world.tick + Math.round(f.stun * world.tps));
+    const t = world.grid.terrain[world.grid.index(Math.floor(o.pos.x), Math.floor(o.pos.y))];
+    const inForest = rime && t === forest;
+    if (t !== snow && !inForest) continue;
+    o.stunnedUntil = Math.max(o.stunnedUntil ?? 0, world.tick + Math.round(f.stun * (inForest ? 1.5 : 1) * world.tps));
     hit++;
   }
   if (hit === 0) return; // Welle nur, wenn sie jemanden trifft – sonst bereit bleiben
@@ -306,12 +521,20 @@ function frostWave(world: World, e: Entity, f: { every: number; radius: number; 
   world.emit({ type: 'frost', owner: e.owner, pos: { x: e.pos.x, y: e.pos.y }, radius: f.radius });
 }
 
+/** Wurzelnetz – nur mit der Synergie zweier Wald-Lanes (Hainhüter; Waldrand: auch Steppenjäger). */
+function rootsFor(world: World, e: Entity): { every: number; chance: number; cooldown: number } | null {
+  if (!hasSynergy(world, e.owner, 'forest')) return null;
+  const ok = e.defId === 'specialForest' || (e.defId === 'specialMeadow' && hasSynergy(world, e.owner, 'forest', 'meadow'));
+  if (!ok) return null;
+  return { every: 20, chance: 0.3, cooldown: 20 / synergyPower(world, e.owner) };
+}
+
 /**
- * Wurzelnetz (Hainhüter): sofort zu einer eigenen Waldfläche auf einer anderen Route, wenn dort Gegner
- * stehen (Hilferuf) – sonst mit einer Chance im Takt `every`. Ziel: eine von Terraformern geformte
- * eigene Waldkachel im eigenen oder umkämpften Gebiet.
+ * Wurzelnetz: sofort zu einer eigenen Waldfläche auf einer anderen Lane, wenn dort Gegner stehen (Hilferuf) oder
+ * die eigene Lane übervoll ist (Gedränge) – sonst mit einer Chance im Takt `every`. Ziel: eigene Waldkachel im
+ * eigenen oder umkämpften Gebiet. Felswurzeln: Beim Ankommen schlägt ein Steinbrocken ein.
  */
-function roots(world: World, e: Entity, r: { every: number; chance: number; cooldown: number }): void {
+function rootsJump(world: World, e: Entity, r: { every: number; chance: number; cooldown: number }): void {
   const tf = e.tf!;
   if (world.tick < tf.nextAbility || world.tick % world.tps !== 0) return;
   const route = e.mover!.route;
@@ -322,17 +545,19 @@ function roots(world: World, e: Entity, r: { every: number; chance: number; cool
     if (world.formed[i] !== e.owner + 1 || g.terrain[i] !== forest || g.structure[i] !== 0) continue;
     if (world.contested[i] !== 1 && controllerAt(world, i) !== e.owner) continue;
     const y = Math.floor(i / g.width);
-    const r2: Route = y < g.height / 3 ? 'top' : y < (2 * g.height) / 3 ? 'mid' : 'bottom';
+    const r2 = laneOfRow(world, y);
     if (r2 === route) continue;
     const x = i % g.width;
     const call = world.entities.some((o) => o.alive && o.kind === 'unit' && o.owner !== e.owner && Math.abs(o.pos.x - x - 0.5) <= 2 && Math.abs(o.pos.y - y - 0.5) <= 2);
     patches.push({ cell: i, route: r2, call });
   }
   if (patches.length === 0) return;
+  // Gedränge: mehr als 8 eigene Verbände in der eigenen Lane nah beieinander
+  const crowd = world.entities.filter((o) => o.alive && o.owner === e.owner && o.kind === 'unit' && o.mover?.route === route && (o.pos.x - e.pos.x) * (o.pos.x - e.pos.x) + (o.pos.y - e.pos.y) * (o.pos.y - e.pos.y) <= 16).length > 8;
   const calls = patches.filter((p) => p.call);
   let target: { cell: number; route: Route } | null = null;
   if (calls.length > 0) target = calls[0]!;
-  else if ((world.tick / world.tps) % r.every === 0 && world.rng.chance(r.chance)) target = patches[world.rng.int(patches.length)]!;
+  else if (crowd || ((world.tick / world.tps) % r.every === 0 && world.rng.chance(r.chance))) target = patches[world.rng.int(patches.length)]!;
   if (!target) return;
   const from = { x: e.pos.x, y: e.pos.y };
   e.pos = { x: (target.cell % g.width) + 0.5, y: Math.floor(target.cell / g.width) + 0.5 };
@@ -342,6 +567,14 @@ function roots(world: World, e: Entity, r: { every: number; chance: number; cool
   e.mover!.passedWaypoint = false;
   if (e.weapon) e.weapon.targetId = 0;
   tf.nextAbility = world.tick + Math.round(r.cooldown * world.tps);
+  if (hasSynergy(world, e.owner, 'forest', 'rubble')) {
+    for (const o of world.entities) {
+      if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
+      if ((o.pos.x - e.pos.x) * (o.pos.x - e.pos.x) + (o.pos.y - e.pos.y) * (o.pos.y - e.pos.y) > 2.25) continue;
+      o.hp -= Math.min(25, o.hp);
+      if (o.hp <= 1e-6) world.destroy(o, e.owner);
+    }
+  }
   world.emit({ type: 'roots', owner: e.owner, from, to: { x: e.pos.x, y: e.pos.y } });
 }
 
@@ -365,7 +598,7 @@ function landformer(world: World, e: Entity, def: UnitDef): void {
   for (const o of world.entities) {
     if (!o.alive || o.owner !== e.owner || o.kind !== 'unit') continue;
     const od = UNITS[o.defId as UnitId];
-    if (!od.summoned && !od.former) continue;
+    if ((!od.summoned && !od.former) || o.defId === 'mudling') continue;
     const d = (o.pos.x - e.pos.x) * (o.pos.x - e.pos.x) + (o.pos.y - e.pos.y) * (o.pos.y - e.pos.y);
     if (d < bestD || (d === bestD && best && o.id < best.id)) {
       bestD = d;
@@ -380,18 +613,29 @@ function landformer(world: World, e: Entity, def: UnitDef): void {
   world.emit({ type: 'landform', owner: e.owner, what: 'copy', pos: { x: copy.pos.x, y: copy.pos.y } });
 }
 
-/** Hinterhalt (Hainhüter): erster Schuss nach einer Pause auf eigenem Boden – Schadensfaktor (1 = normal). */
+/** Hinterhalt: erster Schuss nach einer Pause auf eigenem Boden – Schadensfaktor (1 = normal). */
 export function ambushFactor(world: World, e: Entity): number {
-  const a = e.tf?.onGround ? UNITS[e.defId as UnitId].groundBonus?.ambush : undefined;
+  const a = e.tf?.gb?.ambush;
   if (!a) return 1;
   return world.tick - e.tf!.lastShot >= a.idleSeconds * world.tps ? a.damage : 1;
 }
 
-/** Frost-Treffer (Frostwächter auf eigenem Schnee): das Ziel kurz bremsen. */
+/**
+ * Treffer-Effekte: Frost (Frostwächter immer leicht, auf eigenem Schnee stärker), Schwächung (Schlammschleuder),
+ * Synergien (Gefrorener Schlamm: Schlammmonster bremsen; Schlammlawine: Schlammschleuder macht Schaden über Zeit).
+ */
 export function onHit(world: World, shooter: Entity, target: Entity): void {
   if (shooter.tf) shooter.tf.lastShot = world.tick;
-  const hs = shooter.tf?.onGround ? UNITS[shooter.defId as UnitId].groundBonus?.hitSlow : undefined;
-  if (hs && target.kind === 'unit') slowDown(world, target, world.tick + Math.round(hs.seconds * world.tps), hs.factor);
+  if (target.kind !== 'unit') return;
+  const def = UNITS[shooter.defId as UnitId];
+  const hs = shooter.tf?.gb?.hitSlow ?? def.hitSlow;
+  if (hs) slowDown(world, target, world.tick + Math.round(hs.seconds * world.tps), hs.factor);
+  if (def.hitWeaken) {
+    const w = def.hitWeaken;
+    target.weaken = { until: world.tick + Math.round(w.seconds * world.tps), speed: w.speed, damage: w.damage };
+    if (hasSynergy(world, shooter.owner, 'mud', 'rubble')) target.dot = { until: world.tick + 3 * world.tps, dps: 4, owner: shooter.owner };
+  }
+  if (shooter.defId === 'mudling' && hasSynergy(world, shooter.owner, 'mud', 'snow')) slowDown(world, target, world.tick + Math.round(1.5 * world.tps), 0.7);
 }
 
 /** Welcher Spieler hat diese Kachel geformt (null = keiner)? */

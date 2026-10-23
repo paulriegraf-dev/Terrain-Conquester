@@ -11,13 +11,14 @@ import { checkSwapArea, checkWall, swapArea, wallCoords } from '../sim/systems/a
 import { controllerAt } from '../sim/systems/influence';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
 import { camouflageRange } from '../sim/systems/terraform';
+import { clutchSize } from '../sim/systems/myr';
 import type { PlayerId, Route, Vec2 } from '../sim/types';
 import { ROUTES } from '../sim/types';
 import type { World } from '../sim/world';
 import { buildPreview, predictPath } from '../ui/view';
 import { BUILD_ZONE, zoneAt } from '../sim/map';
 import type { ViewState } from '../ui/view';
-import { PALETTE, PROFILE_COLOR, hpColor } from './palette';
+import { PALETTE, PROTOCOL_COLOR, PROFILE_COLOR, hpColor } from './palette';
 
 /**
  * Debug-Darstellung auf einem Canvas: Formen statt Grafiken.
@@ -125,8 +126,10 @@ export class Renderer {
     }
     this.drawNetworks(world, alpha, visibleTo);
     for (const e of world.entities) {
-      if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(e, alpha, world.tick);
+      if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
     }
+    this.drawNetBadges(world, alpha, visibleTo);
+    this.drawFlights(world, alpha, view);
     this.drawSwaps(world, view);
     this.drawEffects(world, view);
     this.drawWallTimers(world, view);
@@ -188,18 +191,18 @@ export class Renderer {
 
   /**
    * Technoclan-Netze: leuchtende Linien zwischen den Mitgliedern (auch der Gegner sieht sie),
-   * Punkte über einem Verband = geerbte Protokolle, ein heller Ring = Aufstieg.
+   * auf jeder Verbindung wandert ein heller Datenpunkt. Die Abzeichen der Mitglieder
+   * (geerbte Protokolle, Aufstieg) kommen nach den Einheiten – drawNetBadges.
    */
   private drawNetworks(world: World, alpha: number, visibleTo: (e: Entity) => boolean): void {
     const ctx = this.ctx;
     const t = this.tile;
     const at = (e: Entity): Vec2 => ({ x: (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t, y: (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t });
+    const period = 24;
     for (const ids of world.networks.values()) {
       const members = ids.map((id) => world.get(id)).filter((e): e is Entity => !!e && e.alive && visibleTo(e));
       if (members.length < 2) continue;
-      ctx.strokeStyle = withAlpha(PALETTE.player[members[0]!.owner], 0.55);
-      ctx.lineWidth = Math.max(1, t * 0.08);
-      ctx.beginPath();
+      const links: [Entity, Entity][] = [];
       for (const a of members) {
         let near: Entity | null = null;
         let best = Infinity;
@@ -211,28 +214,149 @@ export class Renderer {
             near = b;
           }
         }
-        if (!near) continue;
-        const pa = at(a);
-        const pb = at(near);
-        ctx.moveTo(pa.x, pa.y);
-        ctx.lineTo(pb.x, pb.y);
+        if (near && !links.some(([x, y]) => x === near && y === a)) links.push([a, near]);
       }
-      ctx.stroke();
+      const color = PALETTE.player[members[0]!.owner];
+      // weicher Schein unter der Linie, dann die Linie selbst
+      ctx.lineCap = 'round';
+      for (const [w, a] of [[Math.max(3, t * 0.3), 0.12], [Math.max(1, t * 0.08), 0.6]] as const) {
+        ctx.strokeStyle = withAlpha(color, a);
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        for (const [a1, b1] of links) {
+          const pa = at(a1);
+          const pb = at(b1);
+          ctx.moveTo(pa.x, pa.y);
+          ctx.lineTo(pb.x, pb.y);
+        }
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      // Datenpunkte: pendeln zwischen den Mitgliedern
+      ctx.fillStyle = 'rgba(225,248,255,0.95)';
+      for (const [a1, b1] of links) {
+        const pa = at(a1);
+        const pb = at(b1);
+        const phase = ((world.tick + alpha + (a1.id * 7 + b1.id * 3)) % (period * 2)) / period;
+        const k = phase <= 1 ? phase : 2 - phase;
+        const s = Math.max(1.5, t * 0.1);
+        ctx.fillRect(pa.x + (pb.x - pa.x) * k - s / 2, pa.y + (pb.y - pa.y) * k - s / 2, s, s);
+      }
     }
+  }
+
+  /**
+   * Abzeichen der Netz-Mitglieder: farbige Punkte über dem Verband = geerbte Protokolle (je Protokoll
+   * eine Farbe), Eck-Klammern = aufgerüsteter Verband, pulsierender Ring = Aufstieg.
+   */
+  private drawNetBadges(world: World, alpha: number, visibleTo: (e: Entity) => boolean): void {
+    const ctx = this.ctx;
+    const t = this.tile;
     for (const e of world.entities) {
       if (!e.alive || !e.net || !visibleTo(e)) continue;
-      const p = at(e);
-      const extra = e.net.protocols.length - 1;
-      if (extra > 0) {
-        ctx.fillStyle = 'rgba(160,230,255,0.95)';
-        for (let k = 0; k < extra; k++) ctx.fillRect(p.x - t * 0.3 + k * t * 0.22, p.y - t * 0.75, t * 0.14, t * 0.14);
+      const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
+      const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
+      const r = Math.max(2.5, e.radius * t);
+      const inherited = e.net.protocols.slice(1);
+      if (inherited.length > 0) {
+        // Eck-Klammern
+        const b = r * 1.75;
+        const l = Math.max(2, r * 0.6);
+        ctx.strokeStyle = 'rgba(190,240,255,0.9)';
+        ctx.lineWidth = Math.max(1, t * 0.07);
+        ctx.beginPath();
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+          ctx.moveTo(x + sx * b, y + sy * (b - l));
+          ctx.lineTo(x + sx * b, y + sy * b);
+          ctx.lineTo(x + sx * (b - l), y + sy * b);
+        }
+        ctx.stroke();
+        // Protokoll-Punkte
+        const s = Math.max(2, t * 0.18);
+        const gap = s * 0.45;
+        const w = inherited.length * s + (inherited.length - 1) * gap;
+        const py = y - r - Math.max(6, t * 0.55) - s;
+        inherited.forEach((p, k) => {
+          const px = x - w / 2 + k * (s + gap);
+          ctx.fillStyle = PALETTE.outline;
+          ctx.fillRect(px - 1, py - 1, s + 2, s + 2);
+          ctx.fillStyle = PROTOCOL_COLOR[p];
+          ctx.fillRect(px, py, s, s);
+        });
       }
       if (world.tick < e.net.ascendUntil) {
-        ctx.strokeStyle = `rgba(160,230,255,${0.5 + 0.4 * Math.sin(world.tick * 0.3)})`;
+        const pulse = 0.5 + 0.4 * Math.sin((world.tick + alpha) * 0.3);
+        ctx.strokeStyle = `rgba(160,230,255,${pulse})`;
         ctx.lineWidth = Math.max(1.5, t * 0.12);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(3, e.radius * t * 1.9), 0, Math.PI * 2);
+        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
         ctx.stroke();
+        // kleine Funken, die um den Verband kreisen
+        ctx.fillStyle = 'rgba(225,248,255,0.95)';
+        for (let k = 0; k < 3; k++) {
+          const a = (world.tick + alpha) * 0.12 + (k * Math.PI * 2) / 3;
+          ctx.fillRect(x + Math.cos(a) * r * 2.2 - 1.5, y + Math.sin(a) * r * 2.2 - 1.5, 3, 3);
+        }
+      }
+    }
+  }
+
+  /**
+   * Myriaden-Würfe in der Luft: Bogen vom Werfer zum Ziel, darauf der Verband (Punkte) bzw. der
+   * Verspotter (großer Punkt), am Boden der Schatten und der Landepunkt.
+   */
+  private drawFlights(world: World, alpha: number, view: ViewState): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    const seen = (p: Vec2): boolean =>
+      !view.fog || view.human === null || world.players[view.human].vision.isVisible(Math.floor(p.x), Math.floor(p.y));
+    for (const f of world.flights) {
+      if (!seen(f.from) && !seen(f.to)) continue;
+      const k = Math.min(1, Math.max(0, (world.tick + alpha - f.start) / Math.max(1, f.land - f.start)));
+      const gx = (f.from.x + (f.to.x - f.from.x) * k) * t;
+      const gy = (f.from.y + (f.to.y - f.from.y) * k) * t;
+      const dist = Math.hypot(f.to.x - f.from.x, f.to.y - f.from.y);
+      const lift = 4 * k * (1 - k) * Math.max(1.5, dist * 0.35) * t;
+      const color = PALETTE.player[f.owner];
+      // Flugbahn (gepunktet, noch vor dem Flugkörper)
+      ctx.fillStyle = withAlpha(color, 0.45);
+      const h = Math.max(1.5, dist * 0.35) * t;
+      for (let s = Math.ceil(k * 12); s <= 12; s++) {
+        const q = s / 12;
+        const px = (f.from.x + (f.to.x - f.from.x) * q) * t;
+        const py = (f.from.y + (f.to.y - f.from.y) * q) * t - 4 * q * (1 - q) * h;
+        ctx.fillRect(px - 1, py - 1, 2, 2);
+      }
+      // Landepunkt
+      ctx.strokeStyle = withAlpha(color, 0.5);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.arc(f.to.x * t, f.to.y * t, (f.impact?.radius ?? 0.6) * t, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Schatten
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(gx, gy, t * 0.35, t * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Flugkörper
+      ctx.fillStyle = color;
+      ctx.strokeStyle = PALETTE.outline;
+      ctx.lineWidth = 1;
+      if (f.unit === 'taunter') {
+        ctx.beginPath();
+        ctx.arc(gx, gy - lift, Math.max(3, t * 0.42), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        const s = Math.max(2, t * 0.16);
+        for (let m = 0; m < f.models; m++) {
+          const a = (m / Math.max(1, f.models)) * Math.PI * 2 + (world.tick + alpha) * 0.4;
+          const ox = Math.cos(a) * t * 0.22;
+          const oy = Math.sin(a) * t * 0.22;
+          ctx.fillRect(gx + ox - s / 2, gy - lift + oy - s / 2, s, s);
+        }
       }
     }
   }
@@ -590,7 +714,7 @@ export class Renderer {
       ctx.lineTo(x * t + t * 0.35, y * t);
       ctx.lineTo(x * t, y * t + t * 0.35);
       ctx.closePath();
-      if ((world.consumed[i]! & (owner === 0 ? 1 : 2)) !== 0) {
+      if (world.tileCooldown[owner * world.formed.length + i]! > world.tick) {
         ctx.strokeStyle = withAlpha(PALETTE.player[owner], 0.6);
         ctx.stroke();
       } else {
@@ -664,6 +788,26 @@ export class Renderer {
       const own = view.human === null || e.owner === view.human;
       if (own && pr.pendingRoute) {
         this.drawRouteMark(e.owner, pr.pendingRoute, (r.x + r.w) * t - t * 0.45, (r.y + r.h) * t - t * 0.6, 0.45);
+      }
+      if (own && pr.clutch) {
+        // Myriaden-Gelege: gefüllte Eier = gelegt, hohle = bis zum gemeinsamen Schlupf
+        const size = clutchSize(world, e) ?? pr.clutch.length;
+        const d = Math.max(1.5, Math.min(t * 0.14, (r.w * t - 8) / (size * 2.4)));
+        const step = d * 2.4;
+        const x0 = cx - ((size - 1) * step) / 2;
+        const ey = (r.y + r.h) * t - 5 - d * 1.8;
+        ctx.lineWidth = 1;
+        for (let k = 0; k < size; k++) {
+          ctx.beginPath();
+          ctx.ellipse(x0 + k * step, ey, d, d * 1.25, 0, 0, Math.PI * 2);
+          if (k < pr.clutch.length) {
+            ctx.fillStyle = color;
+            ctx.fill();
+          } else {
+            ctx.strokeStyle = withAlpha(color, 0.55);
+            ctx.stroke();
+          }
+        }
       }
       if (own && pr.paused) this.badge('II', (r.x + 0.45) * t, (r.y + 0.45) * t);
       else if (own && e.disguise && world.tick < e.disguise.until) this.badge('T', (r.x + 0.45) * t, (r.y + 0.45) * t);
@@ -751,7 +895,7 @@ export class Renderer {
     ctx.fillText(text, x, y + 1);
   }
 
-  private drawUnit(e: Entity, alpha: number, tick: number): void {
+  private drawUnit(world: World, e: Entity, alpha: number, tick: number): void {
     const ctx = this.ctx;
     const t = this.tile;
     const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
@@ -774,7 +918,7 @@ export class Renderer {
     }
     const shape = UNITS[e.defId as UnitId].shape;
     // Getarnt (Borkenwächter im eigenen Wald): halb durchsichtig
-    const camo = camouflageRange(e) !== null;
+    const camo = camouflageRange(world, e) !== null;
     if (camo) ctx.globalAlpha = 0.5;
     ctx.fillStyle = PALETTE.player[e.owner];
     ctx.strokeStyle = PALETTE.outline;
@@ -920,6 +1064,63 @@ export class Renderer {
         ctx.lineWidth = Math.max(1, t * 0.08);
         ctx.beginPath();
         ctx.arc(ev.pos.x * t, ev.pos.y * t, t * (1.2 - k * 0.9), 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (ev.type === 'link' && age <= 12) {
+        // Technoclan: Verband tritt dem Netz bei – kurzer Lichtblitz auf der neuen Verbindung
+        if (!seen(ev.from) && !seen(ev.to)) continue;
+        const k = age / 12;
+        ctx.strokeStyle = `rgba(225,248,255,${0.95 * (1 - k)})`;
+        ctx.lineWidth = Math.max(1.5, t * 0.16 * (1 - k * 0.5));
+        ctx.beginPath();
+        ctx.moveTo(ev.from.x * t, ev.from.y * t);
+        ctx.lineTo(ev.to.x * t, ev.to.y * t);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(ev.from.x * t, ev.from.y * t, t * (0.3 + k * 0.6), 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (ev.type === 'protocol' && age <= 24) {
+        // Technoclan: Protokoll wandert vom gefallenen Mitglied zum Erben – Lichtpunkt plus Ring
+        if (!seen(ev.from) && !seen(ev.to)) continue;
+        const k = age / 24;
+        const color = PROTOCOL_COLOR[ev.protocol];
+        const m = Math.min(1, k * 2);
+        ctx.strokeStyle = withAlpha(color, 0.6 * (1 - k));
+        ctx.lineWidth = Math.max(1, t * 0.06);
+        ctx.setLineDash([t * 0.12, t * 0.12]);
+        ctx.beginPath();
+        ctx.moveTo(ev.from.x * t, ev.from.y * t);
+        ctx.lineTo(ev.to.x * t, ev.to.y * t);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const s = Math.max(3, t * 0.26);
+        ctx.fillStyle = withAlpha(color, 1 - k * 0.5);
+        ctx.fillRect(ev.from.x * t + (ev.to.x - ev.from.x) * t * m - s / 2, ev.from.y * t + (ev.to.y - ev.from.y) * t * m - s / 2, s, s);
+        if (k >= 0.5) {
+          const q = (k - 0.5) * 2;
+          ctx.strokeStyle = withAlpha(color, 0.9 * (1 - q));
+          ctx.lineWidth = Math.max(1.5, t * (ev.ascend ? 0.2 : 0.12));
+          ctx.beginPath();
+          ctx.arc(ev.to.x * t, ev.to.y * t, t * (0.4 + q * (ev.ascend ? 2.2 : 1.2)), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (ev.type === 'hatch' && age <= 20) {
+        // Myriaden: Gelege schlüpft – Ring vor der Brut
+        if (!seen(ev.pos)) continue;
+        const k = age / 20;
+        ctx.strokeStyle = withAlpha(PALETTE.player[ev.owner], 0.85 * (1 - k));
+        ctx.lineWidth = Math.max(1.5, t * 0.12);
+        ctx.setLineDash([t * 0.2, t * 0.15]);
+        ctx.beginPath();
+        ctx.arc(ev.pos.x * t, ev.pos.y * t, t * (0.6 + k * 2.4), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if ((ev.type === 'land' || ev.type === 'mudlings') && age <= 12) {
+        if (!seen(ev.pos)) continue;
+        const k = age / 12;
+        ctx.strokeStyle = withAlpha(PALETTE.player[ev.owner], 0.8 * (1 - k));
+        ctx.lineWidth = Math.max(1, t * 0.1);
+        ctx.beginPath();
+        ctx.arc(ev.pos.x * t, ev.pos.y * t, t * (0.3 + k * 1.1), 0, Math.PI * 2);
         ctx.stroke();
       } else if (ev.type === 'death' && age <= 14) {
         if (!seen(ev.pos)) continue;

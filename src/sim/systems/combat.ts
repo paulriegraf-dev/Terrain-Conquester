@@ -12,6 +12,8 @@ import { commandBonus } from './hero';
 import { aimPoint, rangeTo } from './targeting';
 import { frenzyOf } from './lifespan';
 import { ambushFactor, dugInFactor, onHit } from './terraform';
+import { tryLaunch } from './myr';
+import { synergyApBonus, synergyDamageFactor } from './synergy';
 
 interface Hit {
   target: Entity;
@@ -40,6 +42,7 @@ export function updateCombat(world: World): void {
    * Schießen – sonst hinge es von der Listen-Reihenfolge ab, wessen Schüsse ins Leere gehen.
    */
   const consumed = new Map<Entity, number>();
+  shields = shieldMap(world);
 
   for (const e of world.entities) {
     const w = e.weapon;
@@ -55,9 +58,16 @@ export function updateCombat(world: World): void {
     if (rangeTo(e, t) > w.def.range) continue;
     // Bauschutz: Neue Gebäude sind kurz unangreifbar.
     if (t.shieldUntil !== undefined && world.tick < t.shieldUntil) continue;
+    // Werfer (Myr-Kanone, -Katapult): statt eines Schusses eigene Myrs werfen, solange eine Ladung da ist.
+    const launch = e.kind === 'unit' ? UNITS[e.defId as UnitId].launch : undefined;
+    if (launch && rangeTo(e, t) <= launch.range && tryLaunch(world, e, t, consumed)) {
+      w.ready = Math.max(1, Math.round(launch.cooldown * world.tps));
+      continue;
+    }
     let damage = damagePerWound(world, e, t);
     if (damage <= 0) continue;
-    if (e.tf) damage *= ambushFactor(world, e); // Hinterhalt aus dem eigenen Wald (Hainhüter)
+    if (e.tf) damage *= ambushFactor(world, e) * synergyDamageFactor(world, e); // Hinterhalt, Blühende Wiese
+    if (e.weaken && world.tick < e.weaken.until) damage *= e.weaken.damage; // geschwächt (Schlammschleuder)
 
     // Myriaden: Masse als Stärke, Munition wörtlich, Kamikaze.
     const def = e.kind === 'unit' ? UNITS[e.defId as UnitId] : undefined;
@@ -83,7 +93,8 @@ export function updateCombat(world: World): void {
     const shots = aliveModels(e) * w.def.shots;
     const bonus = commandBonus(world, e);
     const blast = rock ? undefined : w.def.blast; // Felsen: kein Explosiv-Bonus gegen Masse
-    const wdef = swarmAp > 0 ? { ...w.def, ap: w.def.ap + swarmAp } : w.def;
+    const apBonus = swarmAp + (e.tf ? synergyApBonus(world, e) : 0);
+    const wdef = apBonus > 0 ? { ...w.def, ap: w.def.ap + apBonus } : w.def;
     const expected = (shots + blastShots(blast, t)) * woundsPerShot(wdef, defenseOf(world, t), bonus) * factor;
     if (def?.kamikaze) {
       // Eine einzige Explosion: der erwartete Schaden in einem Schlag.
@@ -223,6 +234,9 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
     damage *= siegeMultiplier(world, t.owner);
   }
   if (t.kind === 'hq') damage *= world.hqDamageMult;
+  // Schild-Aura (Frostwächter in der Nähe des Ziels)
+  const shield = shields.get(t.id);
+  if (shield !== undefined) damage *= shield;
   // Gebäude in der eigenen Basis sind befestigt, vorgeschobene nicht.
   if (t.kind === 'building' && t.fortified) damage *= world.rules.baseBuildingDamageTaken;
   // Eingegraben (Felsbastion auf eigenem Geröll)
@@ -236,6 +250,28 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
     if (bonus) damage *= world.rules.emergency.bonusDamageTaken;
   }
   return damage;
+}
+
+/** Schild-Auren dieses Ticks: Entity-ID → Schadensfaktor (der stärkste Schild zählt). */
+let shields = new Map<number, number>();
+
+/** Wer steht im Schild eines eigenen Frostwächters (UnitDef.shieldAura)? Einmal je Tick. */
+function shieldMap(world: World): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const s of world.entities) {
+    if (!s.alive || s.kind !== 'unit') continue;
+    const aura = UNITS[s.defId as UnitId].shieldAura;
+    if (!aura) continue;
+    const r2 = aura.radius * aura.radius;
+    for (const o of world.entities) {
+      if (!o.alive || o.kind !== 'unit' || o.owner !== s.owner || o === s) continue;
+      const dx = o.pos.x - s.pos.x;
+      const dy = o.pos.y - s.pos.y;
+      if (dx * dx + dy * dy > r2) continue;
+      out.set(o.id, Math.min(out.get(o.id) ?? 1, aura.factor));
+    }
+  }
+  return out;
 }
 
 /** So viele Ziele mit angebrochenen Wunden merkt sich ein Schütze höchstens. */

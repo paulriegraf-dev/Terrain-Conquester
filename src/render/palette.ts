@@ -1,4 +1,5 @@
 import type { MoveProfileId } from '../data/movement';
+import type { ProtocolId } from '../data/units';
 
 /**
  * Farben der Debug-Ansicht. Alles Grafische steckt in src/render –
@@ -24,6 +25,18 @@ export const PALETTE = {
   selection: '#f4f1e4',
   text: '#eef3ee',
 } as const;
+
+/** Technoclan-Protokolle: je eine Farbe für die Punkte über aufgerüsteten Verbänden. */
+export const PROTOCOL_COLOR: Record<ProtocolId, string> = {
+  antiHeavy: '#ff9a4a',
+  area: '#ffd94a',
+  mark: '#ff5a6e',
+  range: '#8ee07b',
+  pierce: '#c48bff',
+  repair: '#6ff0d0',
+  plating: '#c8ccd4',
+  node: '#ffffff',
+};
 
 /** Farbe je Bewegungsprofil (Wege-Vorschau und Flussfeld-Ebene). */
 export const PROFILE_COLOR: Record<MoveProfileId, string> = {

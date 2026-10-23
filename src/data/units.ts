@@ -18,14 +18,14 @@ export type UnitId =
   // Technoclan
   | 'sniper' | 'plasma' | 'nanomedic' | 'hoverscout' | 'battery' | 'gunner' | 'colossus' | 'commander'
   // Myriaden
-  | 'drone' | 'bomber' | 'hound' | 'myrcannon' | 'catapult' | 'sphere' | 'swarmmind'
+  | 'drone' | 'bomber' | 'hound' | 'myrcannon' | 'catapult' | 'sphere' | 'swarmmind' | 'taunter'
   // Terra-Former: je Bodenart Wächter, Terraformer und gerufene Spezialeinheit, dazu der Held
   | 'wardMeadow' | 'formerMeadow' | 'specialMeadow'
   | 'wardForest' | 'formerForest' | 'specialForest'
   | 'wardMud' | 'formerMud' | 'specialMud'
   | 'wardSnow' | 'formerSnow' | 'specialSnow'
   | 'wardRubble' | 'formerRubble' | 'specialRubble'
-  | 'landformer';
+  | 'landformer' | 'mudling';
 
 /**
  * Waffenprofil nach Tabletop-Vorbild (Warhammer 40k), aber ohne Würfel:
@@ -171,6 +171,35 @@ export const PROTOCOLS: Readonly<Record<ProtocolId, { name: string; hint: string
   node: { name: 'Knoten', hint: 'verbindet zwei Netze (bis 7 Mitglieder)' },
 };
 
+/**
+ * Myriaden (23.10.): Werfer – Kanone und Katapult werfen eigene Myrs, statt selbst Schaden zu machen.
+ * Ist keine Ladung da (und nichts zum Nachladen in der Nähe), wirft die Einheit Steine: dann gilt ihre
+ * normale Waffe (direkter Schaden).
+ */
+export interface LaunchDef {
+  /** Diese Einheit landet beim Ziel. */
+  unit: UnitId;
+  /** So viele Modelle hat der gelandete Verband (Standard: voll). */
+  models?: number;
+  /** Ladungen beim Erscheinen (gratis). */
+  load: number;
+  /** Höchstens so viele Ladungen. */
+  max: number;
+  /** Eigene kleine Brut: alle so viele Sekunden eine neue Ladung. */
+  regen: number;
+  /** Leer: so viele Modelle aus einem eigenen Verband dieser Art im Umkreis als eine Ladung nehmen. */
+  take?: { radius: number; models: number };
+  /** Wurfweite (Kacheln) und Flugzeit (Sekunden). */
+  range: number;
+  flight: number;
+  /** Sekunden zwischen zwei Würfen. */
+  cooldown: number;
+  /** Aufprall: kleine Explosion (Schaden je Gegner im Radius). */
+  impact?: { radius: number; damage: number };
+  /** Zielt auf weiche Ziele (Unbewaffnete, Artillerie, Leichte) – nie direkt auf Panzer oder Bauwerke. */
+  soft?: boolean;
+}
+
 export interface UnitDef {
   id: UnitId;
   /** Technoclan-Netzwerk: Protokoll dieser Einheitenart (siehe PROTOCOLS). */
@@ -226,6 +255,22 @@ export interface UnitDef {
   deathSpawn?: { unit: UnitId; count: number };
   /** Schwarmgeist: Gegner, die in diesem Radius fallen, werden zu eigenen Drohnen. */
   recycle?: { radius: number; unit: UnitId };
+  /** Werfer (Myr-Kanone, Myr-Katapult), siehe LaunchDef. */
+  launch?: LaunchDef;
+  /** Verspotten: Gegner in diesem Radius schießen bevorzugt auf diese Einheit. */
+  taunt?: { radius: number };
+  /** Lebt nur so viele Sekunden, dann ist die Einheit einfach tot (Myr-Verspotter). */
+  expires?: number;
+  /** Schild-Aura: Eigene Einheiten im Radius nehmen nur `factor` des Schadens (Frostwächter). */
+  shieldAura?: { radius: number; factor: number };
+  /** Treffer bremsen das Ziel immer (nicht nur auf eigenem Boden): Sekunden, Tempo-Faktor. */
+  hitSlow?: { seconds: number; factor: number };
+  /** Treffer schwächen das Ziel: bremsen und senken seinen Schaden (Schlammschleuder). */
+  hitWeaken?: { seconds: number; speed: number; damage: number };
+  /** Gestaltwandler (Hainhüter): bekommt auf jedem eigenen Boden den Boden-Bonus des Wächters dieser Art. */
+  shapeshift?: boolean;
+  /** Leine (Schlammmonster): entfernt sich höchstens so weit von eigenem Boden seiner Art. */
+  leash?: { radius: number };
   /** Held: kommt nicht aus einer Fabrik, sondern über ein HQ-Upgrade; einer pro Spieler. */
   hero?: boolean;
   /** Commander: eigene Einheiten in diesem Radius treffen um `hitBonus` Augenzahlen besser. */
@@ -325,20 +370,26 @@ const RAW: Record<UnitId, UnitInput> = {
   },
   myrcannon: {
     id: 'myrcannon', name: 'Myr-Kanone', armor: 'light', hp: 156, toughness: 5, save: 5,
-    speed: 1.2, move: 'wheels', part: 'wheels', radius: 0.4, vision: 6, spawnInterval: 7,
-    weapon: { shots: 10, cooldown: 1.4, range: 3.6, skill: 4, strength: 3, ap: 1, damage: 9, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
-    ammo: { unit: 'drone', radius: 3, shotsPer: 20, emptyFactor: 0.65 },
+    speed: 1.2, move: 'wheels', part: 'wheels', radius: 0.4, vision: 7, spawnInterval: 7,
+    // Steine (wenn keine Drohne zum Werfen da ist): direkter Schaden mit etwas Fläche
+    weapon: { shots: 3, cooldown: 2.0, range: 7, skill: 4, strength: 6, ap: 1, damage: 12, type: 'siege', splash: 1.0, structureDamage: 1.5 },
+    // 23.10.: wirft eigene Drohnen (3 Modelle) zu weichen Zielen hinter der Front
+    launch: { unit: 'drone', models: 3, load: 3, max: 3, regen: 30, take: { radius: 3, models: 3 }, range: 7, flight: 1.5, cooldown: 4, soft: true },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
-    shape: 'triangle', letter: 'k', role: 'Flächenschaden mit Drohnen als Munition – ohne Drohnen schwach',
+    shape: 'triangle', letter: 'k', role: 'Drohnen-Werfer: wirft eigene Drohnen über die Front zu weichen Zielen – ohne Drohnen Steine',
   },
+
   catapult: {
     id: 'catapult', name: 'Myr-Katapult', armor: 'light', hp: 102, toughness: 5, save: 5,
     speed: 0.75, move: 'wheels', part: 'wheels', binds: { wheels: 1, arms: 1 }, radius: 0.45, vision: 6, spawnInterval: 10,
-    weapon: { shots: 2, cooldown: 3.2, range: 7.5, skill: 4, strength: 8, ap: 1, damage: 55, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0, blast: 2 },
-    ammo: { unit: 'drone', radius: 3, shotsPer: 8, emptyFactor: 0.55, rocks: { radius: 1.5, structureBonus: 1.25 } },
+    // Steine (ohne Verspotter): Artillerie, stark gegen Gebäude
+    weapon: { shots: 2, cooldown: 3.2, range: 7.5, skill: 4, strength: 8, ap: 1, damage: 55, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0 },
+    // 23.10.: wirft den Myr-Verspotter in die gegnerische Linie
+    launch: { unit: 'taunter', load: 2, max: 2, regen: 40, range: 7.5, flight: 2, cooldown: 6, impact: { radius: 1.5, damage: 30 } },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
-    shape: 'diamond', letter: 'c', role: 'Artillerie: wirft Myrs weit, stark gegen Gebäude – braucht Drohnen',
+    shape: 'diamond', letter: 'c', role: 'Wirft Myr-Verspotter in die gegnerische Linie – ohne Verspotter Steine gegen Gebäude',
   },
+
   sphere: {
     id: 'sphere', name: 'Myriaden-Battlesphäre', armor: 'heavy', hp: 384, toughness: 8, save: 3,
     speed: 0.9, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.5, vision: 6, spawnInterval: 11,
@@ -354,111 +405,135 @@ const RAW: Record<UnitId, UnitInput> = {
     recycle: { radius: 5, unit: 'drone' },
     hero: true,
     shape: 'diamond', letter: 'Ω', role: 'Held: Gegner, die in seiner Nähe fallen, werden zu Myr-Drohnen',
+  },  taunter: {
+    id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 300, toughness: 8, save: 4,
+    speed: 0.8, move: 'foot', part: 'plates', radius: 0.5, vision: 5, spawnInterval: 0, supply: 0.5,
+    weapon: { shots: 1, cooldown: 2, range: 1.5, skill: 4, strength: 5, ap: 0, damage: 10, type: 'rifle' },
+    taunt: { radius: 3 }, expires: 60,
+    shape: 'square', letter: 'V', role: 'Geworfen vom Katapult: zieht das Feuer auf sich (Verspotten), nach 60 s tot',
   },
+
 
   // ---------------------------------------------------------------- Terra-Former (Entwurf 22.10.)
   // Raum statt Masse oder Technik: Wächter sind zäh, langsam und schwach im Angriff (sie erkaufen Zeit),
   // jeder fünfte Verband ist ein Terraformer, der Boden formt und nach 4 Kacheln eine Spezialeinheit ruft.
   wardMeadow: {
-    id: 'wardMeadow', name: 'Halmwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 3,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 4,
-    weapon: { shots: 1, cooldown: 1.2, range: 3.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
-    ground: 'meadow', groundBonus: { range: 1 },
-    shape: 'circle', letter: 'w', role: 'Wächter: zäh, schwach im Angriff – auf eigener Wiese +1 Reichweite',
+    id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
+    speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 4,
+    weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle' },
+    ground: 'meadow', groundBonus: { speed: 1.3 },
+    shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf eigener Wiese schneller',
   },
+
   formerMeadow: {
     id: 'formerMeadow', name: 'Säer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 1.2, move: 'wheels', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'wheels', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
     ground: 'meadow', former: { special: 'specialMeadow' },
-    shape: 'cross', letter: 'ś', role: 'Terraformer: formt Wiese, ruft nach 4 Kacheln einen Steppenjäger',
+    shape: 'cross', letter: 'ś', role: 'Terraformer: formt die Umgebung zu Wiese, ruft auf 4 Kacheln einen Steppenjäger',
   },
+
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 160, toughness: 5, save: 4,
-    speed: 1.6, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
-    weapon: { shots: 2, cooldown: 1.3, range: 4.5, skill: 3, strength: 7, ap: 2, damage: 30, type: 'cannon', anti: { light: 3 } },
-    ground: 'meadow', groundBonus: { speed: 1.5, range: 1.5 },
-    shape: 'triangle', letter: 'J', role: 'Jäger gegen Fahrzeuge – auf eigener Wiese Sprint und große Reichweite',
+    speed: 2.0, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
+    weapon: { shots: 3, cooldown: 0.9, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 } },
+    ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
+    shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf eigener Wiese Sprint und mehr Reichweite',
   },
+
   wardForest: {
-    id: 'wardForest', name: 'Borkenwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 3,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 4,
-    weapon: { shots: 1, cooldown: 1.2, range: 3.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
+    id: 'wardForest', name: 'Borkenschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
+    speed: 1.0, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 4,
+    weapon: { shots: 1, cooldown: 1.4, range: 5, skill: 3, strength: 5, ap: 1, damage: 8, type: 'rifle' },
     ground: 'forest', groundBonus: { camouflage: 2 },
-    shape: 'circle', letter: 'b', role: 'Wächter: zäh, schwach im Angriff – im eigenen Wald getarnt (erst aus 2 Kacheln zu sehen)',
+    shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im eigenen Wald getarnt (erst aus 2 Kacheln zu sehen)',
   },
+
   formerForest: {
     id: 'formerForest', name: 'Pflanzer', armor: 'infantry', hp: 120, toughness: 4, save: 5,
-    speed: 1.0, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
     ground: 'forest', former: { special: 'specialForest' },
-    shape: 'cross', letter: 'p', role: 'Terraformer: lässt Wald wachsen, ruft nach 4 Kacheln einen Hainhüter',
+    shape: 'cross', letter: 'p', role: 'Terraformer: lässt die Umgebung zu Wald wachsen, ruft auf 4 Kacheln einen Hainhüter',
   },
+
   specialForest: {
-    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 320, toughness: 8, save: 3,
-    speed: 1.0, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 2, cooldown: 1.5, range: 3.5, skill: 3, strength: 8, ap: 3, damage: 40, type: 'pierce', anti: { heavy: 2 } },
-    ground: 'forest', groundBonus: { ambush: { idleSeconds: 5, damage: 2 }, roots: { every: 20, chance: 0.3, cooldown: 20 } },
-    shape: 'square', letter: 'H', role: 'Hinterhalt gegen Panzer – erster Schuss aus dem Wald doppelt; Wurzelnetz: springt zu eigenen Wäldern auf anderen Routen',
+    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 380, toughness: 8, save: 3,
+    speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
+    weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 6, ap: 1, damage: 15, type: 'rifle' },
+    ground: 'forest', shapeshift: true,
+    shape: 'square', letter: 'H', role: 'Langsamer Tank, wenig Schaden – Gestaltwandler: auf jedem eigenen Boden bekommt er den Bonus des Wächters dieser Art',
   },
+
   wardMud: {
-    id: 'wardMud', name: 'Schlammwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 3,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 4,
-    weapon: { shots: 2, cooldown: 1.5, range: 2.8, skill: 4, strength: 3, ap: 0, damage: 6, type: 'splinter', anti: { infantry: 4 }, splash: 1.0 },
+    id: 'wardMud', name: 'Schlammwerfer', armor: 'infantry', hp: 90, models: 3, toughness: 4, save: 5,
+    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 4,
+    weapon: { shots: 1, cooldown: 1.8, range: 5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'splinter', anti: { infantry: 4 }, splash: 1.2 },
     ground: 'mud', groundBonus: { slowAura: { radius: 2, factor: 0.7 } },
-    shape: 'circle', letter: 'm', role: 'Wächter gegen Masse – im eigenen Matsch bremst er Gegner in 2 Kacheln',
+    shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im eigenen Matsch bremst er Gegner in 2 Kacheln',
   },
+
   formerMud: {
     id: 'formerMud', name: 'Wässerer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.9, move: 'tracks', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
     ground: 'mud', former: { special: 'specialMud' },
-    shape: 'cross', letter: 'ẃ', role: 'Terraformer: weicht Boden zu Matsch auf, ruft nach 4 Kacheln einen Moorschlund',
+    shape: 'cross', letter: 'ẃ', role: 'Terraformer: weicht die Umgebung zu Matsch auf, ruft auf 4 Kacheln eine Schlammschleuder',
   },
+
   specialMud: {
-    id: 'specialMud', name: 'Moorschlund', armor: 'heavy', hp: 360, toughness: 8, save: 4,
-    speed: 0.7, move: 'tracks', part: 'plates', radius: 0.5, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 4, cooldown: 1.8, range: 3, skill: 4, strength: 5, ap: 1, damage: 12, type: 'splinter', anti: { infantry: 4 }, splash: 1.6 },
-    ground: 'mud', groundBonus: { pullAura: { radius: 3, factor: 0.4, pull: 0.6 } },
-    shape: 'square', letter: 'M', role: 'Kontrolle: Sog-Zone – Gegner im Matsch kommen kaum voran und werden zu ihm gezogen',
+    id: 'specialMud', name: 'Schlammschleuder', armor: 'light', hp: 200, toughness: 5, save: 5,
+    speed: 0.8, move: 'tracks', part: 'plates', radius: 0.5, vision: 7, spawnInterval: 0, summoned: true,
+    weapon: { shots: 2, cooldown: 2.0, range: 5.5, skill: 4, strength: 5, ap: 1, damage: 14, type: 'splinter', splash: 1.6 },
+    hitWeaken: { seconds: 3, speed: 0.6, damage: 0.75 },
+    ground: 'mud', groundBonus: { range: 1 },
+    shape: 'square', letter: 'M', role: 'Schleudert Schlamm: Flächenschaden, Getroffene sind 3 s langsamer und schwächer',
   },
+
   wardSnow: {
-    id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 3,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 4,
-    weapon: { shots: 1, cooldown: 1.2, range: 3.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
-    ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.6 } },
-    shape: 'circle', letter: 'f', role: 'Wächter: zäh – auf eigenem Schnee bremsen seine Treffer das Ziel',
+    id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 4,
+    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 4,
+    weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
+    hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
+    ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },
+    shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf eigenem Schnee bremst er stärker',
   },
+
   formerSnow: {
     id: 'formerSnow', name: 'Frostbringer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 1.2, move: 'hover', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'hover', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
     ground: 'snow', former: { special: 'specialSnow' },
-    shape: 'cross', letter: 'ƒ', role: 'Terraformer: lässt es schneien, ruft nach 4 Kacheln einen Lawinenrufer',
+    shape: 'cross', letter: 'ƒ', role: 'Terraformer: lässt es in der Umgebung schneien, ruft auf 4 Kacheln einen Lawinenrufer',
   },
+
   specialSnow: {
-    id: 'specialSnow', name: 'Lawinenrufer', armor: 'light', hp: 180, toughness: 5, save: 4,
-    speed: 1.2, move: 'hover', part: 'wheels', radius: 0.4, vision: 7, spawnInterval: 0, summoned: true,
+    id: 'specialSnow', name: 'Lawinenrufer', armor: 'heavy', hp: 260, toughness: 6, save: 4,
+    speed: 1.0, move: 'hover', part: 'plates', radius: 0.45, vision: 7, spawnInterval: 0, summoned: true,
     weapon: { shots: 3, cooldown: 1.5, range: 4, skill: 4, strength: 4, ap: 1, damage: 10, type: 'splinter', splash: 1.4 },
     ground: 'snow', groundBonus: { frostWave: { every: 15, radius: 3.5, stun: 1.5 } },
-    shape: 'triangle', letter: 'L', role: 'Kontrolle: Frostwelle friert Gegner auf Schnee kurz ein (alle 15 s)',
+    shape: 'triangle', letter: 'L', role: 'Kontrolle und Zähigkeit: Flächenschaden, Frostwelle friert Gegner auf Schnee kurz ein (alle 15 s)',
   },
+
   wardRubble: {
-    id: 'wardRubble', name: 'Steinwächter', armor: 'heavy', hp: 180, models: 2, toughness: 6, save: 3,
-    speed: 0.75, move: 'tracks', part: 'plates', radius: 0.38, vision: 6, spawnInterval: 5,
-    weapon: { shots: 2, cooldown: 1.5, range: 3, skill: 4, strength: 5, ap: 1, damage: 10, type: 'rifle' },
+    id: 'wardRubble', name: 'Steinwächter', armor: 'heavy', hp: 240, models: 2, toughness: 6, save: 3,
+    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 5,
+    weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 } },
     ground: 'rubble', groundBonus: { save: 1 },
-    shape: 'square', letter: 'g', role: 'Wächter: schwer und zäh – auf eigenem Geröll Rüstung +1',
+    shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf eigenem Geröll Rüstung +1',
   },
+
   formerRubble: {
     id: 'formerRubble', name: 'Brecher', armor: 'light', hp: 140, toughness: 5, save: 5,
-    speed: 0.9, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 5,
+    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 5,
     ground: 'rubble', former: { special: 'specialRubble' },
-    shape: 'cross', letter: 'ǵ', role: 'Terraformer: bricht Boden zu Geröll, ruft nach 4 Kacheln eine Felsbastion',
+    shape: 'cross', letter: 'ǵ', role: 'Terraformer: bricht die Umgebung zu Geröll, ruft auf 4 Kacheln einen Frontbrecher',
   },
+
   specialRubble: {
-    id: 'specialRubble', name: 'Felsbastion', armor: 'heavy', hp: 420, toughness: 9, save: 3,
-    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.5, vision: 7, spawnInterval: 0, summoned: true,
-    weapon: { shots: 1, cooldown: 3, range: 7, skill: 4, strength: 8, ap: 1, damage: 60, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0 },
-    ground: 'rubble', groundBonus: { dugIn: { damageTaken: 0.5 } },
-    shape: 'diamond', letter: 'F', role: 'Stellung: gräbt sich auf eigenem Geröll ein (unbeweglich, halber Schaden) und wirft Felsen weit',
+    id: 'specialRubble', name: 'Frontbrecher', armor: 'heavy', hp: 420, toughness: 9, save: 3,
+    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.5, vision: 6, spawnInterval: 0, summoned: true,
+    weapon: { shots: 1, cooldown: 2.5, range: 3.5, skill: 3, strength: 10, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
+    ground: 'rubble', groundBonus: { save: 1 },
+    shape: 'diamond', letter: 'F', role: 'Frontbrecher: schwer und langsam, hoher Einzelschaden, wenige Angriffe, leichte Fläche – auf eigenem Geröll Rüstung +1',
   },
+
   landformer: {
     id: 'landformer', name: 'Landformer', armor: 'heavy', hp: 480, toughness: 7, save: 3,
     speed: 1.1, move: 'foot', part: 'arms', binds: {}, supply: 0, radius: 0.45, vision: 8, spawnInterval: 0,
@@ -466,7 +541,14 @@ const RAW: Record<UnitId, UnitInput> = {
     landformer: { every: 40, many: 12, mergeRadius: 5, mergeSeconds: 20, copyRadius: 6 },
     hero: true,
     shape: 'diamond', letter: 'Λ', role: 'Held: viele eigene Verbände → verschmilzt Gelände (jeder Boden zählt als eigener), wenige → kopiert eine gerufene Einheit',
+  },  mudling: {
+    id: 'mudling', name: 'Schlammmonster', armor: 'infantry', hp: 30, models: 3, toughness: 3, save: 6,
+    speed: 1.4, move: 'foot', part: 'arms', radius: 0.25, vision: 5, spawnInterval: 0, summoned: true, supply: 0,
+    weapon: { shots: 1, cooldown: 1.0, range: 1.5, skill: 4, strength: 3, ap: 0, damage: 4, type: 'rifle' },
+    ground: 'mud', leash: { radius: 4 },
+    shape: 'circle', letter: 's', role: 'Kriecht aus eigenen Matschflächen (Gelege) – bleibt in deren Nähe: eine lokale Bedrohung',
   },
+
 };
 
 function finish(u: UnitInput): UnitDef {

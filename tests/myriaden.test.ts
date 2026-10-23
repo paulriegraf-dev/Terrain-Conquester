@@ -115,27 +115,6 @@ describe('Myriaden: Eigenheiten', () => {
     assert.ok(ap > plain * 1.2, `${plain.toFixed(1)} → ${ap.toFixed(1)}`);
   });
 
-  it('Munition wörtlich: die Kanone zieht ein Myr aus einem Drohnen-Verband, ohne Drohnen trifft sie schwächer', () => {
-    const fire = (withDrone: boolean): { damage: number; drone: Entity | null } => {
-      const world = new World({ map: felsenpass, seed: 1, rules: { front: { ...RULES.front, regenPerSecond: 0 } }, ...myr });
-      const target = dummy(world, 1, 'gunner', 24.5, 13.5);
-      target.weapon = undefined;
-      const c = dummy(world, 0, 'myrcannon', 22.0, 13.5);
-      const drone = withDrone ? dummy(world, 0, 'drone', 21.0, 13.5) : null;
-      if (drone) drone.weapon = undefined;
-      c.weapon!.targetId = target.id;
-      const hp = target.hp;
-      stepTimes(world, 10 * world.tps);
-      return { damage: hp - target.hp, drone };
-    };
-    const loaded = fire(true);
-    const empty = fire(false);
-    const d = loaded.drone!;
-    assert.ok(d.alive && d.hp < d.maxHp, 'ein Modell weniger, der Verband lebt');
-    assert.ok(Math.abs((d.maxHp - d.hp) / d.modelWounds - 1) < 1e-6, 'genau ein Modell verbraucht');
-    assert.ok(empty.damage < loaded.damage * 0.85, `${loaded.damage} vs ${empty.damage}`);
-  });
-
   it('die Battlesphäre zerfällt beim Tod in Drohnen', () => {
     const world = new World({ map: felsenpass, seed: 1, ...myr });
     const s = dummy(world, 0, 'sphere', 15.5, 13.5);

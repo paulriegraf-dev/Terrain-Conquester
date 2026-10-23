@@ -27,6 +27,9 @@ import { updateScout } from './systems/scout';
 import { onNetworkDeath, updateNetworks } from './systems/network';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
+import { NO_SYNERGY } from './systems/synergy';
+import type { SynergyState } from './systems/synergy';
+import { releaseClutch, updateMyr } from './systems/myr';
 import type { SiteState } from './systems/sites';
 import type { ScoutReport } from './systems/scout';
 import { updateEconomy, updatePhase } from './systems/economy';
@@ -52,6 +55,20 @@ export interface MatchConfig {
   rules?: Partial<Rules>;
   /** Fraktion je Spieler (Standard: beide Technoclan). */
   factions?: [FactionId, FactionId];
+}
+
+/** Ein geworfener Myr-Verband im Flug (Myr-Kanone, Myr-Katapult). */
+export interface Flight {
+  owner: PlayerId;
+  unit: UnitId;
+  /** So viele Modelle landen (Verband). */
+  models: number;
+  from: Vec2;
+  to: Vec2;
+  start: number;
+  land: number;
+  route: Route;
+  impact?: { radius: number; damage: number };
 }
 
 export interface PlayerStats {
@@ -233,8 +250,17 @@ export class World {
    * Vorbereitung und Terraformer zählen. Für die Terra-Former ist das ihr „eigener Boden“.
    */
   readonly formed: Uint8Array;
-  /** Terra-Former: Kachel hat diesem Spieler schon eine Beschwörung getragen (Bit 1 = Spieler 0, Bit 2 = Spieler 1). */
-  readonly consumed: Uint8Array;
+  /**
+   * Terra-Former: Abklingzeit nach einer Beschwörung – bis zu diesem Tick trägt die Kachel diesem Spieler keine
+   * weitere (Index p × Kacheln + Kachel; 0 = frei).
+   */
+  readonly tileCooldown: Uint32Array;
+  /** Terra-Former: Lane-Synergie je Spieler (alle 5 s neu bestimmt, siehe systems/synergy.ts). */
+  synergy: [SynergyState, SynergyState] = [NO_SYNERGY, NO_SYNERGY];
+  /** Terra-Former: Schlammmonster-Gelege je Matschfeld (Index der 3×3-Zelle → gesammelte Sekunden), je Spieler. */
+  readonly mudNests: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
+  /** Myriaden: geworfene Myrs im Flug (Kanone, Katapult). */
+  flights: Flight[] = [];
   /** Terra-Former: laufende Verschmelzungen des Landformers (dort zählt jeder Boden als eigener). */
   merges: { owner: PlayerId; x: number; y: number; r: number; until: number }[] = [];
   /** Spuren im Schnee: letzter Tick, in dem eine Einheit der Seite dort war (−1 = nie). */
@@ -273,7 +299,7 @@ export class World {
     for (const side of this.map.reserveCells) for (const i of side) this.locked[i] = 1;
     this.siteStates = initialSites(this);
     this.formed = new Uint8Array(cells);
-    this.consumed = new Uint8Array(cells);
+    this.tileCooldown = new Uint32Array(cells * 2);
 
     const factions = config.factions ?? ['technoclan', 'technoclan'];
     this.players = [this.createPlayer(0, factions[0]), this.createPlayer(1, factions[1])];
@@ -334,6 +360,7 @@ export class World {
     updateProduction(this);
     updateNetworks(this);
     updateTerraform(this);
+    updateMyr(this);
     updateTargeting(this);
     updateMovement(this);
     updateCombat(this);
@@ -407,7 +434,11 @@ export class World {
   /** Belegtes Einheitenlimit: Summe der `supply` (Drohnen zählen halb, Helden gar nicht). */
   unitCount(p: PlayerId): number {
     let n = 0;
-    for (const e of this.entities) if (e.alive && e.owner === p && e.kind === 'unit') n += UNITS[e.defId as UnitId].supply ?? 1;
+    for (const e of this.entities) {
+      if (!e.alive || e.owner !== p) continue;
+      if (e.kind === 'unit') n += UNITS[e.defId as UnitId].supply ?? 1;
+      else if (e.producer?.clutch) for (const u of e.producer.clutch) n += UNITS[u].supply ?? 1; // Gelege zählt mit
+    }
     return n;
   }
 
@@ -416,7 +447,7 @@ export class World {
     if (e.owner === p) return true;
     const vision = this.players[p].vision;
     // Getarnt (Borkenwächter im eigenen Wald): nur sichtbar, wenn eine gegnerische Einheit ganz nah ist.
-    const camo = e.kind === 'unit' ? camouflageRange(e) : null;
+    const camo = e.kind === 'unit' ? camouflageRange(this, e) : null;
     if (camo !== null) {
       const r2 = camo * camo;
       if (!this.entities.some((o) => o.alive && o.owner === p && o.kind === 'unit' && (o.pos.x - e.pos.x) * (o.pos.x - e.pos.x) + (o.pos.y - e.pos.y) * (o.pos.y - e.pos.y) <= r2)) return false;
@@ -478,6 +509,7 @@ export class World {
             pierce: fx.pierce ? (def.weapon.pierce ?? 0) + fx.pierce : def.weapon.pierce,
           })
         : undefined,
+      launcher: def.launch ? { load: def.launch.load, nextRegen: this.tick + Math.round(def.launch.regen * this.tps) } : undefined,
       support: def.support
         ? {
             heal: def.support.heal * (fx.heal ?? 1),
@@ -577,6 +609,8 @@ export class World {
     if (e.net && e.net.id !== 0) onNetworkDeath(this, e);
     if (e.kind === 'unit' && killer !== null) this.onUnitDeath(e, killer);
     if (e.kind === 'building') {
+      // Gelege: Fällt die Brut, schlüpft es sofort.
+      if (e.producer?.clutch && e.producer.clutch.length > 0) releaseClutch(this, e);
       if (e.padId !== undefined) this.padBuilding[e.padId] = 0;
       else if (e.rect) this.grid.setStructure(e.rect, false); // Außenposten-Plattformen bleiben
     }

@@ -1,6 +1,6 @@
 import type { MoveProfileId } from '../data/movement';
 import type { BuildingId } from '../data/buildings';
-import type { ProtocolId, UnitId, WeaponDef } from '../data/units';
+import type { GroundBonus, ProtocolId, UnitId, WeaponDef } from '../data/units';
 import type { ArmorClass, CellRect, PlayerId, Route, Vec2 } from './types';
 
 /**
@@ -86,6 +86,8 @@ export interface ProducerState {
   produced: number;
   /** Ab diesem Tick ist wieder ein Eilauftrag möglich. */
   rushReadyTick: number;
+  /** Gelege (Myriaden-Brut): fertige, noch nicht geschlüpfte Verbände (zählen aufs Einheitenlimit). */
+  clutch?: UnitId[];
 }
 
 export interface Entity {
@@ -125,11 +127,19 @@ export interface Entity {
   slow?: { until: number; factor: number };
   /** Sog (Moorschlund): wird bis Tick mit `speed` Kacheln/Tick zu (x, y) gezogen. */
   pull?: { x: number; y: number; until: number; speed: number };
+  /** Geschwächt bis Tick (Schlammschleuder): Tempo × speed, eigener Schaden × damage. */
+  weaken?: { until: number; speed: number; damage: number };
+  /** Schaden über Zeit bis Tick (Lebenspunkte je Sekunde; Terra-Former-Synergien). */
+  dot?: { until: number; dps: number; owner: PlayerId };
+  /** Schneesturm (Terra-Former-Synergie): so viele Sekunden steht die Einheit schon im Sturm. */
+  storm?: number;
+  /** Werfer (Myr-Kanone, -Katapult): Ladungen, nächste eigene Ladung (Tick). */
+  launcher?: { load: number; nextRegen: number };
   /**
    * Terra-Former: auf eigenem Boden? Terraformer: aktueller 2×2-Block, fertige Kacheln, nächster
    * Arbeitsschritt (Tick), Stufe der Fabrik. Fähigkeiten: nächster Einsatz, letzter Schuss.
    */
-  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number };
+  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; nextSummon?: number; workCell?: number; home?: Vec2; gb?: GroundBonus | null };
   /**
    * Technoclan-Netzwerk: Netz-ID (0 = in keinem Netz), Protokolle (eigenes + geerbte) und
    * Aufstieg bis Tick.

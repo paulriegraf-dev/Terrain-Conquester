@@ -77,6 +77,11 @@ export interface FactionBuilding {
   levels?: number;
   /** Terra-Former: Terraformer dieser Linie – kommt jeden n-ten Takt statt eines Wächters. */
   former?: UnitId;
+  /**
+   * Gelege (Myriaden-Brut, 23.10.): Die Fabrik sammelt ihre Verbände und lässt sie gemeinsam schlüpfen, sobald
+   * so viele beisammen sind (je Fabrikstufe: Index 0 = Stufe I). Die Lebensuhr läuft erst ab dem Schlüpfen.
+   */
+  clutch?: readonly number[];
 }
 
 /** Held: kommt über ein HQ-Upgrade, einer pro Spieler, kehrt nach dem Tod zurück. */
@@ -281,7 +286,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     prepPlacements: 6,
     description: 'Masse und Opfer: billige Myrs, die sich in der Gruppe stärken, als Munition dienen und sich opfern. Wenig Aufklärung, kein Flankierer.',
     buildings: {
-      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber', 'hound'] },
+      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber', 'hound'], clutch: [6, 8, 10] },
       workshop: { name: 'Werkstatt', letter: 'W', tiers: ['myrcannon', 'catapult'] },
       foundry: { name: 'Schmelze', letter: 'S', tiers: ['sphere'] },
     },

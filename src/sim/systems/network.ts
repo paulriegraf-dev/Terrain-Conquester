@@ -49,6 +49,7 @@ export function updateNetworks(world: World): void {
     const id = world.nextNetId++;
     for (const m of members) m.net!.id = id;
     world.networks.set(id, members.map((m) => m.id));
+    for (let k = 1; k < members.length; k++) emitLink(world, members[k]!, members.slice(0, k));
   }
   // 3. Geerbte Selbstreparatur
   const heal = rules.repairPerSecond;
@@ -69,9 +70,17 @@ function joinExisting(world: World, u: Entity): boolean {
     if (!members.some((m) => within(m, u, rules.joinRadius))) continue;
     u.net!.id = id;
     ids.push(u.id);
+    emitLink(world, u, members);
     return true;
   }
   return false;
+}
+
+/** Nur für die Darstellung: kurze Lichtlinie vom Neuen zum nächsten Mitglied. */
+function emitLink(world: World, u: Entity, members: readonly Entity[]): void {
+  let near = members[0]!;
+  for (const m of members) if (dist2(u, m) < dist2(u, near)) near = m;
+  world.emit({ type: 'link', owner: u.owner, from: { x: u.pos.x, y: u.pos.y }, to: { x: near.pos.x, y: near.pos.y } });
 }
 
 function capacity(members: readonly Entity[], rules: World['rules']['network']): number {
@@ -108,7 +117,7 @@ export function onNetworkDeath(world: World, e: Entity): void {
       if (have.includes(p)) continue;
       if (!heir || have.length < heir.net!.protocols.length || (have.length === heir.net!.protocols.length && o.id < heir.id)) heir = o;
     }
-    if (heir) inherit(world, heir, p);
+    if (heir) inherit(world, heir, p, e);
   }
   if (survivors.length < 2) {
     for (const o of survivors) o.net!.id = 0;
@@ -119,15 +128,15 @@ export function onNetworkDeath(world: World, e: Entity): void {
 }
 
 /** Protokoll übernehmen: Waffe neu berechnen, ab genug Protokollen aufsteigen. */
-function inherit(world: World, e: Entity, p: ProtocolId): void {
+function inherit(world: World, e: Entity, p: ProtocolId, from: Entity): void {
   const net = e.net!;
   net.protocols.push(p);
   if (p === 'plating') e.toughness += 1;
   if (e.weapon) e.weapon.def = withProtocols(e.weapon.baseDef, net.protocols.slice(1));
   const rules = world.rules.network;
-  if (net.protocols.length >= rules.ascendAt && net.ascendUntil === 0) {
-    net.ascendUntil = world.tick + Math.round(rules.ascendSeconds * world.tps);
-  }
+  const ascend = net.protocols.length >= rules.ascendAt && net.ascendUntil === 0;
+  if (ascend) net.ascendUntil = world.tick + Math.round(rules.ascendSeconds * world.tps);
+  world.emit({ type: 'protocol', owner: e.owner, protocol: p, from: { x: from.pos.x, y: from.pos.y }, to: { x: e.pos.x, y: e.pos.y }, ascend });
 }
 
 /** Waffe mit geerbten Protokollen (das eigene ist schon in der Waffe enthalten). */

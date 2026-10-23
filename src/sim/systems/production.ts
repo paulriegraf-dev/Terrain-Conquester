@@ -6,6 +6,8 @@ import type { PlayerId, Route, Vec2 } from '../types';
 import { PLAYERS } from '../types';
 import type { World } from '../world';
 import { productionFactor } from './market';
+import { clutchSize, layEgg } from './myr';
+import { synergyProduction } from './synergy';
 import type { BuildingId } from '../../data/buildings';
 import type { PartId } from '../../data/market';
 
@@ -28,7 +30,7 @@ export function updateProduction(world: World): void {
  */
 export function productionSpeed(world: World, owner: PlayerId, part: PartId): number {
   const boost = world.tick < world.players[owner].emergency.bonusUntil ? world.rules.emergency.bonusProduction : 1;
-  return (boost * (world.phase.productionMult ?? 1)) / productionFactor(world, owner, part);
+  return (boost * (world.phase.productionMult ?? 1) * synergyProduction(world, owner)) / productionFactor(world, owner, part);
 }
 
 function producePlayer(world: World, owner: PlayerId): void {
@@ -72,10 +74,15 @@ function producePlayer(world: World, owner: PlayerId): void {
       blocked = pr.blockedBy = 'cap';
       continue;
     }
-    const pos = spawnPoint(world, building, pr.route, MOVE_PROFILES[def.move]);
-    if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
-    const spawned = world.addUnit(owner, def, pos, pr.route);
-    if (spawned.tf) spawned.tf.level = pr.level;
+    if (clutchSize(world, building) !== null) {
+      // Gelege (Myriaden-Brut): ins Gelege statt aufs Feld – es schlüpft gemeinsam.
+      layEgg(world, building, def.id);
+    } else {
+      const pos = spawnPoint(world, building, pr.route, MOVE_PROFILES[def.move]);
+      if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
+      const spawned = world.addUnit(owner, def, pos, pr.route);
+      if (spawned.tf) spawned.tf.level = pr.level;
+    }
     pr.progress -= pr.intervalTicks;
     pr.produced++;
     pr.readySince = -1;

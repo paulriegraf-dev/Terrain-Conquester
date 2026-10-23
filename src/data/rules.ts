@@ -218,17 +218,27 @@ export interface Rules {
    */
   sites: { radius: number; captureSeconds: number; neutralizeSeconds: number; fortifySeconds: number; sensorVision: number; junctionRouteSeconds: number };
   /**
-   * Terra-Former: Terraformer formen eine Kachel in `formSeconds`, suchen Blöcke im Umkreis `searchRadius`;
-   * jede Fabrik schickt jeden `every`-ten Verband als Terraformer (ab Stufe II jeden `everyLevel2`-ten),
-   * auf Stufe III haben gerufene Einheiten `level3Hp` × Leben. `summonNeedsRoom`: Gerufene zählen aufs
-   * Einheitenlimit (voll → der Terraformer wartet). `lineResearch`: Forschung des Wächters gilt auch für
-   * Terraformer und Gerufene seiner Linie. `seekGround`: Haltende und verteidigende Verbände stellen sich
-   * auf eigenen Boden ihrer Linie, wenn er so viele Kacheln nah am Formationsplatz liegt (0 = aus).
-   * `preparedRadius`: Fertig vorbereitete Blöcke (selbst geformter Boden ihrer Art) sieht ein Terraformer
-   * auf seiner Route bis so weit voraus – er zieht gezielt dorthin, statt vorher natürlichen Boden umzuformen.
-   * `maxSummons`: so oft ruft ein Terraformer höchstens, danach ist seine Kraft verbraucht (0 = unbegrenzt; Test-Schalter).
+   * Terra-Former (Umbau 23.10.): Terraformer formen möglichst viele Kacheln im Umkreis `workRadius` um sich herum
+   * (je Kachel `formSeconds`), rücken langsam vor (Schritt `advanceStep`, beim Halten höchstens `frontOffset` Kacheln
+   * über die eigene Grenze) und rufen auf einem 2×2-Block eigener Kacheln ihrer Art nach einem Ritual von
+   * `ritualSeconds` die Spezialeinheit ihrer Linie; die vier Kacheln haben danach `cooldownSeconds` Abklingzeit.
+   * Fertige eigene Blöcke sieht er auf seiner Route bis `preparedRadius` voraus. Jede Fabrik schickt jeden
+   * `every`-ten Verband als Terraformer (ab Stufe II jeden `everyLevel2`-ten), auf Stufe III haben Gerufene
+   * `level3Hp` × Leben. `summonNeedsRoom`: Gerufene zählen aufs Einheitenlimit. `lineResearch`: Forschung des
+   * Wächters gilt auch für Terraformer und Gerufene seiner Linie. `seekGround`: Haltende Verbände stellen sich auf
+   * eigenen Boden ihrer Linie in so vielen Kacheln Nähe (0 = aus). `maxSummons`: Test-Schalter (0 = unbegrenzt).
    */
-  terraform: { formSeconds: number; searchRadius: number; preparedRadius: number; maxSummons: number; every: number; everyLevel2: number; level3Hp: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number };
+  terraform: {
+    formSeconds: number; ritualSeconds: number; cooldownSeconds: number; workRadius: number; advanceStep: number; frontOffset: number;
+    preparedRadius: number; maxSummons: number; summonEvery: number; every: number; everyLevel2: number; level3Hp: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
+  };
+  /**
+   * Terra-Former: Schlammmonster. Eine 3×3-Zelle mit mindestens `fieldMin` eigenen Matsch-Kacheln ist ein Matschfeld;
+   * alle `eggSeconds` legt es ein Ei, bei `clutch` Eiern schlüpfen die Schlammmonster (höchstens `max` je Spieler).
+   */
+  mud: { fieldMin: number; eggSeconds: number; clutch: number; max: number };
+  /** Terra-Former: Lane-Synergien (siehe systems/synergy.ts). */
+  synergy: { every: number; laneMin: number; triple: number; stormPerSecond: number; stormMax: number; hailDps: number };
   /** Gebäude ganz in einer Basis-Bauzone sind befestigt und nehmen nur diesen Anteil an Schaden. */
   baseBuildingDamageTaken: number;
   /**
@@ -236,6 +246,12 @@ export interface Rules {
    * (0 = eine einzige Wunde, der Überschuss verfällt). Offene Design-Frage – Test-Schalter, Standard aus.
    */
   kamikazeSpread: number;
+  /** Gelege (Myriaden-Brut): Gegner so nah an der Brut lösen den Notschlupf aus (Kacheln). */
+  clutchAlarmRadius: number;
+  /** Angeschlagene Drohnen-Verbände so nah beieinander vereinen sich (Kacheln). */
+  mergeRadius: number;
+  /** Drohnen-Werfer (Myr-Kanone): sucht weiche Ziele so viele Kacheln über die Wurfweite hinaus und rückt dafür vor. */
+  launcherAdvance: number;
   /** Kamikaze-Einheiten suchen Ziele, gegen die sie stark sind (Panzer), so viele Kacheln weiter (0 = aus). Test-Schalter. */
   kamikazeHunt: number;
   /** Durchschlag im Schwarm: ab diesem Anteil des Schwarm-Höchstbonus +1 Durchschlag (0 = aus). Test-Schalter. */
@@ -319,7 +335,13 @@ export const RULES: Rules = {
   network: { joinRadius: 4, breakRadius: 8, maxMembers: 4, maxWithNode: 7, ascendAt: 3, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3 },
   sites: { radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8 },
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
-  terraform: { formSeconds: 4, searchRadius: 8, preparedRadius: 16, maxSummons: 0, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2 },
+  // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
+  terraform: {
+    formSeconds: 2, ritualSeconds: 4, cooldownSeconds: 90, workRadius: 2, advanceStep: 1.5, frontOffset: 2,
+    preparedRadius: 16, maxSummons: 0, summonEvery: 0, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
+  },
+  mud: { fieldMin: 7, eggSeconds: 10, clutch: 3, max: 15 },
+  synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },
   // Gelände in der eigenen Hälfte (23.10.): 3 Vorbereitungs-Flächen mehr, danach dort 10 statt 15 Energie und 2 statt 3 s
   shaping: { prepExtra: 3, homeCost: 0.67, homeSeconds: 0.67 },
   // Notfallverlegung (22.10., Entwurf des Nutzers): doppelt so stark, 25 s, einmal je Flügel.
@@ -333,6 +355,9 @@ export const RULES: Rules = {
   // 22.10.: 50 % statt 20 % – befestigte Fabriken fallen schneller; wer bedrängt ist, verlegt (Notfallverlegung).
   baseBuildingDamageTaken: 0.5,
   kamikazeSpread: 0,
+  clutchAlarmRadius: 8,
+  mergeRadius: 1.5,
+  launcherAdvance: 4,
   kamikazeHunt: 0,
   swarmAp: 0,
   // Seit 22.10. 15 s statt 25 – oder sofort gegen Energie. Mit der gedrosselten Produktion kostet ein

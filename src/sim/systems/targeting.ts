@@ -8,6 +8,8 @@ import { TERRAIN_INDEX } from '../../data/terrain';
 import { UNITS, UNIT_IDS } from '../../data/units';
 import type { WeaponDef } from '../../data/units';
 import { SpatialGrid } from '../spatial';
+import { launchTarget } from './myr';
+import { leashOk } from './terraform';
 import type { World } from '../world';
 
 /** Größter Einheitenradius (für die grobe Rastersuche). */
@@ -94,6 +96,21 @@ function targetFactor(world: World, w: WeaponDef, t: Entity): number {
   return v;
 }
 
+/**
+ * Wie „weich“ ist ein Ziel für einen Drohnen-Werfer (Myr-Kanone)? Unbewaffnete (Terraformer), Artillerie
+ * und Heiler zuerst, dann Leichte, Infanterie – Panzer und Bauwerke kaum (dort wirft sie Steine).
+ */
+function softness(t: Entity): number {
+  if (t.kind !== 'unit') return 0.2;
+  const def = UNITS[t.defId as keyof typeof UNITS];
+  if (!def) return 1;
+  if (!def.weapon) return def.support ? 2.5 : 3;
+  if (isSiege(def.weapon)) return 2.5;
+  if (t.armor === 'light') return 1.8;
+  if (t.armor === 'heavy') return 0.3;
+  return 1.2;
+}
+
 function inOwnOrContested(world: World, owner: PlayerId, t: Entity): boolean {
   return ownOrContestedAt(world, owner, t.pos.x, t.pos.y);
 }
@@ -142,9 +159,15 @@ export function updateTargeting(world: World): void {
     const range = w.def.range;
     const canChase = !!e.mover && world.tick >= e.mover.chaseBlockedUntil;
     const baseSearch = range + (canChase ? CHASE_EXTRA : 0);
+    const udef = e.kind === 'unit' ? UNITS[e.defId as keyof typeof UNITS] : undefined;
     // Kamikaze-Jäger (rules.kamikazeHunt): sucht ihre Lieblingsziele (Konter, z. B. Panzer) weiter weg.
-    const hunt = canChase && world.rules.kamikazeHunt > 0 && e.kind === 'unit' && UNITS[e.defId as keyof typeof UNITS]?.kamikaze ? world.rules.kamikazeHunt : 0;
-    const searchRange = baseSearch + hunt;
+    const hunt = canChase && world.rules.kamikazeHunt > 0 && udef?.kamikaze ? world.rules.kamikazeHunt : 0;
+    // Werfer mit Ladung (Myr-Kanone): sucht weiche Ziele weiter weg und rückt dafür bis an die eigene Front vor.
+    const ld = udef?.launch;
+    const canThrow = !!ld && !!e.launcher && (e.launcher.load > 0 || !!ld.take);
+    const softThrow = canThrow && !!ld!.soft;
+    const throwReach = softThrow && canChase ? world.rules.launcherAdvance : 0;
+    const searchRange = baseSearch + Math.max(hunt, throwReach);
     const siege = !!e.mover && isSiege(w.def);
     // Artillerie sucht Bauwerke weiter (sie rückt bis auf volle Reichweite an sie heran).
     const structureRange = siege && canChase ? range + SIEGE_ADVANCE : searchRange;
@@ -172,6 +195,8 @@ export function updateTargeting(world: World): void {
       // Haltende Truppen verfolgen nur Gegner im eigenen oder umkämpften Gebiet – kein Nachsetzen übers Niemandsland.
       // Haltende Artillerie rückt an Bauwerke heran, solange sie dafür im eigenen Gebiet bleibt.
       if (siege && t.kind !== 'unit') return siegeSpotOk(world, e, t, range);
+      // Drohnen-Werfer: Er wirft aus dem eigenen Gebiet heraus über die Front (Wurfpunkt im eigenen Gebiet).
+      if (throwReach > 0 && t.kind === 'unit') return siegeSpotOk(world, e, t, ld!.range);
       return inOwnOrContested(world, e.owner, t);
     };
 
@@ -191,11 +216,20 @@ export function updateTargeting(world: World): void {
       if (d > (t.kind === 'unit' ? searchRange : structureRange)) return;
       if (!canAttack(world, e, t)) return;
       if (!allowed(t, d, 0)) return;
+      if (udef?.leash && !leashOk(world, e, t)) return; // Schlammmonster: nur nahe eigenem Matsch
       // Ziele, gegen die die eigene Waffe stark ist, wirken „näher“ → Konter greifen gezielt.
-      const factor = targetFactor(world, w.def, t);
+      const factor = softThrow ? softness(t) : targetFactor(world, w.def, t);
       if (hunt > 0 && d > baseSearch && factor < 1.25) return; // weit weg nur Lieblingsziele (deutlich überdurchschnittlich)
+      if (throwReach > 0 && d > baseSearch) {
+        // Vorstoß-Wurf: nur zu weichen Zielen, und nur so weit, wie der Wurfpunkt im eigenen oder umkämpften Gebiet liegt.
+        if (factor < 1.5 || !launchTarget(ld!, t)) return;
+        if (holding && !siegeSpotOk(world, e, t, ld!.range)) return;
+      }
       const rank = priority(t, d);
-      const score = rank * 1000 + d / (0.5 + 0.5 * factor);
+      let score = rank * 1000 + d / (0.5 + 0.5 * factor);
+      // Verspotten (Myr-Verspotter): Gegner in seinem Umkreis schießen bevorzugt auf ihn.
+      const taunt = t.kind === 'unit' ? UNITS[t.defId as keyof typeof UNITS]?.taunt : undefined;
+      if (taunt && dist(e.pos, t.pos) <= taunt.radius) score = rank * 1000 + (score - rank * 1000) * 0.25;
       // Gleichstand: kleinere ID gewinnt – unabhängig von der Suchreihenfolge.
       if (score < bestScore || (score === bestScore && best && t.id < best.id)) {
         bestScore = score;

@@ -53,7 +53,7 @@ export function updateMovement(world: World): void {
     // Tempo hängt vom Gelände UND vom Bewegungsprofil ab (Eigenheit der Truppenart).
     const aura = m.boostTick === world.tick ? 1 + m.boost : 1; // Tempo-Aura des Myriaden-Hunds
     const rage = e.lifespan ? (frenzyOf(world, e)?.speed ?? 1) : 1; // Todeswut (Lebensuhr)
-    const ground = e.tf || e.slow ? groundSpeedFactor(world, e) : 1; // Terra-Former: Boden, Bremsen, Eingraben
+    const ground = groundSpeedFactor(world, e); // Terra-Former: Boden, Bremsen, Schwächung, Synergien
     const target = e.weapon && e.weapon.targetId ? world.get(e.weapon.targetId) : undefined;
     // Welle: auf dem Marsch im Tempo des Commanders (im Kampf frei).
     const lead = escortLeader(world, e);
