@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Terrain-Conquester</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Silkscreen&family=Sofia+Sans+Semi+Condensed:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<div class="title-screen" id="title-screen">
+  <div class="title-inner">
+    <p class="title-kicker">Prototyp · Echtzeit-Strategie ohne Mikro</p>
+    <h1 class="title-name"><span>Terrain</span><span class="title-dash">-</span><span>Conquester</span></h1>
+    <p class="title-lede">Fabriken setzen, Fronten halten, Gelände formen – und das gegnerische HQ erobern.</p>
+    <div class="title-actions">
+      <button type="button" class="btn-primary title-play" id="btn-title-play" data-action="title-play">Spielen <kbd>↵</kbd></button>
+      <button type="button" class="btn" id="btn-music" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
+      <label class="btn title-file">Startmusik wählen…<input type="file" accept="audio/*" id="music-file" hidden></label>
+    </div>
+    <p class="title-note" id="music-note">Startmusik bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
+  </div>
+</div>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-name">Terrain-Conquester</span>
+      <span class="brand-tag">Prototyp · M2</span>
+      <button type="button" class="menu-btn" id="btn-menu" data-action="game-menu" title="Menü: Neustart, Karte, Fraktionen (F10)">☰ Menü <kbd>F10</kbd></button>
+    </div>
+
+    <div class="timeline" aria-label="Rundenphasen">
+      <div class="timeline-track-wrap">
+        <div class="timeline-track" id="timeline-track"></div>
+        <div class="timeline-marker" id="timeline-marker" aria-hidden="true"></div>
+      </div>
+      <div class="timeline-meta">
+        <span class="clock" id="clock">0:00</span>
+        <span class="phase-name" id="phase-name">Aufbau</span>
+        <span class="phase-hint" id="phase-hint"></span>
+        <span class="hq-mult" id="hq-mult"></span>
+      </div>
+    </div>
+
+    <div class="hq-bars">
+      <div class="hq" data-side="0">
+        <span class="hq-label" id="hq-label-0">Dein HQ</span>
+        <div class="bar"><i id="hq-fill-0"></i></div>
+        <span class="num" id="hq-num-0">4000</span>
+      </div>
+      <div class="hq" data-side="1">
+        <span class="hq-label" id="hq-label-1">KI-HQ</span>
+        <div class="bar"><i id="hq-fill-1"></i></div>
+        <span class="num" id="hq-num-1">4000</span>
+      </div>
+      <p class="territory" id="territory-line" title="Gebiet: Anteil am kontrollierten Land. Wer deutlich mehr hält, erzeugt Belagerungsdruck – seine Treffer an HQ und Gebäuden zählen stärker. Gebiet bringt auch Einkommen."></p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" aria-label="Spielfeld">
+      <div class="board-frame" id="board-frame">
+        <canvas id="board"></canvas>
+        <span class="mode-banner" id="mode-banner" hidden></span>
+        <p class="flash" id="flash" role="status" hidden></p>
+
+        <div class="overlay" id="start-overlay">
+          <div class="card start-card" id="start-card">
+            <p class="eyebrow" id="start-eyebrow">Neue Runde · gegen die KI</p>
+            <h1 class="card-title" id="start-title">Erobere das Gelände</h1>
+            <p class="lede" id="start-lede">Du setzt Fabriken in deine Bauzonen, und sie schicken automatisch Truppen los. Du lenkst sie mit Marschbefehlen, konterst, was du im Nebel entdeckst, und formst das Gelände. Wer das gegnerische HQ zuerst zerstört, gewinnt. Befehle findest du unten am Spielfeld – jeder Knopf zeigt seine Taste.</p>
+            <div class="field">
+              <label for="opt-map">Karte</label>
+              <select id="opt-map"></select>
+              <p class="field-note" id="map-desc"></p>
+            </div>
+            <div class="field-pair">
+              <div class="field">
+                <label for="opt-faction">Deine Fraktion</label>
+                <select id="opt-faction"></select>
+              </div>
+              <div class="field">
+                <label for="opt-enemy-faction">Fraktion der KI</label>
+                <select id="opt-enemy-faction"></select>
+              </div>
+              <p class="field-note" id="faction-desc"></p>
+            </div>
+            <div class="field">
+              <label for="opt-overtime">Verlängerung (Patt-Auflöser, zum Ausprobieren)</label>
+              <select id="opt-overtime"></select>
+              <p class="field-note" id="overtime-desc"></p>
+            </div>
+            <div class="field-pair">
+              <fieldset class="field">
+                <legend>Gegner</legend>
+                <div class="seg-row">
+                  <label class="seg-radio"><input type="radio" name="opt-level" id="opt-level-easy" value="easy"><span>Leicht</span></label>
+                  <label class="seg-radio"><input type="radio" name="opt-level" id="opt-level-normal" value="normal" checked><span>Normal</span></label>
+                </div>
+              </fieldset>
+              <fieldset class="field">
+                <legend>Deine Seite</legend>
+                <div class="seg-row">
+                  <label class="seg-radio"><input type="radio" name="opt-side" id="opt-side-left" value="0" checked><span>Links</span></label>
+                  <label class="seg-radio"><input type="radio" name="opt-side" id="opt-side-right" value="1"><span>Rechts</span></label>
+                </div>
+              </fieldset>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn-primary" id="btn-start" data-action="start">Runde starten</button>
+              <button type="button" class="btn" id="btn-resume" data-action="resume" hidden>Weiterspielen <kbd>Esc</kbd></button>
+              <button type="button" class="btn" id="btn-mainmenu" data-action="new-round" hidden>Runde aufgeben</button>
+              <button type="button" class="btn" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
+            </div>
+            <p class="fine" id="start-fine">Dahinter läuft eine Vorschau: die KI gegen sich selbst.</p>
+          </div>
+        </div>
+
+        <div class="overlay" id="end-overlay" hidden>
+          <div class="card end-card">
+            <p class="eyebrow" id="end-eyebrow"></p>
+            <h2 class="card-title" id="end-title"></h2>
+            <p class="lede" id="end-summary"></p>
+            <div class="table-wrap"><table class="stats" id="end-stats"></table></div>
+            <p class="fine" id="end-note" hidden></p>
+            <div class="btn-row">
+              <button type="button" class="btn-primary" id="btn-again" data-action="new-round">Neue Runde</button>
+              <button type="button" class="btn" id="btn-replay" data-action="replay">Replay ansehen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="console" aria-label="Befehlskonsole">
+        <div class="console-info">
+          <h2 class="console-title" id="info-title">Kommando</h2>
+          <div class="console-body" id="info-body"></div>
+        </div>
+        <div class="console-tip" aria-live="polite">
+          <p class="tip-text" id="tip-text"></p>
+          <p class="tip-hover" id="status-left"></p>
+        </div>
+        <div class="console-grid-wrap">
+          <p class="console-title" id="grid-title">Kommando</p>
+          <div class="command-grid" id="command-grid" role="toolbar" aria-label="Befehle"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="rail" aria-label="Lage">
+      <section class="panel energy-panel">
+        <div class="energy">
+          <span class="panel-title" id="energy-title">Energie</span>
+          <span class="energy-value" id="energy-value">0</span>
+        </div>
+        <div class="energy-bar"><i id="energy-fill"></i></div>
+        <p class="energy-flow" id="energy-flow"></p>
+        <p class="energy-flow" id="energy-locked" hidden></p>
+        <div class="units">
+          <span class="label">Einheiten</span>
+          <span class="units-value" id="units-value">0 / 80</span>
+        </div>
+        <p class="units-breakdown" id="units-breakdown"></p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title" title="Lage von vor 5 s. Punkt: grün entspannt … rot sehr knapp. Prozent = Änderung zu 20 s davor. Teure Bauteile bremsen passende Fabriken und verteuern neue. Bestellen treibt einen Preis 30 s lang hoch (auch für dich); 75 % kommen nach 45 s zurück, nie über das Maximum.">Markt <span class="panel-meta">vor 5 s ⓘ</span></h2>
+        <ul class="market" id="market-list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title" title="Späher melden die grobe Stärke des Gegners je Route – auch im Nebel – und welche Panzerung vorherrscht. Der Bericht zeigt den Stand beim Losschicken.">Spähbericht <span class="panel-meta" id="scout-meta"></span></h2>
+        <ul class="scout" id="scout-list"></ul>
+        <button type="button" class="btn-mini scout-btn" id="scout-btn" data-action="scout">Späher losschicken</button>
+      </section>
+
+      <section class="panel log-panel">
+        <h2 class="panel-title">Lagebericht</h2>
+        <ol class="log" id="log-list"></ol>
+      </section>
+
+      <section class="panel view-panel">
+        <h2 class="panel-title">Ansicht <span class="panel-meta status-right" id="status-right"></span></h2>
+        <div class="seg-row" id="speed-group" role="group" aria-label="Tempo">
+          <button type="button" class="seg-btn" data-action="speed" data-speed="0" aria-pressed="false" title="Pause (Leertaste)">Pause</button>
+          <button type="button" class="seg-btn" data-action="speed" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" class="seg-btn" data-action="speed" data-speed="2" aria-pressed="false">2×</button>
+          <button type="button" class="seg-btn" data-action="speed" data-speed="4" aria-pressed="false">4×</button>
+        </div>
+        <div class="layers" role="group" aria-label="Debug-Ebenen">
+          <button type="button" class="chip" id="layer-influence" data-action="layer" data-layer="influence" aria-pressed="true">Einfluss <kbd>E</kbd></button>
+          <button type="button" class="chip" id="layer-fog" data-action="layer" data-layer="fog" aria-pressed="false">Nebel <kbd>N</kbd></button>
+          <button type="button" class="chip" id="layer-grid" data-action="layer" data-layer="grid" aria-pressed="false">Raster <kbd>G</kbd></button>
+          <button type="button" class="chip" id="layer-vision" data-action="layer" data-layer="vision" aria-pressed="false">Sicht <kbd>V</kbd></button>
+        </div>
+        <label class="flow-pick">
+          <span>Flussfeld <kbd>F</kbd></span>
+          <select id="flow-select">
+            <option value="off">aus</option>
+            <option value="foot">Trupp · zu Fuß</option>
+            <option value="wheels">Flitzer · Räder</option>
+            <option value="tracks">Koloss · Ketten</option>
+            <option value="hover">Schweber · Beispiel</option>
+          </select>
+        </label>
+      </section>
+    </aside>
+  </main>
+</div>
+<script type="module" src="build/app.js"></script>
+</body>
+</html>
