@@ -1266,6 +1266,43 @@ Anlass (Nutzer): Im Aufbau fühlt es sich falsch an, Drohnen zu halten, sie dabe
 
 **Erwartung:** Die Kanone erreicht die Terraformer hinter den Wächtern – laut Diagnose (Nacht zum 23.10.) die Quelle der Gerufenen, die die Paarung Terra-Former gegen Myriaden tragen. Gegen den Technoclan werden Artillerie und Heiler verwundbarer. Die Myriaden verlieren den Flächenschaden der Kanone gegen Infanterie – im Test prüfen.
 
+## Entschieden (23.10. abends): Terra-Former-Umbau – Terraformer, Linien, Gerufene, Lane-Synergien (noch nicht gebaut)
+
+Wird zusammen mit dem Myriaden-Umbau in einem Rutsch gebaut und dann über alle Paarungen und Karten getestet.
+
+**Terraformer**
+- Langsam (Vorschlag 0,6 Kacheln/s), stets ein Stück nach vorn – er soll angreifbar werden, aber nicht davonlaufen (Vorschlag: höchstens bis kurz hinter die eigene Front).
+- Er formt **möglichst viele Kacheln in seiner Umgebung**, nicht nur auf seinem Weg – es geht um das Umformen des ganzen Gebiets (Vorschlag: Umkreis 2, je Kachel 2 s, zuerst Kacheln, die noch nicht eigener Boden sind).
+- Liegt ein 2×2-Block eigener Kacheln ohne Abklingzeit bei ihm, ruft er (Ritual 4 s). Die vier Kacheln bekommen danach **90 s Abklingzeit** (statt wie bisher dauerhaft verbraucht) – der nächste Terraformer muss weiter nach vorn.
+- Kacheln anderer eigener Linien formt er ebenfalls um, wenn sie keine Abklingzeit haben. Mit manuellem Formen lassen sich so kurzfristige Synergie-Tricks bauen.
+- Am Anfang halten die kleinen Linien-Einheiten die Front, während die Terraformer langsam die großen Wesen rufen.
+
+**Linien (Fabrik-Einheiten) und Gerufene**
+
+| Boden | Linien-Einheit | Gerufene |
+|---|---|---|
+| Schnee | Unterstützung im Kern: kurze Reichweite, leicht zäh, **bremsen** und geben einen **leichten Schild** | Kontrolle mit Frostwelle (bleibt), Flächenschaden und Zähigkeit |
+| Matsch | **Flächenschaden und Reichweite** | **Schlammschleuder**: Flächenschaden und Debuffs für Truppen |
+| Geröll | massiv, langsam, **Panzerknacker**, viel Schaden (schweres Stein-Thema) | **Frontbrecher**: schwer und langsam, hoher Einzelschaden, wenige Angriffe je Sekunde, leichter Flächenschaden |
+| Wiese | leicht und flink, viel Schaden, für den schnellen Vorstoß an der Front | **Flinker Jäger**: hohe Schadensrate und Beweglichkeit |
+| Wald | leicht, etwas mehr Reichweite | **Hainhüter**: langsamer Tank, wenig Schaden, vielseitig (Vorschlag: übernimmt einen kleinen Teil des Bonus der Bodenart, auf der er steht – „Gestaltwandler“) |
+
+**Schlammmonster:** Jede eigene 3×3-Matschfläche (Vorschlag) bildet ein kleines Gelege; ist es voll, kriechen kleine Schlammmonster als Schwarm heraus. Sie haben eine **Leine**: Sie entfernen sich nur ein Stück von Matsch-Flächen und kommen deshalb nicht bis zur gegnerischen Basis – außer man hat selbst Matsch in der gegnerischen Hälfte. Eine lokale Bedrohung.
+
+**Lane-Synergien – nur bei zwei gleichen Lanes plus einer dritten** (keine 1+1-Synergien, die sind zu beiläufig)
+
+Eine Lane gilt als „X“, wenn dort mindestens 12 eigene geformte Kacheln liegen (Vorschlag) und X davon den größten Anteil hat. Zwei Lanes X ergeben die Doppel-Synergie, die dritte Lane Y gibt ihr eine Färbung. Das HUD zeigt je Lane das Boden-Symbol und die aktive Synergie. Bremsen aus Sturm, Schlamm und Frost zusammen höchstens 60 %.
+
+| Doppel | Grundwirkung | + Wald | + Schnee | + Matsch | + Geröll | + Wiese |
+|---|---|---|---|---|---|---|
+| **Wald** | Wurzelnetz; bei Gedränge wechselt der Hainhüter auf eine günstige Stelle der anderen Lane (flankieren oder verteidigen) | – | *Raureif:* Hainhüter auch auf Schnee getarnt, Frostwellen halten im Wald länger | *Moor:* Wurzeln halten Gegner in Wald und Matsch kurz fest | *Felswurzeln:* Hainhüter +1 Rüstung, sein Sprung schlägt mit einem Steinbrocken ein (kleiner Flächenschaden) | *Waldrand:* auch Wiesen-Jäger nutzen das Wurzelnetz |
+| **Schnee** | Schneesturm: Bremse wächst, je länger ein Gegner im Feld steht, bis 60 % | *Eiswald:* der Sturm reicht auch in den eigenen Wald | – | *Frostschlamm:* Gegner mit voller Sturm-Bremse erstarren im Matsch kurz | *Lawine:* Geröllhagel fällt auch auf Schneefelder | *Frostwind:* eigene Einheiten im Sturm +15 % Tempo statt gebremst |
+| **Matsch** | Schlammmonster unterstützen die Truppen (Gelege füllen sich schneller, Monster begleiten eigene Verbände) | *Sumpf:* Schlammmonster im Wald getarnt (Hinterhalt) | *Gefrorener Schlamm:* Treffer der Schlammmonster bremsen | – | *Schlammlawine:* Treffer der Schlammschleuder machen Schaden über Zeit | *Aue:* Schlammmonster heilen eigene Einheiten auf Wiese und Matsch |
+| **Geröll** | Geröllhagel: Schaden über Zeit in den Feldern | *Steinwald:* Hagel auch im eigenen Wald, Wächter dort +1 Rüstung | *Eisschlag:* Hagel bremst die Getroffenen | *Treibsand:* Gegner im Hagel kommen im Matsch kaum voran | – | *Steinfeld:* Wiesen-Jäger +1 Durchschlag |
+| **Wiese** | Werte-Bonus für Einheiten und schnellere Produktion | *Lichtung:* der Bonus gilt auch für Gerufene im Wald | *Kufen:* Wiesen-Einheiten auf Schnee ungebremst und schneller | *Weide:* auch die Schlammmonster-Gelege füllen sich schneller | *Ansturm:* Frontbrecher erhalten den Tempo-Bonus der Wiese | – |
+
+Offen: Alle drei Lanes gleich – dieselbe Synergie verstärkt (Vorschlag) oder nichts Besonderes?
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
