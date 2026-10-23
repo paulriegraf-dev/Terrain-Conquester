@@ -1310,7 +1310,7 @@ Gebaut wie in den beiden Abschnitten davor entschieden; hier nur die gewählten 
 **Myriaden**
 - **Gelege:** Brut-Stufe I/II/III sammelt 6/8/10 Verbände (`clutch` an der Brut). Eier zählen aufs Einheitenlimit, die Lebensuhr startet beim Schlüpfen. Notschlupf automatisch, sobald ein Gegner im Umkreis 8 der Brut ist (`clutchAlarmRadius`); fällt die Brut, schlüpft alles. Über der eigenen Brut zeigen gefüllte und hohle Eier den Stand, die Fabrik-Info „Gelege k / N“.
 - **Myr-Kanone:** 3 Ladungen à 3 Modelle gratis, +1 Ladung je 30 s, leer nimmt sie 3 Modelle aus einem Drohnen-Verband im Umkreis 3. Wurf: Reichweite 7, Flugzeit 1,5 s, alle 4 s. Ziele: nur Einheiten, nie schwere (Panzer bekommen Steine). Weiche Ziele bis 4 Kacheln jenseits ihrer Suchweite locken sie nach vorn – nur bis an eine Wurfstelle auf eigener Seite der Front (`launcherAdvance`). Ohne Drohnen wirft sie **Steine**: 3 Schuss, Stärke 6, Durchschlag 1, Schaden 12, Flächenschaden 1,0.
-- **Katapult:** 2 Verspotter Ladung, +1 je 40 s, Reichweite 7,5, alle 6 s; Aufprall Radius 1,5, 30 Schaden. Ohne Verspotter Steine (Belagerung, 55 Schaden, Gebäude ×2).
+- **Katapult:** 4 Verspotter Ladung, +1 je 18 s (nach den Simulationen; erst 2 und 40 s), Reichweite 7,5, alle 6 s; Aufprall Radius 1,5, 30 Schaden. Ohne Verspotter Steine (Belagerung, 55 Schaden, Gebäude ×2).
 - **Myr-Verspotter:** schwer, 300 Leben, Widerstand 8, Rüstung 4+, kaum Waffe, Verspotten im Umkreis 3 (Gegner werten ihn als Ziel 4-mal höher), nach 60 s tot. Ein halber Platz im Einheitenlimit.
 - **Verschmelzen:** Drohnen-Verbände im Abstand 1,5 vereinen sich jede Sekunde (der vollere nimmt auf, bis zum Lebens-Deckel).
 - **Schmelze:** unverändert; die zerfallende Sphäre speist ihre Drohnen in das Verschmelzen ein.
@@ -1334,10 +1334,74 @@ Gebaut wie in den beiden Abschnitten davor entschieden; hier nur die gewählten 
 
 **Weitere Anzeigen:** Würfe der Myriaden fliegen sichtbar im Bogen (Flugbahn gepunktet, Schatten, Landepunkt), Schlüpfen und Landen mit kurzem Ring.
 
+### Simulationen nach dem Umbau (23.10. abends)
+
+Alle Läufe: alle sechs Karten, Seiten getauscht, KI gegen KI. 36 Partien je Paarung heißt ±16 Prozentpunkte Zufall, 24 Partien ±20, 12 Partien ±28.
+
+**Gesamtbild** (36 Partien je Paarung; Siege · Median):
+
+| Stand | TC – Myr | TF – TC | TF – Myr |
+|---|---|---|---|
+| Endstand 23.10. morgens (vor dem Umbau) | 17 : 19 · 20:21 | 19 : 16 · 22:50 | 34 : 0 · 16:12 |
+| Umbau, erste Fassung | 12 : 24 · 19:58 | 16 : 20 · 17:16 | 28 : 7 · 17:12 |
+| + Notschlupf nur bei Gegnern im **eigenen Gebiet** | 18 : 18 · 20:22 | 16 : 20 · 17:16 | 27 : 6 · 17:22 |
+| + Katapult 3 Ladungen, alle 25 s | 19 : 17 · 19:10 | 16 : 20 · 17:16 | 24 : 9 · 19:27 |
+| + Katapult 4 Ladungen, alle 18 s (**neuer Standard**) | 16 : 20 · 19:13 | 16 : 20 · 17:16 | 15 : 18 (3 offen) · 20:30 |
+
+- **Notschlupf:** In der ersten Fassung löste jeder bewaffnete Gegner im Umkreis 8 den Notschlupf aus – Vorfeld-Bruten stehen aber oft so nah an der Front. Die Gelege schlüpften im Schnitt mit 3,4 statt 6–10 Verbänden, die Myriaden fluteten dauernd in kleinen Gruppen und schlugen den Technoclan 24 : 12. Seit der Notschlupf nur bei Gegnern im eigenen Gebiet auslöst, schlüpfen im Schnitt 4,7–5,0 Verbände auf einmal (der Rest sind echte Notfälle) und **Technoclan gegen Myriaden steht 18 : 18**.
+- **Terra-Former gegen Myriaden** steht erstmals ausgeglichen: 15 : 18 statt 34 : 0. Der Umbau allein brachte 27 : 6 – die Terra-Former gewinnen über die Masse der Gerufenen (siehe Varianten). Den Rest macht das stärkere Katapult: Gegen die Terra-Former baut die KI viele Katapulte, und rund 300 Verspotter je Partie ziehen das Feuer der Gerufenen. Preis: Diese Paarung dauert jetzt lange (Median 20:30, 17 von 36 Partien ab 25 min, auf Schluchttal groß 35:01).
+- **Terra-Former gegen Technoclan** ist ausgeglichen (16 : 20) und jetzt deutlich kürzer (Median 17:16 statt 22:50). Auffällig: auf den normalen Karten gewinnt der Technoclan (17 : 7), auf den großen die Terra-Former (9 : 3) – sie brauchen Platz und Zeit, bis die Terraformer gerufen haben.
+- **Spiegel-Paarungen** (je 12 Partien, erste Fassung): Technoclan 4 : 8, Myriaden 8 : 4, Terra-Former 4 : 7 (links : rechts) – im Rahmen des Zufalls.
+
+**Was der Umbau bewirkt (Kennzahlen je Partie, neuer Standard):**
+- Terra-Former: 110–135 Gerufene, 50–95 Schlammmonster, 20–26 Terraformer; am Ende 400–470 eigene geformte Kacheln. Eine Lane-Synergie ist in 47–63 % der Minuten aktiv, am häufigsten Matsch-Doppel mit Wald (Sumpf) und Wald-Doppel mit Matsch (Moor). Die Gerufenen verteilen sich gleichmäßig (Hainhüter 27 %, Steppenjäger 24 %, Lawinenrufer 20 %, Schlammschleuder 18 %), nur der Frontbrecher ist seltener (10 %) – die KI baut den Steinbruch selten.
+- Myriaden: 130–170 Drohnen-Würfe je Partie; Verspotter gegen den Technoclan rund 50, gegen die Terra-Former rund 300 (die KI baut gegen sie mehr Katapulte). Gelege schlüpfen im Schnitt mit 5 Verbänden.
+- Technoclan: rund 100 Netz-Beitritte, 67 geerbte Protokolle und 16 Aufstiege je Partie.
+
+**Varianten** (jeweils auf denselben Seeds wie der Standard ihres Laufs; erste Zahl Standard, zweite Variante):
+
+| Variante | TC – Myr | TF – TC | TF – Myr | Lesart |
+|---|---|---|---|---|
+| ohne Gelege (Brut wie früher) | 3 : 9 → 4 : 8 | – | 10 : 2 → 9 : 2 | damals kaum Wirkung – das Gelege schlüpfte ohnehin fast immer früh |
+| ohne Werfer (Kanone und Katapult nur Steine) | 3 : 9 → 2 : 10 | – | 10 : 2 → 12 : 0 | die Würfe helfen nur gegen die Terra-Former |
+| ohne Lane-Synergien | – | 4 : 8 → 2 : 10 | 10 : 2 → 12 : 0 | kleine Wirkung, im Rahmen des Zufalls |
+| ohne Schlammmonster | – | 4 : 8 → 7 : 5 | 10 : 2 → 8 : 1 (3 offen) | Partien gegen die Myriaden werden lang, sonst Zufall |
+| Abklingzeit 150 s statt 90 s | – | 4 : 8 → 2 : 9 | 10 : 2 → 9 : 3 | schadet nur gegen den Technoclan |
+| Gerufene zählen doppelt im Limit | – | 4 : 8 → 0 : 12 | 10 : 2 → 5 : 5 (Median 29:27) | Masse der Gerufenen = Stärke der Terra-Former |
+| Terraformer ruft höchstens alle 30 s (24 Partien) | – | 9 : 15 → 0 : 24 | 20 : 3 → 15 : 9 | halbiert die Gerufenen – gegen den Technoclan chancenlos |
+| Verspotter 420 Leben, Verspotten 4 Kacheln (24) | 13 : 11 → 13 : 11 | – | 20 : 3 → 19 : 4 | keine Wirkung |
+| Kanone 4 Ladungen, alle 20 s (36) | 18 : 18 → 14 : 22 | – | 27 : 6 → 35 : 1 | stärkt die Myriaden nur gegen den Technoclan |
+| Katapult 3 Ladungen, alle 25 s (36) | 18 : 18 → 19 : 17 | – | 27 : 6 → 24 : 9 | wirkt nur gegen die Terra-Former |
+| Katapult 4 Ladungen, alle 18 s (36) | 18 : 18 → 16 : 20 | – | 27 : 6 → 15 : 18 (3 offen) | **übernommen** – gleicht die Paarung aus, macht sie aber lang |
+| Kanone und Katapult zusammen (36) | 18 : 18 → 11 : 25 | – | 27 : 6 → 22 : 12 | am stärksten gegen die Terra-Former, kippt aber Technoclan gegen Myriaden |
+
+Wie schon in der Nacht verschiebt alles, was die Gerufenen bremst, beide Terra-Former-Paarungen zugleich. Neu ist ein Hebel, der nur gegen die Terra-Former wirkt: das **Katapult mit dem Verspotter** (die KI baut es vor allem gegen sie). Die Kanone dagegen trifft vor allem die weichen Ziele des Technoclans (Artillerie, Heiler) und hilft gegen die Terra-Former nicht.
+
+**Je Karte, Kartenart und Größe – neuer Standard** (je Karte 6 Partien, also nur Tendenzen; Siege · Median):
+
+| Karte | TC : Myr · Median | TF : TC · Median | TF : Myr · Median |
+|---|---|---|---|
+| Felsenpass | 4 : 2 · 19:56 | 2 : 4 · 23:58 | 3 : 3 · 22:58 |
+| Schluchttal | 4 : 2 · 22:19 | 1 : 5 · 15:23 | 3 : 3 · 27:43 |
+| Steilküste | 2 : 4 · 18:44 | 2 : 4 · 15:32 | 1 : 4 (1 offen) · 20:23 |
+| Schluchtenland | 0 : 6 · 18:39 | 2 : 4 · 19:15 | 2 : 4 · 15:05 |
+| Felsenpass groß | 2 : 4 · 18:59 | 4 : 2 · 19:28 | 3 : 3 · 25:12 |
+| Schluchttal groß | 4 : 2 · 19:15 | 5 : 1 · 17:32 | 3 : 1 (2 offen) · 35:01 |
+| *normal (68×27)* | 10 : 14 · 19:13 | 7 : 17 · 16:36 | 9 : 14 (1 offen) · 18:43 |
+| *groß (84×35)* | 6 : 6 · 19:15 | 9 : 3 · 18:05 | 6 : 4 (2 offen) · 30:58 |
+| *Korridore (Felsenpass)* | 6 : 6 · 19:56 | 6 : 6 · 21:10 | 6 : 6 · 24:07 |
+| *Schlucht mit Brücken (Schluchttal)* | 8 : 4 · 19:47 | 6 : 6 · 16:43 | 6 : 4 (2 offen) · 35:01 |
+| *asymmetrisch* | 2 : 10 · 18:39 | 4 : 8 · 15:32 | 3 : 8 (1 offen) · 18:23 |
+| **alle** | 16 : 20 · 19:13 | 16 : 20 · 17:16 | 15 : 18 (3 offen) · 20:30 |
+
+Auffällig je Kartenart: Auf den **asymmetrischen Karten** gewinnen die Myriaden beide Paarungen (10 : 2 und 8 : 3), auf **Schluchtenland** alle sechs gegen den Technoclan. Die **großen Karten** gehören den Terra-Formern gegen den Technoclan (9 : 3), und Terra-Former gegen Myriaden zieht sich dort (Median 30:58). Im Ziel von 13–20 Minuten liegen 39–47 % der Partien.
+
+
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
-- **Terra-Former:** Typen und Besonderheiten der Einheiten zuweisen (Nutzer) – vor allem den Hainhüter (siehe „Nacht zum 23.10.“) –, dann die Paarung gegen die Myriaden abstimmen; weitere routenübergreifende Effekte neben dem Wurzelnetz.
+- **Terra-Former und Myriaden nach dem Umbau (23.10. abends):** Paarung Terra-Former gegen Myriaden weiter angleichen (Katapult/Verspotter, zweite Antwort der Myriaden), Terra-Former gegen Technoclan je Kartengröße. Danach die Grafik – erst die Netz-, Gelege- und Synergie-Hinweise, die es jetzt als einfache Formen gibt.
 - **Balance je Karte, Kartenart und Größe** (Wunsch 23.10., vor einer 4. Fraktion): größere Läufe je Karte (16+ Partien je Karte und Paarung), dann gezielt Karten oder Regeln je Kartengröße anpassen.
 - **Lernkurve:** Lektionen gegen die KI, die die Systeme nacheinander freischalten (siehe „Zur Diskussion (22.10.)“).
 - **Danach:** HQ-Erweiterungen wie bei Galactic Forces (Waffenlabor, Panzerung, Versorgung) und Gebäude-Upgrades.
@@ -1353,12 +1417,12 @@ Gebaut wie in den beiden Abschnitten davor entschieden; hier nur die gewählten 
 - **Bauplätze je Fraktion:** Myr-Brut als halber Bauplatz behalten oder nicht? Zahlen siehe dort.
 - **Schlucht:** reichen 100 Energie und höchstens 3 gleichzeitig – oder lieber Schluchten, die sich nach ein paar Minuten von selbst verschütten?
 - **Gebäude fallen selten** – trotz Befestigung 50 % statt 20 %: Der Technoclan verliert in KI-Partien fast nie eine Fabrik, die Myriaden etwa eine je Partie, meist früh. Beute und „Fabrik ausschalten“ spielen damit für den Technoclan kaum eine Rolle – so lassen?
-- **Terraformer auf Boden anderer Linien:** Bisher lässt er eigenen Boden einer anderen Art in Ruhe. Soll er dort schneller umformen dürfen (z. B. 2 statt 4 s, „gelockerter Boden“)?
-- **Lange Partien Terra-Former gegen Technoclan:** Median 22:50, 13 von 36 Partien ab 25 min (vor allem Schluchttal groß). Patt-Auflöser B (Gebiet zählt doppelt ab 20:00) oder doppeltes Gebietseinkommen fest einschalten? Beide kürzten im Test; Zahlen siehe „Nacht zum 23.10.“.
+- **Terra-Former gegen Technoclan je Kartengröße:** nach dem Umbau ausgeglichen und kürzer (16 : 20, Median 17:16), aber auf normalen Karten gewinnt der Technoclan (17 : 7), auf großen die Terra-Former (9 : 3). Karten- oder Regelwerte je Größe angleichen (z. B. erster Terraformer früher auf normalen Karten) – oder als Kartencharakter lassen?
 - **Hund:** Auch mit der schlaueren KI selten (1 von 36 Partien) – er sitzt auf Brut-Stufe III. Früher freischalten (Stufe II) oder lassen?
 - **Erdwall:** Abklingzeit 30 s lassen oder auf 20 s senken (gefragt am 22.10., noch offen)? Bauzeit hat er keine; die Schlucht braucht jetzt 6 statt 8 s.
 - **Späte Armeen sind klein** (5–10 Verbände je Seite ab 11:00), die Energie läuft voll und hat kaum noch einen Zweck. Ein Energie-Ventil fürs späte Spiel? Schnellere Fabriken in den späten Phasen verlängerten die Partien im Test allerdings.
-- **Terra-Former gegen Myriaden (Design-Entscheidung):** Die Terra-Former gewinnen fast jede Partie (Endstand 34 : 0), gegen den Technoclan ist es ausgeglichen (19 : 16). Ursache sind die Gerufenen, vor allem der **Hainhüter** (ohne ihn 15 : 4), nicht das Gelände. Zahlen-Stellschrauben verschieben beide Paarungen zugleich (siehe „Nacht zum 23.10.“). Möglich: (A) den Hainhüter gegen Masse verwundbar machen (Widerstand 6, Rüstung 4+: gegen Myriaden 15 : 5) und die Terra-Former dafür gegen den Technoclan stärken; (B) den Myriaden eine echte Antwort auf zähe Verbände geben, etwa eine Einheit oder Fähigkeit gegen viele Leben je Modell; (C) als Konter-Dreieck akzeptieren und nur abmildern. Ihre zähen Wächter (30 Leben je Modell, Rüstung 3+) halten den vielen kleinen Drohnen-Treffern stand, und die Lebensuhr lässt wartende Drohnen verfallen. Ein natürlicher Konter wäre der Sprengetopp, wenn seine Explosion mehrere Modelle träfe (siehe nächste Frage).
+- **Terra-Former gegen Myriaden – lange Partien:** mit dem stärkeren Katapult ausgeglichen (15 : 18), aber lang (Median 20:30, 17 von 36 ab 25 min, auf den großen Karten Median 30:58). Patt-Auflöser B (Gebiet zählt doppelt ab 20:00) für diese Paarung prüfen – oder dem Verspotter etwas Durchschlagskraft geben, damit die Myriaden ihre Vorstöße auch abschließen?
+- **Asymmetrische Karten bevorzugen die Myriaden** (Technoclan 2 : 10, Terra-Former 3 : 8; je 12 Partien): Kartencharakter oder angleichen?
 - **Konter nach gesehenen Werten** (KI-Schalter): die klügere KI, aber sie stärkt vor allem den Technoclan. Einschalten und die Fraktionen danach neu abstimmen?
 - **Sprengetopp gegen Verbände:** Seine Explosion ist eine einzige Wunde – gegen einen Verband stirbt genau ein Modell, der Rest verfällt. So lassen (reiner Panzerknacker, die Zielwahl lenkt ihn auf Panzer) oder die Explosion auf mehrere Modelle verteilen? Seit den Terra-Formern auch eine Balance-Frage (siehe oben).
 - **Upgrades sind spürbarer** als vorher (Waffen-Kette im Schnitt +60–90 % Wirkung, Panzerung −30–50 % Verluste) – passt das zur Leitlinie „wenige, gewichtige Entscheidungen“, oder zu stark?

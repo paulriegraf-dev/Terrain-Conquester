@@ -351,7 +351,7 @@ const RAW: Record<UnitId, UnitInput> = {
     // verfällt; ab 90 s (75 % der Lebenszeit) Todeswut: +50 % Feuerrate, +30 % Tempo. Der Hund lässt Drohnen in
     // seiner Nähe halb so schnell altern, „Lebensdauer I/II“ verlängert die Uhr um je 30 s.
     lifespan: { start: 1, seconds: 120, fresh: 40, frenzy: { at: 0.75, fireRate: 1.5, speed: 1.3 } },
-    shape: 'circle', letter: 'd', role: 'Schwarm: billig und viele, stärker in der Masse; Munition für Kanone und Katapult; altert (Lebensuhr)',
+    shape: 'circle', letter: 'd', role: 'Schwarm: billig und viele, stärker in der Masse; schlüpft gebündelt aus dem Gelege, die Kanone wirft Trupps hinter die Front; altert (Lebensuhr)',
   },
   bomber: {
     id: 'bomber', name: 'Myr-Sprengetopp', armor: 'infantry', hp: 90, toughness: 3, save: 6, evasion: 1,
@@ -385,7 +385,7 @@ const RAW: Record<UnitId, UnitInput> = {
     // Steine (ohne Verspotter): Artillerie, stark gegen Gebäude
     weapon: { shots: 2, cooldown: 3.2, range: 7.5, skill: 4, strength: 8, ap: 1, damage: 55, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0 },
     // 23.10.: wirft den Myr-Verspotter in die gegnerische Linie
-    launch: { unit: 'taunter', load: 2, max: 2, regen: 40, range: 7.5, flight: 2, cooldown: 6, impact: { radius: 1.5, damage: 30 } },
+    launch: { unit: 'taunter', load: 4, max: 4, regen: 18, range: 7.5, flight: 2, cooldown: 6, impact: { radius: 1.5, damage: 30 } },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
     shape: 'diamond', letter: 'c', role: 'Wirft Myr-Verspotter in die gegnerische Linie – ohne Verspotter Steine gegen Gebäude',
   },
