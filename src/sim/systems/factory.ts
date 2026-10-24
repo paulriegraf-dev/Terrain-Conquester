@@ -9,6 +9,7 @@ import type { PlayerId } from '../types';
 import type { World } from '../world';
 import { buildPriceFactor } from './market';
 import { factorySpeed } from './production';
+import { releaseClutch } from './myr';
 
 /**
  * Fabriken: Stufen, Einheitenwahl und kleine Upgrades.
@@ -50,9 +51,11 @@ export function checkLevelUp(world: World, e: Entity): Check {
   if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
   const step = faction.levelUpgrades[pr.level - 1];
   if (!step) return { ok: false, reason: 'Keine weitere Stufe' };
-  const cost = upgradePrice(world, step.cost, marketFactor(world, e));
+  // Wiederaufbau-Bonus (nach dem Verkauf einer hochgestuften Fabrik): halber Preis, halbe Zeit.
+  const bonus = (pr.bonusLevels ?? 0) > 0 ? 0.5 : 1;
+  const cost = Math.round(upgradePrice(world, step.cost, marketFactor(world, e)) * bonus);
   if (world.players[e.owner].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
-  return { ok: true, cost, seconds: step.seconds };
+  return { ok: true, cost, seconds: step.seconds * bonus };
 }
 
 /**
@@ -188,8 +191,83 @@ export function levelUp(world: World, e: Entity): CommandResult {
   const c = checkLevelUp(world, e);
   if (!c.ok) return c;
   pay(world, e.owner, c.cost);
-  e.producer!.job = { kind: 'level', level: e.producer!.level + 1, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) };
+  const pr = e.producer!;
+  pr.levelPaid = (pr.levelPaid ?? 0) + c.cost;
+  if ((pr.bonusLevels ?? 0) > 0) pr.bonusLevels!--;
+  pr.job = { kind: 'level', level: pr.level + 1, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) };
   return { ok: true };
+}
+
+/** Höchste Stufe einer Gebäudeart dieser Fraktion. */
+function maxLevel(world: World, owner: PlayerId, building: BuildingId): number {
+  const fb = world.players[owner].faction.buildings[building]!;
+  return fb.levels ?? fb.tiers.length;
+}
+
+/** Baupreis einer Gebäudeart jetzt (mit Marktpreis und Fraktions-Faktor). */
+function buildPriceNow(world: World, owner: PlayerId, building: BuildingId): number {
+  const def = BUILDINGS[building];
+  const fb = world.players[owner].faction.buildings[building]!;
+  return def.buildCost * (fb.costFactor ?? 1) * buildPriceFactor(world, def.part);
+}
+
+/**
+ * Umwidmen (24.10. abends, Wunsch des Nutzers): Eine Fabrik wird zu einer anderen Gebäudeart der eigenen Fraktion.
+ * Sie steht rules.convertSeconds still, behält ihre Stufe (soweit es sie dort gibt) und kostet nur den
+ * Preisunterschied, wenn das Ziel teurer ist. Terra-Former: Die Terraformer aus dieser Fabrik wechseln die Linie.
+ */
+export function checkConvert(world: World, e: Entity, to: BuildingId): Check {
+  const pr = e.producer;
+  if (!pr) return { ok: false, reason: 'Keine Fabrik' };
+  const faction = world.players[e.owner].faction;
+  if (!faction.buildings[to]) return { ok: false, reason: 'Diese Gebäudeart gibt es bei deiner Fraktion nicht' };
+  if (to === e.defId) return { ok: false, reason: 'Ist schon diese Gebäudeart' };
+  if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
+  const cost = Math.max(0, Math.round(buildPriceNow(world, e.owner, to) - buildPriceNow(world, e.owner, e.defId as BuildingId)));
+  if (world.players[e.owner].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
+  return { ok: true, cost, seconds: world.rules.convertSeconds };
+}
+
+export function convertFactory(world: World, e: Entity, to: BuildingId): CommandResult {
+  const c = checkConvert(world, e, to);
+  if (!c.ok) return c;
+  pay(world, e.owner, c.cost);
+  e.paid = (e.paid ?? 0) + c.cost;
+  e.producer!.job = { kind: 'convert', to, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) };
+  return { ok: true };
+}
+
+function applyConvert(world: World, e: Entity, to: BuildingId): void {
+  const pr = e.producer!;
+  const faction = world.players[e.owner].faction;
+  const from = e.defId as BuildingId;
+  const fb = faction.buildings[to]!;
+  if (pr.clutch?.length) releaseClutch(world, e);
+  const hpShare = e.maxHp > 0 ? e.hp / e.maxHp : 1;
+  e.defId = to;
+  e.name = fb.name;
+  e.maxHp = BUILDINGS[to].hp;
+  e.hp = Math.max(1, e.maxHp * hpShare);
+  e.disguise = undefined;
+  pr.level = Math.min(pr.level, maxLevel(world, e.owner, to));
+  pr.unit = fb.tiers[0]!;
+  pr.intervalTicks = world.spawnTicks(pr.unit, e.padId !== undefined, e.owner);
+  pr.progress = 0;
+  pr.readySince = -1;
+  pr.unitSince = world.tick;
+  // Terra-Former: Die Terraformer aus dieser Fabrik wechseln die Linie (Säer → Brecher usw.).
+  const oldFormer = faction.buildings[from]?.former;
+  const newFormer = fb.former;
+  if (oldFormer && newFormer) {
+    for (const u of [...world.entities]) {
+      if (!u.alive || u.kind !== 'unit' || u.owner !== e.owner || u.defId !== oldFormer || u.fromBuilding !== e.id) continue;
+      const share = u.maxHp > 0 ? u.hp / u.maxHp : 1;
+      const n = world.addUnit(u.owner, UNITS[newFormer], { x: u.pos.x, y: u.pos.y }, u.mover!.route);
+      n.hp = Math.max(1, n.maxHp * share);
+      n.fromBuilding = e.id;
+      u.alive = false; // ersetzt, nicht gefallen (kein Verlust in der Statistik)
+    }
+  }
 }
 
 /** Fertige Aufträge abschließen. */
@@ -209,6 +287,8 @@ export function updateFactories(world: World): void {
       pr.unitSince = world.tick;
     } else if (job.kind === 'level') {
       pr.level = job.level;
+    } else if (job.kind === 'convert') {
+      applyConvert(world, e, job.to);
     }
     pr.job = null;
     world.emit({ type: 'factory', owner: e.owner, entityId: e.id, kind: job.kind, name: e.name });

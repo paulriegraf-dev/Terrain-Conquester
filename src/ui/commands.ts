@@ -8,7 +8,8 @@ import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { UNITS } from '../data/units';
 import { buildCost } from '../sim/costs';
 import type { BuildingId } from '../data/buildings';
-import { checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { checkConvert, checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { sellValue } from '../sim/systems/applyCommand';
 import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
 import { routeChangeSeconds } from '../sim/systems/sites';
@@ -74,6 +75,7 @@ export function commandsFor(ctx: CommandContext): CommandSet {
     if (e?.alive && e.producer && e.owner === view.human) {
       if (view.menu === 'disguise') return disguiseCommands(ctx, e);
       if (view.menu === 'research') return researchCommands(ctx, e);
+      if (view.menu === 'convert') return convertCommands(ctx, e);
       return buildingCommands(ctx, e);
     }
   }
@@ -375,6 +377,16 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
       data: { unit: u },
     });
   });
+  // Umwidmen sitzt im freien dritten Feld der ersten Reihe (keine Fabrik hat mehr als zwei Einheiten-Linien).
+  const others = buildingIds(player.faction).filter((id) => id !== e.defId);
+  const convertButton: CommandButton = ({
+    id: 'convert-menu', glyph: '⟲', label: 'Umwidmen', key: 'k', disabled: !canAct || !!job || others.length === 0,
+    pending: job?.kind === 'convert' ? `Umwidmen ${secs(job.doneTick)}s` : undefined,
+    tip: `Umwidmen: Die Fabrik wird zu einer anderen Gebäudeart – sie bleibt an ihrem Platz und behält ihre Stufe (soweit es sie dort gibt), steht dafür ${world.rules.convertSeconds} s still. Kostet nur den Preisunterschied, wenn das Ziel teurer ist.${player.faction.id === 'terraformer' ? ' Terra-Former: Die Terraformer aus dieser Fabrik wechseln mit die Linie.' : ''}`,
+    action: 'menu', data: { menu: 'convert' },
+  });
+  while (buttons.length < 2) buttons.push(emptyButton(buttons.length));
+  if (buttons.length < 3) buttons.push(convertButton);
   while (buttons.length < 3) buttons.push(emptyButton(buttons.length));
   const level = checkLevelUp(world, e);
   const maxed = pr.level >= (fb.levels ?? fb.tiers.length);
@@ -431,12 +443,13 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     tip: `Upgrades für ${UNITS[pr.unit].name} – gelten für alle ${UNITS[pr.unit].name} von dir, laufen neben der Produktion. Alle Einheiten auf einen Blick: Panel „Forschung“ rechts.`,
     action: 'menu', data: { menu: 'research' },
   });
-  const refund = Math.floor((e.paid ?? BUILDINGS[e.defId as BuildingId].buildCost) * world.rules.sellRefund);
+  const refund = sellValue(world, e);
   const armed = sellArmed === e.id;
+  const rebuildNote = pr.level > 1 ? ` Die nächste neue Fabrik in den folgenden ${world.rules.rebuildSeconds} s stuft sich ${pr.level - 1}× zum halben Preis und in halber Zeit hoch.` : '';
   buttons.push(
     {
       id: 'sell', glyph: '✕', label: armed ? 'Sicher?' : 'Verkaufen', key: 'x', disabled: !canAct, danger: armed,
-      tip: `Verkaufen: +${refund} Energie (die Hälfte des bezahlten Preises). ${armed ? 'Nochmal drücken zum Bestätigen.' : 'Zweimal drücken.'}`,
+      tip: `Verkaufen: +${refund} Energie (${Math.round(world.rules.sellRefund * 100)} % von Bau und Stufen).${rebuildNote} ${armed ? 'Nochmal drücken zum Bestätigen.' : 'Zweimal drücken.'}`,
       action: 'sell',
     },
     {
@@ -457,7 +470,31 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     tip: `Eilauftrag: ${UNITS[pr.unit].name} kommt sofort heraus – für ${rushRules.perSecond} Energie je Sekunde Restzeit (mindestens ${rushRules.min}), danach ${rushRules.cooldownSeconds} s Pause für Eilaufträge ${rushRules.perPlayer ? 'an allen eigenen Fabriken' : 'an dieser Fabrik'}. ${rush.ok ? `Jetzt ${rush.cost} Energie.` : rush.reason}`,
     action: 'rush-order',
   });
-  return { title: `Befehle · Stufe ${pr.level}`, buttons };
+  return { title: `Befehle · Stufe ${pr.level}${(pr.bonusLevels ?? 0) > 0 ? ` · Wiederaufbau ×${pr.bonusLevels}` : ''}`, buttons };
+}
+
+/** Untermenü Umwidmen: alle anderen Gebäudearten der eigenen Fraktion. */
+function convertCommands(ctx: CommandContext, e: Entity): CommandSet {
+  const { world, canAct } = ctx;
+  const player = world.players[e.owner];
+  const fbs = player.faction.buildings;
+  const pr = e.producer!;
+  const buttons: CommandButton[] = buildingIds(player.faction)
+    .filter((id) => id !== e.defId)
+    .map((id) => {
+      const fb = fbs[id]!;
+      const c = checkConvert(world, e, id);
+      const lvl = Math.min(pr.level, fb.levels ?? fb.tiers.length);
+      return {
+        id: `convert-${id}`, glyph: fb.letter, label: fb.name, key: BUILDINGS[id].key,
+        cost: c.ok && c.cost > 0 ? c.cost : undefined,
+        disabled: !canAct || !c.ok,
+        tip: `Zu ${fb.name} umwidmen: baut dann ${UNITS[fb.tiers[0]!].name}${lvl > 1 ? `, Stufe ${lvl}` : ''}. ${c.ok ? `${c.cost > 0 ? `${c.cost} Energie, ` : 'kostenlos, '}${c.seconds} s ohne Produktion.` : c.reason}`,
+        action: 'convert-to', data: { building: id },
+      };
+    });
+  buttons.push(backButton());
+  return { title: 'Umwidmen zu …', buttons };
 }
 
 function researchCommands(ctx: CommandContext, e: Entity): CommandSet {

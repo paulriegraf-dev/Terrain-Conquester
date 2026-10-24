@@ -23,6 +23,8 @@ export type Command =
   | { type: 'setPaused'; entityId: number; paused: boolean }
   /** Fabrik auf eine andere freigeschaltete Einheit umrüsten (dauert kurz). */
   | { type: 'selectUnit'; entityId: number; unit: UnitId }
+  /** Fabrik umwidmen: wird zu einer anderen Gebäudeart (Stufe bleibt, soweit möglich). */
+  | { type: 'convertFactory'; entityId: number; to: BuildingId }
   /** Fabrik eine Stufe hochrüsten: erweitert ihre Einheitenauswahl. */
   | { type: 'upgradeFactory'; entityId: number }
   /**

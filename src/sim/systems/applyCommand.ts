@@ -14,7 +14,7 @@ import { prepTerrain } from './prep';
 import { castWall, swapTerrain } from './abilities';
 import { DISGUISE } from '../../data/abilities';
 import { placeOrder } from './market';
-import { levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
+import { convertFactory, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
 import { triggerEmergency } from './emergency';
 import { orderScout } from './scout';
 import { routeChangeSeconds } from './sites';
@@ -38,13 +38,19 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
   switch (cmd.type) {
     case 'build':
       return build(world, player, cmd.x, cmd.y, cmd.building);
+    case 'convertFactory': {
+      const b = ownBuilding(world, player, cmd.entityId);
+      if (typeof b === 'string') return fail(b);
+      return convertFactory(world, b, cmd.to);
+    }
     case 'sell': {
       const b = ownBuilding(world, player, cmd.entityId);
       if (typeof b === 'string') return fail(b);
-      const def = BUILDINGS[b.defId as BuildingId];
       const p = world.players[player];
-      const paid = b.paid ?? def.buildCost;
-      p.energy = Math.min(energyCap(world, player), p.energy + Math.floor(paid * world.rules.sellRefund));
+      p.energy = Math.min(energyCap(world, player), p.energy + sellValue(world, b));
+      // Hochgestufte Fabrik verkauft: Die nächste neue Fabrik stuft sich günstiger und schneller hoch.
+      const level = b.producer?.level ?? 1;
+      if (level > 1) p.rebuild = { levels: level - 1, until: world.tick + Math.round(world.rules.rebuildSeconds * world.tps) };
       world.destroy(b, null);
       world.emit({ type: 'sold', owner: player, name: b.name });
       return OK;
@@ -156,7 +162,11 @@ function build(world: World, player: PlayerId, x: number, y: number, buildingId:
   p.energy -= cost;
   p.stats.energySpent += cost;
   p.stats.buildingsBuilt++;
-  world.addBuilding(player, def, check.rect, { paid: cost, outpost: check.outpost });
+  const built = world.addBuilding(player, def, check.rect, { paid: cost, outpost: check.outpost });
+  if (p.rebuild && world.tick <= p.rebuild.until && built.producer) {
+    built.producer.bonusLevels = p.rebuild.levels;
+    p.rebuild = null;
+  }
   world.emit({
     type: 'built',
     owner: player,
@@ -172,4 +182,10 @@ function ownBuilding(world: World, player: PlayerId, id: number): Entity | strin
   if (!e || !e.alive || e.kind !== 'building' || !e.producer) return 'Gebäude nicht gefunden';
   if (e.owner !== player) return 'Nicht dein Gebäude';
   return e;
+}
+
+/** Verkaufswert: Anteil von allem, was in die Fabrik geflossen ist (Bau, Stufen, Umwidmen). */
+export function sellValue(world: World, b: Entity): number {
+  const paid = (b.paid ?? BUILDINGS[b.defId as BuildingId].buildCost) + (b.producer?.levelPaid ?? 0);
+  return Math.floor(paid * world.rules.sellRefund);
 }

@@ -126,6 +126,8 @@ export interface PlayerState {
   pendingStance: Record<Route, { stance: Stance; tick: number } | null>;
   /** Ab diesem Tick ist der Erdwall wieder einsatzbereit. */
   wallReadyTick: number;
+  /** Wiederaufbau (24.10.): Nach dem Verkauf einer hochgestuften Fabrik bekommt die nächste neue Fabrik bis zum Tick `until` so viele Bonus-Stufen. */
+  rebuild: { levels: number; until: number } | null;
   /** Ab diesem Tick geht wieder ein Eilauftrag (nur wenn die Pause für alle Fabriken gilt, rushOrder.perPlayer). */
   rushReadyTick: number;
   /**
@@ -802,6 +804,7 @@ export class World {
       stance: { top: 'hold', mid: 'hold', bottom: 'hold' },
       pendingStance: { top: null, mid: null, bottom: null },
       wallReadyTick: 0,
+      rebuild: null,
       rushReadyTick: 0,
       emergency: { pressure: 0, section: -1, used: [], bonusUntil: 0, open: false },
       scout: { readyTick: 0, pending: null, last: null },

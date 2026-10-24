@@ -115,7 +115,7 @@ function producePlayer(world: World, owner: PlayerId): void {
     } else {
       const pos = spawnPoint(world, building, pr.route, MOVE_PROFILES[def.move]);
       if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
-      world.addUnit(owner, def, pos, pr.route);
+      world.addUnit(owner, def, pos, pr.route).fromBuilding = building.id;
     }
     pr.progress -= pr.intervalTicks;
     pr.produced++;

@@ -63,7 +63,9 @@ export interface MoverState {
 /** Was eine Fabrik gerade umbaut – währenddessen produziert sie nicht. */
 export type FactoryJob =
   | { kind: 'retool'; unit: UnitId; startTick: number; doneTick: number }
-  | { kind: 'level'; level: number; startTick: number; doneTick: number };
+  | { kind: 'level'; level: number; startTick: number; doneTick: number }
+  /** Umwidmen (24.10.): Die Fabrik wird zu einer anderen Gebäudeart (Stufe bleibt, soweit es sie dort gibt). */
+  | { kind: 'convert'; to: BuildingId; startTick: number; doneTick: number };
 
 export interface ProducerState {
   /** Einheit, die die Fabrik gerade baut (eine der freigeschalteten). */
@@ -90,10 +92,16 @@ export interface ProducerState {
   unitSince: number;
   /** Gelege (Myriaden-Brut): fertige, noch nicht geschlüpfte Verbände (zählen aufs Einheitenlimit). */
   clutch?: UnitId[];
+  /** Für Stufen bezahlte Energie (zählt beim Verkauf mit). */
+  levelPaid?: number;
+  /** Wiederaufbau-Bonus: so viele nächste Stufen kosten die Hälfte und dauern halb so lang. */
+  bonusLevels?: number;
 }
 
 export interface Entity {
   id: number;
+  /** Einheit: aus dieser Fabrik (Entity-ID) – für das Umwidmen der Terra-Former-Linien. */
+  fromBuilding?: number;
   owner: PlayerId;
   kind: EntityKind;
   /** Schlüssel in den Daten (z. B. 'trooper', 'barracks', 'hq'). */

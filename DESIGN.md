@@ -1608,6 +1608,16 @@ Wunsch des Nutzers: M5 vorziehen, damit sich das Spiel mit der jetzigen Grafik z
 - **Upgrades zu teuer:** Forschung, Gebäude-Ausbau und Fabrikstufen hingen voll am Marktpreis. Große Armeen (vor allem Terra-Former ohne Einheitenlimit) trieben die Preise so hoch, dass Stufe III über 400 Energie kostete – nicht kaufbar, der Speicher fasst 400. Jetzt verteuert der Markt höchstens um die Hälfte (rules.upgradePriceMax 1,5), und nichts kostet mehr als 300.
 - **Übersicht:** Leben in Worten (wenig, mittel, viel, sehr viel; die Zahl im Tooltip), Konter-Tabelle nur noch als Farben.
 
+## Umgesetzt (24.10. abends): Verkaufen, Wiederaufbau, Umwidmen
+
+Wunsch des Nutzers: Anpassen soll sich lohnen, aber nicht zu leicht fallen – der Gegner soll von Fehlplanungen profitieren können. Im Spätspiel sind Neubau und Hochstufen teuer (Markt) und kosten Zeit.
+
+- **Verkaufen:** 70 % von allem, was in die Fabrik geflossen ist (Bau, Stufen, Umwidmen) – vorher 50 % nur vom Bau. Nie über den Energiespeicher.
+- **Wiederaufbau-Bonus:** Wer eine hochgestufte Fabrik verkauft, dessen nächste neue Fabrik (innerhalb von 60 s gebaut) stuft sich so oft zum halben Preis und in halber Zeit hoch, wie die verkaufte Stufen hatte. Die Befehlsleiste zeigt „Wiederaufbau ×n“.
+- **Umwidmen (Taste K):** Die Fabrik wird zu einer anderen Gebäudeart der eigenen Fraktion, bleibt an ihrem Platz und behält ihre Stufe (soweit es sie dort gibt), steht 20 s still und kostet nur den Preisunterschied, wenn das Ziel teurer ist. Danach baut sie die erste Einheit der neuen Linie; das Einspielen beginnt neu.
+- **Terra-Former:** Beim Umwidmen wechseln die Terraformer aus dieser Fabrik die Linie (Säer → Brecher usw.; die Einheiten merken sich ihre Fabrik). Wächter bleiben, geformter Boden bleibt liegen. Der Gebäude-Ausbau gilt je Linie – die neue Linie hat ihn nur, wenn er dort schon erforscht ist.
+- Forschung geht beim Verkaufen und Umwidmen nie verloren – sie gilt zentral für die Einheitenart.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.

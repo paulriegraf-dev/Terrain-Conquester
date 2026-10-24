@@ -43,7 +43,7 @@ export interface ViewState {
   /** Gelände-Werkzeug; `vertical`: Schlucht hochkant (2×4) oder quer (4×2). */
   swap: { terrain: TerrainId; vertical?: boolean } | null;
   /** Untermenü im Befehlsraster (wie bei klassischen Echtzeit-Strategiespielen). */
-  menu: 'main' | 'terrain' | 'disguise' | 'front' | 'research' | 'hero';
+  menu: 'main' | 'terrain' | 'disguise' | 'front' | 'research' | 'hero' | 'convert';
   /** Vorbereitungsphase läuft (Gelände formen vor Rundenbeginn). */
   prep: boolean;
   /** Täuschung vorbereiten: angezeigter Typ und angezeigte Route. */

@@ -171,6 +171,10 @@ export interface Rules {
   unitSpeed: number;
   /** Anteil der Baukosten, den man beim Verkaufen zurückbekommt. */
   sellRefund: number;
+  /** Wiederaufbau: So lange nach dem Verkauf bekommt die nächste neue Fabrik den Stufen-Bonus (Sekunden). */
+  rebuildSeconds: number;
+  /** Umwidmen: so lange steht die Fabrik still (Sekunden). */
+  convertSeconds: number;
   /** Erste Einheit eines neuen Gebäudes erscheint nach diesem Anteil des Intervalls. */
   firstSpawnFactor: number;
   /** Sicht (Nebel) wird alle n Ticks neu berechnet. */
@@ -319,7 +323,10 @@ export const RULES: Rules = {
   unitCap: 150,
   productionTime: 5,
   unitSpeed: 1,
-  sellRefund: 0.5,
+  // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
+  sellRefund: 0.7,
+  rebuildSeconds: 60,
+  convertSeconds: 20,
   firstSpawnFactor: 0.5,
   visionEvery: 4,
   phases: [

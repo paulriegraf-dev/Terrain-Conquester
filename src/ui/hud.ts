@@ -727,7 +727,9 @@ function buildingInfo(e: Entity, world: World): string {
   const jobText = job
     ? job.kind === 'retool'
       ? `Rüstet um auf ${UNITS[job.unit].name}`
-      : `Wird auf Stufe ${job.level} ausgebaut`
+      : job.kind === 'convert'
+        ? `Wird umgewidmet zu ${world.players[e.owner].faction.buildings[job.to]?.name ?? job.to}`
+        : `Wird auf Stufe ${job.level} ausgebaut`
     : '';
   const status = job
     ? `${jobText} – noch ${Math.ceil((job.doneTick - world.tick) / tps)} s`

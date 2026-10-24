@@ -338,7 +338,7 @@ export class Game {
           break;
         case 'factory':
           if (ev.owner === human) {
-            const what = ev.kind === 'retool' ? 'umgerüstet' : ev.kind === 'level' ? 'hochgestuft' : 'Forschung abgeschlossen';
+            const what = ev.kind === 'retool' ? 'umgerüstet' : ev.kind === 'level' ? 'hochgestuft' : ev.kind === 'convert' ? 'umgewidmet' : 'Forschung abgeschlossen';
             this.hud.log(s, `${ev.name}: ${what}`, 'good');
           }
           break;
@@ -936,6 +936,12 @@ export class Game {
           this.view.swap = null;
           this.view.selected = null;
         }
+        break;
+      }
+      case 'convert-to': {
+        const b = own();
+        if (b && data.building) this.session.issue({ type: 'convertFactory', entityId: b.id, to: data.building as BuildingId });
+        this.view.menu = 'main';
         break;
       }
       case 'select-unit': {
