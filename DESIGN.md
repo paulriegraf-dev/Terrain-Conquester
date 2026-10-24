@@ -1638,6 +1638,15 @@ Sie sollen Überwindung kosten – man soll sich zweimal überlegen, ob man den 
 - **Schaden nach der Runde:** Die Rundenend-Karte zeigt neben der Statistik je Seite den Gesamtschaden, welche eigenen Einheiten am meisten Schaden gemacht haben und woran er ging (Top 5, mit Balken). Die Simulation zählt dafür je Spieler `damageBy` (eigene Einheitenart) und `damageTo` (getroffene Art).
 - **Gespeicherte Partien:** Liegen im Ordner `partien/` (erste: Multiplayer auf Felsenpass, Technoclan gegen Myriaden, 17 Minuten).
 
+### Myriaden gegen Schwere (24.10. spät, Wunsch des Nutzers)
+
+Beobachtung aus echten Partien: Sobald der Gegner Schwere baut (Terra-Former schon früh: Steinwächter, Hainhüter), kommt ein Drohnen-Rush kaum durch; auch gegen den Technoclan fehlt den Myriaden ein Mittel.
+- **Zersetzung:** Drohnen-Schüsse auf schwere Einheiten weichen deren Rüstung auf – je 40 Schüsse eine Stufe (höchstens 2), nach 4 s ohne Treffer vorbei. Ein Schwarm am Panzer macht ihn Schritt für Schritt weich.
+- **Schwarm-Durchschlag:** Drohnen mit mindestens 6 Nachbarn (60 % des Schwarm-Bonus) haben +1 Durchschlag.
+- **Sprengetopp-Beimischung:** Die Brut schickt schon ab Stufe I jeden 6. Verband als Sprengetopp – die volle Sprengetopp-Linie (Stufe II) bleibt.
+- **Sprengetopps jagen Schwere:** Sie suchen ihre Lieblingsziele (Panzer) 4 Kacheln weiter als andere Ziele.
+- Simulation dazu: Nachtlauf u12 (Stand mit allen Änderungen vom 24.10.), danach Schwer-Spam u13.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.

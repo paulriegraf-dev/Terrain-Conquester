@@ -52,6 +52,10 @@ export function factionEntries(f: FactionId): Entry[] {
       const every = fb.mix.every === 'clutch' ? 'einer je Gelege' : `jeder ${fb.mix.every}. Verband`;
       add(fb.mix.unit, `${fb.name} · ab Stufe ${ROMAN[fb.mix.level]}, Beimischung (${every})`);
     }
+    if (fb.mix2) {
+      const entry = out.find((x) => x.unit === fb.mix2!.unit);
+      if (entry) entry.source += ` · ab Stufe ${ROMAN[fb.mix2.level]} auch als Beimischung (jeder ${fb.mix2.every}. Verband)`;
+    }
     if (fb.former) {
       add(fb.former, `${fb.name} · jeder ${RULES.terraform.every}. Verband`);
       const special = UNITS[fb.former].former?.special;

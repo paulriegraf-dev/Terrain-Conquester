@@ -29,12 +29,13 @@ describe('Myriaden-Umbau: Gelege', () => {
       world.step();
       const eggs = brood.producer!.clutch?.length ?? 0;
       maxClutch = Math.max(maxClutch, eggs);
-      if (count(world, 'drone') > 0) break;
+      if (count(world, 'drone') + count(world, 'bomber') > 0) break;
       before = eggs;
       if (eggs > 0) assert.ok(world.unitCount(0) >= eggs * (UNITS.drone.supply ?? 1) - 1e-9, 'Gelege zählt aufs Limit');
     }
     assert.equal(before, 5, 'vor dem Schlüpfen lagen 5 im Gelege');
-    assert.equal(count(world, 'drone'), 6, 'alle 6 schlüpfen auf einmal');
+    assert.equal(count(world, 'drone') + count(world, 'bomber'), 6, 'alle 6 schlüpfen auf einmal');
+    assert.equal(count(world, 'bomber'), 1, 'jeder 6. Verband ein Sprengetopp (Beimischung)');
     assert.equal(brood.producer!.clutch!.length, 0);
     // Die Lebensuhr läuft erst ab dem Schlüpfen
     for (const d of world.entities.filter((e) => e.alive && e.defId === 'drone')) assert.ok(d.lifespan!.age <= 1);

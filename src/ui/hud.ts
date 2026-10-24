@@ -18,7 +18,7 @@ import { checkSwapArea, checkWall, swapCostAt } from '../sim/systems/abilities';
 import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
 import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
-import { factorySpeed, mixOf, settleFactor } from '../sim/systems/production';
+import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/production';
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
 import { checkResearch, ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
@@ -753,9 +753,10 @@ function buildingInfo(e: Entity, world: World): string {
   const enemy = world.players[e.owner === 0 ? 1 : 0].faction.id;
   const counters = counterInfo(pr.unit, enemy);
   const mix = mixOf(world, e);
-  const mixLine = mix
+  const mix2 = mix2Of(world, e);
+  const mixLine = (mix
     ? `<p>Beimischung: jeder ${mix.every}. Verband ${escapeHtml(UNITS[mix.unit].name)}${pr.clutch ? ' (einer je Gelege)' : ''}</p>`
-    : '';
+    : '') + (mix2 ? `<p>Beimischung: jeder ${mix2.every}. Verband ${escapeHtml(UNITS[mix2.unit].name)}</p>` : '');
   const settle = settleFactor(world, e);
   const nextSettle = world.rules.settle.find((st) => st.speed > settle);
   const sinceS = (world.tick - pr.unitSince) / tps;

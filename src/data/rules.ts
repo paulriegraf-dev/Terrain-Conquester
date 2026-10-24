@@ -420,8 +420,10 @@ export const RULES: Rules = {
   clutchAlarmRadius: 8,
   mergeRadius: 1.5,
   launcherAdvance: 4,
-  kamikazeHunt: 0,
-  swarmAp: 0,
+  // 24.10. abends: Sprengetopps suchen ihre Lieblingsziele (Schwere) 4 Kacheln weiter; Drohnen ab 6 Nachbarn (60 % des
+  // Schwarm-Höchstbonus) +1 Durchschlag – Masse soll gegen Panzer eine Chance haben.
+  kamikazeHunt: 4,
+  swarmAp: 0.6,
   // Seit 22.10. 15 s statt 25 – oder sofort gegen Energie. Mit der gedrosselten Produktion kostet ein
   // falscher Marschbefehl ohnehin weniger (eine Fabrik schickt nur alle 12–55 s einen Verband).
   routeChangeSeconds: 15,

@@ -87,6 +87,11 @@ export interface FactionBuilding {
    * die Fabrik gerade baut. `every: 'clutch'` = einer je Gelege. So tauchen Unterstützer auf, ohne eine Linie zu kosten.
    */
   mix?: { unit: UnitId; level: number; every: number | 'clutch' };
+  /**
+   * Zweite Beimischung (24.10. abends, Myriaden-Brut: Sprengetopps): ab dieser Stufe jeder n-te Verband – aber nicht, wenn
+   * die Fabrik diese Einheit ohnehin baut (dann gibt es die volle Linie).
+   */
+  mix2?: { unit: UnitId; level: number; every: number };
 }
 
 /**
@@ -343,7 +348,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     description: 'Masse und Opfer: billige Myrs, die sich in der Gruppe stärken, als Munition dienen und sich opfern. Wenig Aufklärung, kein Flankierer.',
     buildings: {
       // 24.10.: Der Hund kommt ab Stufe III als Beimischung (einer je Gelege); das Gelege wächst über den Gebäude-Ausbau.
-      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber'], levels: 3, mix: { unit: 'hound', level: 3, every: 'clutch' }, clutch: [6, 8, 10] },
+      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber'], levels: 3, mix: { unit: 'hound', level: 3, every: 'clutch' }, mix2: { unit: 'bomber', level: 1, every: 6 }, clutch: [6, 8, 10] },
       workshop: { name: 'Werkstatt', letter: 'W', tiers: ['myrcannon', 'catapult'] },
       foundry: { name: 'Schmelze', letter: 'S', tiers: ['sphere'] },
     },

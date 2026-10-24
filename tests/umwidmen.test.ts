@@ -174,3 +174,19 @@ describe('Schadens-Statistik (24.10.)', () => {
     }
   });
 });
+
+describe('Myriaden gegen Schwere (24.10. abends)', () => {
+  it('Zersetzung: Drohnen-Schüsse machen die Rüstung eines Panzers schlechter, nach ein paar Sekunden ist es vorbei', async () => {
+    const { defenseOf } = await import('../src/sim/systems/hitmath');
+    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['myriaden', 'technoclan'] });
+    const k = world.addUnit(1, UNITS.colossus, { x: 12.5, y: 7.5 }, 'mid');
+    for (let i = 0; i < 4; i++) world.addUnit(0, UNITS.drone, { x: 10.5, y: 6.5 + i * 0.5 }, 'mid');
+    const base = defenseOf(world, k).save;
+    for (let t = 0; t < 120 && !(k.corrosion && k.corrosion.level >= 2); t++) world.step();
+    assert.equal(k.corrosion?.level, 2);
+    assert.equal(defenseOf(world, k).save, base + 2);
+    for (const e of world.entities) if (e.owner === 0 && e.kind === 'unit') e.alive = false;
+    stepTimes(world, 5 * world.tps);
+    assert.equal(defenseOf(world, k).save, base, 'vorbei');
+  });
+});

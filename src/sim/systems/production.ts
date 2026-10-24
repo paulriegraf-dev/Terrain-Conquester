@@ -69,6 +69,14 @@ export function mixOf(world: World, building: Entity): { unit: UnitId; every: nu
   return null;
 }
 
+/** Zweite Beimischung (Myriaden-Brut: jeder 6. Verband ein Sprengetopp) – nicht, wenn die Fabrik diese Einheit selbst baut. */
+export function mix2Of(world: World, building: Entity): { unit: UnitId; every: number } | null {
+  const fb = world.players[building.owner].faction.buildings[building.defId as BuildingId];
+  const pr = building.producer;
+  if (!fb?.mix2 || !pr || pr.level < fb.mix2.level || pr.unit === fb.mix2.unit) return null;
+  return { unit: fb.mix2.unit, every: fb.mix2.every };
+}
+
 function producePlayer(world: World, owner: PlayerId): void {
   const ready: Entity[] = [];
   for (const e of world.entities) {
@@ -104,7 +112,11 @@ function producePlayer(world: World, owner: PlayerId): void {
     }
     // Beimischung: Terraformer (jeder fünfte, mit „Mehr Terraformer“ jeder vierte Verband) oder Unterstützer.
     const mix = mixOf(world, building);
-    const def = mix && pr.produced % mix.every === mix.every - 1 ? UNITS[mix.unit] : UNITS[pr.unit];
+    const mix2 = mix2Of(world, building);
+    const def =
+      mix && pr.produced % mix.every === mix.every - 1 ? UNITS[mix.unit]
+      : mix2 && pr.produced % mix2.every === Math.floor(mix2.every / 2) ? UNITS[mix2.unit]
+      : UNITS[pr.unit];
     if (units >= world.rules.unitCap) {
       blocked = pr.blockedBy = 'cap';
       continue;

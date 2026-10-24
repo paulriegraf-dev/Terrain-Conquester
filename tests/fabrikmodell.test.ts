@@ -60,7 +60,9 @@ describe('Fabrikmodell: Beimischung', () => {
     }
     const hatched = world.entities.filter((e) => e.alive && e.owner === 0 && e.kind === 'unit');
     assert.equal(hatched.filter((e) => e.defId === 'hound').length, 1);
-    assert.equal(hatched.filter((e) => e.defId === 'drone').length, 5);
+    // 24.10. abends: dazu jeder 6. Verband ein Sprengetopp (Beimischung schon ab Stufe I)
+    assert.equal(hatched.filter((e) => e.defId === 'bomber').length, 1);
+    assert.equal(hatched.filter((e) => e.defId === 'drone').length, 4);
   });
 
   it('Kaserne ab Stufe III: jeder vierte Verband ist ein Nano-Heiler', () => {

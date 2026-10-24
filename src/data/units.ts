@@ -279,6 +279,11 @@ export interface UnitDef {
    * `seconds` lang an – auch über ihre Leine hinaus (bis `reach` Kacheln vom Matsch).
    */
   charge?: { maxRange: number; seconds: number; reach: number };
+  /**
+   * Zersetzung (Myr-Drohnen, 24.10. abends): Schüsse auf schwere Einheiten weichen deren Rüstung auf – je `shotsPerLevel`
+   * Schüsse eine Stufe schlechter (höchstens `max`), nach `seconds` ohne Treffer ist es vorbei. Masse knackt so Panzer.
+   */
+  corrode?: { shotsPerLevel: number; max: number; seconds: number };
   /** Leine (Schlammmonster): entfernt sich höchstens so weit von eigenem Boden seiner Art. */
   leash?: { radius: number };
   /** Held: kommt nicht aus einer Fabrik, sondern über ein HQ-Upgrade; einer pro Spieler. */
@@ -360,11 +365,12 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 1.7, move: 'foot', part: 'arms', binds: { arms: 0.35 }, supply: 0.5, radius: 0.25, vision: 5, spawnInterval: 2.3,
     weapon: { shots: 1, cooldown: 0.8, range: 3.2, skill: 4, strength: 5, ap: 1, damage: 2.3, type: 'rifle' },
     swarm: { perNeighbor: 0.06, max: 0.6, radius: 2.5 },
+    corrode: { shotsPerLevel: 40, max: 2, seconds: 4 },
     // Lebensuhr (22.10.): 40 s volles Leben, danach sinkt der Höchstwert gleichmäßig, bis der Verband mit 120 s
     // verfällt; ab 90 s (75 % der Lebenszeit) Todeswut: +50 % Feuerrate, +30 % Tempo. Der Hund lässt Drohnen in
     // seiner Nähe halb so schnell altern, „Lebensdauer I/II“ verlängert die Uhr um je 30 s.
     lifespan: { start: 1, seconds: 120, fresh: 40, frenzy: { at: 0.75, fireRate: 1.5, speed: 1.3 } },
-    shape: 'circle', letter: 'd', role: 'Schwarm: billig und viele, stärker in der Masse; schlüpft gebündelt aus dem Gelege, die Kanone wirft Trupps hinter die Front; altert (Lebensuhr)',
+    shape: 'circle', letter: 'd', role: 'Schwarm: billig und viele, stärker in der Masse (ab 6 Nachbarn Durchschlag +1); weicht die Rüstung schwerer Ziele auf (Zersetzung); schlüpft gebündelt aus dem Gelege, die Kanone wirft Trupps hinter die Front; altert (Lebensuhr)',
   },
   bomber: {
     id: 'bomber', name: 'Myr-Sprengetopp', armor: 'infantry', hp: 90, toughness: 3, save: 6, evasion: 1,
@@ -372,7 +378,7 @@ const RAW: Record<UnitId, UnitInput> = {
     weapon: { shots: 1, cooldown: 1, range: 0.9, skill: 2, strength: 10, ap: 4, damage: 540, type: 'pierce', anti: { heavy: 3 } },
     kamikaze: true,
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
-    shape: 'triangle', letter: 'x', role: 'Kamikaze: rennt hin und sprengt sich – extrem gegen Panzer',
+    shape: 'triangle', letter: 'x', role: 'Kamikaze: sucht sich Panzer und sprengt sich – extrem gegen Schwere; aus der Brut auch als Beimischung',
   },
   hound: {
     id: 'hound', name: 'Myriaden-Hund', armor: 'infantry', hp: 108, models: 3, toughness: 4, save: 5,

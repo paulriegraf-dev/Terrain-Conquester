@@ -101,6 +101,15 @@ export function updateCombat(world: World): void {
     const apBonus = swarmAp + (e.tf ? synergyApBonus(world, e) : 0);
     const wdef = apBonus > 0 ? { ...w.def, ap: w.def.ap + apBonus } : w.def;
     const expected = (shots + blastShots(blast, t)) * woundsPerShot(wdef, defenseOf(world, t, e), bonus) * factor;
+    // Zersetzung: Drohnen-Schüsse weichen die Rüstung schwerer Einheiten auf (zählt für die nächsten Schüsse).
+    const corrode = e.kind === 'unit' && t.kind === 'unit' && t.armor === 'heavy' ? UNITS[e.defId as UnitId].corrode : undefined;
+    if (corrode) {
+      const c = t.corrosion && world.tick < t.corrosion.until ? t.corrosion : { shots: 0, level: 0, until: 0 };
+      c.shots += shots;
+      c.level = Math.min(corrode.max, Math.floor(c.shots / corrode.shotsPerLevel));
+      c.until = world.tick + Math.round(corrode.seconds * world.tps);
+      t.corrosion = c;
+    }
     // Schlammmonster: Wer sie aus kurzer oder mittlerer Reichweite beschießt, den stürmen sie an.
     const charge = t.kind === 'unit' && e.kind === 'unit' ? UNITS[t.defId as UnitId].charge : undefined;
     if (charge && w.def.range <= charge.maxRange) t.charge = { target: e.id, until: world.tick + Math.round(charge.seconds * world.tps) };

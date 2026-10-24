@@ -106,6 +106,8 @@ export interface Entity {
   id: number;
   /** Einheit: aus dieser Fabrik (Entity-ID) – für das Umwidmen der Terra-Former-Linien. */
   fromBuilding?: number;
+  /** Zersetzung (Myr-Drohnen auf Schweren): gezählte Schüsse, Stufe (Rüstung so viel schlechter), gilt bis `until`. */
+  corrosion?: { shots: number; level: number; until: number };
   /** Schlammmonster: stürmt bis `until` auf diesen Gegner los (auch über die Leine hinaus). */
   charge?: { target: number; until: number };
   /** Steht gerade auf einer gegnerischen Schlucht (Schweber). */
