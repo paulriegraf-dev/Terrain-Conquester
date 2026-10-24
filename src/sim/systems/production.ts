@@ -7,6 +7,8 @@ import { PLAYERS } from '../types';
 import type { World } from '../world';
 import { productionFactor } from './market';
 import { clutchSize, layEgg } from './myr';
+import { buildingUpgradeLevel } from './factory';
+import type { UnitId } from '../../data/units';
 import { synergyProduction } from './synergy';
 import type { BuildingId } from '../../data/buildings';
 import type { PartId } from '../../data/market';
@@ -33,6 +35,40 @@ export function productionSpeed(world: World, owner: PlayerId, part: PartId): nu
   return (boost * (world.phase.productionMult ?? 1) * synergyProduction(world, owner)) / productionFactor(world, owner, part);
 }
 
+/** Einspielen (24.10.): Faktor einer Fabrik, die schon eine Weile bei derselben Einheit bleibt (1 = noch nicht). */
+export function settleFactor(world: World, e: Entity): number {
+  const pr = e.producer;
+  if (!pr) return 1;
+  const secs = (world.tick - (pr.unitSince ?? 0)) / world.tps;
+  let f = 1;
+  for (const st of world.rules.settle) if (secs >= st.seconds) f = st.speed;
+  return f;
+}
+
+/** Tempo genau dieser Fabrik: Markt, Phase, Synergie, Notfall – und Einspielen. */
+export function factorySpeed(world: World, e: Entity): number {
+  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e);
+}
+
+/**
+ * Beimischung dieser Fabrik: jeder `every`-te Verband ist `unit` (Terraformer der Terra-Former-Linien; ab einer
+ * Stufe Unterstützer wie Hund und Nano-Heiler). null = keine.
+ */
+export function mixOf(world: World, building: Entity): { unit: UnitId; every: number } | null {
+  const fb = world.players[building.owner].faction.buildings[building.defId as BuildingId];
+  const pr = building.producer;
+  if (!fb || !pr) return null;
+  if (fb.former) {
+    const more = buildingUpgradeLevel(world, building.owner, building.defId as BuildingId, 'formers') > 0;
+    return { unit: fb.former, every: more ? world.rules.terraform.everyLevel2 : world.rules.terraform.every };
+  }
+  if (fb.mix && pr.level >= fb.mix.level) {
+    const every = fb.mix.every === 'clutch' ? (clutchSize(world, building) ?? 5) : fb.mix.every;
+    return every > 0 ? { unit: fb.mix.unit, every } : null;
+  }
+  return null;
+}
+
 function producePlayer(world: World, owner: PlayerId): void {
   const ready: Entity[] = [];
   for (const e of world.entities) {
@@ -47,7 +83,7 @@ function producePlayer(world: World, owner: PlayerId): void {
       pr.blockedBy = 'none';
       continue;
     }
-    if (pr.progress < pr.intervalTicks) pr.progress += productionSpeed(world, owner, UNITS[pr.unit].part);
+    if (pr.progress < pr.intervalTicks) pr.progress += factorySpeed(world, e);
     if (pr.progress >= pr.intervalTicks) {
       if (pr.readySince < 0) pr.readySince = world.tick;
       ready.push(e);
@@ -66,10 +102,9 @@ function producePlayer(world: World, owner: PlayerId): void {
       pr.blockedBy = blocked;
       continue;
     }
-    // Terra-Former: jeder fünfte Verband (ab Stufe II jeder vierte) ist ein Terraformer.
-    const former = world.players[owner].faction.buildings[building.defId as BuildingId]?.former;
-    const every = former ? (pr.level >= 2 ? world.rules.terraform.everyLevel2 : world.rules.terraform.every) : 0;
-    const def = every > 0 && pr.produced % every === every - 1 ? UNITS[former!] : UNITS[pr.unit];
+    // Beimischung: Terraformer (jeder fünfte, mit „Mehr Terraformer“ jeder vierte Verband) oder Unterstützer.
+    const mix = mixOf(world, building);
+    const def = mix && pr.produced % mix.every === mix.every - 1 ? UNITS[mix.unit] : UNITS[pr.unit];
     if (units >= world.rules.unitCap) {
       blocked = pr.blockedBy = 'cap';
       continue;
@@ -80,8 +115,7 @@ function producePlayer(world: World, owner: PlayerId): void {
     } else {
       const pos = spawnPoint(world, building, pr.route, MOVE_PROFILES[def.move]);
       if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
-      const spawned = world.addUnit(owner, def, pos, pr.route);
-      if (spawned.tf) spawned.tf.level = pr.level;
+      world.addUnit(owner, def, pos, pr.route);
     }
     pr.progress -= pr.intervalTicks;
     pr.produced++;

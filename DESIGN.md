@@ -1544,6 +1544,40 @@ Grundlage: 36 Diagnose-Partien, jede Sekunde alle Schüsse in Reichweite erfasst
 - Die HQ-Zweige zusammen verlängern um gut 2 Minuten und helfen den Terra-Formern (Gelände bis Stufe 5) mehr als dem Technoclan (Aufklärung und Markt).
 - Die frühere Messung „ohne HQ-Zweige Median 19 statt 31 Minuten“ (24 Partien, vor der Neu-Abstimmung) war zu großen Teilen Zufall – mit 72 Partien sind es gut 2 Minuten.
 
+## Umgesetzt (24.10. nachmittags): Fabrikmodell, Beimischung, Einspielen, ohne Einheitenlimit, Übersicht
+
+Wunsch des Nutzers: Das Entweder-oder der Fabriken bleibt (nicht auflockern), aber ohne Strafe. Allgemeine Upgrades gelten für alle Gebäude einer Art; die Fabrikstufe schaltet nur noch Produktionslinien frei. So kann man eine einzelne Fabrik hinten hochstufen („fette Fabrik“), während die anderen einfach bleiben und nur die passiven Upgrades bekommen. Unterstützer sollen öfter auftauchen. Kein spielerisches Einheitenlimit.
+
+**Drei Ebenen**
+
+| Ebene | gilt für | was |
+|---|---|---|
+| Einheiten-Forschung | alle Einheiten der Art | Leben, Schaden, Rüstung, Sonder-Upgrades (wie bisher) |
+| Gebäude-Ausbau (neu) | alle Gebäude der Art | Myriaden: Gelege 6 → 8 → 10 (90 / 160 Energie). Terra-Former je Linie: „Mehr Terraformer“ (jeder vierte statt fünfte Verband, 100), „Starke Gerufene“ (+25 % Leben, 160). Läuft über die Forschung (gleiche 2 Plätze, parallel zur Produktion). |
+| Fabrikstufe | nur diese Fabrik | nur Produktionslinien: neue Einheit oder Beimischung |
+
+- **Myriaden:** Brut Stufe II Sprengetopps, Stufe III der **Hund als Beimischung** (einer je Gelege, egal ob die Brut Drohnen oder Sprengetopps baut). Das Gelege wächst nur noch über den Gebäude-Ausbau – auch bei Bruten auf Stufe I.
+- **Technoclan:** Kaserne Stufe III: jeder vierte Verband ist ein **Nano-Heiler** (Beimischung, keine eigene Linie mehr). Hangar und Schwerwerk wie bisher.
+- **Terra-Former:** Ihre Fabriken bauen je nur eine Linie; die Stufen waren reine Boni und entfallen. Die Boni sind jetzt Gebäude-Ausbau je Linie.
+- Vorher kamen Unterstützer kaum vor: Hund 0,2–2,4 je Partie, Nano-Heiler 0,2–1,7 (je 72 Partien).
+
+**Umrüsten und Einspielen**
+- Umrüsten dauert 3 statt 8 s, und der Fortschritt bleibt anteilig erhalten (vorher begann die Fabrik bei null). Das Entweder-oder ist eine Entscheidung, keine Strafe.
+- **Einspielen:** Eine Fabrik, die bei ihrer Einheit bleibt, baut nach 60 s 5 % und nach 150 s 10 % schneller. Umrüsten beginnt von vorn, Pause und Stufe nicht. Die Fabrik-Info zeigt den Stand. (Erst +10 / +20 %: Das half vor allem den Fraktionen, die nie umrüsten – Myriaden-Bruten, Terra-Former-Linien. Technoclan–Myriaden 22 : 48, ohne Einspielen 31 : 39.)
+- **Stufen günstiger und kürzer** (Wunsch: mehr Vielfalt in 15–20-Minuten-Partien): Technoclan 90 / 120 statt 120 / 180 Energie, Myriaden 70 / 110 statt 90 / 160, je 12 / 15 s statt 18–25 s.
+
+**Kein Einheitenlimit mehr (nur noch eine technische Grenze von 150)**
+- Das Limit von 40 bremste fast nur die Terra-Former: Sie standen 42 % der Spielzeit daran (in 123 von 144 Partien), Technoclan und Myriaden 3–4 %. Schlammmonster zählten schon vorher nicht, Drohnen und Verspotter halb.
+- Ohne Limit (alter Stand, je 72 Partien) gewannen die Terra-Former gegen die Myriaden 60 : 6 und gegen den Technoclan 34 : 22, Partien nur 12–19 Minuten.
+- Der Grund sind die Gerufenen: je Partie rund 190 Gerufene gegen 115 Wächter aus den Fabriken. Ein Terraformer formt einen 2×2-Block in etwa 8 s, ruft nach 4 s Ritual und formt sofort den nächsten Block – er rief etwa alle 12–15 s.
+- **Ausgleich (Entscheidung des Nutzers): Ruf-Pause je Terraformer.** Nach einem Ruf wartet er 20 s, bevor er wieder ruft; formen darf er weiter (Boden, Linien-Boni, Synergien). Mit 30 s gewann der Technoclan gegen die Terra-Former 52 : 17.
+
+**Übersicht (F1, im Titelbild und im Menü)** – alles aus den Spielwerten berechnet, damit es nach jeder Abstimmung stimmt:
+- **Einheiten** je Fraktion: Herkunft (Fabrik und Stufe, Beimischung, gerufen, geworfen, Held), Panzerung, Leben, Reichweite, Tempo und Bewegungsart, Wirkung gegen Infanterie / Leicht / Schwer / Gebäude (im Vergleich zur Durchschnittswirkung der Waffe; Tooltip: Schaden je Sekunde) und je Gegnerfraktion die drei gefährlichsten Einheiten für ihre Panzerung.
+- **Konter:** Sekunden, bis ein voller Verband einen gegnerischen ausschaltet (Angreifer- und Zielfraktion wählbar; Sprengetopps: Anteil der Leben je Explosion). Richtwert ohne Upgrades, Schwarm, Fläche, Deckung, Heimvorteil.
+- **Gelände:** Tempo je Bewegungsart in Prozent der Wiese (Beispiel aus den Werten: Plasmawerfer auf Rädern im Schnee 70 % = 1,0 statt 1,4 Kacheln/s), Sicht, Baukosten, Deckung, Spuren, Boni der Terra-Former auf eigenem Boden; darunter, welche Einheit sich wie bewegt.
+- Das Forschungspanel zeigt jetzt kurze, sprechende Namen („Stärke +1“ statt „Waffen I“), die echten Namen stehen in der Fabrik und im Tooltip.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
@@ -1554,6 +1588,22 @@ Grundlage: 36 Diagnose-Partien, jede Sekunde alle Schüsse in Reichweite erfasst
 - **M3 – Grafik:** eigener Grafikstil (z. B. Pixel-Art, Top-down oder 2.5D) als neuer Renderer, dazu Sound.
 - **M4 – Abwechslung:** Fraktionen mit eigenen Einheiten und Bewegungsprofilen, Gebäudeauswahl vor der Runde (Draft) und Kartenereignisse.
 - **M5 – Multiplayer:** Lockstep. Die Simulation ist dafür vorbereitet.
+- **Spielmodus-Idee: Wellen-Modus** (Wunsch des Nutzers, 24.10. – als zusätzlicher Modus, kein Ersatz):
+  - Etwa alle 30 s planen beide Seiten und dürfen eine begrenzte Zahl an Aktionen ausführen. Danach werden die Einheiten gebaut und ziehen auf ihre Lanes.
+  - Aufklärung und Täuschung werden zum Kern: Man kontert den Plan des Gegners, bevor die Welle läuft, und schneidet seine Basis Schritt für Schritt ein.
+  - Passt zur Technik: Die Simulation ist deterministisch, Befehle sind einzelne Schritte, und die Vorbereitungsphase ist schon eine verdeckte Planungsphase.
+  - Der Einwand gegen „feste Wellen“ im Echtzeit-Modus (22.10.: lange Stille, gegen eine laufende Welle kontert man nicht mehr) gilt hier nicht: Die Planungsphase ist genau das Zeitfenster zum Kontern.
+  - Zu klären, wenn es so weit ist:
+    - Pausiert der Kampf beim Planen, oder läuft er weiter?
+    - Was zählt als Aktion, und wie viele gibt es?
+    - Zeigt der Spähbericht den Zustand oder einen Teil des gegnerischen Plans?
+    - Planen beide gleichzeitig verdeckt oder abwechselnd?
+    - Wie lange dauert eine Welle, und wie viele Wellen hat eine Partie?
+    - Echtzeit-Werkzeuge (Eilauftrag, Routenwechsel, Notfallverlegung) in Phasen übersetzen.
+    - Eigene Balance-Werte für den Modus.
+- **Notiert für später (UI, Wunsch 24.10.):**
+  - Die rechten Leisten müssen ohne Scrollen passen.
+  - (Erledigt 24.10.: kurze Namen im Forschungspanel.)
 
 ## Offene Fragen
 
@@ -1563,7 +1613,6 @@ Grundlage: 36 Diagnose-Partien, jede Sekunde alle Schüsse in Reichweite erfasst
 - **Bauplätze je Fraktion:** Myr-Brut als halber Bauplatz behalten oder nicht? Zahlen siehe dort.
 - **Gebäude fallen selten** – trotz Befestigung 50 % statt 20 %: Der Technoclan verliert in KI-Partien fast nie eine Fabrik, die Myriaden etwa eine je Partie, meist früh. Beute und „Fabrik ausschalten“ spielen damit für den Technoclan kaum eine Rolle – so lassen?
 - **Balance je Karte** (Stand 24.10., je 12 Partien): Felsenpass liegt den Terra-Formern (9 : 3 gegen beide), Steilküste dem Technoclan (9 : 2 gegen die Myriaden, 8 : 3 gegen die Terra-Former). Erst mit 24+ Partien je Karte prüfen, ob das Kartencharakter ist – dann behalten oder angleichen?
-- **Hund:** Auch mit der schlaueren KI selten (1 von 36 Partien) – er sitzt auf Brut-Stufe III. Früher freischalten (Stufe II) oder lassen?
 - **Späte Armeen sind klein** (5–10 Verbände je Seite ab 11:00), die Energie läuft voll und hat kaum noch einen Zweck. Ein Energie-Ventil fürs späte Spiel? Schnellere Fabriken in den späten Phasen verlängerten die Partien im Test allerdings.
 - **Lange Partien** (Stand 24.10.): Median 24–28 Minuten, gut die Hälfte ab 25 Minuten – in allen drei Paarungen. Die Gelände-Zweige sind es nicht (siehe „Simulationen nach dem Umbau (24.10.)“). Patt-Auflöser B (Gebiet zählt doppelt ab 20:00) fest einschalten, Halten schwächen (Heimvorteil) – oder so lassen?
 - **Konter nach gesehenen Werten** (KI-Schalter): die klügere KI, aber sie stärkt vor allem den Technoclan. Einschalten und die Fraktionen danach neu abstimmen?

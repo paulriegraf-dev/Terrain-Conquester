@@ -7,6 +7,8 @@ import { BUILD_ZONE } from '../map';
 import type { CellRect, PlayerId, Route, Vec2 } from '../types';
 import { PLAYERS } from '../types';
 import type { World } from '../world';
+import type { BuildingId } from '../../data/buildings';
+import { buildingUpgradeLevel } from './factory';
 import { controllerAt } from './influence';
 import {
   hasSynergy, laneOfRow, mudClutchRate, mudLeash, synergyCamouflage, synergyPower, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
@@ -354,7 +356,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       if (tf.waiting) return;
       const until = world.tick + Math.round(rules.cooldownSeconds * world.tps);
       for (const i of blockCells(world, tf.block)) world.tileCooldown[p * world.formed.length + i] = until;
-      summon(world, e, def.former!.special, center, tf.level);
+      summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
       tf.summons = (tf.summons ?? 0) + 1;
       tf.nextSummon = world.tick + Math.round(rules.summonEvery * world.tps);
       tf.block = null;
@@ -440,10 +442,19 @@ function hasRoom(world: World, owner: PlayerId, unit: UnitId): boolean {
   return !world.rules.terraform.summonNeedsRoom || world.unitCount(owner) + (UNITS[unit].supply ?? 1) <= world.rules.unitCap;
 }
 
-/** Spezialeinheit rufen (Stufe III der Fabrik: +25 % Leben). */
-function summon(world: World, former: Entity, unit: UnitId, at: { x: number; y: number }, level: number): Entity {
+/** Gebäude-Ausbau „Starke Gerufene“ der Linie dieses Terraformers (seit 24.10. zentral statt Fabrikstufe III)? */
+function strongSummons(world: World, p: PlayerId, former: UnitId): boolean {
+  const buildings = world.players[p].faction.buildings;
+  for (const id of Object.keys(buildings) as BuildingId[]) {
+    if (buildings[id]?.former === former) return buildingUpgradeLevel(world, p, id, 'summons') > 0;
+  }
+  return false;
+}
+
+/** Spezialeinheit rufen (mit „Starke Gerufene“: +25 % Leben). */
+function summon(world: World, former: Entity, unit: UnitId, at: { x: number; y: number }, strong: boolean): Entity {
   const s = world.addUnit(former.owner, UNITS[unit], { x: at.x, y: at.y }, former.mover!.route);
-  if (level >= 3) {
+  if (strong) {
     const k = world.rules.terraform.level3Hp;
     s.maxHp *= k;
     s.hp *= k;

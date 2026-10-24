@@ -7,7 +7,7 @@ import type { CellRect, PlayerId, Route } from '../types';
 import { PLAYERS } from '../types';
 import type { World } from '../world';
 import { controllerAt } from './influence';
-import { productionSpeed } from './production';
+import { factorySpeed, productionSpeed } from './production';
 
 /** Berechnet den Nebel neu: Jede eigene Entity deckt ihren Sichtradius auf, dazu das eigene Gebiet. */
 export function updateVision(world: World): void {
@@ -50,7 +50,7 @@ export function apparentBuilding(
   // Gegenspionage (HQ-Zweig Aufklärung): Täuschungen fliegen auf.
   const fake = d && viewer !== e.owner && world.tick < d.until && !seesThroughDisguise(world, viewer);
   const unit = fake ? world.players[e.owner].faction.buildings[d.as]!.tiers[0]! : pr.unit;
-  const speed = productionSpeed(world, e.owner, UNITS[unit].part);
+  const speed = fake ? productionSpeed(world, e.owner, UNITS[unit].part) : factorySpeed(world, e);
   const every = Math.round((fake ? world.spawnTicks(unit, e.padId !== undefined, e.owner) : pr.intervalTicks) / speed);
   const share = Math.min(1, pr.progress / Math.max(1, pr.intervalTicks));
   const idle = pr.paused || pr.job !== null;

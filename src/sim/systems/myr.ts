@@ -9,6 +9,7 @@ import { aliveModels, currentModelWounds } from './combat';
 import { lifeCap } from './lifespan';
 import { controllerAt } from './influence';
 import { spawnPoint } from './production';
+import { buildingUpgradeLevel } from './factory';
 
 /**
  * Myriaden-Umbau (23.10., Entwurf des Nutzers):
@@ -42,12 +43,14 @@ export function updateMyr(world: World): void {
 
 // ------------------------------------------------------------------ Gelege
 
-/** Gelege-Größe einer Brut auf ihrer Stufe (null = die Fabrik hat kein Gelege). */
+/** Gelege-Größe einer Brut nach dem Gebäude-Ausbau des Spielers (null = die Fabrik hat kein Gelege). */
 export function clutchSize(world: World, building: Entity): number | null {
   const fb = world.players[building.owner].faction.buildings[building.defId as BuildingId];
   const sizes = fb?.clutch;
   if (!sizes || !building.producer) return null;
-  return sizes[Math.min(sizes.length, building.producer.level) - 1] ?? sizes[sizes.length - 1]!;
+  // Seit 24.10. zentral über den Gebäude-Ausbau „Gelege II/III“ (vorher mit der Fabrikstufe).
+  const tier = buildingUpgradeLevel(world, building.owner, building.defId as BuildingId, 'clutch');
+  return sizes[Math.min(sizes.length - 1, tier)]!;
 }
 
 /** Ins Gelege legen; ist es voll, schlüpft alles. */

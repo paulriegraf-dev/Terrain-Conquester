@@ -82,6 +82,31 @@ export interface FactionBuilding {
    * so viele beisammen sind (je Fabrikstufe: Index 0 = Stufe I). Die Lebensuhr läuft erst ab dem Schlüpfen.
    */
   clutch?: readonly number[];
+  /**
+   * Beimischung (24.10.): Ab dieser Fabrikstufe kommt jeder n-te Verband als diese Unterstützer-Einheit – egal, was
+   * die Fabrik gerade baut. `every: 'clutch'` = einer je Gelege. So tauchen Unterstützer auf, ohne eine Linie zu kosten.
+   */
+  mix?: { unit: UnitId; level: number; every: number | 'clutch' };
+}
+
+/**
+ * Gebäude-Ausbau (24.10.): gilt zentral für alle Gebäude dieser Art des Spielers (die Fabrikstufe schaltet nur noch
+ * Einheiten frei). Läuft über die Forschung (gleiche Plätze, parallel zur Produktion).
+ * - `clutch`: Gelege der Myr-Brut größer (je Stufe ein Eintrag weiter in `clutch`).
+ * - `formers`: Terra-Former – Terraformer kommen öfter (rules.terraform.everyLevel2 statt every).
+ * - `summons`: Terra-Former – gerufene Spezialeinheiten der Linie mit rules.terraform.level3Hp Leben.
+ */
+export type BuildingUpgradeKind = 'clutch' | 'formers' | 'summons';
+
+export interface BuildingUpgradeDef {
+  id: string;
+  building: BuildingId;
+  kind: BuildingUpgradeKind;
+  name: string;
+  description: string;
+  cost: number;
+  seconds: number;
+  requires?: string;
 }
 
 /** Held: kommt über ein HQ-Upgrade, einer pro Spieler, kehrt nach dem Tod zurück. */
@@ -103,6 +128,8 @@ export interface FactionDef {
   /** Kosten und Dauer der Stufen-Upgrades: Index 0 = auf Stufe 2, 1 = auf Stufe 3. */
   levelUpgrades: readonly { cost: number; seconds: number }[];
   upgrades: readonly UpgradeDef[];
+  /** Gebäude-Ausbau (zentral je Gebäudeart, seit 24.10.). */
+  buildingUpgrades: readonly BuildingUpgradeDef[];
   hero?: HeroDef;
   /** Gelände-Platzierungen in der Vorbereitungsphase (je eine 3×3-Fläche). */
   prepPlacements: number;
@@ -246,6 +273,26 @@ function special(unit: UnitId, id: string, name: string, description: string, co
   return { id, unit, name, description, cost: Math.round((cost * 1.2) / 5) * 5, seconds, effect };
 }
 
+/** Gebäude-Ausbau in zwei Stufen (zentral für alle Gebäude dieser Art). */
+function buildingChain(building: BuildingId, kind: BuildingUpgradeKind, steps: readonly { name: string; description: string; cost: number; seconds: number }[]): BuildingUpgradeDef[] {
+  return steps.map((st, k) => ({
+    id: `${building}-${kind}-${k + 1}`,
+    building,
+    kind,
+    name: st.name,
+    description: st.description,
+    cost: st.cost,
+    seconds: st.seconds,
+    requires: k > 0 ? `${building}-${kind}-${k}` : undefined,
+  }));
+}
+
+/** Terra-Former: je Linie „Terraformer öfter“ und „Gerufene stärker“ (vorher Fabrikstufe II und III). */
+const tfLine = (building: BuildingId): BuildingUpgradeDef[] => [
+  ...buildingChain(building, 'formers', [{ name: 'Mehr Terraformer', description: 'jeder vierte statt jeder fünfte Verband ist ein Terraformer', cost: 100, seconds: 18 }]),
+  ...buildingChain(building, 'summons', [{ name: 'Starke Gerufene', description: 'gerufene Spezialeinheiten dieser Linie +25 % Leben', cost: 160, seconds: 25 }]),
+];
+
 export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
   technoclan: {
     id: 'technoclan',
@@ -253,13 +300,17 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     prepPlacements: 6,
     description: 'Präzision, Reichweite, Reparatur. Wenige, teure Einheiten – tut sich gegen Masse schwer.',
     buildings: {
-      barracks: { name: 'Kaserne', letter: 'K', tiers: ['sniper', 'plasma', 'nanomedic'] },
+      // 24.10.: Der Nano-Heiler ist keine eigene Linie mehr, sondern kommt ab Stufe III als Beimischung (jeder vierte Verband –
+      // Wunsch: mindestens jeder vierte).
+      barracks: { name: 'Kaserne', letter: 'K', tiers: ['sniper', 'plasma'], levels: 3, mix: { unit: 'nanomedic', level: 3, every: 4 } },
       workshop: { name: 'Hangar', letter: 'H', tiers: ['hoverscout', 'battery'] },
       foundry: { name: 'Schwerwerk', letter: 'S', tiers: ['gunner', 'colossus'] },
     },
+    // 24.10.: Stufen günstiger und kürzer (vorher 120 / 180 Energie, 20 / 25 s) – mehr Vielfalt in 15–20-Minuten-Partien,
+    // damit Plasmawerfer, Batterie, Koloss und der Nano-Heiler (Beimischung ab Stufe III) öfter auftauchen.
     levelUpgrades: [
-      { cost: 120, seconds: 20 },
-      { cost: 180, seconds: 25 },
+      { cost: 90, seconds: 12 },
+      { cost: 120, seconds: 15 },
     ],
     upgrades: [
       ...weapons('sniper', ['S', 'D', 'D']), ...armor('sniper', ['SV', 'SV', 'W']),
@@ -282,6 +333,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     // schwächeren Verspotter stand es Technoclan–Myriaden 31 : 37 und Technoclan–Terra-Former 30 : 31 (je 72 Partien).
     productionSpeed: 4 / 3,
     network: true,
+    buildingUpgrades: [],
     hero: { unit: 'commander', cost: 200, respawnSeconds: 45, leadsWaves: true },
   },
   myriaden: {
@@ -290,13 +342,16 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     prepPlacements: 6,
     description: 'Masse und Opfer: billige Myrs, die sich in der Gruppe stärken, als Munition dienen und sich opfern. Wenig Aufklärung, kein Flankierer.',
     buildings: {
-      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber', 'hound'], clutch: [6, 8, 10] },
+      // 24.10.: Der Hund kommt ab Stufe III als Beimischung (einer je Gelege); das Gelege wächst über den Gebäude-Ausbau.
+      barracks: { name: 'Myr-Brut', letter: 'B', tiers: ['drone', 'bomber'], levels: 3, mix: { unit: 'hound', level: 3, every: 'clutch' }, clutch: [6, 8, 10] },
       workshop: { name: 'Werkstatt', letter: 'W', tiers: ['myrcannon', 'catapult'] },
       foundry: { name: 'Schmelze', letter: 'S', tiers: ['sphere'] },
     },
+    // 24.10.: Stufen günstiger und kürzer (vorher 90 / 160 Energie, 18 / 25 s) – Sprengetopps und der Hund (Beimischung ab
+    // Stufe III) sollen in 15–20-Minuten-Partien öfter auftauchen.
     levelUpgrades: [
-      { cost: 90, seconds: 18 },
-      { cost: 160, seconds: 25 },
+      { cost: 70, seconds: 12 },
+      { cost: 110, seconds: 15 },
     ],
     upgrades: [
       ...weapons('drone', ['AP', 'S', 'D']), ...armor('drone', ['SV', 'SV', 'W']),
@@ -314,6 +369,11 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
       special('catapult', 'catapult-arm', 'Langer Wurfarm', '+1 Reichweite', 100, 18, { range: 1 }),
       ...weapons('sphere', ['S', 'BS', 'D']), ...armor('sphere', ['T', 'T', 'W']),
     ],
+    // 24.10.: Das Gelege wächst zentral für alle Bruten (vorher mit der Fabrikstufe, 90 / 160 Energie).
+    buildingUpgrades: buildingChain('barracks', 'clutch', [
+      { name: 'Gelege II', description: 'Gelege aller Bruten fasst 8 statt 6 Verbände', cost: 90, seconds: 18 },
+      { name: 'Gelege III', description: 'Gelege aller Bruten fasst 10 Verbände', cost: 160, seconds: 25 },
+    ]),
     hero: { unit: 'swarmmind', cost: 220, respawnSeconds: 45 },
   },
   terraformer: {
@@ -322,17 +382,15 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     prepPlacements: 8,
     description: 'Raum statt Masse oder Technik: je Bodenart eine Fabrik, zähe Wächter, Terraformer formen Boden und rufen Spezialeinheiten.',
     buildings: {
-      meadowhall: { name: 'Wiesenhof', letter: 'W', tiers: ['wardMeadow'], levels: 3, former: 'formerMeadow' },
-      grove: { name: 'Hain', letter: 'H', tiers: ['wardForest'], levels: 3, former: 'formerForest' },
-      mudpit: { name: 'Schlammgrube', letter: 'M', tiers: ['wardMud'], levels: 3, former: 'formerMud' },
-      frosthall: { name: 'Frosthalle', letter: 'F', tiers: ['wardSnow'], levels: 3, former: 'formerSnow' },
-      quarry: { name: 'Steinbruch', letter: 'G', tiers: ['wardRubble'], levels: 3, former: 'formerRubble' },
+      meadowhall: { name: 'Wiesenhof', letter: 'W', tiers: ['wardMeadow'], former: 'formerMeadow' },
+      grove: { name: 'Hain', letter: 'H', tiers: ['wardForest'], former: 'formerForest' },
+      mudpit: { name: 'Schlammgrube', letter: 'M', tiers: ['wardMud'], former: 'formerMud' },
+      frosthall: { name: 'Frosthalle', letter: 'F', tiers: ['wardSnow'], former: 'formerSnow' },
+      quarry: { name: 'Steinbruch', letter: 'G', tiers: ['wardRubble'], former: 'formerRubble' },
     },
-    // Stufe II: Terraformer öfter (jeder vierte statt jeder fünfte Verband); Stufe III: gerufene Einheiten stärker.
-    levelUpgrades: [
-      { cost: 100, seconds: 18 },
-      { cost: 160, seconds: 25 },
-    ],
+    // 24.10.: Terra-Former-Fabriken haben keine Stufen mehr – ihre Boni (Terraformer öfter, Gerufene stärker) sind
+    // zentraler Gebäude-Ausbau je Linie (vorher Stufe II und III, 100 / 160 Energie).
+    levelUpgrades: [],
     upgrades: [
       ...weapons('wardMeadow', ['S', 'AP', 'D']), ...armor('wardMeadow', ['T', 'SV', 'W']),
       ...weapons('wardForest', ['S', 'AP', 'D']), ...armor('wardForest', ['T', 'SV', 'W']),
@@ -340,6 +398,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
       ...weapons('wardSnow', ['S', 'AP', 'D']), ...armor('wardSnow', ['T', 'SV', 'W']),
       ...weapons('wardRubble', ['S', 'AP', 'D']), ...armor('wardRubble', ['T', 'W', 'W']),
     ],
+    buildingUpgrades: [...tfLine('meadowhall'), ...tfLine('grove'), ...tfLine('mudpit'), ...tfLine('frosthall'), ...tfLine('quarry')],
     hero: { unit: 'landformer', cost: 200, respawnSeconds: 45 },
   },
 };

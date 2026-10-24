@@ -43,7 +43,7 @@ export const MOVE_PROFILES: Readonly<Record<MoveProfileId, MoveProfile>> = {
   hover: {
     id: 'hover',
     name: 'Schweber',
-    hint: 'Beispiel für eine spätere Fraktion: gleitet über Schluchten.',
+    hint: 'Gleitet über Schluchten; Matsch und Schnee bremsen nicht, im Wald langsamer.',
     speed: { meadow: 1, forest: 0.7, mud: 1, snow: 1, mountain: 0, gorge: 0.8, wall: 0, rubble: 0.9 },
   },
 };

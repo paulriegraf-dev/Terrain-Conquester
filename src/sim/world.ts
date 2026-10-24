@@ -637,6 +637,7 @@ export class World {
         blockedBy: 'none',
         produced: 0,
         rushReadyTick: 0,
+        unitSince: this.tick,
       },
     };
     this.insert(e);

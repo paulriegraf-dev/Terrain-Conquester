@@ -127,7 +127,8 @@ describe('KI: schlaue Forschung (Myriaden)', () => {
         const ai = new SimpleAi(0, seed);
         let research: Command | undefined;
         for (let k = 0; k < 30 && !research; k++) {
-          research = nextThought(world, ai).find((c) => c.type === 'research');
+          // Nur Einheiten-Forschung zählen (Gebäude-Ausbau wie „Gelege II“ läuft seit 24.10. über denselben Befehl).
+          research = nextThought(world, ai).find((c) => c.type === 'research' && FACTIONS.myriaden.upgrades.some((u) => u.id === c.upgrade));
           world.step();
         }
         assert.ok(research && research.type === 'research', 'sie forscht');

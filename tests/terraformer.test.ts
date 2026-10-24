@@ -137,7 +137,7 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
 
   it('Test-Schalter: maxSummons begrenzt, wie oft ein Terraformer ruft', () => {
     const keepers = (maxSummons: number): number => {
-      const world = new World({ map: openMap, seed: 1, ...tf, rules: { terraform: { ...RULES.terraform, maxSummons } } });
+      const world = new World({ map: openMap, seed: 1, ...tf, rules: { terraform: { ...RULES.terraform, maxSummons, summonEvery: 0 } } });
       for (let x = 6; x <= 9; x++) {
         for (let y = 7; y <= 8; y++) {
           setTerrain(world, x, y, 'forest');

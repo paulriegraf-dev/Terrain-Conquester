@@ -562,3 +562,78 @@ select {
 .title-play { padding: 12px 34px; font-size: 1.25rem; }
 .title-file { cursor: pointer; }
 .title-note { margin: 0; font-size: 0.78rem; color: var(--muted); max-width: 56ch; }
+
+/* ---------------------------------------------------------------- Übersicht: Einheiten, Konter, Gelände (24.10.) */
+.codex {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  padding: max(8px, env(safe-area-inset-top, 0px)) 12px; background: rgba(9, 13, 11, 0.82);
+}
+.codex[hidden] { display: none; }
+.codex-card {
+  width: min(1240px, 100%); max-height: calc(100dvh - 24px); display: grid; grid-template-rows: auto minmax(0, 1fr);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+.codex-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.codex-head .card-title { font-size: var(--step-1); }
+.codex-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.codex-tab[aria-selected="true"] { border-color: var(--brass); color: var(--brass); }
+.codex-close { margin-left: auto; }
+.codex-body { overflow: auto; padding: 12px 18px 18px; }
+.codex-body > * + * { margin-top: 10px; }
+.cx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cx-label { font-size: var(--step--1); color: var(--muted); min-width: 5.5em; }
+.cx-chip[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); }
+.cx-lede { margin: 0; font-size: var(--step--1); color: var(--muted); max-width: 120ch; }
+.cx-lede b { color: var(--text); font-weight: 600; }
+.cx-key { white-space: nowrap; padding: 0 4px; border-radius: 3px; }
+.cx-scroll { overflow-x: auto; }
+.cx-table { width: 100%; border-collapse: collapse; font-size: var(--step--1); }
+.cx-table th, .cx-table td { padding: 5px 7px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.cx-table thead th { position: sticky; top: -12px; background: var(--panel); color: var(--muted); font-weight: 600; white-space: nowrap; z-index: 1; }
+.cx-table tbody th { font-weight: 600; min-width: 11em; }
+.cx-glyph { display: inline-grid; place-items: center; width: 1.4em; height: 1.4em; margin-right: 6px; border: 1px solid var(--line); border-radius: 3px; font-family: var(--font-data); font-size: 0.75rem; color: var(--brass); }
+.cx-role { display: block; font-weight: 400; color: var(--muted); font-size: 0.75rem; max-width: 26ch; }
+.cx-src { color: var(--muted); max-width: 18ch; }
+.cx-num { font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cx-sub { color: var(--muted); font-size: 0.75rem; }
+.cx-threat { font-size: 0.75rem; color: var(--muted); max-width: 28ch; }
+.cx-threat b { color: var(--text); font-weight: 600; }
+.cx-note { color: var(--muted); max-width: 52ch; min-width: 30ch; }
+.cx-move { font-size: 0.75rem; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap; }
+.cx-move[data-move="foot"] { color: var(--p-foot); }
+.cx-move[data-move="wheels"] { color: var(--p-wheels); }
+.cx-move[data-move="tracks"] { color: var(--p-tracks); }
+.cx-move[data-move="hover"] { color: var(--p-hover); }
+.cx-r { font-family: var(--font-data); text-align: center !important; white-space: nowrap; }
+.cx-rt { display: block; font-family: var(--font-body); font-size: 0.7rem; }
+.cx-r[data-l="3"], .cx-key[data-l="3"] { background: rgba(123, 211, 137, 0.24); color: var(--good); }
+.cx-r[data-l="2"], .cx-key[data-l="2"] { background: rgba(123, 211, 137, 0.1); color: #b9e6c0; }
+.cx-r[data-l="1"], .cx-key[data-l="1"] { background: rgba(240, 184, 74, 0.14); color: var(--warn); }
+.cx-r[data-l="0"], .cx-key[data-l="0"] { background: rgba(255, 95, 109, 0.14); color: var(--bad); }
+.cx-r[data-l="none"] { color: var(--muted); }
+.cx-matrix { width: auto; }
+.cx-matrix td { min-width: 2.6em; }
+.cx-vert { vertical-align: bottom !important; }
+.cx-vert span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; display: inline-block; max-height: 11em; overflow: hidden; text-overflow: ellipsis; }
+.cx-swatch { display: inline-block; width: 0.9em; height: 0.9em; margin-right: 6px; border-radius: 2px; vertical-align: -1px; border: 1px solid rgba(255, 255, 255, 0.2); }
+.cx-h3 { margin: 6px 0 0; font-size: var(--step-0); font-weight: 600; }
+.cx-movers { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: var(--step--1); }
+.cx-movers .cx-sub { display: block; }
+@media (max-width: 820px) {
+  .codex { padding: 8px; }
+  .codex-head, .codex-body { padding-inline: 12px; }
+  .cx-role { display: none; }
+}
+.cx-armor { font-size: 0.75rem; padding: 0 5px; border-radius: 3px; white-space: nowrap; }
+.cx-armor[data-a="infantry"] { background: rgba(196, 210, 140, 0.18); color: #d4dd9e; }
+.cx-armor[data-a="light"] { background: rgba(127, 184, 230, 0.18); color: #9cccf2; }
+.cx-armor[data-a="heavy"] { background: rgba(224, 154, 90, 0.2); color: #f0b57e; }
+.cx-armor-text[data-a="infantry"] { color: #d4dd9e; }
+.cx-armor-text[data-a="light"] { color: #9cccf2; }
+.cx-armor-text[data-a="heavy"] { color: #f0b57e; }
+.cx-bar { display: block; height: 3px; margin-top: 3px; background: var(--line); border-radius: 2px; min-width: 3.5em; }
+.cx-bar i { display: block; height: 100%; background: var(--brass); border-radius: 2px; }
+.cx-f[data-f="technoclan"], .cx-glyph[data-f="technoclan"] { color: #5cc8ff; }
+.cx-f[data-f="myriaden"], .cx-glyph[data-f="myriaden"] { color: #ff8fc2; }
+.cx-f[data-f="terraformer"], .cx-glyph[data-f="terraformer"] { color: #9be37b; }
+.cx-glyph[data-f] { border-color: currentColor; }

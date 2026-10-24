@@ -18,10 +18,25 @@
     <p class="title-lede">Fabriken setzen, Fronten halten, Gelände formen – und das gegnerische HQ erobern.</p>
     <div class="title-actions">
       <button type="button" class="btn-primary title-play" id="btn-title-play" data-action="title-play">Spielen <kbd>↵</kbd></button>
+      <button type="button" class="btn" data-action="codex" title="Einheiten, Konter und Gelände auf einen Blick">Übersicht: Einheiten &amp; Gelände</button>
       <button type="button" class="btn" id="btn-music" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
       <label class="btn title-file">Startmusik wählen…<input type="file" accept="audio/*" id="music-file" hidden></label>
     </div>
     <p class="title-note" id="music-note">Startmusik bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
+  </div>
+</div>
+<div class="codex" id="codex" role="dialog" aria-modal="true" aria-labelledby="codex-title" hidden>
+  <div class="codex-card">
+    <div class="codex-head">
+      <h2 class="card-title" id="codex-title">Übersicht</h2>
+      <div class="codex-tabs" role="tablist">
+        <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="units" aria-selected="true">Einheiten</button>
+        <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="counters" aria-selected="false">Konter</button>
+        <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="terrain" aria-selected="false">Gelände</button>
+      </div>
+      <button type="button" class="btn codex-close" data-action="codex-close">Schließen <kbd>Esc</kbd></button>
+    </div>
+    <div class="codex-body" id="codex-body"></div>
   </div>
 </div>
 <div class="app">
@@ -113,6 +128,7 @@
               <button type="button" class="btn-primary" id="btn-start" data-action="start">Runde starten</button>
               <button type="button" class="btn" id="btn-resume" data-action="resume" hidden>Weiterspielen <kbd>Esc</kbd></button>
               <button type="button" class="btn" id="btn-mainmenu" data-action="new-round" hidden>Runde aufgeben</button>
+              <button type="button" class="btn" data-action="codex" title="Einheiten, Konter und Gelände auf einen Blick (F1)">Übersicht <kbd>F1</kbd></button>
               <button type="button" class="btn" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
             </div>
             <p class="fine" id="start-fine">Dahinter läuft eine Vorschau: die KI gegen sich selbst.</p>

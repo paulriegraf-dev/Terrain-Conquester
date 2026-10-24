@@ -3,11 +3,12 @@ import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
 import { checkHqUpgrade } from '../sim/systems/hq';
 import { BUILDINGS } from '../data/buildings';
 import { buildingIds } from '../data/factions';
+import type { FactionBuilding } from '../data/factions';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { UNITS } from '../data/units';
 import { buildCost } from '../sim/costs';
 import type { BuildingId } from '../data/buildings';
-import { checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleUpgrades } from '../sim/systems/factory';
+import { checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
 import { routeChangeSeconds } from '../sim/systems/sites';
@@ -368,7 +369,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
       pressed: pr.unit === u,
       pending: retooling ? `Umrüsten ${secs(job.doneTick)}s` : undefined,
       tip: unlocked
-        ? `${def.name}: ${def.role} – ${counterLine(u, enemyFaction)}. ${pr.unit === u ? 'Wird gerade gebaut.' : `Umrüsten dauert ${world.rules.retoolSeconds} s (keine Produktion).`}`
+        ? `${def.name}: ${def.role} – ${counterLine(u, enemyFaction)}. ${pr.unit === u ? 'Wird gerade gebaut.' : `Umrüsten dauert ${world.rules.retoolSeconds} s, der Fortschritt bleibt erhalten – das Einspielen beginnt von vorn.`}`
         : `${def.name} (${def.role} – ${counterLine(u, enemyFaction)}) – braucht Stufe ${k + 1}. Mit S hochstufen.`,
       action: 'select-unit',
       data: { unit: u },
@@ -387,8 +388,10 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     disabled: !canAct || maxed || !level.ok,
     pending: levelJob ? `Stufe ${secs(job.doneTick)}s` : undefined,
     tip: maxed
-      ? 'Diese Fabrik hat ihre höchste Stufe.'
-      : `Hochstufen auf Stufe ${pr.level + 1}: ${fb.tiers[pr.level] ? `schaltet ${UNITS[fb.tiers[pr.level]!].name} frei – zusätzlich zu den bisherigen Einheiten` : pr.level === 1 ? 'Terraformer kommen öfter (jeder vierte statt jeder fünfte Verband)' : 'gerufene Spezialeinheiten haben +25 % Leben'}. ${level.ok ? `${level.cost} Energie, ${level.seconds} s ohne Produktion.` : level.reason}`,
+      ? (fb.levels ?? fb.tiers.length) <= 1
+        ? 'Diese Fabrik hat keine Stufen. Ihr Ausbau gilt zentral für alle Gebäude dieser Art – unter Forschung (R) oder im Panel „Forschung“.'
+        : 'Diese Fabrik hat ihre höchste Stufe.'
+      : `Hochstufen auf Stufe ${pr.level + 1}: ${levelText(fb, pr.level + 1)}. Gilt nur für diese Fabrik. ${level.ok ? `${level.cost} Energie, ${level.seconds} s ohne Produktion.` : level.reason}`,
     action: 'upgrade',
   });
 
@@ -416,7 +419,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
   }
   buttons.push({
     id: 'pause', glyph: pr.paused ? '▶' : '❚❚', label: pr.paused ? 'Weiter' : 'Pause', key: 'p', disabled: !canAct, pressed: pr.paused,
-    tip: 'Produktion anhalten – der Fortschritt bleibt erhalten, andere Fabriken bekommen Platz im Limit.', action: 'pause',
+    tip: 'Produktion anhalten – der Fortschritt bleibt erhalten, das Einspielen läuft weiter.', action: 'pause',
   });
 
   // Reihe 3: Forschung (R), Verkaufen (X), Tarnen (D)
@@ -462,6 +465,7 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const pr = e.producer!;
   const player = world.players[e.owner];
   const ups = visibleUpgrades(player.faction, pr.unit, player.research);
+  const buildingUps = visibleBuildingUpgrades(player.faction, e.defId as BuildingId, player.research);
   const buttons: CommandButton[] = ups.map((u, k) => {
     const done = player.research.includes(u.id);
     const running = researching(world, e.owner, u.id);
@@ -481,8 +485,38 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
       data: { upgrade: u.id },
     };
   });
+  const fbName = player.faction.buildings[e.defId as BuildingId]?.name ?? '';
+  buildingUps.forEach((u, k) => {
+    const done = player.research.includes(u.id);
+    const c = checkResearch(world, e.owner, u.id);
+    const lab = player.labs.find((l) => l.upgrade === u.id);
+    buttons.push({
+      id: `research-${u.id}`,
+      glyph: done ? '✓' : '▣',
+      label: u.name,
+      key: String(ups.length + k + 1),
+      cost: done || !c.ok ? undefined : c.cost,
+      disabled: !canAct || done || !c.ok,
+      pressed: done,
+      pending: lab ? `${Math.max(0, Math.ceil((lab.doneTick - world.tick) / world.tps))}s` : undefined,
+      tip: `Ausbau ${u.name}: ${u.description} – gilt für alle ${fbName}. ${done ? 'Ausgebaut.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
+      action: 'research',
+      data: { upgrade: u.id },
+    });
+  });
   buttons.push(backButton());
   return { title: `Forschung · ${UNITS[pr.unit].name}`, buttons };
+}
+
+/** Was eine Fabrikstufe bringt (seit 24.10. nur Linien: neue Einheit oder Beimischung). */
+function levelText(fb: FactionBuilding, level: number): string {
+  const unit = fb.tiers[level - 1];
+  if (unit) return `schaltet ${UNITS[unit].name} frei – zusätzlich zu den bisherigen Einheiten`;
+  if (fb.mix && fb.mix.level === level) {
+    const every = fb.mix.every === 'clutch' ? 'ein' : `jeder ${fb.mix.every}.`;
+    return `Beimischung: ${every} ${UNITS[fb.mix.unit].name}${fb.mix.every === 'clutch' ? ' je Gelege' : ' Verband'} – egal, was die Fabrik gerade baut`;
+  }
+  return 'keine neue Linie';
 }
 
 function emptyButton(i: number): CommandButton {

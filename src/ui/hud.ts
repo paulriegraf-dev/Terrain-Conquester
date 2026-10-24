@@ -6,8 +6,8 @@ import { MARKET, MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
 import { OVERTIME_VARIANTS, OVERTIME_VARIANT_IDS } from '../data/rules';
 import type { OvertimeVariant, Rules } from '../data/rules';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
-import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS } from '../data/factions';
-import type { FactionId } from '../data/factions';
+import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingIds } from '../data/factions';
+import type { BuildingUpgradeDef, FactionDef, FactionId } from '../data/factions';
 import { UNITS, UNIT_IDS, emptyUnitCounts } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
@@ -18,9 +18,9 @@ import { checkSwapArea, checkWall, swapCostAt } from '../sim/systems/abilities';
 import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
 import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
-import { productionSpeed } from '../sim/systems/production';
+import { factorySpeed, mixOf, settleFactor } from '../sim/systems/production';
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
-import { checkResearch, researchableUnits, researching, visibleUpgrades } from '../sim/systems/factory';
+import { checkResearch, ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
 import { synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
@@ -32,7 +32,7 @@ import { counterInfo } from '../sim/counters';
 import type { PlayerStats, World } from '../sim/world';
 import { commandsFor } from './commands';
 import type { CommandButton } from './commands';
-import { clock, escapeHtml, num } from './format';
+import { clock, escapeHtml, num, shortUpgradeLabel } from './format';
 import type { Session } from './session';
 import { buildPreview } from './view';
 import type { ViewState } from './view';
@@ -364,21 +364,34 @@ export class Hud {
     const p = world.players[me];
     const labs = p.labs.map((l) => {
       const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
+      const bu = p.faction.buildingUpgrades.find((x) => x.id === l.upgrade);
       const share = (world.tick - l.startTick) / Math.max(1, l.doneTick - l.startTick);
       const left = Math.max(0, Math.ceil((l.doneTick - world.tick) / world.tps));
-      return `<li class="lab"><span>${escapeHtml(u ? `${UNITS[u.unit].name}: ${u.name}` : l.upgrade)}</span><span class="num">${left} s</span><span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span></li>`;
+      const name = u ? `${UNITS[u.unit].name}: ${shortUpgradeLabel(u.description)}` : bu ? `${p.faction.buildings[bu.building]?.name ?? ''}: ${buildingUpgradeLabel(p.faction, bu)}` : l.upgrade;
+      return `<li class="lab"><span>${escapeHtml(name)}</span><span class="num">${left} s</span><span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span></li>`;
     }).join('');
     const rows = researchableUnits(world, me).map((unit) => {
       const ups = visibleUpgrades(p.faction, unit, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id));
       if (ups.length === 0) return '';
       const buttons = ups.map((u) => {
         const c = checkResearch(world, me, u.id);
-        const label = u.name.replace(/^Waffen III: /, 'W III: ').replace(/^Panzerung /, 'Pz ').replace(/^Waffen /, 'W ');
-        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(label)}${c.ok ? ` ${c.cost}` : ''}</button>`;
+        const label = shortUpgradeLabel(u.description);
+        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description} – gilt für alle ${UNITS[unit].name}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(label)}${c.ok ? ` ${c.cost}` : ''}</button>`;
       }).join('');
       return `<li><span class="unit">${escapeHtml(UNITS[unit].name)}</span><span class="ups">${buttons}</span></li>`;
     }).join('');
-    const html = labs + (rows || '<li class="unit">Erst Fabriken bauen – dann gibt es hier Upgrades.</li>');
+    // Gebäude-Ausbau (24.10.): zentral je Gebäudeart, die der Spieler besitzt.
+    const bRows = buildingIds(p.faction).filter((b) => ownsBuilding(world, me, b)).map((b) => {
+      const ups = visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id));
+      if (ups.length === 0) return '';
+      const fbName = p.faction.buildings[b]!.name;
+      const buttons = ups.map((u) => {
+        const c = checkResearch(world, me, u.id);
+        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description} – gilt für alle ${fbName}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(buildingUpgradeLabel(p.faction, u))}${c.ok ? ` ${c.cost}` : ''}</button>`;
+      }).join('');
+      return `<li><span class="unit">${escapeHtml(fbName)} (alle)</span><span class="ups">${buttons}</span></li>`;
+    }).join('');
+    const html = labs + ((rows + bRows) || '<li class="unit">Erst Fabriken bauen – dann gibt es hier Upgrades.</li>');
     const meta = `${p.labs.length}/${world.rules.researchSlots} läuft`;
     const sig = html + meta;
     if (sig === this.researchSig) return;
@@ -685,7 +698,7 @@ function buildingInfo(e: Entity, world: World): string {
   const pr = e.producer!;
   const unit = UNITS[pr.unit];
   const price = productionFactor(world, e.owner, unit.part);
-  const left = Math.max(0, (pr.intervalTicks - pr.progress) / productionSpeed(world, e.owner, unit.part) / tps);
+  const left = Math.max(0, (pr.intervalTicks - pr.progress) / factorySpeed(world, e) / tps);
   const job = pr.job;
   const jobText = job
     ? job.kind === 'retool'
@@ -709,8 +722,20 @@ function buildingInfo(e: Entity, world: World): string {
   const bar = job ? (world.tick - job.startTick) / Math.max(1, job.doneTick - job.startTick) : pr.progress / pr.intervalTicks;
   const enemy = world.players[e.owner === 0 ? 1 : 0].faction.id;
   const counters = counterInfo(pr.unit, enemy);
+  const mix = mixOf(world, e);
+  const mixLine = mix
+    ? `<p>Beimischung: jeder ${mix.every}. Verband ${escapeHtml(UNITS[mix.unit].name)}${pr.clutch ? ' (einer je Gelege)' : ''}</p>`
+    : '';
+  const settle = settleFactor(world, e);
+  const nextSettle = world.rules.settle.find((st) => st.speed > settle);
+  const sinceS = (world.tick - pr.unitSince) / tps;
+  const settleLine = settle > 1 || nextSettle
+    ? `<p class="muted">Eingespielt: ${settle > 1 ? `+${Math.round((settle - 1) * 100)} % Tempo` : 'noch nicht'}${nextSettle ? ` · +${Math.round((nextSettle.speed - 1) * 100)} % in ${Math.max(0, Math.ceil(nextSettle.seconds - sinceS))} s` : ''}</p>`
+    : '';
   return `${hpLine(e)}
     <p>Stufe ${pr.level} · baut <strong>${escapeHtml(unit.name)}</strong></p>
+    ${mixLine}
+    ${settleLine}
     ${pr.clutch ? `<p>Gelege <strong>${pr.clutch.length} / ${clutchSize(world, e) ?? pr.clutch.length}</strong> – schlüpft gemeinsam (bei Gefahr sofort)</p>` : ''}
     <p class="counters">stark gegen <strong>${escapeHtml(counters.strong)}</strong> · schwach gegen <strong>${escapeHtml(counters.weak)}</strong></p>
     <div class="progress${job ? ' job' : ''}"><i style="width:${Math.min(100, bar * 100)}%"></i></div>
@@ -749,3 +774,14 @@ function costText(c: BuildCheck, outpostSpeed: number): string {
 
 /** Panzerung im Spähbericht. */
 const ARMOR_NAMES: Readonly<Record<'infantry' | 'light' | 'heavy', string>> = { infantry: 'Infanterie', light: 'Leicht', heavy: 'Schwer' };
+
+/** Kurzname eines Gebäude-Ausbaus fürs Panel: „Gelege 8“ statt „Gelege II“. */
+function buildingUpgradeLabel(faction: FactionDef, u: BuildingUpgradeDef): string {
+  if (u.kind === 'clutch') {
+    const sizes = faction.buildings[u.building]?.clutch ?? [];
+    const k = faction.buildingUpgrades.filter((x) => x.building === u.building && x.kind === 'clutch').indexOf(u);
+    const size = sizes[Math.min(sizes.length - 1, k + 1)];
+    if (size) return `Gelege ${size}`;
+  }
+  return u.name;
+}

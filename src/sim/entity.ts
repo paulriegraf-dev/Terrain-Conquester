@@ -86,6 +86,8 @@ export interface ProducerState {
   produced: number;
   /** Ab diesem Tick ist wieder ein Eilauftrag möglich. */
   rushReadyTick: number;
+  /** Einspielen (24.10.): seit diesem Tick baut die Fabrik ihre jetzige Einheit (Umrüsten setzt es neu). */
+  unitSince: number;
   /** Gelege (Myriaden-Brut): fertige, noch nicht geschlüpfte Verbände (zählen aufs Einheitenlimit). */
   clutch?: UnitId[];
 }

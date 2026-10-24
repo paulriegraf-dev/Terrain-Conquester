@@ -533,7 +533,12 @@ export class SimpleAi {
         if (!pr) return false;
         return pred(pr.job?.kind === 'retool' ? pr.job.unit : pr.unit);
       }).length;
-    const supporters = making((u) => !!UNITS[u].support);
+    // Unterstützer: Fabriken, die einen bauen – oder ihn seit 24.10. als Beimischung mitschicken (Hund, Nano-Heiler).
+    const supporters = making((u) => !!UNITS[u].support) +
+      this.ownBuildings(world).filter((b) => {
+        const mx = me.faction.buildings[b.defId as BuildingId]?.mix;
+        return !!b.producer && !!mx && b.producer.level >= mx.level && !!UNITS[mx.unit].support;
+      }).length;
     const agingUnits = world.entities.filter((e) => e.alive && e.owner === this.player && e.lifespan).length;
     // Myriaden: Kanone und Katapult brauchen Drohnen als Munition – mindestens eine Fabrik baut sie.
     const ammoUnits = new Set(this.ownBuildings(world).flatMap((b) => (b.producer && UNITS[b.producer.unit].ammo ? [UNITS[b.producer.unit].ammo!.unit] : [])));
@@ -580,16 +585,28 @@ export class SimpleAi {
     // Aufbau zuerst (AI_TUNING.buildFirst): nur vom Überschuss über die Fabrik-Rücklage.
     const keep = AI_TUNING.buildFirst ? Math.max(reserve, this.saving) : reserve;
     if (this.rng.chance(0.6)) {
+      // Gebäude-Ausbau (24.10., zentral je Gebäudeart: Gelege, Terraformer-Takt, Gerufene) – Terra-Former haben keine
+      // Fabrikstufen mehr, für sie ist das der einzige Ausbau.
+      const building = this.pickBuildingUpgrade(world, keep);
       const candidates = factories.filter((f) => checkLevelUp(world, f).ok);
+      if (building && (candidates.length === 0 || this.rng.chance(0.5))) return building;
       if (candidates.length > 0) {
         // Zuerst die Fabrik, deren nächste Stufe am meisten gegen das Gesehene hilft (Konter),
-        // sonst nach Strategie-Vorliebe.
+        // sonst nach Strategie-Vorliebe. Eine Stufe ohne neue Linie bringt die Beimischung (Hund, Nano-Heiler).
         const gain = (f: Entity): number => {
-          const tiers = me.faction.buildings[f.defId as BuildingId]!.tiers;
-          const next = tiers[f.producer!.level];
-          if (!next) return 0;
-          const now = Math.max(...tiers.slice(0, f.producer!.level).map((u, k) => scoreOf(u, k + 1)));
-          return scoreOf(next, f.producer!.level + 1) / Math.max(0.1, now);
+          const fbd = me.faction.buildings[f.defId as BuildingId]!;
+          const tiers = fbd.tiers;
+          const lvl = f.producer!.level;
+          const now = Math.max(...tiers.slice(0, lvl).map((u, k) => scoreOf(u, k + 1)));
+          const next = tiers[lvl];
+          if (next) return scoreOf(next, lvl + 1) / Math.max(0.1, now);
+          // Beimischung (Unterstützer): die erste solche Fabrik hat Vorrang, sobald eine Armee steht – Unterstützer sollen
+          // auftauchen (Wunsch 24.10.); sie kosten keine Linie.
+          if (fbd.mix && fbd.mix.level === lvl + 1) {
+            const first = supporters === 0 && myUnits >= 6 ? 1.6 : 0;
+            return Math.max(scoreOf(fbd.mix.unit, lvl + 1), first) / Math.max(0.1, now);
+          }
+          return 0;
         };
         candidates.sort(
           (a, b) =>
@@ -619,6 +636,24 @@ export class SimpleAi {
       }
     }
     return null;
+  }
+
+  /**
+   * Gebäude-Ausbau (24.10.): der Ausbau für die Gebäudeart, von der die KI am meisten hat (gilt für alle zugleich).
+   * „Starke Gerufene“ etwas nach „Mehr Terraformer“. Gleichstand nach ID (spiegelbildlich, kein Zufall).
+   */
+  private pickBuildingUpgrade(world: World, keep: number): Command | null {
+    const me = world.players[this.player];
+    let best: { id: string; value: number } | null = null;
+    for (const u of me.faction.buildingUpgrades) {
+      const c = checkResearch(world, this.player, u.id);
+      if (!c.ok || me.energy < c.cost + keep) continue;
+      const count = this.ownBuildings(world).filter((b) => b.defId === u.building).length;
+      const value = count * (u.kind === 'summons' ? 0.8 : 1);
+      if (value <= 0) continue;
+      if (!best || value > best.value + 1e-9 || (Math.abs(value - best.value) <= 1e-9 && u.id < best.id)) best = { id: u.id, value };
+    }
+    return best ? { type: 'research', upgrade: best.id } : null;
   }
 
   /**

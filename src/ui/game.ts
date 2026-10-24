@@ -22,6 +22,7 @@ import { controllerAt } from '../sim/systems/influence';
 import type { PlayerId, Route } from '../sim/types';
 import { ROUTE_NAMES, otherPlayer } from '../sim/types';
 import type { Stance, World } from '../sim/world';
+import { FACTIONS, FACTION_IDS } from '../data/factions';
 import type { FactionId } from '../data/factions';
 import type { OvertimeVariant } from '../data/rules';
 import { Music } from './music';
@@ -37,6 +38,8 @@ import { Hud } from './hud';
 import { commandsFor } from './commands';
 import { Session } from './session';
 import { createView } from './view';
+import { renderCodex } from './codex';
+import type { CodexState } from './codex';
 import type { ViewState } from './view';
 
 interface FinishedMatch {
@@ -85,6 +88,9 @@ export class Game {
   private readonly music: Music;
   /** Titelbild sichtbar (nur beim ersten Öffnen). */
   private titleOpen = true;
+  /** Übersicht (Einheiten, Konter, Gelände) offen – über Titelbild und Menü. */
+  private codexOpen = false;
+  private codex: CodexState = { tab: 'units', faction: 'technoclan', enemy: 'myriaden' };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -518,6 +524,20 @@ export class Game {
     const tag = (ev.target as HTMLElement | null)?.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
     const key = ev.key.toLowerCase();
+    if (this.codexOpen) {
+      if (key === 'escape' || key === 'f1') {
+        ev.preventDefault();
+        this.closeCodex();
+      }
+      return;
+    }
+    if (key === 'f1') {
+      ev.preventDefault();
+      // In der eigenen Runde erst das Menü (pausiert), dann die Übersicht darüber.
+      if (!this.titleOpen && !this.menuOpen && this.session.mode === 'play' && !this.session.world.result) this.toggleMenu();
+      this.openCodex();
+      return;
+    }
     if (this.titleOpen) {
       if (key === 'enter' || key === ' ') {
         ev.preventDefault();
@@ -609,6 +629,27 @@ export class Game {
     if (note && name) note.textContent = `Startmusik: ${name} (nur in diesem Browser gespeichert). Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).`;
   }
 
+  /** Übersicht öffnen: eigene Fraktion vorgewählt, als Gegner die Fraktion der KI. */
+  private openCodex(): void {
+    const f = this.session.factions;
+    const me = this.session.mode === 'play' ? this.session.human : 0;
+    this.codex.faction = f[me];
+    this.codex.enemy = f[otherPlayer(me)] === f[me] ? FACTION_IDS.find((x) => x !== f[me])! : f[otherPlayer(me)];
+    this.codexOpen = true;
+    this.doc.getElementById('codex')!.hidden = false;
+    this.renderCodex();
+  }
+
+  private closeCodex(): void {
+    this.codexOpen = false;
+    this.doc.getElementById('codex')!.hidden = true;
+  }
+
+  private renderCodex(): void {
+    this.doc.getElementById('codex-body')!.innerHTML = renderCodex(this.codex);
+    for (const b of this.doc.querySelectorAll<HTMLElement>('.codex-tab')) b.setAttribute('aria-selected', String(b.dataset.tab === this.codex.tab));
+  }
+
   /** Menü (F10): in einer eigenen Runde pausiert es das Spiel – Neustart, andere Karte, andere Fraktionen. */
   private toggleMenu(): void {
     if (this.menuOpen) {
@@ -669,6 +710,26 @@ export class Game {
       case 'title-play':
         this.closeTitle();
         break;
+      case 'codex':
+        this.openCodex();
+        break;
+      case 'codex-close':
+        this.closeCodex();
+        break;
+      case 'codex-tab':
+        this.codex.tab = (data.tab as CodexState['tab']) ?? 'units';
+        this.renderCodex();
+        break;
+      case 'codex-faction':
+      case 'codex-enemy': {
+        const f = data.faction as FactionId | undefined;
+        if (f && FACTIONS[f]) {
+          if (action === 'codex-faction') this.codex.faction = f;
+          else this.codex.enemy = f;
+        }
+        this.renderCodex();
+        break;
+      }
       case 'music-toggle':
         this.music.setEnabled(!this.music.enabled);
         this.syncMusicButtons();

@@ -155,7 +155,10 @@ export interface Rules {
   maxEnergy: number;
   /** Grund-Einkommen pro Sekunde. */
   energyPerSecond: number;
-  /** Sicherheitsnetz für Rechenleistung und Übersicht – im Spiel bremst vorher der Markt. */
+  /**
+   * Nur noch technische Grenze für Rechenleistung (24.10.: das spielerische Einheitenlimit von 40 ist weg – es bremste
+   * fast nur die Terra-Former; die bremst jetzt die Ruf-Pause ihrer Terraformer).
+   */
   unitCap: number;
   /**
    * Regler für die Produktion: Faktor auf alle Bauzeiten aus units.ts (1 = Werte dort; 4 = jede
@@ -183,8 +186,16 @@ export interface Rules {
   building: BuildingRules;
   front: FrontRules;
   formation: FormationRules;
-  /** Fabriken: Umrüsten auf eine andere freigeschaltete Einheit dauert so lange (Sekunden, Produktion pausiert). */
+  /**
+   * Fabriken: Umrüsten auf eine andere freigeschaltete Einheit dauert so lange (Sekunden, Produktion pausiert).
+   * Seit 24.10. bleibt der Fortschritt dabei anteilig erhalten.
+   */
   retoolSeconds: number;
+  /**
+   * Einspielen (24.10.): Eine Fabrik, die so lange bei derselben Einheit bleibt, baut um diesen Faktor schneller
+   * (Stufen aufsteigend; Umrüsten beginnt von vorn). Leere Liste = aus.
+   */
+  settle: readonly { seconds: number; speed: number }[];
   /** Heimvorteil: Einheiten im eigenen Einflussgebiet nehmen nur diesen Anteil an Schaden. */
   homeDamageTaken: number;
   /**
@@ -302,7 +313,7 @@ export const RULES: Rules = {
   energyPerSecond: 3,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,
   // Täuschung und Konter Zeit zum Greifen haben. Vorher 21 (Technoclan) bzw. 34 (Myriaden) Verbände pro Minute.
-  unitCap: 40,
+  unitCap: 150,
   productionTime: 5,
   unitSpeed: 1,
   sellRefund: 0.5,
@@ -340,7 +351,14 @@ export const RULES: Rules = {
     buildingBounty: 0.5,
     buildShieldSeconds: 15,
   },
-  retoolSeconds: 8,
+  // 24.10.: 3 statt 8 s, und der Fortschritt bleibt erhalten (Wunsch: kleiner Aufschub, keine Strafe).
+  retoolSeconds: 3,
+  // 24.10.: Einspielen – nach 60 s bei derselben Einheit +5 %, nach 150 s +10 % Tempo. Mit +10 / +20 % half es vor allem
+  // den Fraktionen, die nie umrüsten (Myriaden-Bruten, Terra-Former-Linien): Technoclan–Myriaden 22 : 48 statt 31 : 39.
+  settle: [
+    { seconds: 60, speed: 1.05 },
+    { seconds: 150, speed: 1.1 },
+  ],
   formation: {
     spacing: 1.0,
     slotsPerRow: 7,
@@ -362,7 +380,7 @@ export const RULES: Rules = {
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
     formSeconds: 2, ritualSeconds: 4, cooldownSeconds: 90, workRadius: 2, advanceStep: 1.5, frontOffset: 2,
-    preparedRadius: 16, maxSummons: 0, summonEvery: 0, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
+    preparedRadius: 16, maxSummons: 0, summonEvery: 20, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 7, eggSeconds: 10, clutch: 3, max: 15 },
   synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },

@@ -1,4 +1,4 @@
-import type { FactionDef, UpgradeDef } from '../../data/factions';
+import type { BuildingUpgradeDef, BuildingUpgradeKind, FactionDef, UpgradeDef } from '../../data/factions';
 import { BUILDINGS } from '../../data/buildings';
 import type { BuildingId } from '../../data/buildings';
 import { UNITS } from '../../data/units';
@@ -8,7 +8,7 @@ import type { Entity } from '../entity';
 import type { PlayerId } from '../types';
 import type { World } from '../world';
 import { buildPriceFactor } from './market';
-import { productionSpeed } from './production';
+import { factorySpeed } from './production';
 
 /**
  * Fabriken: Stufen, Einheitenwahl und kleine Upgrades.
@@ -81,6 +81,8 @@ function researchPriceFactor(world: World, unit: UnitId): number {
 export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: string): Check {
   const owner = typeof who === 'number' ? who : who.owner;
   const p = world.players[owner];
+  const bu = p.faction.buildingUpgrades.find((x) => x.id === upgradeId);
+  if (bu) return checkBuildingUpgrade(world, owner, bu);
   const u = p.faction.upgrades.find((x) => x.id === upgradeId);
   if (!u) return { ok: false, reason: 'Unbekanntes Upgrade' };
   if (!researchableUnits(world, owner).includes(u.unit)) return { ok: false, reason: `Erst eine Fabrik, die ${UNITS[u.unit].name} bauen kann` };
@@ -98,6 +100,37 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
   const cost = Math.round(u.cost * researchPriceFactor(world, u.unit));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost, seconds: u.seconds };
+}
+
+/** Besitzt Spieler p ein (fertiges oder entstehendes) Gebäude dieser Art? */
+export function ownsBuilding(world: World, owner: PlayerId, building: BuildingId): boolean {
+  return world.entities.some((e) => e.alive && e.owner === owner && e.kind === 'building' && e.defId === building);
+}
+
+/** Gebäude-Ausbau (zentral je Gebäudeart): gleiche Regeln wie Forschung – Kette, Plätze, Energie. */
+function checkBuildingUpgrade(world: World, owner: PlayerId, u: BuildingUpgradeDef): Check {
+  const p = world.players[owner];
+  const fb = p.faction.buildings[u.building];
+  if (!fb) return { ok: false, reason: 'Unbekanntes Gebäude' };
+  if (!ownsBuilding(world, owner, u.building)) return { ok: false, reason: `Erst ein Gebäude „${fb.name}“ bauen` };
+  if (p.research.includes(u.id)) return { ok: false, reason: 'Schon ausgebaut' };
+  if (u.requires && !p.research.includes(u.requires)) {
+    const prev = p.faction.buildingUpgrades.find((x) => x.id === u.requires);
+    return { ok: false, reason: `Erst ${prev?.name ?? 'die vorige Stufe'} ausbauen` };
+  }
+  if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon ausgebaut' };
+  if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
+  const cost = Math.round(u.cost * buildPriceFactor(world, BUILDINGS[u.building].part));
+  if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
+  return { ok: true, cost, seconds: u.seconds };
+}
+
+/** Wie viele Stufen dieses Gebäude-Ausbaus hat Spieler p fertig (gilt für alle Gebäude dieser Art)? */
+export function buildingUpgradeLevel(world: World, owner: PlayerId, building: BuildingId, kind: BuildingUpgradeKind): number {
+  const p = world.players[owner];
+  let n = 0;
+  for (const u of p.faction.buildingUpgrades) if (u.building === building && u.kind === kind && p.research.includes(u.id)) n++;
+  return n;
 }
 
 /** Wird dieses Upgrade gerade beim Spieler erforscht? */
@@ -126,7 +159,9 @@ export function updateResearch(world: World): void {
       p.research.push(l.upgrade);
       p.stats.research++;
       const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
-      world.emit({ type: 'research', owner: p.id, upgrade: l.upgrade, name: u ? `${UNITS[u.unit].name}: ${u.name}` : l.upgrade });
+      const bu = p.faction.buildingUpgrades.find((x) => x.id === l.upgrade);
+      const name = u ? `${UNITS[u.unit].name}: ${u.name}` : bu ? `${p.faction.buildings[bu.building]?.name ?? bu.building}: ${bu.name}` : l.upgrade;
+      world.emit({ type: 'research', owner: p.id, upgrade: l.upgrade, name });
     }
   }
 }
@@ -153,10 +188,14 @@ export function updateFactories(world: World): void {
     const job = pr?.job;
     if (!e.alive || !pr || !job || world.tick < job.doneTick) continue;
     if (job.kind === 'retool') {
+      // 24.10.: Der Fortschritt bleibt anteilig erhalten (vorher begann die Fabrik bei null) – Umrüsten soll eine
+      // Entscheidung sein, keine Strafe. Das Einspielen beginnt neu.
+      const share = pr.intervalTicks > 0 ? Math.min(1, pr.progress / pr.intervalTicks) : 0;
       pr.unit = job.unit;
       pr.intervalTicks = world.spawnTicks(job.unit, e.padId !== undefined, e.owner);
-      pr.progress = 0;
+      pr.progress = share * pr.intervalTicks;
       pr.readySince = -1;
+      pr.unitSince = world.tick;
     } else if (job.kind === 'level') {
       pr.level = job.level;
     }
@@ -189,6 +228,16 @@ export function visibleUpgrades(faction: FactionDef, unit: UnitId, research: rea
   return out;
 }
 
+/** Gebäude-Ausbau, den das Menü für eine Gebäudeart zeigt: je Kette die nächste offene (oder die letzte) Stufe. */
+export function visibleBuildingUpgrades(faction: FactionDef, building: BuildingId, research: readonly string[]): BuildingUpgradeDef[] {
+  const ups = faction.buildingUpgrades.filter((u) => u.building === building);
+  return ups.filter((u) => {
+    if (u.requires && !research.includes(u.requires)) return false;
+    const next = ups.find((x) => x.requires === u.id);
+    return !(research.includes(u.id) && next);
+  });
+}
+
 /**
  * Eilauftrag: Was er an dieser Fabrik gerade kostet – oder warum er nicht geht.
  * Kosten nach der echten Restzeit (mit Marktbremse), damit ein schwerer Verband teurer ist als Drohnen.
@@ -215,7 +264,7 @@ export function rushReadyTick(world: World, e: Entity): number {
 /** Sekunden bis zum nächsten Verband dieser Fabrik, mit dem Markt von jetzt. */
 export function rushSecondsLeft(world: World, e: Entity): number {
   const pr = e.producer!;
-  return Math.max(0, pr.intervalTicks - pr.progress) / productionSpeed(world, e.owner, UNITS[pr.unit].part) / world.tps;
+  return Math.max(0, pr.intervalTicks - pr.progress) / factorySpeed(world, e) / world.tps;
 }
 
 export function rushOrder(world: World, e: Entity): CommandResult {
