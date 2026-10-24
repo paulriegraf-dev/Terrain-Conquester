@@ -323,9 +323,12 @@ const RAW: Record<UnitId, UnitInput> = {
     weapon: { shots: 2, cooldown: 1.2, range: 3, skill: 3, strength: 5, ap: 4, damage: 32, type: 'pierce', anti: { heavy: 3 } },
     shape: 'square', letter: 'T', role: 'Linienbrecher: zäh, knackt Panzer',
   },
+  // 24.10. abends (Entscheidung des Nutzers): alle 12 statt 10 s. Erste Schadensdaten: Der Koloss machte je
+  // Fabrik-Sekunde so viel Schaden wie die Scharfschützen (gegen Myriaden) bzw. am meisten von allen (gegen
+  // Terra-Former). Der Technogunner bleibt unverändert.
   colossus: {
     id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 360, toughness: 9, save: 3,
-    speed: 1.0, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 10,
+    speed: 1.0, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 12,
     weapon: { shots: 3, cooldown: 2, range: 4, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
     shape: 'square', letter: 'K', role: 'Schwerer Kampfpanzer: stark gegen leichte Fahrzeuge und Gebäude',
   },
