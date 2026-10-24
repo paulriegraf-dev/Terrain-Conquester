@@ -82,7 +82,7 @@ export function defenseOf(world: World, t: Entity): Defense {
   const unit = t.kind === 'unit';
   const cell = world.grid.index(Math.floor(t.pos.x), Math.floor(t.pos.y));
   const cover = unit && world.grid.terrain[cell] === TERRAIN_INDEX.forest ? 1 : 0;
-  // Terra-Former: Rüstungsbonus auf eigenem Boden (Steinwächter auf Geröll)
+  // Terra-Former: Rüstungsbonus auf Boden ihrer Art (Steinwächter auf Geröll)
   const save = t.tf ? Math.max(2, t.save - groundSaveBonus(world, t)) : t.save;
   return { armor: t.armor, toughness: t.toughness, save, evasion: t.evasion, big: !unit, cover };
 }

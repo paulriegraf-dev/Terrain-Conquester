@@ -917,7 +917,7 @@ export class Renderer {
       ctx.stroke();
     }
     const shape = UNITS[e.defId as UnitId].shape;
-    // Getarnt (Borkenwächter im eigenen Wald): halb durchsichtig
+    // Getarnt (Borkenschützen im Wald): halb durchsichtig
     const camo = camouflageRange(world, e) !== null;
     if (camo) ctx.globalAlpha = 0.5;
     ctx.fillStyle = PALETTE.player[e.owner];

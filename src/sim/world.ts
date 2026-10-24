@@ -456,7 +456,7 @@ export class World {
   isVisibleTo(p: PlayerId, e: Entity): boolean {
     if (e.owner === p) return true;
     const vision = this.players[p].vision;
-    // Getarnt (Borkenwächter im eigenen Wald): nur sichtbar, wenn eine gegnerische Einheit ganz nah ist.
+    // Getarnt (Borkenschützen im Wald): nur sichtbar, wenn eine gegnerische Einheit ganz nah ist.
     const camo = e.kind === 'unit' ? camouflageRange(this, e) : null;
     if (camo !== null) {
       const r2 = camo * camo;

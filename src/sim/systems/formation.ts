@@ -99,7 +99,8 @@ function placeRow(
 
 /**
  * Terra-Former: Liegt eigener Boden der eigenen Linie nah am Formationsplatz (rules.terraform.seekGround
- * Kacheln), stellt sich der Verband dorthin – Boden-Boni wirken nur auf eigenem Boden. Gespiegelt fair:
+ * Kacheln), stellt sich der Verband dorthin (der Bonus wirkt auf jedem Boden dieser Art; beim Halten bleibt der Verband
+ * im eigenen oder umkämpften Gebiet). Gespiegelt fair:
  * bei gleichem Abstand gewinnt die Kachel weiter vorn, dann die obere.
  */
 function ownGroundNear(world: World, p: PlayerId, e: Entity, target: Vec2, profile: MoveProfile): Vec2 | null {

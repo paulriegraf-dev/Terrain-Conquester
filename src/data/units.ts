@@ -98,8 +98,8 @@ export interface LifespanDef {
 }
 
 /**
- * Terra-Former: Was eine Einheit auf eigenem Boden ihrer Art (UnitDef.ground, im eigenen oder
- * umkämpften Gebiet) kann – automatisch, ohne Befehl.
+ * Terra-Former: Was eine Einheit auf Boden ihrer Art (UnitDef.ground) kann – automatisch, ohne Befehl. Seit 24.10.
+ * egal, wer den Boden geformt hat und in wessen Gebiet er liegt: auch natürlicher und gegnerischer Boden zählt.
  */
 export interface GroundBonus {
   /** Reichweite +n. */
@@ -204,7 +204,7 @@ export interface UnitDef {
   id: UnitId;
   /** Technoclan-Netzwerk: Protokoll dieser Einheitenart (siehe PROTOCOLS). */
   protocol?: ProtocolId;
-  /** Terra-Former: Bodenart der Linie – auf eigenem Boden dieser Art wirkt `groundBonus`. */
+  /** Terra-Former: Bodenart der Linie – auf jedem Boden dieser Art wirkt `groundBonus` (egal, wer ihn geformt hat). */
   ground?: TerrainId;
   groundBonus?: GroundBonus;
   /** Terra-Former: Terraformer – formt Boden seiner Art und ruft nach 4 Kacheln (2×2) diese Spezialeinheit. */
@@ -267,7 +267,7 @@ export interface UnitDef {
   hitSlow?: { seconds: number; factor: number };
   /** Treffer schwächen das Ziel: bremsen und senken seinen Schaden (Schlammschleuder). */
   hitWeaken?: { seconds: number; speed: number; damage: number };
-  /** Gestaltwandler (Hainhüter): bekommt auf jedem eigenen Boden den Boden-Bonus des Wächters dieser Art. */
+  /** Gestaltwandler (Hainhüter): bekommt auf jedem Boden den Boden-Bonus des Wächters dieser Art. */
   shapeshift?: boolean;
   /** Leine (Schlammmonster): entfernt sich höchstens so weit von eigenem Boden seiner Art. */
   leash?: { radius: number };
@@ -426,7 +426,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 4,
     weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle' },
     ground: 'meadow', groundBonus: { speed: 1.3 },
-    shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf eigener Wiese schneller',
+    shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
   },
 
   formerMeadow: {
@@ -441,7 +441,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 2.0, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
     weapon: { shots: 3, cooldown: 0.9, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
-    shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf eigener Wiese Sprint und mehr Reichweite',
+    shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',
   },
 
   wardForest: {
@@ -449,7 +449,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 1.0, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 4,
     weapon: { shots: 1, cooldown: 1.4, range: 5, skill: 3, strength: 5, ap: 1, damage: 8, type: 'rifle' },
     ground: 'forest', groundBonus: { camouflage: 2 },
-    shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im eigenen Wald getarnt (erst aus 2 Kacheln zu sehen)',
+    shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im Wald getarnt (erst aus 2 Kacheln zu sehen)',
   },
 
   formerForest: {
@@ -464,7 +464,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
     weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 6, ap: 1, damage: 15, type: 'rifle' },
     ground: 'forest', shapeshift: true,
-    shape: 'square', letter: 'H', role: 'Langsamer Tank, wenig Schaden – Gestaltwandler: auf jedem eigenen Boden bekommt er den Bonus des Wächters dieser Art',
+    shape: 'square', letter: 'H', role: 'Langsamer Tank, wenig Schaden – Gestaltwandler: auf jedem Boden bekommt er den Bonus des Wächters dieser Art',
   },
 
   wardMud: {
@@ -472,7 +472,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 4,
     weapon: { shots: 1, cooldown: 1.8, range: 5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'splinter', anti: { infantry: 4 }, splash: 1.2 },
     ground: 'mud', groundBonus: { slowAura: { radius: 2, factor: 0.7 } },
-    shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im eigenen Matsch bremst er Gegner in 2 Kacheln',
+    shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im Matsch bremst er Gegner in 2 Kacheln',
   },
 
   formerMud: {
@@ -497,7 +497,7 @@ const RAW: Record<UnitId, UnitInput> = {
     weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
     hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
     ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },
-    shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf eigenem Schnee bremst er stärker',
+    shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf Schnee bremst er stärker',
   },
 
   formerSnow: {
@@ -520,7 +520,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 5,
     weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 } },
     ground: 'rubble', groundBonus: { save: 1 },
-    shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf eigenem Geröll Rüstung +1',
+    shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf Geröll Rüstung +1',
   },
 
   formerRubble: {
@@ -535,7 +535,7 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 0.6, move: 'tracks', part: 'plates', radius: 0.5, vision: 6, spawnInterval: 0, summoned: true,
     weapon: { shots: 1, cooldown: 2.5, range: 3.5, skill: 3, strength: 10, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
     ground: 'rubble', groundBonus: { save: 1 },
-    shape: 'diamond', letter: 'F', role: 'Frontbrecher: schwer und langsam, hoher Einzelschaden, wenige Angriffe, leichte Fläche – auf eigenem Geröll Rüstung +1',
+    shape: 'diamond', letter: 'F', role: 'Frontbrecher: schwer und langsam, hoher Einzelschaden, wenige Angriffe, leichte Fläche – auf Geröll Rüstung +1',
   },
 
   landformer: {

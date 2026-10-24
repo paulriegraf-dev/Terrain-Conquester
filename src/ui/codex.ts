@@ -209,7 +209,7 @@ function terrainTab(): string {
     if (t.id === 'forest') notes.push('Deckung heißt: Rüstung +1.');
     if (t.leavesTracks) notes.push('Hinterlässt Spuren, die der Gegner später sieht.');
     const tf = tfUnits.filter((u) => u.ground === t.id).map((u) => `${u.name} ${bonusText(u.groundBonus!)}`);
-    if (tf.length > 0) notes.push(`Terra-Former auf eigenem Boden: ${tf.join('; ')}.`);
+    if (tf.length > 0) notes.push(`Terra-Former auf diesem Boden (egal, wer ihn geformt hat – auch der Gegner): ${tf.join('; ')}.`);
     const build = t.buildFactor === null ? '–' : t.buildFactor > 1 ? `+${Math.round((t.buildFactor - 1) * 100)} %` : 'normal';
     return `<tr>
       <th scope="row"><span class="cx-swatch" style="background:${t.color}"></span>${escapeHtml(t.name)}</th>

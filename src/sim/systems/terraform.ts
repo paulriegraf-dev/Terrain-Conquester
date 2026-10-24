@@ -18,9 +18,11 @@ import {
  * Terra-Former (Entwurf des Nutzers, 22.10., Umbau 23.10. abends): „Meine Einheiten werden stärker, wenn der Boden
  * unter ihnen mir gehört.“ Alles läuft automatisch – der Spieler steuert nur die Bedingungen.
  *
+ * - **Boden-Bonus:** Steht ein Verband auf der Bodenart seiner Linie, wirkt UnitDef.groundBonus – seit 24.10. egal,
+ *   wer den Boden geformt hat und in wessen Gebiet er liegt (auch natürlicher und gegnerischer Boden). Der Hainhüter
+ *   ist Gestaltwandler: auf jedem Boden bekommt er den Bonus des Wächters dieser Art.
  * - **Eigener Boden:** Bodenart der Linie auf einer Kachel, die der Spieler selbst umgeformt hat (Gelände formen,
- *   Vorbereitung, Terraformer – world.formed), im eigenen oder umkämpften Gebiet. Dort wirkt UnitDef.groundBonus.
- *   Der Hainhüter ist Gestaltwandler: auf jedem eigenen Boden bekommt er den Bonus des Wächters dieser Art.
+ *   Vorbereitung, Terraformer – world.formed). Er zählt für das Rufen, die Schlammmonster und die Lane-Synergien.
  * - **Terraformer:** langsam, stets ein Stück nach vorn (beim Halten höchstens bis kurz hinter die eigene Grenze).
  *   Er formt möglichst viele Kacheln in seiner Umgebung (je Kachel rules.terraform.formSeconds), auch Kacheln
  *   anderer eigener Linien ohne Abklingzeit. Liegt ein 2×2-Block eigener Kacheln seiner Art ohne Abklingzeit bei
@@ -57,8 +59,12 @@ export function updateTerraform(world: World): void {
 const WARD_OF: Partial<Record<TerrainId, UnitId>> = { meadow: 'wardMeadow', forest: 'wardForest', mud: 'wardMud', snow: 'wardSnow', rubble: 'wardRubble' };
 
 /**
- * Boden-Bonus, der für e gerade wirkt (null = keiner): eigener Boden seiner Linie im eigenen oder umkämpften
- * Gebiet (oder in einer Verschmelzung seines Helden). Gestaltwandler: Bonus des Wächters der Bodenart unter ihm.
+ * Boden-Bonus, der für e gerade wirkt (null = keiner): Boden seiner Linie unter ihm (oder eine Verschmelzung seines
+ * Helden). Gestaltwandler: Bonus des Wächters der Bodenart unter ihm.
+ *
+ * Seit 24.10. (Wunsch des Nutzers) egal, wer den Boden geformt hat und in wessen Gebiet er liegt – auch natürlicher Boden
+ * und Boden, den der Gegner gelegt hat. Wer gegen die Terra-Former Matsch formt, um sie zu bremsen, kann ihren
+ * Schlammwerfern damit in die Hände spielen – und muss dann schnell wieder umbauen.
  */
 export function activeBonus(world: World, e: Entity): GroundBonus | null {
   const def = UNITS[e.defId as UnitId];
@@ -66,23 +72,19 @@ export function activeBonus(world: World, e: Entity): GroundBonus | null {
   const x = Math.floor(e.pos.x);
   const y = Math.floor(e.pos.y);
   const cell = world.grid.index(x, y);
-  const mine = world.contested[cell] === 1 || controllerAt(world, cell) === e.owner;
-  if (!mine) return null;
   const merged = world.merges.some((m) => m.owner === e.owner && world.tick < m.until && (e.pos.x - m.x) * (e.pos.x - m.x) + (e.pos.y - m.y) * (e.pos.y - m.y) <= m.r * m.r);
   if (def.shapeshift) {
-    if (world.formed[cell] !== e.owner + 1) return merged ? (UNITS[WARD_OF[def.ground]!].groundBonus ?? null) : null;
     const id = TERRAIN_LIST[world.grid.terrain[cell]!]!.id;
     const ward = WARD_OF[id];
-    return ward ? (UNITS[ward].groundBonus ?? null) : null;
+    if (ward) return UNITS[ward].groundBonus ?? null;
+    return merged ? (UNITS[WARD_OF[def.ground]!].groundBonus ?? null) : null;
   }
   if (!def.groundBonus) return null;
-  if (world.grid.terrain[cell] === TERRAIN_INDEX[def.ground] && world.formed[cell] === e.owner + 1) return def.groundBonus;
-  // Natürlicher Boden der eigenen Art zählt im eigenen Gebiet weiterhin (wie bisher)
   if (world.grid.terrain[cell] === TERRAIN_INDEX[def.ground]) return def.groundBonus;
   return merged ? def.groundBonus : null;
 }
 
-/** Steht e auf eigenem Boden (ein Bonus wirkt)? */
+/** Steht e auf Boden seiner Art (ein Bonus wirkt)? */
 export function onOwnGround(world: World, e: Entity): boolean {
   return activeBonus(world, e) !== null;
 }
@@ -136,12 +138,12 @@ export function groundSpeedFactor(world: World, e: Entity): number {
   return f;
 }
 
-/** Eingegraben (auf eigenem Geröll): Anteil des Schadens, den die Einheit nimmt (1 = normal). */
+/** Eingegraben (auf Geröll): Anteil des Schadens, den die Einheit nimmt (1 = normal). */
 export function dugInFactor(e: Entity): number {
   return e.tf?.gb?.dugIn?.damageTaken ?? 1;
 }
 
-/** Rüstungsbonus auf eigenem Boden (Steinwächter, Frontbrecher) und aus Synergien. */
+/** Rüstungsbonus auf Boden der eigenen Art (Steinwächter, Frontbrecher) und aus Synergien. */
 export function groundSaveBonus(world: World, e: Entity): number {
   return (e.tf?.gb?.save ?? 0) + (e.tf ? synergySaveBonus(world, e) : 0);
 }
@@ -679,7 +681,7 @@ function landformer(world: World, e: Entity, def: UnitDef): void {
   world.emit({ type: 'landform', owner: e.owner, what: 'copy', pos: { x: copy.pos.x, y: copy.pos.y } });
 }
 
-/** Hinterhalt: erster Schuss nach einer Pause auf eigenem Boden – Schadensfaktor (1 = normal). */
+/** Hinterhalt: erster Schuss nach einer Pause auf Boden der eigenen Art – Schadensfaktor (1 = normal). */
 export function ambushFactor(world: World, e: Entity): number {
   const a = e.tf?.gb?.ambush;
   if (!a) return 1;
@@ -687,7 +689,7 @@ export function ambushFactor(world: World, e: Entity): number {
 }
 
 /**
- * Treffer-Effekte: Frost (Frostwächter immer leicht, auf eigenem Schnee stärker), Schwächung (Schlammschleuder),
+ * Treffer-Effekte: Frost (Frostwächter immer leicht, auf Schnee stärker), Schwächung (Schlammschleuder),
  * Synergien (Gefrorener Schlamm: Schlammmonster bremsen; Schlammlawine: Schlammschleuder macht Schaden über Zeit).
  */
 export function onHit(world: World, shooter: Entity, target: Entity): void {

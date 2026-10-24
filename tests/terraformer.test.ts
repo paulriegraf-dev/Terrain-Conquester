@@ -195,14 +195,21 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
 });
 
 describe('Terra-Former: eigener Boden', () => {
-  it('Halmläufer: auf eigener Wiese schneller, im gegnerischen Gebiet nicht', () => {
+  it('Halmläufer: auf Wiese schneller – seit 24.10. auch im gegnerischen Gebiet und auf Boden, den der Gegner gelegt hat', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     const w = unit(world, 0, 'wardMeadow', 4.5, 7.5);
     world.step();
     assert.equal(w.tf!.gb?.speed, UNITS.wardMeadow.groundBonus!.speed);
     w.pos = { x: 16.5, y: 7.5 };
     world.step();
-    assert.equal(w.tf!.gb, null);
+    assert.equal(w.tf!.gb?.speed, UNITS.wardMeadow.groundBonus!.speed, 'auch im gegnerischen Gebiet');
+    setTerrain(world, 16, 7, 'mud');
+    world.formed[world.grid.index(16, 7)] = 2; // vom Gegner geformter Matsch
+    world.step();
+    assert.equal(w.tf!.gb, null, 'auf Matsch kein Wiesen-Bonus');
+    const mudWard = unit(world, 0, 'wardMud', 16.5, 7.5);
+    world.step();
+    assert.ok(mudWard.tf!.gb?.slowAura, 'der Schlammwerfer nutzt den Matsch des Gegners');
   });
   it('Borkenwächter: im eigenen Wald getarnt – erst aus 2 Kacheln zu sehen', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
