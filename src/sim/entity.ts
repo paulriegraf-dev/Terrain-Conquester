@@ -10,7 +10,8 @@ import type { ArmorClass, CellRect, PlayerId, Route, Vec2 } from './types';
  * Neue Fähigkeit = neuer Baustein + ein System, das ihn verarbeitet.
  */
 
-export type EntityKind = 'unit' | 'building' | 'hq';
+/** 'wall' = Erdwall (seit 24.10. dauerhaft und zerstörbar; nur schwere Einheiten, Artillerie und Sprengetopps). */
+export type EntityKind = 'unit' | 'building' | 'hq' | 'wall';
 
 export interface WeaponState {
   def: WeaponDef;
@@ -62,8 +63,7 @@ export interface MoverState {
 /** Was eine Fabrik gerade umbaut – währenddessen produziert sie nicht. */
 export type FactoryJob =
   | { kind: 'retool'; unit: UnitId; startTick: number; doneTick: number }
-  | { kind: 'level'; level: number; startTick: number; doneTick: number }
-  | { kind: 'research'; upgrade: string; startTick: number; doneTick: number };
+  | { kind: 'level'; level: number; startTick: number; doneTick: number };
 
 export interface ProducerState {
   /** Einheit, die die Fabrik gerade baut (eine der freigeschalteten). */
@@ -145,8 +145,10 @@ export interface Entity {
    * Aufstieg bis Tick.
    */
   net?: { id: number; protocols: ProtocolId[]; ascendUntil: number };
-  /** Grundfläche (nur Gebäude und HQ). */
+  /** Grundfläche (Gebäude, HQ, Erdwall). */
   rect?: CellRect;
+  /** Erdwall: seine Kacheln und der Boden darunter (kehrt zurück, wenn er fällt). */
+  wallCells?: { index: number; original: number }[];
   /** Nur bei Gebäuden auf einem Außenposten: dessen ID. */
   padId?: number;
   /** Gebäude in der eigenen Basis sind befestigt und nehmen weniger Schaden. */

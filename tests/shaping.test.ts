@@ -5,7 +5,7 @@ import { MOVE_PROFILES } from '../src/data/movement';
 import { felsenpass } from '../src/data/maps/felsenpass';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
-import { checkSwap, checkSwapArea, checkWall, gorgeAreas, swapCostAt } from '../src/sim/systems/abilities';
+import { checkSwap, checkSwapArea, checkWall, gorgeArea, gorgeAreas, swapCostAt } from '../src/sim/systems/abilities';
 import { FACTIONS } from '../src/data/factions';
 import { controllerAt } from '../src/sim/systems/influence';
 import { World } from '../src/sim/world';
@@ -50,7 +50,7 @@ describe('Gelände formen in der eigenen Kartenhälfte (großzügiger)', () => {
     const away = swapCostAt(world, 0, world.map.width - 8, 'forest');
     assert.equal(away.cost, swapCost('forest').cost);
     assert.ok(home.cost < away.cost && home.buildSeconds < away.buildSeconds, `eigene Hälfte ${home.cost}/${home.buildSeconds} s`);
-    assert.deepEqual(swapCostAt(world, 0, 8, 'gorge'), swapCost('gorge'));
+    assert.deepEqual(swapCostAt(world, 0, 8, 'gorge'), swapCost('gorge'), 'Schluchten kosten überall gleich');
     const energy = world.players[0].energy;
     world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'forest' })]);
     assert.equal(world.players[0].energy, energy - home.cost);
@@ -65,21 +65,38 @@ describe('Gelände formen in der eigenen Kartenhälfte (großzügiger)', () => {
   });
 });
 
-describe('Schlucht graben', () => {
-  it('kostet mehr, dauert länger, sperrt Bodentruppen – und lässt sich zuschütten', () => {
+describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () => {
+  it('erst mit „Schluchtgräber“ am HQ', () => {
     const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
+    const c = checkSwapArea(world, 0, 8, 13, 'gorge');
+    assert.equal(c.ok, false);
+    assert.match(c.ok ? '' : c.reason, /HQ-Zweig Gelände/);
+    world.players[0].hq.terrain = 1;
+    assert.equal(checkSwapArea(world, 0, 8, 13, 'gorge').ok, true);
+  });
+
+  it('2×4 Kacheln, drehbar, sperrt Bodentruppen – Truppen darauf weichen aus – und lässt sich zuschütten', () => {
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
+    world.players[0].hq.terrain = 1;
+    const area = gorgeArea(8, 13, true);
+    assert.equal(area.length, 8);
+    assert.deepEqual(new Set(area.map(([x]) => x)).size, 2, 'hochkant: 2 breit');
+    assert.deepEqual(new Set(gorgeArea(8, 13, false).map(([, y]) => y)).size, 2, 'quer: 2 hoch');
+    const u = world.addUnit(0, UNITS.sniper, { x: 8.5, y: 13.5 }, 'mid');
+    u.mover!.speed = 0;
     const { cost, buildSeconds } = swapCost('gorge');
     const energy = world.players[0].energy;
-    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'gorge' })]);
+    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'gorge', vertical: true })]);
     assert.equal(world.players[0].energy, energy - cost);
-    const cell = world.grid.index(8, 13);
     stepTimes(world, buildSeconds * world.tps);
-    assert.equal(world.grid.terrain[cell], TERRAIN_INDEX.gorge);
+    for (const [x, y] of area) assert.equal(world.grid.terrain[world.grid.index(x, y)], TERRAIN_INDEX.gorge, `(${x}, ${y})`);
     assert.equal(world.grid.isPassable(8, 13, MOVE_PROFILES.foot), false);
     assert.equal(world.grid.isPassable(8, 13, MOVE_PROFILES.hover), true, 'Schweber kommen drüber');
+    const cell = world.grid.index(Math.floor(u.pos.x), Math.floor(u.pos.y));
+    assert.notEqual(world.grid.terrain[cell], TERRAIN_INDEX.gorge, 'der Scharfschütze ist ausgewichen');
     world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'meadow' })]);
     stepTimes(world, swapCost('meadow').buildSeconds * world.tps);
-    assert.equal(world.grid.terrain[cell], TERRAIN_INDEX.meadow);
+    assert.equal(world.grid.terrain[world.grid.index(8, 13)], TERRAIN_INDEX.meadow);
   });
 
   it('natürliche Schluchten bleiben – man schüttet nur eigene zu', () => {
@@ -91,32 +108,39 @@ describe('Schlucht graben', () => {
     assert.equal(checkSwap(world, 0, x, y, 'meadow').ok, false);
   });
 
-  it('höchstens drei eigene Schluchten gleichzeitig – nach dem Zuschütten geht wieder eine', () => {
+  it('so viele gleichzeitig, wie der HQ-Zweig erlaubt – nach dem Zuschütten geht wieder eine', () => {
     const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 400 } });
-    const spots: [number, number][] = [[8, 13], [8, 9], [8, 17]];
+    world.players[0].hq.terrain = 1; // Schluchtgräber: 2 gleichzeitig
+    const spots: [number, number][] = [[8, 9], [8, 17]];
     for (const [x, y] of spots) {
       assert.equal(checkSwapArea(world, 0, x, y, 'gorge').ok, true, `(${x}, ${y})`);
       world.step([cmd(0, { type: 'swapTerrain', x, y, terrain: 'gorge' })]);
     }
-    const fourth = checkSwapArea(world, 0, 5, 6, 'gorge');
-    assert.equal(fourth.ok, false);
-    assert.match(fourth.ok ? '' : fourth.reason, /Höchstens 3 Schluchten/);
-    assert.equal(gorgeAreas(world, 0), 3, 'auch Schluchten im Bau zählen');
+    const third = checkSwapArea(world, 0, 5, 13, 'gorge');
+    assert.equal(third.ok, false);
+    assert.match(third.ok ? '' : third.reason, /Höchstens 2 Schluchten/);
+    assert.equal(gorgeAreas(world, 0), 2, 'auch Schluchten im Bau zählen');
     assert.equal(gorgeAreas(world, 1), 0, 'der Gegner hat seine eigene Grenze');
+    world.players[0].hq.terrain = 3; // Tiefe Gräben: 3 gleichzeitig
+    assert.equal(checkSwapArea(world, 0, 5, 13, 'gorge').ok, true);
+    world.players[0].hq.terrain = 1;
     stepTimes(world, swapCost('gorge').buildSeconds * world.tps + 1);
     world.players[0].energy = 400;
     world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 9, terrain: 'meadow' })]);
+    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 11, terrain: 'meadow' })]);
     stepTimes(world, swapCost('meadow').buildSeconds * world.tps + 1);
-    assert.equal(gorgeAreas(world, 0), 2);
-    assert.equal(checkSwapArea(world, 0, 5, 6, 'gorge').ok, true);
+    assert.equal(gorgeAreas(world, 0), 1);
+    assert.equal(checkSwapArea(world, 0, 5, 13, 'gorge').ok, true);
   });
 
-  it('schneidet nie den letzten Weg ab', () => {
+  it('schneidet nie den letzten Weg von HQ zu HQ ab', () => {
     const world = new World({ map: chokeMap, seed: 1, rules: { ...smallBases, startEnergy: 300 } });
+    world.players[0].hq.terrain = 1;
     spotter(world, 4, 3);
+    world.grid.setTerrain(world.grid.index(8, 2), TERRAIN_INDEX.mountain); // Engpass: nur noch Zeilen 3–4
     world.step();
-    const c = checkSwapArea(world, 0, 8, 3, 'gorge');
+    const c = checkSwapArea(world, 0, 7, 3, 'gorge', false); // quer (4×2) genau hinein
     assert.equal(c.ok, false);
-    assert.match(c.ok ? '' : c.reason, /versperren/);
+    assert.match(c.ok ? '' : c.reason, /HQ zu HQ/);
   });
 });

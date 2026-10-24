@@ -1,4 +1,5 @@
 import { AI_STRATEGIES } from '../ai/simpleAi';
+import { orderCost, scoutCost, scoutDelay } from '../sim/systems/hq';
 import { DISGUISE, SWAP, WALL } from '../data/abilities';
 import { BUILDINGS, HQ } from '../data/buildings';
 import { MARKET, MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
@@ -18,6 +19,8 @@ import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
 import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
 import { productionSpeed } from '../sim/systems/production';
+import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
+import { checkResearch, researchableUnits, researching, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
 import { synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
@@ -113,6 +116,8 @@ export class Hud {
       scoutList: q('scout-list'),
       scoutMeta: q('scout-meta'),
       scoutBtn: q<HTMLButtonElement>('scout-btn'),
+      researchList: q('research-list'),
+      researchMeta: q('research-meta'),
       infoTitle: q('info-title'),
       infoBody: q('info-body'),
       tipText: q('tip-text'),
@@ -281,6 +286,7 @@ export class Hud {
     const canAct = session.mode === 'play' && !world.result;
     this.updateMarket(world, canAct, me);
     this.updateScout(world, canAct, me);
+    this.updateResearchPanel(world, canAct, me);
     this.updateInfo(input, canAct);
     this.updateGrid(input, canAct);
     this.updateTip(input, canAct);
@@ -302,7 +308,7 @@ export class Hud {
   // ------------------------------------------------------------------ Markt
 
   private updateMarket(world: World, canAct: boolean, me: PlayerId): void {
-    const view = marketView(world);
+    const view = marketView(world, me);
     const energy = world.players[me].energy;
     const html = PART_IDS.map((id) => {
       const price = view ? view.prices[id] : 1;
@@ -310,7 +316,7 @@ export class Hud {
       const change = view ? Math.round(view.change[id] * 100) : 0;
       const lvl = marketLevel(price);
       const pct = change === 0 ? '±0%' : `${change > 0 ? '+' : '−'}${Math.abs(change)}%`;
-      return `<li title="${PARTS[id].name}: ${MARKET_LEVELS[lvl]}"><span class="part"><i class="dot" data-level="${lvl}"></i>${PARTS[id].name}</span><span class="pct" data-trend="${trend}">${trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} ${pct}</span><button class="btn-mini" data-action="order" data-part="${id}" title="Scheinbestellung: treibt den Preis ${MARKET.orderDuration} s lang hoch" ${canAct && energy >= MARKET.orderCost ? '' : 'disabled'}>Bestellen ${MARKET.orderCost}</button></li>`;
+      return `<li title="${PARTS[id].name}: ${MARKET_LEVELS[lvl]}"><span class="part"><i class="dot" data-level="${lvl}"></i>${PARTS[id].name}</span><span class="pct" data-trend="${trend}">${trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} ${pct}</span><button class="btn-mini" data-action="order" data-part="${id}" title="Scheinbestellung: treibt den Preis ${MARKET.orderDuration} s lang hoch" ${canAct && energy >= orderCost(world, me, MARKET.orderCost) ? '' : 'disabled'}>Bestellen ${orderCost(world, me, MARKET.orderCost)}</button></li>`;
     }).join('');
     if (html === this.marketSig) return;
     this.marketSig = html;
@@ -331,11 +337,11 @@ export class Hud {
     const rows = report
       ? ROUTES.map((r) => {
           const x = report.routes[r];
-          const armor = x.armor ? ` · meist ${ARMOR_NAMES[x.armor]}` : '';
+          const armor = (x.armor ? ` · meist ${ARMOR_NAMES[x.armor]}` : '') + (x.unit ? ` · ${UNITS[x.unit].name}` : '');
           return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
-    const label = check.ok || !canAct ? `Späher losschicken · ${rules.cost}` : check.reason;
+    const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;
     const sig = `${meta}|${rows}|${label}|${check.ok && canAct}`;
     if (sig === this.scoutSig) return;
     this.scoutSig = sig;
@@ -343,7 +349,42 @@ export class Hud {
     this.el.scoutList.innerHTML = rows;
     this.el.scoutBtn.textContent = label;
     this.el.scoutBtn.disabled = !canAct || !check.ok;
-    this.el.scoutBtn.title = `Spähbericht (${rules.cost} Energie, alle ${rules.cooldownSeconds} s): grobe Stärke des Gegners je Route – keine, wenige, einige, viele – und die vorherrschende Panzerung. Kommt nach ${rules.delaySeconds} s an (Stand beim Losschicken). Taste L.`;
+    this.el.scoutBtn.title = `Spähbericht (${scoutCost(world, me)} Energie, alle ${rules.cooldownSeconds} s): grobe Stärke des Gegners je Route – keine, wenige, einige, viele – und die vorherrschende Panzerung. Kommt nach ${scoutDelay(world, me)} s an (Stand beim Losschicken). Taste L.`;
+  }
+
+  // ------------------------------------------------------------------ Forschung (zentral, seit 24.10.)
+
+  private researchSig = '';
+
+  /**
+   * Alle Einheiten, die die eigenen Fabriken bauen können, mit ihren nächsten Upgrades als Knöpfe – ein Klick
+   * startet die Forschung. Laufende Forschung oben mit Fortschritt.
+   */
+  private updateResearchPanel(world: World, canAct: boolean, me: PlayerId): void {
+    const p = world.players[me];
+    const labs = p.labs.map((l) => {
+      const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
+      const share = (world.tick - l.startTick) / Math.max(1, l.doneTick - l.startTick);
+      const left = Math.max(0, Math.ceil((l.doneTick - world.tick) / world.tps));
+      return `<li class="lab"><span>${escapeHtml(u ? `${UNITS[u.unit].name}: ${u.name}` : l.upgrade)}</span><span class="num">${left} s</span><span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span></li>`;
+    }).join('');
+    const rows = researchableUnits(world, me).map((unit) => {
+      const ups = visibleUpgrades(p.faction, unit, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id));
+      if (ups.length === 0) return '';
+      const buttons = ups.map((u) => {
+        const c = checkResearch(world, me, u.id);
+        const label = u.name.replace(/^Waffen III: /, 'W III: ').replace(/^Panzerung /, 'Pz ').replace(/^Waffen /, 'W ');
+        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(label)}${c.ok ? ` ${c.cost}` : ''}</button>`;
+      }).join('');
+      return `<li><span class="unit">${escapeHtml(UNITS[unit].name)}</span><span class="ups">${buttons}</span></li>`;
+    }).join('');
+    const html = labs + (rows || '<li class="unit">Erst Fabriken bauen – dann gibt es hier Upgrades.</li>');
+    const meta = `${p.labs.length}/${world.rules.researchSlots} läuft`;
+    const sig = html + meta;
+    if (sig === this.researchSig) return;
+    this.researchSig = sig;
+    this.el.researchList.innerHTML = html;
+    this.el.researchMeta.textContent = meta;
   }
 
   // ------------------------------------------------------------------ Konsole: Auswahl
@@ -380,10 +421,17 @@ export class Hud {
       } else if (e.producer) {
         title = e.name + (view.human !== null && e.owner !== view.human ? ' (Gegner)' : '');
         html = buildingInfo(e, world);
+      } else if (e.kind === 'wall') {
+        title = `Erdwall${view.human !== null && e.owner !== view.human ? ' (Gegner)' : ''}`;
+        html = `${hpLine(e)}<p class="muted">Dauerhaft. Brechen können ihn nur schwere Einheiten, Artillerie und Sprengetopps – Infanterie und leichte Fahrzeuge laufen außen herum.</p>`;
       } else {
         title = e.name;
         const w = HQ.weapon;
-        html = `${hpLine(e)}<p class="muted">Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. Widerstand ${e.toughness}, Rüstung ${e.save}+.</p><p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>`;
+        const own = view.human === null || e.owner === view.human;
+        const branches = own
+          ? `<p><strong>Zweige</strong> (einer bis Stufe ${HQ_PATH_LIMITS.main}, einer bis ${HQ_PATH_LIMITS.side}): ${HQ_PATH_IDS.map((id) => `${HQ_PATHS[id].name} ${'●'.repeat(world.players[e.owner].hq[id])}${'○'.repeat(HQ_PATHS[id].tiers.length - world.players[e.owner].hq[id])}`).join(' · ')}</p>`
+          : '';
+        html = `${hpLine(e)}${branches}<p class="muted">Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. Widerstand ${e.toughness}, Rüstung ${e.save}+.</p><p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>`;
       }
     } else if (canAct) {
       const p = world.players[me];
@@ -467,8 +515,8 @@ export class Hud {
       } else text = 'Vorbereitung: Bodenart wählen, dann in deiner Hälfte klicken. Enter = Bereit.';
     } else if (canAct && view.swap) {
       if (view.hover) {
-        const check = checkSwapArea(world, me, view.hover.x, view.hover.y, view.swap.terrain);
-        text = check.ok ? `${check.cells.length} Kacheln für ${swapCostAt(world, me, view.hover.x, view.swap.terrain).cost} Energie – klicken oder ziehen.` : check.reason;
+        const check = checkSwapArea(world, me, view.hover.x, view.hover.y, view.swap.terrain, view.swap.vertical ?? true);
+        text = check.ok ? `${check.cells.length} Kacheln für ${swapCostAt(world, me, view.hover.x, view.swap.terrain).cost} Energie – klicken${view.swap.terrain === 'gorge' ? ', R oder Rechtsklick dreht' : ' oder ziehen'}.` : check.reason;
         warn = !check.ok;
       } else text = 'Kacheln anklicken oder darüberziehen. Esc beendet das Werkzeug.';
     } else if (canAct && view.menu === 'front') {
@@ -642,9 +690,7 @@ function buildingInfo(e: Entity, world: World): string {
   const jobText = job
     ? job.kind === 'retool'
       ? `Rüstet um auf ${UNITS[job.unit].name}`
-      : job.kind === 'level'
-        ? `Wird auf Stufe ${job.level} ausgebaut`
-        : `Forscht: ${world.players[e.owner].faction.upgrades.find((u) => u.id === job.upgrade)?.name ?? ''}`
+      : `Wird auf Stufe ${job.level} ausgebaut`
     : '';
   const status = job
     ? `${jobText} – noch ${Math.ceil((job.doneTick - world.tick) / tps)} s`

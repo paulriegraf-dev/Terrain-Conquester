@@ -10,6 +10,7 @@ import type { WeaponDef } from '../../data/units';
 import { SpatialGrid } from '../spatial';
 import { launchTarget } from './myr';
 import { leashOk } from './terraform';
+import { breaksWalls } from './abilities';
 import type { World } from '../world';
 
 /** Größter Einheitenradius (für die grobe Rastersuche). */
@@ -27,7 +28,7 @@ const LEASH = 1;
  * In der letzten Phase (stormHq) ignorieren Truppen Gebäude ganz – sonst könnten
  * befestigte Fabriken vor dem HQ eine Runde endlos hinziehen.
  */
-const PRIORITY: Record<EntityKind, number> = { unit: 0, hq: 1, building: 2 };
+const PRIORITY: Record<EntityKind, number> = { unit: 0, hq: 1, building: 2, wall: 3 };
 
 /**
  * Belagerung (automatisch, kein eigener Befehl): Waffen mit doppeltem Bauwerk-Schaden (Artillerie)
@@ -57,6 +58,8 @@ export function aimPoint(a: Entity, t: Entity): Vec2 {
 }
 
 function canAttack(world: World, e: Entity, t: Entity): boolean {
+  // Erdwall (24.10.): nur schwere Einheiten, Artillerie und Sprengetopps brechen ihn – „weiche Sperre“.
+  if (t.kind === 'wall' && !breaksWalls(e)) return false;
   // In der Sturm-Phase halten Gebäude niemanden mehr auf – nur Einheiten und das HQ zählen.
   if (t.kind === 'building' && e.mover && world.phase.stormHq) return false;
   // Bauschutz: geschützte Gebäude sind kein Ziel.
@@ -109,6 +112,18 @@ function softness(t: Entity): number {
   if (t.armor === 'light') return 1.8;
   if (t.armor === 'heavy') return 0.3;
   return 1.2;
+}
+
+/** Sieht e das Ziel selbst, oder steht ein eigener Verband (keine Artillerie) höchstens r Kacheln davon? */
+function spotted(world: World, e: Entity, t: Entity, r: number): boolean {
+  const own = (t.pos.x - e.pos.x) * (t.pos.x - e.pos.x) + (t.pos.y - e.pos.y) * (t.pos.y - e.pos.y);
+  if (own <= e.vision * e.vision) return true;
+  for (const o of world.entities) {
+    if (!o.alive || o.kind !== 'unit' || o.owner !== e.owner || o === e) continue;
+    if (o.weapon && o.weapon.def.range >= 6) continue;
+    if ((o.pos.x - t.pos.x) * (o.pos.x - t.pos.x) + (o.pos.y - t.pos.y) * (o.pos.y - t.pos.y) <= r * r) return true;
+  }
+  return false;
 }
 
 function inOwnOrContested(world: World, owner: PlayerId, t: Entity): boolean {
@@ -167,7 +182,8 @@ export function updateTargeting(world: World): void {
     const canThrow = !!ld && !!e.launcher && (e.launcher.load > 0 || !!ld.take);
     const softThrow = canThrow && !!ld!.soft;
     const throwReach = softThrow && canChase ? world.rules.launcherAdvance : 0;
-    const searchRange = baseSearch + Math.max(hunt, throwReach);
+    const focusReach = canChase && world.rules.focusReach > 0 ? world.rules.focusReach : 0;
+    const searchRange = baseSearch + Math.max(hunt, throwReach, focusReach);
     const siege = !!e.mover && isSiege(w.def);
     // Artillerie sucht Bauwerke weiter (sie rückt bis auf volle Reichweite an sie heran).
     const structureRange = siege && canChase ? range + SIEGE_ADVANCE : searchRange;
@@ -191,6 +207,7 @@ export function updateTargeting(world: World): void {
     /** Darf e das Ziel in Abstand d verfolgen (Reichweite der Suche, Gebietsregel beim Halten)? */
     const allowed = (t: Entity, d: number, slack: number): boolean => {
       if (d > (t.kind === 'unit' ? searchRange : structureRange) + slack) return false;
+      if (t.kind === 'wall') return d <= range + slack; // Wälle nur, was in Reichweite liegt – niemand jagt ihnen nach
       if (d <= range || !holding) return true;
       // Haltende Truppen verfolgen nur Gegner im eigenen oder umkämpften Gebiet – kein Nachsetzen übers Niemandsland.
       // Haltende Artillerie rückt an Bauwerke heran, solange sie dafür im eigenen Gebiet bleibt.
@@ -220,13 +237,17 @@ export function updateTargeting(world: World): void {
       // Ziele, gegen die die eigene Waffe stark ist, wirken „näher“ → Konter greifen gezielt.
       const factor = softThrow ? softness(t) : targetFactor(world, w.def, t);
       if (hunt > 0 && d > baseSearch && factor < 1.25) return; // weit weg nur Lieblingsziele (deutlich überdurchschnittlich)
+      if (focusReach > 0 && hunt === 0 && throwReach === 0 && d > baseSearch && (t.kind !== 'unit' || factor < 1.5)) return;
+      // Zielaufklärung (Test-Schalter): Fernkampf trifft nur, was er selbst sieht oder ein eigener Späher nahe am Ziel.
+      if (world.rules.spotterRange > 0 && t.kind === 'unit' && range >= 6 && !spotted(world, e, t, world.rules.spotterRange)) return;
       if (throwReach > 0 && d > baseSearch) {
         // Vorstoß-Wurf: nur zu weichen Zielen, und nur so weit, wie der Wurfpunkt im eigenen oder umkämpften Gebiet liegt.
         if (factor < 1.5 || !launchTarget(ld!, t)) return;
         if (holding && !siegeSpotOk(world, e, t, ld!.range)) return;
       }
       const rank = priority(t, d);
-      let score = rank * 1000 + d / (0.5 + 0.5 * factor);
+      const pref = 0.5 + 0.5 * factor;
+      let score = rank * 1000 + d / (world.rules.targetFocus > 0 ? pref * pref : pref);
       // Verspotten (Myr-Verspotter): Gegner in seinem Umkreis schießen bevorzugt auf ihn.
       const taunt = t.kind === 'unit' ? UNITS[t.defId as keyof typeof UNITS]?.taunt : undefined;
       if (taunt && dist(e.pos, t.pos) <= taunt.radius) score = rank * 1000 + (score - rank * 1000) * 0.25;
@@ -245,7 +266,10 @@ export function updateTargeting(world: World): void {
     const current = w.targetId ? world.get(w.targetId) : undefined;
     if (current && current.alive && current.owner !== e.owner && canAttack(world, e, current)) {
       const d = rangeTo(e, current);
-      if (allowed(current, d, LEASH) && (!best || priority(current, d) <= bestRank)) continue;
+      // Mit Zielfokus (Test-Schalter): wechseln, wenn ein deutlich besseres Ziel (Konter) in Reichweite ist.
+      const better = world.rules.targetFocus > 0 && best && best !== current && rangeTo(e, best) <= range &&
+        (softThrow ? softness(best) : targetFactor(world, w.def, best)) >= 1.5 * (softThrow ? softness(current) : targetFactor(world, w.def, current));
+      if (!better && allowed(current, d, LEASH) && (!best || priority(current, d) <= bestRank)) continue;
     }
     w.targetId = best ? best.id : 0;
   }

@@ -7,7 +7,7 @@ import { UNITS } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
 import { hqKey } from '../sim/keys';
-import { checkSwapArea, checkWall, swapArea, wallCoords } from '../sim/systems/abilities';
+import { checkSwapArea, checkWall, shapeArea, swapArea, wallCoords } from '../sim/systems/abilities';
 import { controllerAt } from '../sim/systems/influence';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
 import { camouflageRange } from '../sim/systems/terraform';
@@ -122,7 +122,7 @@ export class Renderer {
     const visibleTo = (e: Entity): boolean =>
       !view.fog || view.human === null || world.isVisibleTo(view.human, e);
     for (const e of world.entities) {
-      if (e.alive && e.kind !== 'unit' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
+      if (e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
     }
     this.drawNetworks(world, alpha, visibleTo);
     for (const e of world.entities) {
@@ -1134,16 +1134,30 @@ export class Renderer {
     }
   }
 
+  /**
+   * Erdwälle (seit 24.10. dauerhaft): angekündigte als gestrichelter Umriss mit Countdown (Truppen weichen gleich
+   * aus), stehende mit Lebensleiste, sobald sie angeschlagen sind.
+   */
   private drawWallTimers(world: World, view: ViewState): void {
-    if (this.tile < 12) return;
     const ctx = this.ctx;
     const t = this.tile;
+    const known = (i: number): boolean => !view.fog || view.human === null || world.players[view.human].vision.explored[i] === 1;
     for (const wall of world.walls) {
       const mid = wall.cells[Math.floor(wall.cells.length / 2)]!.index;
+      if (!known(mid)) continue;
+      ctx.strokeStyle = withAlpha(PALETTE.player[wall.owner], 0.9);
+      ctx.lineWidth = Math.max(1, t * 0.08);
+      ctx.setLineDash([t * 0.2, t * 0.15]);
+      for (const c of wall.cells) {
+        const cx = c.index % world.map.width;
+        const cy = Math.floor(c.index / world.map.width);
+        ctx.strokeRect(cx * t + 1.5, cy * t + 1.5, t - 3, t - 3);
+      }
+      ctx.setLineDash([]);
+      if (t < 12) continue;
       const x = (mid % world.map.width) + 0.5;
       const y = Math.floor(mid / world.map.width) + 0.5;
-      if (view.fog && view.human !== null && !world.players[view.human].vision.explored[mid]) continue;
-      const seconds = Math.ceil((wall.endTick - world.tick) / world.tps);
+      const seconds = Math.max(0, Math.ceil((wall.raiseTick - world.tick) / world.tps));
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       ctx.fillRect(x * t - t * 0.45, y * t - t * 0.32, t * 0.9, t * 0.64);
       ctx.fillStyle = PALETTE.player[wall.owner];
@@ -1151,6 +1165,16 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(seconds), x * t, y * t + 1);
+    }
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'wall' || !e.rect) continue;
+      const mid = e.wallCells![Math.floor(e.wallCells!.length / 2)]!.index;
+      if (!known(mid)) continue;
+      // Besitzer-Farbe als feiner Rand, damit man eigene und gegnerische Wälle unterscheidet
+      ctx.strokeStyle = withAlpha(PALETTE.player[e.owner], 0.55);
+      ctx.lineWidth = Math.max(1, t * 0.06);
+      ctx.strokeRect(e.rect.x * t + 1, e.rect.y * t + 1, e.rect.w * t - 2, e.rect.h * t - 2);
+      if (e.hp < e.maxHp) this.hpBar(e.rect.x * t + 2, e.rect.y * t - 4, e.rect.w * t - 4, e.hp / e.maxHp, 3);
     }
   }
 
@@ -1334,8 +1358,8 @@ export class Renderer {
       // Pinsel-Vorschau: grün = wird umgebaut, rot = passt nicht (oder der Kauf ginge gerade nicht)
       const area = view.prep
         ? checkPrep(world, view.human, hover.x, hover.y, view.swap.terrain)
-        : checkSwapArea(world, view.human, hover.x, hover.y, view.swap.terrain);
-      for (const [cx, cy] of swapArea(hover.x, hover.y)) {
+        : checkSwapArea(world, view.human, hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true);
+      for (const [cx, cy] of view.prep ? swapArea(hover.x, hover.y) : shapeArea(hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true)) {
         if (!world.grid.inBounds(cx, cy)) continue;
         const ok = area.ok && area.cells.includes(world.grid.index(cx, cy));
         ctx.fillStyle = ok ? PALETTE.previewOk : PALETTE.previewBad;

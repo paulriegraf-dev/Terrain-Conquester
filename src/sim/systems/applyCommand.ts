@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../data/buildings';
+import { energyCap } from './economy';
 import type { BuildingId } from '../../data/buildings';
 import type { Command, CommandResult } from '../commands';
 import { checkBuild } from '../placement';
@@ -17,6 +18,8 @@ import { levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './fact
 import { triggerEmergency } from './emergency';
 import { orderScout } from './scout';
 import { routeChangeSeconds } from './sites';
+import { buyHqUpgrade, disguiseFactor } from './hq';
+import { HQ_PATH_IDS } from '../../data/hq';
 
 const OK: CommandResult = { ok: true };
 const fail = (reason: string): CommandResult => ({ ok: false, reason });
@@ -41,7 +44,7 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       const def = BUILDINGS[b.defId as BuildingId];
       const p = world.players[player];
       const paid = b.paid ?? def.buildCost;
-      p.energy = Math.min(world.rules.maxEnergy, p.energy + Math.floor(paid * world.rules.sellRefund));
+      p.energy = Math.min(energyCap(world, player), p.energy + Math.floor(paid * world.rules.sellRefund));
       world.destroy(b, null);
       world.emit({ type: 'sold', owner: player, name: b.name });
       return OK;
@@ -82,7 +85,7 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       p.energy -= DISGUISE.cost;
       p.stats.energySpent += DISGUISE.cost;
       p.stats.disguises++;
-      b.disguise = { as: cmd.as, route: cmd.route, until: world.tick + Math.round(DISGUISE.duration * world.tps) };
+      b.disguise = { as: cmd.as, route: cmd.route, until: world.tick + Math.round(DISGUISE.duration * disguiseFactor(world, player) * world.tps) };
       return OK;
     }
     case 'setPaused': {
@@ -101,11 +104,12 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       if (typeof b === 'string') return fail(b);
       return levelUp(world, b);
     }
-    case 'research': {
-      const b = ownBuilding(world, player, cmd.entityId);
-      if (typeof b === 'string') return fail(b);
-      return startResearch(world, b, cmd.upgrade);
-    }
+    case 'research':
+      // Seit 24.10. zentral: die Fabrik-ID ist nur noch ein Hinweis aus alten Replays.
+      return startResearch(world, player, cmd.upgrade);
+    case 'hqUpgrade':
+      if (!HQ_PATH_IDS.includes(cmd.path)) return fail('Unbekannter HQ-Zweig');
+      return buyHqUpgrade(world, player, cmd.path);
     case 'setStance': {
       if (!ROUTES.includes(cmd.route) || !STANCES.includes(cmd.stance)) return fail('Ungültige Haltung');
       const p = world.players[player];
@@ -133,7 +137,7 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
     case 'castWall':
       return castWall(world, player, cmd.x, cmd.y, cmd.vertical);
     case 'swapTerrain':
-      return swapTerrain(world, player, cmd.x, cmd.y, cmd.terrain);
+      return swapTerrain(world, player, cmd.x, cmd.y, cmd.terrain, cmd.vertical ?? true);
     case 'order': {
       const reason = placeOrder(world, player, cmd.part);
       return reason ? fail(reason) : OK;

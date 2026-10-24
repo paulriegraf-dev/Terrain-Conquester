@@ -1,4 +1,6 @@
-import { DISGUISE, PREP, SHAPING_REACH, SWAP, WALL, swapCost } from '../data/abilities';
+import { DISGUISE, PREP, SHAPING_REACH, SWAP, WALL } from '../data/abilities';
+import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
+import { checkHqUpgrade } from '../sim/systems/hq';
 import { BUILDINGS } from '../data/buildings';
 import { buildingIds } from '../data/factions';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
@@ -10,7 +12,8 @@ import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
 import { routeChangeSeconds } from '../sim/systems/sites';
 import { counterLine } from '../sim/counters';
-import { gorgeAreas } from '../sim/systems/abilities';
+import { gorgeAreas, swapCostAt, wallCount } from '../sim/systems/abilities';
+import { disguiseFactor, gorgeLimit, scoutCost, scoutDelay, scoutNamesUnits, wallLimit } from '../sim/systems/hq';
 import type { Entity } from '../sim/entity';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
 import type { Stance, World } from '../sim/world';
@@ -66,6 +69,7 @@ export function commandsFor(ctx: CommandContext): CommandSet {
   if (sel?.kind === 'pad') return outpostCommands(ctx, sel.padId);
   if (sel?.kind === 'entity') {
     const e = world.get(sel.id);
+    if (e?.alive && e.kind === 'hq' && e.owner === view.human) return hqCommands(ctx);
     if (e?.alive && e.producer && e.owner === view.human) {
       if (view.menu === 'disguise') return disguiseCommands(ctx, e);
       if (view.menu === 'research') return researchCommands(ctx, e);
@@ -118,7 +122,7 @@ function mainCommands(ctx: CommandContext): CommandSet {
     cost: WALL.cost,
     disabled: !canAct,
     pressed: !!view.wall,
-    tip: `Erdwall (${WALL.cost} Energie): blockiert ${WALL.duration} s lang Weg und Sicht, lädt ${WALL.cooldown} s. Im eigenen Gebiet und bis ${SHAPING_REACH} Kacheln davor, nie den letzten Weg.`,
+    tip: `Erdwall (${WALL.cost} Energie, lädt ${WALL.cooldown} s): dauerhaft, blockiert Weg und Sicht. Brechen können ihn nur schwere Einheiten, Artillerie und Sprengetopps. Steigt nach ${WALL.raiseSeconds} s auf – Truppen darauf weichen aus. Eigenes Gebiet, Niemandsland und bis ${SHAPING_REACH} Kacheln vor die Grenze; ein Weg von HQ zu HQ bleibt immer. Deine: ${wallCount(world, me)} von ${wallLimit(world, me, WALL.maxActive)}.`,
     action: 'wall',
   });
   if (view.wall) {
@@ -145,10 +149,10 @@ function mainCommands(ctx: CommandContext): CommandSet {
   });
   const scout = checkScout(world, me);
   buttons.push({
-    id: 'scout', glyph: '◎', label: 'Späher', key: 'l', cost: world.rules.scout.cost,
+    id: 'scout', glyph: '◎', label: 'Späher', key: 'l', cost: scoutCost(world, me),
     disabled: !canAct || !scout.ok,
     pending: p.scout.pending ? `${Math.ceil((p.scout.pending.dueTick - world.tick) / world.tps)} s` : undefined,
-    tip: `Spähbericht (${world.rules.scout.cost} Energie): grobe Stärke des Gegners je Route – auch im Nebel – und die vorherrschende Panzerung. Kommt nach ${world.rules.scout.delaySeconds} s an.${scout.ok ? '' : ` ${scout.reason}`}`,
+    tip: `Spähbericht (${scoutCost(world, me)} Energie): grobe Stärke des Gegners je Route – auch im Nebel – und die vorherrschende Panzerung${scoutNamesUnits(world, me) ? ' und Einheit' : ''}. Kommt nach ${scoutDelay(world, me)} s an.${scout.ok ? '' : ` ${scout.reason}`}`,
     action: 'scout',
   });
   if (world.map.reserve > 0) {
@@ -301,18 +305,31 @@ function heroCommands(ctx: CommandContext): CommandSet {
 
 function terrainCommands(ctx: CommandContext): CommandSet {
   const { view, canAct, world } = ctx;
+  const me = view.human ?? 0;
   const dug = view.human !== null ? gorgeAreas(world, view.human) : 0;
+  const limit = gorgeLimit(world, me);
   const buttons: CommandButton[] = SWAP.targets.map((id, i) => {
     const t = TERRAIN_LIST[TERRAIN_INDEX[id]]!;
+    const c = swapCostAt(world, me, world.map.hq[me].x, id);
+    const far = swapCostAt(world, me, world.map.width - 1 - world.map.hq[me].x, id);
     return {
-      id: `swap-${id}`, glyph: t.char === '.' ? '·' : t.char, label: id === 'gorge' ? 'Graben' : t.name, key: String(i + 1), cost: swapCost(id).cost,
-      disabled: !canAct, pressed: view.swap?.terrain === id,
+      id: `swap-${id}`, glyph: t.char === '.' ? '·' : t.char, label: id === 'gorge' ? 'Graben' : t.name, key: String(i + 1), cost: far.cost,
+      disabled: !canAct || (id === 'gorge' && limit === 0), pressed: view.swap?.terrain === id,
       tip: id === 'gorge'
-        ? `Schlucht graben (${swapCost(id).cost} Energie, ${swapCost(id).buildSeconds} s): dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber. Schneidet nie den letzten Weg ab. Höchstens ${SWAP.gorgeLimit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten.`
-        : `${t.name}: ${t.hint} Formt eine ${SWAP.brush}×${SWAP.brush}-Fläche pro Klick (${swapCost(id).cost} Energie, ${swapCost(id).buildSeconds} s; in deiner Kartenhälfte ${swapCost(id, world.rules.shaping).cost} Energie, ${swapCost(id, world.rules.shaping).buildSeconds.toFixed(0)} s) – auch zum Darüberziehen. Gegrabene Schluchten werden dabei zugeschüttet.`,
+        ? limit === 0
+          ? 'Schlucht graben: erst mit dem HQ-Zweig Gelände (Stufe 1 „Schluchtgräber“) – HQ anklicken.'
+          : `Schlucht graben (${far.cost} Energie, ${far.buildSeconds} s): 2×4 Kacheln, R oder Rechtsklick dreht. Dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber; Truppen darauf weichen aus. Darf ganze Routen sperren – nur ein Weg von HQ zu HQ bleibt immer. Höchstens ${limit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten; Terraformer schütten gegnerische Schluchten in ihrer Nähe zu.`
+        : `${t.name}: ${t.hint} Formt eine ${SWAP.brush}×${SWAP.brush}-Fläche pro Klick (${far.cost} Energie, ${far.buildSeconds.toFixed(0)} s; in deiner Kartenhälfte ${c.cost} Energie, ${c.buildSeconds.toFixed(0)} s) – auch zum Darüberziehen. Gegrabene Schluchten werden dabei zugeschüttet.`,
       action: 'swap-tool', data: { terrain: id },
     };
   });
+  if (view.swap?.terrain === 'gorge') {
+    buttons.push({
+      id: 'gorge-rotate', glyph: view.swap.vertical === false ? '⇄' : '⇅', label: 'Drehen', key: 'r', disabled: !canAct,
+      tip: 'Schlucht drehen: hochkant (2×4) oder quer (4×2). Auch Rechtsklick.',
+      action: 'gorge-rotate',
+    });
+  }
   buttons.push(backButton());
   return { title: 'Gelände formen', buttons };
 }
@@ -404,11 +421,11 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
 
   // Reihe 3: Forschung (R), Verkaufen (X), Tarnen (D)
   const open = player.faction.upgrades.filter((u) => u.unit === pr.unit && !player.research.includes(u.id)).length;
-  const researchJob = job?.kind === 'research';
+  const lab = player.labs.find((l) => player.faction.upgrades.find((u) => u.id === l.upgrade)?.unit === pr.unit);
   buttons.push({
     id: 'research-menu', glyph: '⚙', label: open ? `Forschung (${open})` : 'Forschung', key: 'r', disabled: !canAct,
-    pending: researchJob ? `Forschung ${secs(job.doneTick)}s` : undefined,
-    tip: `Kleine Upgrades für ${UNITS[pr.unit].name} – gelten danach für alle ${UNITS[pr.unit].name} von dir.`,
+    pending: lab ? `Forschung ${secs(lab.doneTick)}s` : undefined,
+    tip: `Upgrades für ${UNITS[pr.unit].name} – gelten für alle ${UNITS[pr.unit].name} von dir, laufen neben der Produktion. Alle Einheiten auf einen Blick: Panel „Forschung“ rechts.`,
     action: 'menu', data: { menu: 'research' },
   });
   const refund = Math.floor((e.paid ?? BUILDINGS[e.defId as BuildingId].buildCost) * world.rules.sellRefund);
@@ -421,7 +438,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     },
     {
       id: 'disguise-menu', glyph: '◐', label: 'Tarnen', key: 'd', cost: DISGUISE.cost, disabled: !canAct,
-      tip: `Täuschung (${DISGUISE.cost} Energie): Der Gegner sieht ${DISGUISE.duration} s lang einen anderen Typ und eine andere Route.`,
+      tip: `Täuschung (${DISGUISE.cost} Energie): Der Gegner sieht ${DISGUISE.duration * disguiseFactor(world, e.owner)} s lang einen anderen Typ und eine andere Route.`,
       action: 'menu', data: { menu: 'disguise' },
     },
   );
@@ -448,8 +465,8 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const buttons: CommandButton[] = ups.map((u, k) => {
     const done = player.research.includes(u.id);
     const running = researching(world, e.owner, u.id);
-    const c = checkResearch(world, e, u.id);
-    const here = pr.job?.kind === 'research' && pr.job.upgrade === u.id;
+    const c = checkResearch(world, e.owner, u.id);
+    const lab = player.labs.find((l) => l.upgrade === u.id);
     return {
       id: `research-${u.id}`,
       glyph: done ? '✓' : '⚙',
@@ -458,8 +475,8 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
       cost: done || !c.ok ? undefined : c.cost,
       disabled: !canAct || done || !c.ok,
       pressed: done,
-      pending: here && pr.job ? `${Math.max(0, Math.ceil((pr.job.doneTick - world.tick) / world.tps))}s` : running ? 'läuft' : undefined,
-      tip: `${u.name}: ${u.description} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s ohne Produktion.` : c.reason}`,
+      pending: lab ? `${Math.max(0, Math.ceil((lab.doneTick - world.tick) / world.tps))}s` : running ? 'läuft' : undefined,
+      tip: `${u.name}: ${u.description} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
       action: 'research',
       data: { upgrade: u.id },
     };
@@ -496,6 +513,37 @@ function disguiseCommands(ctx: CommandContext, e: Entity): CommandSet {
   });
   buttons.push(backButton());
   return { title: 'Täuschung', buttons };
+}
+
+/**
+ * HQ gewählt (24.10.): die drei HQ-Zweige. Ein Zweig bis Stufe 5, ein zweiter bis 2, der dritte bleibt zu –
+ * jeder Knopf zeigt die nächste Stufe, ihren Preis und warum es (noch) nicht geht.
+ */
+function hqCommands(ctx: CommandContext): CommandSet {
+  const { world, view, canAct } = ctx;
+  const me = view.human ?? 0;
+  const tiers = world.players[me].hq;
+  const buttons: CommandButton[] = HQ_PATH_IDS.map((id) => {
+    const def = HQ_PATHS[id];
+    const t = tiers[id];
+    const next = def.tiers[t];
+    const c = checkHqUpgrade(world, me, id);
+    const done = def.tiers.slice(0, t).map((x, k) => `${k + 1}. ${x.name}`).join(', ');
+    return {
+      id: `hq-${id}`,
+      glyph: def.glyph,
+      label: `${def.name} ${t}/${def.tiers.length}`,
+      key: def.key,
+      cost: next && c.ok ? c.cost : next?.cost,
+      disabled: !canAct || !c.ok,
+      pressed: t > 0,
+      tip: `${def.name}${done ? ` (ausgebaut: ${done})` : ''}. ${next ? `Nächste Stufe ${t + 1} „${next.name}“ (${next.cost} Energie): ${next.description}.` : 'Voll ausgebaut.'}${c.ok ? '' : ` ${c.reason}.`} Ein Zweig bis Stufe ${HQ_PATH_LIMITS.main}, ein zweiter bis ${HQ_PATH_LIMITS.side}, der dritte bleibt zu.`,
+      action: 'hq-upgrade',
+      data: { path: id },
+    };
+  });
+  buttons.push(backButton('Abwählen'));
+  return { title: 'HQ · Zweige', buttons };
 }
 
 function backButton(label = 'Zurück'): CommandButton {

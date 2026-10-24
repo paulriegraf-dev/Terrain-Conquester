@@ -59,7 +59,7 @@ export const TERRAIN_LIST: readonly TerrainDef[] = [
   },
   {
     id: 'wall', name: 'Erdwall', char: '=', solid: false, blocksVision: true, leavesTracks: false, buildFactor: null,
-    color: '#8a6a45', hint: 'Von Spielern errichtet. Blockiert Weg und Sicht, verschwindet wieder.',
+    color: '#8a6a45', hint: 'Von Spielern errichtet. Blockiert Weg und Sicht, bis schwere Einheiten oder Artillerie ihn brechen.',
   },
 ];
 

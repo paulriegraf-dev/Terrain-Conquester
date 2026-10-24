@@ -201,10 +201,11 @@ function pushing(world: World, e: Entity): boolean {
 }
 
 /**
- * Fertiger Block (Ritual): in der Nähe (Umkreis workRadius + 1) oder – vom Spieler vorbereitet – bis preparedRadius
- * voraus auf der eigenen Route. Am liebsten weit vorn und nah.
+ * Fertiger Block (Ritual): in der Nähe (Umkreis workRadius + 1) oder – mit `far`, vom Spieler vorbereitet – bis
+ * preparedRadius voraus auf der eigenen Route. Am liebsten nah (24.10.: vorher „am liebsten weit vorn“ – dann lief
+ * der Terraformer an der Basis vorbei zu weit entfernten Blöcken und ließ das Gelände dazwischen liegen).
  */
-function findReadyBlock(world: World, e: Entity, ground: number): CellRect | null {
+function findReadyBlock(world: World, e: Entity, ground: number, far = true): CellRect | null {
   const g = world.grid;
   const p = e.owner;
   const cx = Math.floor(e.pos.x);
@@ -214,7 +215,7 @@ function findReadyBlock(world: World, e: Entity, ground: number): CellRect | nul
   const push = pushing(world, e);
   const dir = forward(world, p);
   const near = Math.ceil(world.rules.terraform.workRadius) + 1;
-  const RP = Math.max(near, world.rules.terraform.preparedRadius);
+  const RP = far ? Math.max(near, world.rules.terraform.preparedRadius) : near;
   let best: CellRect | null = null;
   let bestScore = -Infinity;
   for (let y = cy - RP; y <= cy + RP; y++) {
@@ -228,7 +229,7 @@ function findReadyBlock(world: World, e: Entity, ground: number): CellRect | nul
       const mx = x + 1;
       const my = y + 1;
       const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
-      const score = (mx - e.pos.x) * dir - 0.5 * d;
+      const score = 0.2 * (mx - e.pos.x) * dir - d;
       if (score > bestScore + 1e-9) {
         bestScore = score;
         best = r;
@@ -264,6 +265,40 @@ function nextWorkCell(world: World, e: Entity, ground: number, radius: number): 
       const score = Math.sqrt(d2) + ownOther - 0.3 * dx * dir;
       if (score < bestScore - 1e-9) {
         bestScore = score;
+        best = i;
+      }
+    }
+  }
+  return best >= 0 ? best : null;
+}
+
+/** Von einem Gegner gegrabene Schlucht, die Spieler p zuschütten darf (kein laufender Umbau). */
+function enemyGorge(world: World, i: number, p: PlayerId): boolean {
+  const enemy = p === 0 ? 2 : 1;
+  return world.dug[i] === enemy && world.grid.structure[i] === 0 && !world.swaps.some((s) => s.index === i);
+}
+
+/** Nächste gegnerische Schlucht im Umkreis (nur im eigenen oder umkämpften Gebiet, außer die Route stößt vor). */
+function nearestEnemyGorge(world: World, e: Entity, radius: number): number | null {
+  if (radius <= 0) return null;
+  const g = world.grid;
+  const p = e.owner;
+  const enemy: PlayerId = p === 0 ? 1 : 0;
+  const push = pushing(world, e);
+  const r = Math.ceil(radius);
+  const cx = Math.floor(e.pos.x);
+  const cy = Math.floor(e.pos.y);
+  let best = -1;
+  let bestD = radius * radius;
+  for (let y = cy - r; y <= cy + r; y++) {
+    for (let x = cx - r; x <= cx + r; x++) {
+      if (!g.inBounds(x, y)) continue;
+      const i = g.index(x, y);
+      if (!enemyGorge(world, i, p)) continue;
+      if (!push && controllerAt(world, i) === enemy) continue;
+      const d = (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2;
+      if (d < bestD - 1e-9 || (Math.abs(d - bestD) < 1e-9 && i < best)) {
+        bestD = d;
         best = i;
       }
     }
@@ -332,14 +367,16 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   // Rufen nur, solange die Kraft reicht (rules.terraform.maxSummons) und seine eigene Pause (summonEvery) um ist –
   // sonst formt er nur weiter Boden (für Linien-Boni und Synergien).
   const canSummon = (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
-  // 2. Kachel in Arbeit
+  // 2. Kachel in Arbeit (auch eine gegnerische Schlucht, die er zuschüttet)
   if (tf.workCell !== undefined && tf.workCell >= 0) {
     const i = tf.workCell;
-    if (!convertible(world, i, p, ground)) {
+    const filling = enemyGorge(world, i, p);
+    if (!filling && !convertible(world, i, p, ground)) {
       tf.workCell = -1;
     } else if (world.tick >= tf.workTick) {
       world.grid.setTerrain(i, ground);
       world.formed[i] = p + 1;
+      if (filling) world.dug[i] = 0;
       world.players[p].vision.learn(i);
       tf.workCell = -1;
     } else {
@@ -349,7 +386,26 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   // Neue Arbeit nur alle paar Ticks suchen (Flächensuche)
   if ((world.tick + e.id) % 5 !== 0 && tf.workCell !== undefined) return;
-  const block = canSummon ? findReadyBlock(world, e, ground) : null;
+  // Gegnerische Schlucht in der Nähe (24.10.): zuerst zuschütten – das dauert länger als eine Kachel.
+  const gorge = nearestEnemyGorge(world, e, rules.gorgeSeek);
+  if (gorge !== null) {
+    const gx = (gorge % world.grid.width) + 0.5;
+    const gy = Math.floor(gorge / world.grid.width) + 0.5;
+    const d = Math.sqrt((gx - e.pos.x) * (gx - e.pos.x) + (gy - e.pos.y) * (gy - e.pos.y));
+    if (d <= rules.workRadius + 0.75) {
+      tf.workCell = gorge;
+      tf.workTick = world.tick + Math.round(rules.formSeconds * rules.gorgeFactor * world.tps);
+      m.goal = here;
+    } else {
+      m.goal = { x: gx, y: gy }; // hingehen (er bleibt am Rand stehen)
+      tf.workCell = -1;
+    }
+    return;
+  }
+  // Reihenfolge (24.10.): fertiger Block in der Nähe → Arbeit in der Nähe → vorbereiteter Block weiter voraus →
+  // vorrücken. So formt er das Gelände nahe der Basis, statt daran vorbeizulaufen.
+  const cell = nextWorkCell(world, e, ground, rules.workRadius);
+  const block = canSummon ? findReadyBlock(world, e, ground, cell === null) : null;
   if (block) {
     tf.block = block;
     tf.workTick = 0;
@@ -357,7 +413,6 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     m.goal = { x: block.x + 1, y: block.y + 1 };
     return;
   }
-  const cell = nextWorkCell(world, e, ground, rules.workRadius);
   tf.done = 0;
   if (cell !== null) {
     tf.workCell = cell;

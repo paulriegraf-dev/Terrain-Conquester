@@ -306,3 +306,28 @@ describe('Terra-Former: Halten auf eigenem Boden', () => {
     assert.equal(slotOnMud(0), false, 'ohne die Regel bleibt er auf seinem Platz');
   });
 });
+
+describe('Terraformer: gegnerische Schluchten (24.10.)', () => {
+  it('geht eine gegnerische Schlucht in der Nähe zuerst an und schüttet sie mit seinem Boden zu – langsamer als eine Kachel', () => {
+    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+    const i = world.grid.index(10, 7);
+    world.grid.setTerrain(i, TERRAIN_INDEX.gorge);
+    world.dug[i] = 2; // vom Gegner gegraben
+    const f = unit(world, 0, 'formerMud', 7.5, 7.5, false);
+    const rules = world.rules.terraform;
+    stepTimes(world, Math.round(rules.formSeconds * world.tps) + 5);
+    assert.equal(world.grid.terrain[i], TERRAIN_INDEX.gorge, 'nach einer Kachel-Zeit noch nicht fertig');
+    let t = 0;
+    while (world.grid.terrain[i] === TERRAIN_INDEX.gorge && t < 25 * world.tps) {
+      world.step();
+      t++;
+      if (f.tf!.workCell === i && world.grid.terrain[i] === TERRAIN_INDEX.gorge) {
+        const left = (f.tf!.workTick - world.tick) / world.tps;
+        assert.ok(left <= rules.formSeconds * rules.gorgeFactor + 1e-9);
+      }
+    }
+    assert.equal(world.grid.terrain[i], TERRAIN_INDEX.mud, `zugeschüttet (Terraformer bei x ${f.pos.x.toFixed(1)})`);
+    assert.equal(world.dug[i], 0);
+    assert.equal(world.formed[i], 1, 'eigener Boden');
+  });
+});

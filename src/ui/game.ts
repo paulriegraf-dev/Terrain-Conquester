@@ -302,6 +302,16 @@ export class Game {
           if (ev.owner === human) this.hud.log(s, `Notfallverlegung: ${ev.moved} Fabrik(en) im Rückraum, ${ev.stunned} Gegner betäubt`, 'good');
           else this.hud.log(s, `Der Gegner verlegt seine Basis – ${ev.stunned} eigene Verbände betäubt`, 'warn');
           break;
+        case 'hq':
+          if (ev.owner === human) this.hud.log(s, `HQ: ${ev.name} (Stufe ${ev.tier})`, 'good');
+          break;
+        case 'research':
+          if (ev.owner === human) this.hud.log(s, `Erforscht: ${ev.name}`, 'good');
+          break;
+        case 'wallBroken':
+          if (ev.owner === human) this.hud.log(s, 'Ein Erdwall ist gebrochen', 'bad');
+          else if (human !== null) this.hud.log(s, 'Gegnerischer Erdwall gebrochen', 'good');
+          break;
         case 'protocol':
           if (ev.ascend && ev.owner === human) this.hud.log(s, `Netz: Ein Verband erbt ${PROTOCOLS[ev.protocol].name} und steigt auf`, 'good');
           else if (ev.ascend && human !== null && world.players[human].vision.isVisible(Math.floor(ev.to.x), Math.floor(ev.to.y))) this.hud.log(s, 'Ein gegnerischer Netz-Verband steigt auf', 'warn');
@@ -447,6 +457,7 @@ export class Game {
     c.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       if (this.view.wall) this.rotateWall();
+      else if (this.view.swap?.terrain === 'gorge' && !this.view.prep) this.rotateGorge();
       else this.back();
     });
     // Rechtsklick wirkt wie Esc – auch auf dem Befehlsraster und in der Konsole, nicht nur auf der Karte.
@@ -705,11 +716,12 @@ export class Game {
         if (b) this.session.issue({ type: 'upgradeFactory', entityId: b.id });
         break;
       }
-      case 'research': {
-        const b = own();
-        if (b && data.upgrade) this.session.issue({ type: 'research', entityId: b.id, upgrade: data.upgrade });
+      case 'research':
+        if (data.upgrade) this.session.issue({ type: 'research', upgrade: data.upgrade });
         break;
-      }
+      case 'hq-upgrade':
+        if (data.path === 'intel' || data.path === 'market' || data.path === 'terrain') this.session.issue({ type: 'hqUpgrade', path: data.path });
+        break;
       case 'none':
         break;
       case 'stance':
@@ -763,7 +775,7 @@ export class Game {
       case 'swap-tool': {
         if (this.session.mode !== 'play' || world.result) break;
         const terrain = (data.terrain as TerrainId | undefined) ?? this.lastSwapTerrain;
-        this.view.swap = this.view.swap && this.view.swap.terrain === terrain ? null : { terrain };
+        this.view.swap = this.view.swap && this.view.swap.terrain === terrain ? null : { terrain, vertical: this.gorgeVertical };
         this.lastSwapTerrain = terrain;
         if (this.view.swap) {
           this.view.wall = null;
@@ -807,6 +819,9 @@ export class Game {
       case 'hero-route':
         if (this.session.mode === 'play' && data.route) this.session.issue({ type: 'heroRoute', route: data.route as Route });
         break;
+      case 'gorge-rotate':
+        this.rotateGorge();
+        break;
       case 'wall-rotate':
         this.rotateWall();
         break;
@@ -832,6 +847,7 @@ export class Game {
 
   private hudSellArmed = 0;
   private lastSwapTerrain: TerrainId = 'forest';
+  private gorgeVertical = true;
   private lastPainted: { x: number; y: number } | null = null;
 
   /**
@@ -851,11 +867,20 @@ export class Game {
     }
     const last = this.lastPainted;
     if (!notify && last && Math.max(Math.abs(cell.x - last.x), Math.abs(cell.y - last.y)) < SWAP.brush - 1) return;
-    const check = checkSwapArea(this.session.world, human, cell.x, cell.y, this.view.swap.terrain);
+    const vertical = this.view.swap.vertical ?? true;
+    if (!notify && this.view.swap.terrain === 'gorge') return; // Schluchten nur per Klick, nicht im Ziehen
+    const check = checkSwapArea(this.session.world, human, cell.x, cell.y, this.view.swap.terrain, vertical);
     if (check.ok) {
-      this.session.issue({ type: 'swapTerrain', x: cell.x, y: cell.y, terrain: this.view.swap.terrain });
+      this.session.issue({ type: 'swapTerrain', x: cell.x, y: cell.y, terrain: this.view.swap.terrain, vertical });
       this.lastPainted = { ...cell };
     } else if (notify) this.hud.flash(check.reason);
+  }
+
+  /** Schlucht drehen: hochkant (2×4) oder quer (4×2). */
+  private rotateGorge(): void {
+    if (!this.view.swap) return;
+    this.gorgeVertical = !(this.view.swap.vertical ?? this.gorgeVertical);
+    this.view.swap = { ...this.view.swap, vertical: this.gorgeVertical };
   }
 
   private rotateWall(): void {

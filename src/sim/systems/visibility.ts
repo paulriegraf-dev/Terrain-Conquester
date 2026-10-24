@@ -1,4 +1,5 @@
 import type { BuildingId } from '../../data/buildings';
+import { seesThroughDisguise, structureVisionBonus } from './hq';
 import { UNITS } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import type { Entity } from '../entity';
@@ -12,8 +13,9 @@ import { productionSpeed } from './production';
 export function updateVision(world: World): void {
   for (const p of world.players) p.vision.clear();
   for (const e of world.entities) {
-    if (!e.alive) continue;
-    world.players[e.owner].vision.reveal(Math.floor(e.pos.x), Math.floor(e.pos.y), e.vision);
+    if (!e.alive || e.kind === 'wall') continue;
+    const bonus = e.kind === 'unit' ? 0 : structureVisionBonus(world, e.owner); // Feldstecher (HQ-Zweig Aufklärung)
+    world.players[e.owner].vision.reveal(Math.floor(e.pos.x), Math.floor(e.pos.y), e.vision + bonus);
   }
   // Sensorstation: Sicht rund um den Ort für den Besitzer.
   world.map.sites.forEach((s, i) => {
@@ -45,7 +47,8 @@ export function apparentBuilding(
 ): { defId: BuildingId; route: Route; unit: UnitId; level: number; nextTick: number; everyTicks: number } {
   const pr = e.producer!;
   const d = e.disguise;
-  const fake = d && viewer !== e.owner && world.tick < d.until;
+  // Gegenspionage (HQ-Zweig Aufklärung): Täuschungen fliegen auf.
+  const fake = d && viewer !== e.owner && world.tick < d.until && !seesThroughDisguise(world, viewer);
   const unit = fake ? world.players[e.owner].faction.buildings[d.as]!.tiers[0]! : pr.unit;
   const speed = productionSpeed(world, e.owner, UNITS[unit].part);
   const every = Math.round((fake ? world.spawnTicks(unit, e.padId !== undefined, e.owner) : pr.intervalTicks) / speed);

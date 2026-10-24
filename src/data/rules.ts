@@ -227,10 +227,12 @@ export interface Rules {
    * `level3Hp` × Leben. `summonNeedsRoom`: Gerufene zählen aufs Einheitenlimit. `lineResearch`: Forschung des
    * Wächters gilt auch für Terraformer und Gerufene seiner Linie. `seekGround`: Haltende Verbände stellen sich auf
    * eigenen Boden ihrer Linie in so vielen Kacheln Nähe (0 = aus). `maxSummons`: Test-Schalter (0 = unbegrenzt).
+   * `gorgeSeek`/`gorgeFactor` (24.10.): Gegnerische Schluchten bis so weit gehen Terraformer zuerst an und schütten
+   * sie mit ihrem Boden zu – das dauert `gorgeFactor`-mal so lange wie eine Kachel.
    */
   terraform: {
     formSeconds: number; ritualSeconds: number; cooldownSeconds: number; workRadius: number; advanceStep: number; frontOffset: number;
-    preparedRadius: number; maxSummons: number; summonEvery: number; every: number; everyLevel2: number; level3Hp: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
+    preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
   };
   /**
    * Terra-Former: Schlammmonster. Eine 3×3-Zelle mit mindestens `fieldMin` eigenen Matsch-Kacheln ist ein Matschfeld;
@@ -256,6 +258,19 @@ export interface Rules {
   kamikazeHunt: number;
   /** Durchschlag im Schwarm: ab diesem Anteil des Schwarm-Höchstbonus +1 Durchschlag (0 = aus). Test-Schalter. */
   swarmAp: number;
+  /** Forschung (seit 24.10. zentral und parallel zur Produktion): so viele gleichzeitig. */
+  researchSlots: number;
+  /**
+   * Test-Schalter Kampf (24.10., Standard aus):
+   * - `targetFocus`: Konter bevorzugen ihr Lieblingsziel stärker (0 = wie bisher; 1 = Vorliebe quadriert) und
+   *   wechseln, wenn ein deutlich besseres Ziel in Reichweite kommt.
+   * - `focusReach`: Einheiten suchen Ziele, gegen die sie deutlich stark sind, so viele Kacheln weiter.
+   * - `spotterRange`: Fernkampf ab 6 Reichweite schießt auf Einheiten außerhalb der eigenen Sicht nur, wenn ein
+   *   eigener Verband (keine Artillerie) höchstens so weit vom Ziel steht (0 = aus: geteilte Sicht genügt).
+   */
+  targetFocus: number;
+  focusReach: number;
+  spotterRange: number;
   /** So lange (Sekunden) dauert es, bis ein neuer Marschbefehl greift. */
   routeChangeSeconds: number;
   /** Marschbefehl sofort umstellen statt nach der Umstellzeit: kostet so viel Energie. */
@@ -331,14 +346,15 @@ export const RULES: Rules = {
   homeDamageTaken: 0.75,
   // Ab der Entscheidung (11:00) nur noch halber Heimvorteil (22.10., getestet: unverändert / halb / aus).
   homeLate: { at: 660, factor: 0.5 },
-  scout: { cost: 20, cooldownSeconds: 20, delaySeconds: 10, some: 3, many: 6 },
+  // 24.10.: 25 statt 20 Energie (mit dem HQ-Zweig Aufklärung 15)
+  scout: { cost: 25, cooldownSeconds: 20, delaySeconds: 10, some: 3, many: 6 },
   network: { joinRadius: 4, breakRadius: 8, maxMembers: 4, maxWithNode: 7, ascendAt: 3, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3 },
   sites: { radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8 },
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
     formSeconds: 2, ritualSeconds: 4, cooldownSeconds: 90, workRadius: 2, advanceStep: 1.5, frontOffset: 2,
-    preparedRadius: 16, maxSummons: 0, summonEvery: 0, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
+    preparedRadius: 16, maxSummons: 0, summonEvery: 0, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 7, eggSeconds: 10, clutch: 3, max: 15 },
   synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },
@@ -364,6 +380,10 @@ export const RULES: Rules = {
   // falscher Marschbefehl ohnehin weniger (eine Fabrik schickt nur alle 12–55 s einen Verband).
   routeChangeSeconds: 15,
   routeRushCost: 25,
+  researchSlots: 2,
+  targetFocus: 0,
+  focusReach: 0,
+  spotterRange: 0,
   // Pause für alle eigenen Fabriken (22.10.): Je Fabrik nutzte die KI den Eilauftrag in der
   // HQ-Schlacht fast jede Minute an jeder Fabrik – Runden dauerten im Median 22:36 statt 18:00 ohne.
   rushOrder: { perSecond: 1.5, min: 20, cooldownSeconds: 60, perPlayer: true },

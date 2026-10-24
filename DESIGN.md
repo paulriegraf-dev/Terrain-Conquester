@@ -1398,6 +1398,82 @@ Auffällig je Kartenart: Auf den **asymmetrischen Karten** gewinnen die Myriaden
 
 
 
+## Umgesetzt (24.10.): Erdwall und Schlucht mit mehr Freiheit, HQ-Zweige, Forschung zentral, Preise
+
+Wunsch des Nutzers (24.10. nachts): Angriffsrouten, Verteidigungs- und Produktionslinien stärker über Gelände gestalten; das Upgrade-System weniger klobig; am HQ Spionage, Markt und Gelände ausbauen.
+
+**Erdwall – dauerhaft, aber zerstörbar („weiche Sperre“)**
+- Steht dauerhaft, statt nach 18 s zu verschwinden. Leben 900, Widerstand 8, Rüstung 4+.
+- Brechen können ihn nur **schwere Einheiten, Artillerie und Sprengetopps**. Infanterie und leichte Fahrzeuge laufen außen herum. Sie greifen nur Wälle in Reichweite an und jagen keinen nach.
+- Setzen: im eigenen Gebiet, im **ganzen Niemandsland** und bis 6 Kacheln vor die eigene Grenze, nie im gegnerischen Gebiet. Der Wall wird 2 s vorher markiert. Truppen auf den Feldern – eigene wie gegnerische – **weichen** auf die nächste freie Kachel aus, ohne Schaden.
+- 50 Energie (vorher 60), alle 20 s, höchstens 4 gleichzeitig (mit dem HQ-Zweig Gelände bis 7). Fällt ein Wall, kehrt der Boden darunter zurück.
+
+**Schlucht – 2×4 Kacheln, über den HQ-Zweig Gelände**
+- 2×4 statt 3×3 Kacheln, drehbar (R oder Rechtsklick), 80 Energie (vorher 100), 6 s.
+- Graben erst mit dem HQ-Zweig Gelände: 2, ab Stufe 3 3, ab Stufe 5 4 gleichzeitig (vorher immer 3). Eine Schlucht gibt es nur ganz – passt eine Kachel nicht, geht sie nicht.
+- Truppen auf den Kacheln weichen beim Fertigwerden aus (vorher wartete die Schlucht, bis die Kachel frei war).
+- **Terraformer schütten gegnerische Schluchten zu:** Liegt eine bis 6 Kacheln entfernt, gehen sie sie zuerst an. Das dauert dreimal so lange wie eine Kachel (6 s).
+
+**Wege sperren:** Erdwall, Schlucht und Gebäude dürfen einzelne Routen jetzt **ganz** schließen. Es muss nur immer ein Weg von HQ zu HQ offen bleiben, und jede Fabrik muss hinauskommen. Vorher mussten alle Routen-Wegpunkte erreichbar bleiben, man konnte also nur umlenken. Truppen, deren Route zu ist, ziehen auf dem verbleibenden Weg aufs HQ (Front) bzw. halten, wo sie stehen.
+
+**HQ-Zweige (nach dem Vorbild von Tower-Defense-Upgradepfaden)**
+
+HQ anklicken, dann `1`–`3`. Ein Zweig darf bis Stufe 5, ein zweiter bis Stufe 2, der dritte bleibt zu (z. B. 5-2-0 oder 3-1-0). Jede Stufe wirkt sofort. Preise 60 / 90 / 130 / 180 / 250 Energie (5-2-0 = 860).
+
+| Stufe | Aufklärung | Markt | Gelände |
+|---|---|---|---|
+| 1 | Späher-Netz: Spähbericht 10 billiger, kommt nach 5 s | Händlerkontakte: Scheinbestellung 15 billiger | Schluchtgräber: Schluchten graben, 2 gleichzeitig |
+| 2 | Feldstecher: HQ und Fabriken +3 Sicht | Börsenticker: Markt ohne Verzögerung, eine Bestellung mehr | Pioniere: Gelände formen ⅓ billiger und schneller, ein Erdwall mehr |
+| 3 | Typenanalyse: Spähbericht nennt die häufigste Einheit je Route | Lieferverträge: hohe Preise bremsen die eigenen Fabriken nur halb | Tiefe Gräben: 3 Schluchten, Graben in 4 s |
+| 4 | Gegenspionage: gegnerische Täuschungen fliegen auf, eigene halten doppelt | Großbestellung: Bestellungen doppelt so stark und 45 s | Wallbau: Erdwälle +50 % Leben, zwei mehr |
+| 5 | Lagezentrum: alle 20 s ein Spähbericht von selbst | Börsenmacht: Einkommen +15 %, Energie-Maximum +200 | Landnahme: 4 Schluchten; Wall, Gelände und Schlucht bis 4 Kacheln ins gegnerische Gebiet |
+
+Die KI wählt den Hauptzweig nach Profil (Händler Markt, Landformer Gelände, Täuscher Aufklärung), sonst nach Fraktion (Technoclan Aufklärung + Markt, Myriaden Markt + Gelände, Terra-Former Gelände + Aufklärung). Sie kauft ab 2:00 vom Überschuss, höchstens eine Stufe je 45 s.
+
+**Forschung – zentral und parallel zur Produktion**
+- Forschung läuft nicht mehr als Auftrag einer Fabrik (die dabei stillstand), sondern **zentral neben der Produktion**. Sie gilt für die Einheitenart in allen Fabriken. Höchstens 2 Forschungen gleichzeitig.
+- Neues Panel „Forschung“ rechts: Alle Einheiten, die die eigenen Fabriken auf ihrer Stufe bauen können, stehen dort mit ihren nächsten Upgrades als Knöpfe; ein Klick startet. Laufende Forschung steht oben mit Fortschritt. Der Weg über die Fabrik (`R`) geht weiter.
+- Stufen und Umrüsten bleiben Aufträge der Fabrik (sie pausiert dabei).
+
+**Preise (Einschätzung und Anpassung)**
+
+| Was | vorher | jetzt | Warum |
+|---|---|---|---|
+| Erdwall | 60, 18 s, alle 30 s | 50, dauerhaft, alle 20 s, max. 4 | Der dauerhafte Wall ist viel mehr wert – die Obergrenze bremst stärker als der Preis |
+| Schlucht | 100 (3×3), max. 3 | 80 (2×4), nur mit HQ-Zweig Gelände, 2–4 | 8 statt 9 Kacheln; die Freiheit kommt über den HQ-Zweig |
+| Gelände formen | 15 (eigene Hälfte 10) | unverändert, mit „Pioniere“ ⅓ billiger | soll oft genutzt werden |
+| Forschung | 80/120/160, Einzel-Upgrades 70–110 | 100/150/200, Einzel-Upgrades +20 % | kostet keine Bauzeit mehr |
+| Spähbericht | 20 | 25 (mit Aufklärung 15) | war beiläufig |
+| Täuschen | 30 | unverändert | |
+| Scheinbestellung | 40, 75 % zurück (netto 10) | 50, 60 % zurück (netto 20; mit Markt 35) | netto war sie fast gratis |
+| HQ-Stufen | – | 60/90/130/180/250 | |
+| Bauplätze | 6 je Fraktion | unverändert | erst nach den Simulationen entscheiden (Test: Myriaden 7) |
+
+Einordnung: Grundeinkommen 180 Energie je Minute, in der Eskalation 252, in der Entscheidung 324, dazu Gebietseinkommen. Die KI gibt im Schnitt etwa 330 je Minute aus.
+
+**Terraformer nahe der Basis:** Er lief zu vorbereiteten Blöcken weit voraus und ließ das Gelände nahe der Basis liegen – die Blockwahl bevorzugte „weit vorn“. Jetzt gilt: fertiger Block in der Nähe, dann Arbeit in der Nähe, erst dann ein vorbereiteter Block weiter voraus; bei gleich guten Blöcken der nähere.
+
+**Lane-Synergien öfter aktiv:** Eine Lane „hat“ Boden X jetzt schon ab 12 eigenen Kacheln X – X muss nicht mehr vorherrschen. Vorher schalteten wechselnde Mehrheiten die Synergie ab: In Minute 1 war sie in jeder Partie aktiv (Vorbereitung), ab Minute 10 nur noch in rund 45 % der Minuten, weil Terraformer auch Boden anderer eigener Linien umformen.
+
+### Einschätzung (24.10.): Haltungen, Reichweiten, Sicht, Zielwahl
+
+Grundlage: 36 Diagnose-Partien, jede Sekunde alle Schüsse in Reichweite erfasst.
+
+- **Haltungen:** Die KI hält 64 % der Zeit, steht 24 % auf Front, 12 % auf Verteidigen.
+  - Halten ist durch Heimvorteil (75 % Schaden, Heilung) sehr stark – daher die Patts.
+  - Front marschiert als Kolonne: die Schnellen kommen zuerst an und fallen einzeln. Ausgeschwärmt wird erst vor der gegnerischen Basis, und wer die Mitte überquert, kommt nie zurück.
+  - Ideen: Front mit Sammeln an der Grenze (Welle für alle Fraktionen), Ausschwärmen beim ersten Kontakt, Rückzug unter 30 % Leben.
+- **Reichweiten und Schadensarten:** Die Schadensarten sind Etiketten; es wirken Stärke, Durchschlag, „verwundet X ab“ und Flächenschaden.
+  - Schwäche: Konter sind teils kürzer als ihr Ziel – Plasmawerfer (gegen Infanterie) 2,8 gegen Drohnen 3,2, Technogunner (gegen Panzer) 3 gegen Battlesphäre 3,8 und Koloss 4.
+  - Artillerie schießt zu 65 % auf Ziele, die andere sehen.
+  - Bewusst fehlend: Flugabwehr (keine Flieger), Fernfeuer der Myriaden, billige Masse beim Technoclan.
+- **Sicht:** Nahkämpfer sehen zu 100 % selbst, was sie beschießen. Die geteilte Sicht macht Artillerie und Späher stark (Hover Scout 10, mit Sensoren 13; Sensorstation 12). 22 % der Gefechte gehen über eine Lane-Grenze, meist wo die Routen am HQ zusammenlaufen.
+- **Zielwahl:** Fast alles schießt auf Panzer (60–70 % der Schüsse, der Plasmawerfer zu 81 %) – Panzer stehen vorn, der Verspotter zieht Feuer. Einen Konter, der sein Lieblingsziel in Reichweite hat und trotzdem anderes beschießt, gibt es nur in 3–14 % der Fälle. Meist ist das Lieblingsziel gar nicht in Reichweite.
+- **Als Test-Schalter eingebaut** (Standard aus, Ergebnisse unten):
+  - `targetFocus`: Vorliebe quadriert, Wechsel zu deutlich besseren Zielen in Reichweite.
+  - `focusReach`: Lieblingsziele 1,5 Kacheln weiter suchen.
+  - `spotterRange`: Fernkampf ab 6 Reichweite braucht eigene Sicht oder einen eigenen Verband nahe am Ziel.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
@@ -1415,11 +1491,9 @@ Auffällig je Kartenart: Auf den **asymmetrischen Karten** gewinnen die Myriaden
 - Grafikstil und Perspektive (Top-down oder 2.5D)? – Grafik kommt bewusst später, damit Änderungen schnell bleiben.
 - **Patt-Auflöser:** eine der drei Varianten (A Niemandsland schrumpft, B Gebiet zählt doppelt, C Heimvorteil schwindet) fest einschalten, kombinieren oder alle aus lassen? Zahlen siehe „Umgesetzt (Nacht zum 22.10.)“.
 - **Bauplätze je Fraktion:** Myr-Brut als halber Bauplatz behalten oder nicht? Zahlen siehe dort.
-- **Schlucht:** reichen 100 Energie und höchstens 3 gleichzeitig – oder lieber Schluchten, die sich nach ein paar Minuten von selbst verschütten?
 - **Gebäude fallen selten** – trotz Befestigung 50 % statt 20 %: Der Technoclan verliert in KI-Partien fast nie eine Fabrik, die Myriaden etwa eine je Partie, meist früh. Beute und „Fabrik ausschalten“ spielen damit für den Technoclan kaum eine Rolle – so lassen?
 - **Terra-Former gegen Technoclan je Kartengröße:** nach dem Umbau ausgeglichen und kürzer (16 : 20, Median 17:16), aber auf normalen Karten gewinnt der Technoclan (17 : 7), auf großen die Terra-Former (9 : 3). Karten- oder Regelwerte je Größe angleichen (z. B. erster Terraformer früher auf normalen Karten) – oder als Kartencharakter lassen?
 - **Hund:** Auch mit der schlaueren KI selten (1 von 36 Partien) – er sitzt auf Brut-Stufe III. Früher freischalten (Stufe II) oder lassen?
-- **Erdwall:** Abklingzeit 30 s lassen oder auf 20 s senken (gefragt am 22.10., noch offen)? Bauzeit hat er keine; die Schlucht braucht jetzt 6 statt 8 s.
 - **Späte Armeen sind klein** (5–10 Verbände je Seite ab 11:00), die Energie läuft voll und hat kaum noch einen Zweck. Ein Energie-Ventil fürs späte Spiel? Schnellere Fabriken in den späten Phasen verlängerten die Partien im Test allerdings.
 - **Terra-Former gegen Myriaden – lange Partien:** mit dem stärkeren Katapult ausgeglichen (15 : 18), aber lang (Median 20:30, 17 von 36 ab 25 min, auf den großen Karten Median 30:58). Patt-Auflöser B (Gebiet zählt doppelt ab 20:00) für diese Paarung prüfen – oder dem Verspotter etwas Durchschlagskraft geben, damit die Myriaden ihre Vorstöße auch abschließen?
 - **Asymmetrische Karten bevorzugen die Myriaden** (Technoclan 2 : 10, Terra-Former 3 : 8; je 12 Partien): Kartencharakter oder angleichen?

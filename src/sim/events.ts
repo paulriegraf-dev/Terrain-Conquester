@@ -1,5 +1,6 @@
 import type { ProtocolId, UnitId } from '../data/units';
 import type { PartId } from '../data/market';
+import type { HqPathId } from '../data/hq';
 import type { EntityKind } from './entity';
 import type { PlayerId, Route, Vec2 } from './types';
 
@@ -52,6 +53,12 @@ export type SimEventData =
   | { type: 'link'; owner: PlayerId; from: Vec2; to: Vec2 }
   /** Technoclan: Ein Mitglied erbt ein Protokoll eines gefallenen Mitglieds (ascend = steigt dadurch auf). */
   | { type: 'protocol'; owner: PlayerId; protocol: ProtocolId; from: Vec2; to: Vec2; ascend: boolean }
+  /** HQ-Zweig ausgebaut. */
+  | { type: 'hq'; owner: PlayerId; path: HqPathId; tier: number; name: string }
+  /** Forschung abgeschlossen (zentral, seit 24.10.). */
+  | { type: 'research'; owner: PlayerId; upgrade: string; name: string }
+  /** Erdwall gefallen (zerstört). */
+  | { type: 'wallBroken'; owner: PlayerId; cells: number[] }
   /** Ein Spähbericht ist angekommen. */
   | { type: 'scout'; owner: PlayerId }
   | { type: 'gameOver'; winner: PlayerId | null; reason: 'hq' };

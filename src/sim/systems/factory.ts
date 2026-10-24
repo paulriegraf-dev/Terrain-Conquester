@@ -15,9 +15,9 @@ import { productionSpeed } from './production';
  *
  * - Stufen-Upgrade: erweitert die Auswahl der Fabrik (Stufe 2 kann Stufe-1- oder Stufe-2-Einheiten bauen).
  * - Umrüsten: die Fabrik baut eine andere freigeschaltete Einheit.
- * - Forschung: ein kleines Upgrade für die Einheitenart, die die Fabrik gerade baut –
- *   es gilt danach für alle Einheiten dieser Art des Spielers.
- * Alle drei sind „Aufträge“: Solange einer läuft, produziert die Fabrik nicht.
+ * - Forschung (seit 24.10. zentral, siehe checkResearch): läuft parallel zur Produktion und gilt für die
+ *   Einheitenart in allen Fabriken des Spielers.
+ * Stufe und Umrüsten sind „Aufträge“: Solange einer läuft, produziert die Fabrik nicht.
  * Kosten für Stufe und Forschung steigen mit dem Marktpreis des Bauteils der Linie.
  */
 
@@ -55,33 +55,80 @@ export function checkLevelUp(world: World, e: Entity): Check {
   return { ok: true, cost, seconds: step.seconds };
 }
 
-export function checkResearch(world: World, e: Entity, upgradeId: string): Check {
-  const pr = e.producer!;
-  const p = world.players[e.owner];
+/**
+ * Einheitenarten, die Spieler p gerade erforschen kann: alles, was eine eigene Fabrik auf ihrer Stufe bauen kann
+ * (seit 24.10. zentral – man muss nicht mehr die Fabrik anklicken, die die Einheit gerade baut).
+ */
+export function researchableUnits(world: World, p: PlayerId): UnitId[] {
+  const out: UnitId[] = [];
+  for (const e of world.entities) {
+    if (!e.alive || e.owner !== p || !e.producer) continue;
+    for (const u of unlockedUnits(world, e)) if (!out.includes(u)) out.push(u);
+  }
+  return out;
+}
+
+/** Forschungspreis: steigt mit dem Marktpreis des Bauteils der Einheit. */
+function researchPriceFactor(world: World, unit: UnitId): number {
+  return buildPriceFactor(world, UNITS[unit].part);
+}
+
+/**
+ * Darf Spieler p dieses Upgrade erforschen? Forschung läuft seit 24.10. zentral und parallel zur Produktion
+ * (höchstens rules.researchSlots gleichzeitig) und gilt für die Einheitenart in allen Fabriken.
+ * `e` (alte Aufrufe mit Fabrik) wird nur noch für den Besitzer gelesen.
+ */
+export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: string): Check {
+  const owner = typeof who === 'number' ? who : who.owner;
+  const p = world.players[owner];
   const u = p.faction.upgrades.find((x) => x.id === upgradeId);
   if (!u) return { ok: false, reason: 'Unbekanntes Upgrade' };
-  if (u.unit !== pr.unit) return { ok: false, reason: `Nur an einer Fabrik, die ${UNITS[u.unit].name} baut` };
+  if (!researchableUnits(world, owner).includes(u.unit)) return { ok: false, reason: `Erst eine Fabrik, die ${UNITS[u.unit].name} bauen kann` };
   if (p.research.includes(u.id)) return { ok: false, reason: 'Schon erforscht' };
   if (u.requires && !p.research.includes(u.requires)) {
     const prev = p.faction.upgrades.find((x) => x.id === u.requires);
     return { ok: false, reason: `Erst ${prev?.name ?? 'die vorige Stufe'} erforschen` };
   }
-  if (researching(world, e.owner, u.id)) return { ok: false, reason: 'Wird schon erforscht' };
+  if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon erforscht' };
   if (u.fork) {
-    const other = p.faction.upgrades.find((x) => x.fork === u.fork && x.id !== u.id && (p.research.includes(x.id) || researching(world, e.owner, x.id)));
+    const other = p.faction.upgrades.find((x) => x.fork === u.fork && x.id !== u.id && (p.research.includes(x.id) || researching(world, owner, x.id)));
     if (other) return { ok: false, reason: `Gabelung: schon ${other.name} gewählt` };
   }
-  if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
-  const cost = Math.round(u.cost * marketFactor(world, e));
+  if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
+  const cost = Math.round(u.cost * researchPriceFactor(world, u.unit));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost, seconds: u.seconds };
 }
 
-/** Wird dieses Upgrade gerade irgendwo beim Spieler erforscht? */
+/** Wird dieses Upgrade gerade beim Spieler erforscht? */
 export function researching(world: World, owner: PlayerId, upgradeId: string): boolean {
-  return world.entities.some(
-    (x) => x.alive && x.owner === owner && x.producer?.job?.kind === 'research' && x.producer.job.upgrade === upgradeId,
-  );
+  return world.players[owner].labs.some((l) => l.upgrade === upgradeId);
+}
+
+/** Forschung starten (zentral, parallel zur Produktion). */
+export function startResearch(world: World, owner: PlayerId, upgradeId: string): CommandResult {
+  const c = checkResearch(world, owner, upgradeId);
+  if (!c.ok) return c;
+  pay(world, owner, c.cost);
+  world.players[owner].labs.push({ upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) });
+  return { ok: true };
+}
+
+/** Fertige Forschung übernehmen. */
+export function updateResearch(world: World): void {
+  for (const p of world.players) {
+    if (p.labs.length === 0) continue;
+    const done = p.labs.filter((l) => world.tick >= l.doneTick);
+    if (done.length === 0) continue;
+    p.labs = p.labs.filter((l) => world.tick < l.doneTick);
+    for (const l of done) {
+      if (p.research.includes(l.upgrade)) continue;
+      p.research.push(l.upgrade);
+      p.stats.research++;
+      const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
+      world.emit({ type: 'research', owner: p.id, upgrade: l.upgrade, name: u ? `${UNITS[u.unit].name}: ${u.name}` : l.upgrade });
+    }
+  }
 }
 
 export function selectUnit(world: World, e: Entity, unit: UnitId): CommandResult {
@@ -99,14 +146,6 @@ export function levelUp(world: World, e: Entity): CommandResult {
   return { ok: true };
 }
 
-export function startResearch(world: World, e: Entity, upgradeId: string): CommandResult {
-  const c = checkResearch(world, e, upgradeId);
-  if (!c.ok) return c;
-  pay(world, e.owner, c.cost);
-  e.producer!.job = { kind: 'research', upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) };
-  return { ok: true };
-}
-
 /** Fertige Aufträge abschließen. */
 export function updateFactories(world: World): void {
   for (const e of world.entities) {
@@ -120,12 +159,6 @@ export function updateFactories(world: World): void {
       pr.readySince = -1;
     } else if (job.kind === 'level') {
       pr.level = job.level;
-    } else {
-      const p = world.players[e.owner];
-      if (!p.research.includes(job.upgrade)) {
-        p.research.push(job.upgrade);
-        p.stats.research++;
-      }
     }
     pr.job = null;
     world.emit({ type: 'factory', owner: e.owner, entityId: e.id, kind: job.kind, name: e.name });

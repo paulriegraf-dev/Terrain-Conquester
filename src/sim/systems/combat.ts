@@ -1,4 +1,5 @@
 import { UNITS } from '../../data/units';
+import { energyCap } from './economy';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import type { UnitId } from '../../data/units';
 import type { Entity } from '../entity';
@@ -151,7 +152,7 @@ export function updateCombat(world: World): void {
         if (t.kind === 'building' && h.attacker !== t.owner) {
           const amount = Math.floor((t.paid ?? 0) * world.rules.front.buildingBounty);
           const p = world.players[h.attacker];
-          p.energy = Math.min(world.rules.maxEnergy, p.energy + amount);
+          p.energy = Math.min(energyCap(world, p.id), p.energy + amount);
           p.stats.bounty += amount;
           world.emit({ type: 'bounty', owner: h.attacker, amount, name: t.name });
         }

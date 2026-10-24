@@ -375,6 +375,13 @@ select {
 .scout li .lvl[data-level="2"] { color: var(--warn); }
 .scout li .lvl[data-level="3"] { color: var(--bad); font-weight: 600; }
 .scout-btn { width: 100%; }
+.research { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: var(--step--1); }
+.research li { display: grid; gap: 3px; }
+.research .unit { color: var(--muted); }
+.research .ups { display: flex; flex-wrap: wrap; gap: 4px; }
+.research .lab { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; color: var(--brass); }
+.research .lab .bar { grid-column: 1 / -1; height: 3px; background: var(--line); }
+.research .lab .bar i { display: block; height: 100%; background: var(--brass); }
 .market li { display: grid; grid-template-columns: minmax(0, 1fr) 3.9rem auto; gap: 8px; align-items: center; font-size: var(--step--1); }
 .market .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; background: var(--good); }
 .market .dot[data-level="1"] { background: var(--muted); }

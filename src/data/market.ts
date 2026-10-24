@@ -67,10 +67,11 @@ export const MARKET: MarketRules = {
   buildCostShare: 0.6,
   sampleEvery: 20,
   displayDelay: 5,
-  orderCost: 40, // 22.10.: 40 statt 60 – Markt-Manipulation soll sich öfter lohnen
+  // 22.10.: 40 statt 60. 24.10.: 50 bei 60 % Rückgabe (vorher 75 %) – netto 20 statt 10 Energie; der HQ-Zweig Markt senkt sie.
+  orderCost: 50,
   orderSteps: 0.5,
   orderDuration: 30,
-  orderRefund: 0.75,
+  orderRefund: 0.6,
   orderLock: 45,
   maxOrders: 3,
 };

@@ -13,23 +13,42 @@ export interface WallAbilityDef {
   cost: number;
   /** Sekunden bis zum nächsten Einsatz. */
   cooldown: number;
-  /** Sekunden, die der Wall steht. */
-  duration: number;
+  /** So lange (Sekunden) ist die Stelle markiert, bevor der Wall aufsteigt – Truppen weichen dann aus. */
+  raiseSeconds: number;
+  /** Höchstens so viele eigene Wälle gleichzeitig (der HQ-Zweig Gelände erhöht das). */
+  maxActive: number;
   /** Länge in Kacheln. */
   length: number;
+  /** Leben, Widerstand, Rüstung eines Walls. Brechen können ihn nur schwere Einheiten, Artillerie und Sprengetopps. */
+  hp: number;
+  toughness: number;
+  save: number;
   hint: string;
 }
 
+/**
+ * Erdwall (24.10., Wunsch des Nutzers): dauerhaft, aber zerstörbar – nur von schweren Einheiten, Artillerie und
+ * Sprengetopps („weiche Sperre“: Infanterie und leichte Fahrzeuge laufen außen herum). Er steigt nach einer kurzen
+ * Warnung auf; Truppen auf den Feldern weichen auf die nächste freie Kachel aus. Eigenes Gebiet und Niemandsland.
+ * Vorher: 60 Energie, stand 18 s, alle 30 s.
+ */
 export const WALL: WallAbilityDef = {
   id: 'wall',
   name: 'Erdwall',
   key: 'W',
-  cost: 60,
-  cooldown: 30,
-  duration: 18,
+  cost: 50,
+  cooldown: 20,
+  raiseSeconds: 2,
+  maxActive: 4,
   length: 3,
-  hint: 'Hebt einen Wall aus dem Boden: blockiert Weg und Sicht. Nur in sichtbarem Gebiet, darf den Weg nie ganz versperren.',
+  hp: 900,
+  toughness: 8,
+  save: 4,
+  hint: 'Hebt einen dauerhaften Wall aus dem Boden: blockiert Weg und Sicht, bis schwere Einheiten oder Artillerie ihn brechen. Eigenes Gebiet und Niemandsland; eine Route von HQ zu HQ bleibt immer offen.',
 };
+
+/** Schlucht (seit 24.10.): 2×4 Kacheln, drehbar; graben erst mit dem HQ-Zweig Gelände. */
+export const GORGE_SHAPE = { long: 4, short: 2 } as const;
 
 export interface SwapAbilityDef {
   name: string;
@@ -45,8 +64,6 @@ export interface SwapAbilityDef {
   targets: readonly TerrainId[];
   /** Abweichende Kosten und Bauzeit je Bodenart (z. B. Schlucht graben ist teurer). */
   special: Partial<Record<TerrainId, { cost: number; buildSeconds: number }>>;
-  /** Höchstens so viele gegrabene Schlucht-Flächen (je brush × brush Kacheln) pro Spieler gleichzeitig. */
-  gorgeLimit: number;
   hint: string;
 }
 
@@ -85,11 +102,10 @@ export const SWAP: SwapAbilityDef = {
   // Schlucht: 100 statt 40 Energie (22.10.) – für 40 war sie zu kosteneffizient: Als die KI ihre
   // Schluchten nicht mehr versehentlich zuschüttete, dauerten Runden im Median 26 statt 17 Minuten.
   // Bauzeit seit 22.10. 6 statt 8 s (Wunsch: höchstens etwa 7 s), Kosten unverändert.
-  special: { gorge: { cost: 100, buildSeconds: 6 } },
-  // …und höchstens 3 eigene Schlucht-Flächen gleichzeitig: Sonst grub die KI mit übriger Energie
-  // im späten Spiel Dutzende Schluchten und machte ihre Basis zur Festung (Partien bis 45 min).
-  gorgeLimit: 3,
-  hint: 'Formt eine 3×3-Fläche im eigenen Gebiet und bis 6 Kacheln davor: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Schlucht als Sperre (nur Schweber kommen drüber), Geröll gegen Räder (und als Felsen für Myr-Katapulte).',
+  // 24.10.: 2×4 statt 3×3 Kacheln, 80 statt 100 Energie; wie viele gleichzeitig, bestimmt der HQ-Zweig Gelände
+  // (ohne ihn keine). Früher höchstens 3 – ohne Grenze grub die KI im späten Spiel Dutzende Schluchten.
+  special: { gorge: { cost: 80, buildSeconds: 6 } },
+  hint: 'Formt eine 3×3-Fläche im eigenen Gebiet, im Niemandsland und bis 6 Kacheln vor die Grenze: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Geröll gegen Räder. Schlucht (2×4, mit dem HQ-Zweig Gelände) als Sperre – nur Schweber kommen drüber.',
 };
 
 /**

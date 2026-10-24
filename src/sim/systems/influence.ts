@@ -75,7 +75,7 @@ export function stampPresence(world: World): void {
   p0.fill(0);
   p1.fill(0);
   for (const e of world.entities) {
-    if (!e.alive) continue;
+    if (!e.alive || e.kind === 'wall') continue; // Erdwälle beanspruchen kein Gebiet
     const r = e.kind === 'unit' ? rules.unitRadius : e.kind === 'hq' ? rules.hqRadius : rules.buildingRadius;
     const target = e.owner === 0 ? p0 : p1;
     const r2 = r * r;

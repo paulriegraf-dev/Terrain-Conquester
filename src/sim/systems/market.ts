@@ -1,4 +1,6 @@
 import { MARKET, PART_IDS } from '../../data/market';
+import { energyCap } from './economy';
+import { marketDelay, maxOrders, orderCost, orderSeconds, orderStrength, priceBrake } from './hq';
 import type { PartId } from '../../data/market';
 import { UNITS, bindsOf } from '../../data/units';
 import type { UnitId } from '../../data/units';
@@ -29,7 +31,7 @@ export function updateMarket(world: World): void {
   const m = world.market;
   m.orders = m.orders.filter((o) => o.endTick > world.tick);
   const ordered: Record<PartId, number> = { arms: 0, wheels: 0, plates: 0 };
-  for (const o of m.orders) ordered[o.part] += MARKET.orderSteps * MARKET.unitsPerStep[o.part];
+  for (const o of m.orders) ordered[o.part] += MARKET.orderSteps * MARKET.unitsPerStep[o.part] * (o.strength ?? 1);
   for (const id of PART_IDS) {
     m.bound[id] = bound[id];
     m.prices[id] = priceFor(id, bound[id] + ordered[id]);
@@ -39,7 +41,7 @@ export function updateMarket(world: World): void {
     m.stock = m.stock.filter((s) => {
       if (s.releaseTick > world.tick) return true;
       const p = world.players[s.owner];
-      p.energy = Math.min(world.rules.maxEnergy, p.energy + s.amount);
+      p.energy = Math.min(energyCap(world, p.id), p.energy + s.amount);
       return false;
     });
   }
@@ -69,7 +71,8 @@ export function productionFactor(world: World, player: PlayerId, part: PartId): 
   const total = world.market.bound[part];
   if (total === 0) return 1;
   const share = Math.min(1, world.market.boundBy[player][part] / total);
-  return Math.min(MARKET.maxPrice, 1 + (world.market.prices[part] - 1) * 2 * share);
+  // Lieferverträge (HQ-Zweig Markt): die Preisbremse kommt nur halb an.
+  return Math.min(MARKET.maxPrice, 1 + (world.market.prices[part] - 1) * 2 * share * priceBrake(world, player));
 }
 
 /** Faktor auf die Baukosten einer Fabrik, die dieses Bauteil braucht. */
@@ -83,9 +86,11 @@ export function buildPriceFactor(world: World, part: PartId): number {
  */
 export function marketView(
   world: World,
+  viewer?: PlayerId,
 ): { prices: Prices; trend: Record<PartId, -1 | 0 | 1>; change: Record<PartId, number> } | null {
   const h = world.market.history;
-  const shownTick = world.tick - MARKET.displayDelay * world.tps;
+  const delay = viewer === undefined ? MARKET.displayDelay : marketDelay(world, viewer, MARKET.displayDelay);
+  const shownTick = world.tick - delay * world.tps;
   const idx = findLast(h, (s) => s.tick <= shownTick);
   if (idx < 0) return null;
   const shown = h[idx]!;
@@ -105,15 +110,17 @@ export function placeOrder(world: World, player: PlayerId, part: PartId): string
   if (!PART_IDS.includes(part)) return 'Unbekanntes Bauteil';
   const p = world.players[player];
   const running = world.market.orders.filter((o) => o.owner === player && o.endTick > world.tick).length;
-  if (running >= MARKET.maxOrders) return `Höchstens ${MARKET.maxOrders} Bestellungen gleichzeitig`;
-  if (p.energy < MARKET.orderCost) return `Zu wenig Energie (${MARKET.orderCost} nötig)`;
-  p.energy -= MARKET.orderCost;
-  p.stats.energySpent += MARKET.orderCost;
+  const max = maxOrders(world, player, MARKET.maxOrders);
+  if (running >= max) return `Höchstens ${max} Bestellungen gleichzeitig`;
+  const cost = orderCost(world, player, MARKET.orderCost);
+  if (p.energy < cost) return `Zu wenig Energie (${cost} nötig)`;
+  p.energy -= cost;
+  p.stats.energySpent += cost;
   p.stats.orders++;
-  world.market.orders.push({ owner: player, part, endTick: world.tick + MARKET.orderDuration * world.tps });
+  world.market.orders.push({ owner: player, part, endTick: world.tick + orderSeconds(world, player, MARKET.orderDuration) * world.tps, strength: orderStrength(world, player) });
   world.market.stock.push({
     owner: player,
-    amount: Math.floor(MARKET.orderCost * MARKET.orderRefund),
+    amount: Math.floor(cost * MARKET.orderRefund),
     releaseTick: world.tick + MARKET.orderLock * world.tps,
   });
   world.emit({ type: 'order', owner: player, part });

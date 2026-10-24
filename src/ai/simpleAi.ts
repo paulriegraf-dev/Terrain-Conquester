@@ -1,4 +1,5 @@
 import { DISGUISE, SWAP, WALL } from '../data/abilities';
+import { maxOrders, orderCost, scoutCost } from '../sim/systems/hq';
 import { MARKET } from '../data/market';
 import type { PartId } from '../data/market';
 import { MOVE_PROFILES } from '../data/movement';
@@ -17,6 +18,9 @@ import type { Entity } from '../sim/entity';
 import { dist, rectCenter } from '../sim/math';
 import { Rng } from '../sim/rng';
 import { checkSwapArea, checkWall, gorgeCells, swapArea } from '../sim/systems/abilities';
+import { checkHqUpgrade, gorgeLimit } from '../sim/systems/hq';
+import type { HqPathId } from '../data/hq';
+import type { FactionId } from '../data/factions';
 import { controllerAt } from '../sim/systems/influence';
 import type { TerrainId } from '../data/terrain';
 import { TERRAIN_INDEX } from '../data/terrain';
@@ -163,6 +167,7 @@ export class SimpleAi {
   private readonly lastRetool = new Map<number, number>();
   /** Wann die KI zuletzt Gelände geformt hat (Tick). */
   private lastShape = -1e9;
+  private lastHq = -1e9;
   /** Terra-Former (AI_TUNING.tfPrep): Linien, deren Boden in der Vorbereitung geformt wurde – zuerst bauen. */
   private openingLines: BuildingId[] = [];
   /** Schätzung der gegnerischen Armeegröße (höchste gesehene Zahl, verblasst langsam). */
@@ -286,6 +291,8 @@ export class SimpleAi {
     if (factory) commands.push(factory);
     const hero = this.decideHero(world);
     if (hero) commands.push(hero);
+    const hq = this.decideHq(world);
+    if (hq) commands.push(hq);
     if (this.level === 'normal') {
       const rush = this.decideRush(world);
       if (rush) commands.push(rush);
@@ -796,6 +803,24 @@ export class SimpleAi {
     return null;
   }
 
+  /**
+   * HQ-Zweige (24.10.): Hauptzweig nach Profil (Händler Markt, Landformer Gelände, Täuscher Aufklärung), sonst nach
+   * Fraktion (Technoclan Aufklärung, Myriaden Markt, Terra-Former Gelände); dazu ein Nebenzweig bis Stufe 2.
+   * Gekauft wird vom Überschuss, höchstens eine Stufe je 45 s, frühestens ab 2:00. Die Masse-KI baut nichts aus.
+   */
+  private decideHq(world: World): Command | null {
+    if (this.profileId === 'mass' || world.seconds < 120 || world.tick - this.lastHq < 45 * world.tps) return null;
+    const [main, side] = hqPlan(this.profileId, world.players[this.player].faction.id);
+    const t = world.players[this.player].hq;
+    const path: HqPathId | null =
+      t[main] < 2 ? main : t[side] < 1 ? side : t[main] < 3 ? main : t[side] < 2 ? side : t[main] < 5 ? main : null;
+    if (!path) return null;
+    const c = checkHqUpgrade(world, this.player, path);
+    if (!c.ok || this.spare(world) < c.cost + 60) return null;
+    this.lastHq = world.tick;
+    return { type: 'hqUpgrade', path };
+  }
+
   // ------------------------------------------------------------ Haltung (Verteidigen / Halten / Front)
 
   /**
@@ -939,7 +964,9 @@ export class SimpleAi {
       if (controllerAt(world, world.grid.index(x, wy)) === this.player) edge = x;
     }
     if (edge < 0) return null;
-    const gorge = this.spare(world) >= 220 && this.rng.chance(0.35) && gorgeCells(world, this.player) + 9 <= SWAP.gorgeLimit * 9;
+    // Schluchten (seit 24.10.): 2×4, erst mit dem HQ-Zweig Gelände; quer über die Route gegraben (hochkant).
+    const gLimit = gorgeLimit(world, this.player);
+    const gorge = gLimit > 0 && this.spare(world) >= 200 && this.rng.chance(0.35) && gorgeCells(world, this.player) + 8 <= gLimit * 8;
     // Felsen-Munition: Katapulte auf dieser Route bekommen Geröll hinter die eigene Linie.
     const rockers = world.entities.some(
       (e) => e.alive && e.owner === this.player && e.mover?.route === route && UNITS[e.defId as UnitId].ammo?.rocks,
@@ -1041,7 +1068,7 @@ export class SimpleAi {
     const f = this.profile.scout;
     if (f <= 0 || world.seconds < 60) return null;
     if (world.tick - this.lastScout < (45 / f) * world.tps) return null;
-    if (this.spare(world) < world.rules.scout.cost + 40 || !checkScout(world, this.player).ok) return null;
+    if (this.spare(world) < scoutCost(world, this.player) + 40 || !checkScout(world, this.player).ok) return null;
     this.lastScout = world.tick;
     return { type: 'scout' };
   }
@@ -1054,9 +1081,9 @@ export class SimpleAi {
     const f = this.profile.market;
     if (f <= 0 || world.seconds < 120) return null;
     if (world.tick - this.lastOrder < (60 / f) * world.tps) return null;
-    if (this.spare(world) < MARKET.orderCost + (f >= 2 ? 30 : 70)) return null;
+    if (this.spare(world) < orderCost(world, this.player, MARKET.orderCost) + (f >= 2 ? 30 : 70)) return null;
     const running = world.market.orders.filter((o) => o.owner === this.player && o.endTick > world.tick).length;
-    if (running >= MARKET.maxOrders) return null;
+    if (running >= maxOrders(world, this.player, MARKET.maxOrders)) return null;
     const enemyTotal = PART_KEYS.reduce((s, k) => s + this.seenParts[k], 0);
     if (enemyTotal < 1) return null;
     const own = world.market.boundBy[this.player];
@@ -1136,6 +1163,16 @@ export class SimpleAi {
   private spare(world: World): number {
     return world.players[this.player].energy - this.saving;
   }
+}
+
+/** Haupt- und Nebenzweig am HQ je KI-Profil bzw. Fraktion. */
+export function hqPlan(profile: AiProfileId, faction: FactionId): [HqPathId, HqPathId] {
+  if (profile === 'trader') return ['market', 'intel'];
+  if (profile === 'shaper') return ['terrain', 'intel'];
+  if (profile === 'deceiver') return ['intel', 'market'];
+  if (faction === 'terraformer') return ['terrain', 'intel'];
+  if (faction === 'myriaden') return ['market', 'terrain'];
+  return ['intel', 'market'];
 }
 
 const PART_KEYS: readonly PartId[] = ['arms', 'wheels', 'plates'];

@@ -1,4 +1,5 @@
 import { overtimeEnabled } from '../../data/rules';
+import { incomeFactor, maxEnergyBonus } from './hq';
 import type { PlayerId } from '../types';
 import type { World } from '../world';
 import { playableCells } from '../map';
@@ -33,13 +34,18 @@ export function overtimeHint(world: World): string {
  */
 export function updateEconomy(world: World): void {
   for (const p of world.players) {
-    p.energy = Math.min(world.rules.maxEnergy, p.energy + incomePerSecond(world, p.id) / world.tps);
+    p.energy = Math.min(energyCap(world, p.id), p.energy + incomePerSecond(world, p.id) / world.tps);
   }
 }
 
 /** Energie pro Sekunde, die ein Spieler gerade bekommt (Grundeinkommen + Gebiet). */
 export function incomePerSecond(world: World, player: PlayerId): number {
-  return (world.rules.energyPerSecond + territoryIncome(world, player)) * world.phase.energyMult;
+  return (world.rules.energyPerSecond + territoryIncome(world, player)) * world.phase.energyMult * incomeFactor(world, player);
+}
+
+/** Energie-Maximum (Börsenmacht, HQ-Zweig Markt: +200). */
+export function energyCap(world: World, player: PlayerId): number {
+  return world.rules.maxEnergy + maxEnergyBonus(world, player);
 }
 
 /** Anteil des Einkommens aus Gebiet (vor Phasen-Faktor). */

@@ -40,7 +40,8 @@ export interface ViewState {
   /** Bau-Modus: dieses Gebäude hängt am Mauszeiger, Klick setzt es. */
   build: { building: BuildingId } | null;
   /** Werkzeug „Feld tauschen“ aktiv: diese Bodenart wird gesetzt. */
-  swap: { terrain: TerrainId } | null;
+  /** Gelände-Werkzeug; `vertical`: Schlucht hochkant (2×4) oder quer (4×2). */
+  swap: { terrain: TerrainId; vertical?: boolean } | null;
   /** Untermenü im Befehlsraster (wie bei klassischen Echtzeit-Strategiespielen). */
   menu: 'main' | 'terrain' | 'disguise' | 'front' | 'research' | 'hero';
   /** Vorbereitungsphase läuft (Gelände formen vor Rundenbeginn). */

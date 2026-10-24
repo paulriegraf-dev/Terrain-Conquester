@@ -51,7 +51,7 @@ export interface UpgradeDef {
   name: string;
   description: string;
   cost: number;
-  /** So lange forscht die Fabrik (sie produziert in der Zeit nicht). */
+  /** So lange dauert die Forschung (seit 24.10. parallel zur Produktion). */
   seconds: number;
   effect: UpgradeEffect;
   /** Stufen-Kette: erst nach diesem Upgrade verfügbar. */
@@ -124,7 +124,8 @@ export interface FactionDef {
  * (ein Scharfschütze trifft schon auf 2+, also bringt ihm „Treffen +1“ nichts).
  */
 const STEPS = ['I', 'II', 'III'] as const;
-const STEP_COST = [80, 120, 160];
+// 24.10.: Forschung läuft parallel zur Produktion (kostet keine Bauzeit mehr) – dafür etwa 25 % teurer (vorher 80/120/160).
+const STEP_COST = [100, 150, 200];
 const STEP_SECONDS = [12, 16, 20];
 
 /** Waffen-Stufen: Stärke, Durchschlag, Treffen oder Schaden pro Wunde. */
@@ -240,8 +241,9 @@ const armor = (unit: UnitId, steps: [ArmorStep, ArmorStep, ArmorStep]): UpgradeD
 const healing = (unit: UnitId): UpgradeDef[] =>
   chain(unit, 'heal', 'Heilung', [0, 1, 2].map(() => ({ effect: { heal: 1.2 }, label: 'Heilung +20 %' })));
 
+/** Einzel-Upgrade. Kosten seit 24.10. +20 % (Forschung läuft parallel zur Produktion), auf 5 gerundet. */
 function special(unit: UnitId, id: string, name: string, description: string, cost: number, seconds: number, effect: UpgradeEffect): UpgradeDef {
-  return { id, unit, name, description, cost, seconds, effect };
+  return { id, unit, name, description, cost: Math.round((cost * 1.2) / 5) * 5, seconds, effect };
 }
 
 export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
@@ -297,8 +299,8 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     upgrades: [
       ...weapons('drone', ['AP', 'S', 'D']), ...armor('drone', ['SV', 'SV', 'W']),
       // Lebensuhr: +30 s je Stufe bis zum Verfall – kostet Energie und Forschungszeit im Aufbau.
-      { id: 'drone-life-1', unit: 'drone', name: 'Lebensdauer I', description: '+30 s bis zum Verfall', cost: 80, seconds: 12, effect: { lifespan: 30 } },
-      { id: 'drone-life-2', unit: 'drone', name: 'Lebensdauer II', description: '+30 s bis zum Verfall', cost: 120, seconds: 16, effect: { lifespan: 30 }, requires: 'drone-life-1' },
+      { id: 'drone-life-1', unit: 'drone', name: 'Lebensdauer I', description: '+30 s bis zum Verfall', cost: 100, seconds: 12, effect: { lifespan: 30 } },
+      { id: 'drone-life-2', unit: 'drone', name: 'Lebensdauer II', description: '+30 s bis zum Verfall', cost: 150, seconds: 16, effect: { lifespan: 30 }, requires: 'drone-life-1' },
       special('drone', 'drone-legs', 'Krabbelbeine', '+15 % Tempo', 70, 12, { speed: 1.15 }),
       ...weapons('bomber', ['D', 'D', 'D']), ...armor('bomber', ['SV', 'W', 'SV']),
       special('bomber', 'bomber-sprint', 'Zündeifer', '+20 % Tempo', 80, 12, { speed: 1.2 }),

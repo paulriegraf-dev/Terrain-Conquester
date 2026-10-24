@@ -68,11 +68,11 @@ describe('Fabriken: kleine Upgrades', () => {
     assert.equal(other.save, UNITS.sniper.save, 'nicht beim Gegner');
   });
 
-  it('nur an einer Fabrik, die diese Einheit baut', () => {
+  it('nur für Einheiten, die eine eigene Fabrik bauen kann', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     const f = factory(world);
     world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'colossus-armor-1' })]);
-    assert.equal(f.producer!.job, null);
+    assert.equal(world.players[0].labs.length, 0);
     const reasons = world.events.filter((e) => e.type === 'rejected').map((e) => (e.type === 'rejected' ? e.reason : ''));
     assert.match(reasons.at(-1) ?? '', /Koloss/);
   });

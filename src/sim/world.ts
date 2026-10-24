@@ -18,7 +18,7 @@ import type { MapDef, PadDef, ParsedMap } from './map';
 import { inBaseZone } from './placement';
 import { rectCenter } from './math';
 import { Rng } from './rng';
-import { updateSwaps, updateWalls } from './systems/abilities';
+import { removeWall, updateSwaps, updateWalls } from './systems/abilities';
 import { applyCommand } from './systems/applyCommand';
 import { updateCombat } from './systems/combat';
 import { updateLifespans } from './systems/lifespan';
@@ -31,12 +31,13 @@ import { NO_SYNERGY } from './systems/synergy';
 import type { SynergyState } from './systems/synergy';
 import { releaseClutch, updateMyr } from './systems/myr';
 import type { SiteState } from './systems/sites';
+import type { HqPathId } from '../data/hq';
 import type { ScoutReport } from './systems/scout';
 import { updateEconomy, updatePhase } from './systems/economy';
 import { countTerritory, stampPresence, updateInfluence } from './systems/influence';
 import { updateFront } from './systems/front';
 import { updateHeroes } from './systems/hero';
-import { updateFactories } from './systems/factory';
+import { updateFactories, updateResearch } from './systems/factory';
 import { updateMarket } from './systems/market';
 import type { PartId } from '../data/market';
 import { checkVictory } from './systems/victory';
@@ -111,6 +112,13 @@ export interface PlayerState {
   faction: FactionDef;
   /** Erforschte kleine Upgrades (IDs, in Reihenfolge der Forschung). */
   research: string[];
+  /**
+   * Laufende Forschung (24.10.: zentral, parallel zur Produktion, gilt für die Einheitenart in allen Fabriken).
+   * Höchstens rules.researchSlots gleichzeitig.
+   */
+  labs: { upgrade: string; startTick: number; doneTick: number }[];
+  /** HQ-Zweige: erreichte Stufe je Zweig (siehe data/hq.ts). */
+  hq: Record<HqPathId, number>;
   energy: number;
   /** Haltung je Route. */
   stance: Record<Route, Stance>;
@@ -155,10 +163,11 @@ export interface IntelRecord {
   everyTicks: number;
 }
 
+/** Angekündigter Erdwall: steigt bei `raiseTick` auf (dann wird er eine Entity der Art 'wall'). */
 export interface ActiveWall {
   owner: PlayerId;
   cells: { index: number; original: number }[];
-  endTick: number;
+  raiseTick: number;
 }
 
 export interface MatchResult {
@@ -221,7 +230,7 @@ export class World {
     boundBy: [Record<PartId, number>, Record<PartId, number>];
     prices: Record<PartId, number>;
     /** Laufende Scheinbestellungen. */
-    orders: { owner: PlayerId; part: PartId; endTick: number }[];
+    orders: { owner: PlayerId; part: PartId; endTick: number; strength?: number }[];
     /** Gesperrter Vorrat aus Bestellungen: wird zum Tick `releaseTick` als Energie frei. */
     stock: { owner: PlayerId; amount: number; releaseTick: number }[];
     history: { tick: number; prices: Record<PartId, number> }[];
@@ -354,6 +363,7 @@ export class World {
     updateScout(this);
     updateSites(this);
     updateFactories(this);
+    updateResearch(this);
     updateHeroes(this);
     updateMarket(this);
     if (this.tick % this.rules.visionEvery === 0) updateVision(this);
@@ -543,6 +553,39 @@ export class World {
    * Setzt ein Gebäude – frei auf `rect` oder auf einen Außenposten. Prüfen muss vorher
    * checkBuild (src/sim/placement.ts); hier wird nur noch ausgeführt.
    */
+  /** Erdwall (dauerhaft, zerstörbar) als Bauwerk anlegen – die Kacheln sind schon Wall-Terrain. */
+  addWall(owner: PlayerId, cells: { index: number; original: number }[], hp: number, toughness: number, save: number): Entity {
+    const xs = cells.map((c) => c.index % this.map.width);
+    const ys = cells.map((c) => Math.floor(c.index / this.map.width));
+    const rect = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs) + 1, h: Math.max(...ys) - Math.min(...ys) + 1 };
+    const center = rectCenter(rect);
+    const e: Entity = {
+      id: this.nextId++,
+      owner,
+      kind: 'wall',
+      defId: 'wall',
+      name: 'Erdwall',
+      pos: center,
+      prev: { x: center.x, y: center.y },
+      radius: Math.max(rect.w, rect.h) / 2,
+      hp,
+      maxHp: hp,
+      armor: 'structure',
+      models: 1,
+      modelWounds: hp,
+      toughness,
+      save,
+      evasion: 0,
+      vision: 0,
+      alive: true,
+      bornTick: this.tick,
+      rect,
+      wallCells: cells,
+    };
+    this.insert(e);
+    return e;
+  }
+
   addBuilding(
     owner: PlayerId,
     def: BuildingDef,
@@ -608,6 +651,7 @@ export class World {
     e.alive = false;
     if (e.net && e.net.id !== 0) onNetworkDeath(this, e);
     if (e.kind === 'unit' && killer !== null) this.onUnitDeath(e, killer);
+    if (e.kind === 'wall') removeWall(this, e);
     if (e.kind === 'building') {
       // Gelege: Fällt die Brut, schlüpft es sofort.
       if (e.producer?.clutch && e.producer.clutch.length > 0) releaseClutch(this, e);
@@ -751,6 +795,8 @@ export class World {
       id,
       faction: FACTIONS[faction],
       research: [],
+      labs: [],
+      hq: { intel: 0, market: 0, terrain: 0 },
       energy: this.rules.startEnergy,
       stance: { top: 'hold', mid: 'hold', bottom: 'hold' },
       pendingStance: { top: null, mid: null, bottom: null },

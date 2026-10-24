@@ -2,6 +2,7 @@ import type { BuildingId } from '../data/buildings';
 import type { UnitId } from '../data/units';
 import type { PartId } from '../data/market';
 import type { TerrainId } from '../data/terrain';
+import type { HqPathId } from '../data/hq';
 import type { PlayerId, Route } from './types';
 
 /**
@@ -24,15 +25,20 @@ export type Command =
   | { type: 'selectUnit'; entityId: number; unit: UnitId }
   /** Fabrik eine Stufe hochrüsten: erweitert ihre Einheitenauswahl. */
   | { type: 'upgradeFactory'; entityId: number }
-  /** Kleines Upgrade für die Einheit erforschen, die diese Fabrik gerade baut. */
-  | { type: 'research'; entityId: number; upgrade: string }
+  /**
+   * Upgrade für eine Einheitenart erforschen (seit 24.10. zentral und parallel zur Produktion; gilt für alle
+   * Fabriken). `entityId` ist optional und wird nicht mehr gebraucht.
+   */
+  | { type: 'research'; upgrade: string; entityId?: number }
+  /** HQ-Zweig eine Stufe ausbauen (Aufklärung, Markt, Gelände – siehe data/hq.ts). */
+  | { type: 'hqUpgrade'; path: HqPathId }
   /** Haltung einer Route: halten (an der Gebietsgrenze) oder vorstoßen (bis zum gegnerischen HQ). Greift verzögert. */
   | { type: 'setStance'; route: Route; stance: 'defend' | 'hold' | 'push' }
   | { type: 'castWall'; x: number; y: number; vertical: boolean }
   /** Scheinbestellung am Markt: treibt den Preis eines Bauteils für eine Weile hoch. */
   | { type: 'order'; part: PartId }
-  /** Eine Kachel im eigenen Einflussgebiet gegen eine andere Bodenart tauschen. */
-  | { type: 'swapTerrain'; x: number; y: number; terrain: TerrainId }
+  /** Eine Fläche gegen eine andere Bodenart tauschen (3×3; Schlucht 2×4, `vertical` = hochkant). */
+  | { type: 'swapTerrain'; x: number; y: number; terrain: TerrainId; vertical?: boolean }
   /** Täuschung: eigene Fabrik zeigt dem Gegner eine Weile einen anderen Typ und eine andere Route. */
   | { type: 'disguise'; entityId: number; as: BuildingId; route: Route }
   /** Vorbereitungsphase (nur vor dem ersten Tick): 3×3-Fläche in der eigenen Hälfte umgestalten. */

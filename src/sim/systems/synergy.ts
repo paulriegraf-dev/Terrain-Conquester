@@ -10,8 +10,8 @@ import { currentModelWounds } from './combat';
 
 /**
  * Terra-Former: Lane-Synergien (Entwurf des Nutzers, 23.10.). Eine Lane (oberes, mittleres, unteres Kartendrittel)
- * gilt als „X“, wenn dort mindestens rules.synergy.laneMin eigene geformte Kacheln liegen und X davon den größten
- * Anteil hat. **Zwei Lanes gleich** ergeben die Grundwirkung von X; die dritte Lane (anderer Boden) färbt sie
+ * „hat“ Boden X, wenn dort mindestens rules.synergy.laneMin eigene geformte Kacheln X liegen (seit 24.10. muss X nicht
+ * mehr vorherrschen). **Zwei Lanes mit X** ergeben die Grundwirkung von X; die dritte Lane (anderer Boden) färbt sie
  * (20 Kombinationen). **Alle drei gleich**: Grundwirkung verstärkt (× rules.synergy.triple). Keine 1+1-Synergien.
  *
  * | Doppel | Grundwirkung | Färbungen durch die dritte Lane |
@@ -82,29 +82,34 @@ export function computeSynergy(world: World, p: PlayerId): SynergyState {
     const t = g.terrain[i]!;
     counts[lane]!.set(t, (counts[lane]!.get(t) ?? 0) + 1);
   }
-  const lanes = counts.map((c) => {
-    let total = 0;
+  const min = world.rules.synergy.laneMin;
+  const n = (lane: number, id: TerrainId): number => counts[lane]!.get(TERRAIN_INDEX[id]) ?? 0;
+  // Anzeige: vorherrschender Boden je Lane (ab laneMin Kacheln)
+  const lanes = counts.map((_, lane) => {
     let best: TerrainId | null = null;
-    let bestN = 0;
-    for (const id of SYNERGY_GROUNDS) {
-      const n = c.get(TERRAIN_INDEX[id]) ?? 0;
-      total += n;
-      if (n > bestN) {
-        bestN = n;
-        best = id;
-      }
-    }
-    return total >= world.rules.synergy.laneMin ? best : null;
+    let bestN = min - 1;
+    for (const id of SYNERGY_GROUNDS) if (n(lane, id) > bestN) { bestN = n(lane, id); best = id; }
+    return best;
   }) as [TerrainId | null, TerrainId | null, TerrainId | null];
+  // 24.10. (Wunsch: Synergien möglichst oft aktiv): Eine Lane „hat“ Boden X, sobald dort mindestens laneMin eigene
+  // Kacheln X liegen – X muss nicht vorherrschen. Wechselnde Mehrheiten (Terraformer formen auch Boden anderer
+  // Linien um) schalten die Synergie so nicht mehr dauernd ab. Mehrere Kandidaten: der mit den meisten Kacheln.
+  let base: TerrainId | null = null;
+  let baseLanes: number[] = [];
+  let baseTotal = -1;
   for (const id of SYNERGY_GROUNDS) {
-    const same = lanes.filter((l) => l === id).length;
-    if (same === 3) return { lanes, base: id, accent: null, triple: true };
-    if (same === 2) {
-      const other = lanes.find((l) => l !== id) ?? null;
-      return { lanes, base: id, accent: other, triple: false };
-    }
+    const has = [0, 1, 2].filter((lane) => n(lane, id) >= min);
+    if (has.length < 2) continue;
+    const total = has.reduce((sum, lane) => sum + n(lane, id), 0) + (has.length === 3 ? 10000 : 0);
+    if (total > baseTotal) { baseTotal = total; base = id; baseLanes = has; }
   }
-  return { lanes, base: null, accent: null, triple: false };
+  if (!base) return { lanes, base: null, accent: null, triple: false };
+  if (baseLanes.length === 3) return { lanes, base, accent: null, triple: true };
+  const third = [0, 1, 2].find((lane) => !baseLanes.includes(lane))!;
+  let accent: TerrainId | null = null;
+  let accentN = min - 1;
+  for (const id of SYNERGY_GROUNDS) if (id !== base && n(third, id) > accentN) { accentN = n(third, id); accent = id; }
+  return { lanes, base, accent, triple: false };
 }
 
 /** Ist bei Spieler p die Grundwirkung `base` (und ggf. die Färbung `accent`) aktiv? */

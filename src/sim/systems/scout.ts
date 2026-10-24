@@ -5,6 +5,7 @@ import { zoneAt } from '../map';
 import type { PlayerId, Route } from '../types';
 import { ROUTES } from '../types';
 import type { World } from '../world';
+import { autoScoutSeconds, scoutCost, scoutDelay, scoutNamesUnits } from './hq';
 
 export type ScoutArmor = 'infantry' | 'light' | 'heavy';
 
@@ -15,6 +16,8 @@ export interface ScoutRoute {
   level: 0 | 1 | 2 | 3;
   /** Vorherrschende Panzerung (null = keine Truppen). */
   armor: ScoutArmor | null;
+  /** Häufigste Einheit (nur mit „Typenanalyse“, HQ-Zweig Aufklärung; sonst null). */
+  unit: UnitId | null;
 }
 
 export interface ScoutReport {
@@ -32,11 +35,11 @@ export const SCOUT_LEVELS = ['keine', 'wenige', 'einige', 'viele'] as const;
  * beim Losschicken – wer danach umlenkt, ist darin noch nicht zu sehen.
  */
 export function checkScout(world: World, p: PlayerId): CommandResult {
-  const rules = world.rules.scout;
   const st = world.players[p].scout;
   if (st.pending) return { ok: false, reason: 'Späher sind schon unterwegs' };
   if (world.tick < st.readyTick) return { ok: false, reason: `Späher erst wieder in ${Math.ceil((st.readyTick - world.tick) / world.tps)} s` };
-  if (world.players[p].energy < rules.cost) return { ok: false, reason: `Zu wenig Energie (${rules.cost} nötig)` };
+  const cost = scoutCost(world, p);
+  if (world.players[p].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true };
 }
 
@@ -45,17 +48,24 @@ export function orderScout(world: World, p: PlayerId): CommandResult {
   if (!check.ok) return check;
   const rules = world.rules.scout;
   const player = world.players[p];
-  player.energy -= rules.cost;
-  player.stats.energySpent += rules.cost;
+  const cost = scoutCost(world, p);
+  player.energy -= cost;
+  player.stats.energySpent += cost;
   player.stats.scouts++;
   player.scout.readyTick = world.tick + Math.round(rules.cooldownSeconds * world.tps);
-  player.scout.pending = { dueTick: world.tick + Math.round(rules.delaySeconds * world.tps), report: snapshot(world, p) };
+  player.scout.pending = { dueTick: world.tick + Math.round(scoutDelay(world, p) * world.tps), report: snapshot(world, p) };
   return { ok: true };
 }
 
 /** Angekommene Berichte zustellen. */
 export function updateScout(world: World): void {
   for (const player of world.players) {
+    // Lagezentrum (HQ-Zweig Aufklärung, Stufe 5): alle n Sekunden ein Bericht von selbst, sofort und kostenlos.
+    const auto = autoScoutSeconds(world, player.id);
+    if (auto > 0 && world.tick % Math.round(auto * world.tps) === 0 && !player.scout.pending) {
+      player.scout.last = snapshot(world, player.id);
+      world.emit({ type: 'scout', owner: player.id });
+    }
     const pending = player.scout.pending;
     if (!pending || world.tick < pending.dueTick) continue;
     player.scout.last = pending.report;
@@ -67,10 +77,10 @@ export function updateScout(world: World): void {
 /** Gegnerische Truppen je Route (nach ihrem Marschbefehl, sonst nach Kartendrittel). */
 export function snapshot(world: World, p: PlayerId): ScoutReport {
   const rules = world.rules.scout;
-  const acc: Record<Route, { strength: number; armor: Record<ScoutArmor, number> }> = {
-    top: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 } },
-    mid: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 } },
-    bottom: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 } },
+  const acc: Record<Route, { strength: number; armor: Record<ScoutArmor, number>; units: Map<UnitId, number> }> = {
+    top: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 }, units: new Map() },
+    mid: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 }, units: new Map() },
+    bottom: { strength: 0, armor: { infantry: 0, light: 0, heavy: 0 }, units: new Map() },
   };
   for (const e of world.entities) {
     if (!e.alive || e.kind !== 'unit' || e.owner === p) continue;
@@ -78,6 +88,8 @@ export function snapshot(world: World, p: PlayerId): ScoutReport {
     const s = UNITS[e.defId as UnitId].supply ?? 1;
     acc[route].strength += s;
     if (e.armor === 'infantry' || e.armor === 'light' || e.armor === 'heavy') acc[route].armor[e.armor] += s;
+    const id = e.defId as UnitId;
+    acc[route].units.set(id, (acc[route].units.get(id) ?? 0) + s);
   }
   const routes = {} as Record<Route, ScoutRoute>;
   for (const r of ROUTES) {
@@ -85,7 +97,12 @@ export function snapshot(world: World, p: PlayerId): ScoutReport {
     const level = a.strength < 0.5 ? 0 : a.strength < rules.some ? 1 : a.strength < rules.many ? 2 : 3;
     let armor: ScoutArmor | null = null;
     for (const k of ['infantry', 'light', 'heavy'] as const) if (a.armor[k] > 0 && (!armor || a.armor[k] > a.armor[armor])) armor = k;
-    routes[r] = { strength: a.strength, level, armor };
+    let unit: UnitId | null = null;
+    if (scoutNamesUnits(world, p)) {
+      let best = 0;
+      for (const [id, n] of [...a.units].sort((x, y) => (x[0] < y[0] ? -1 : 1))) if (n > best + 1e-9) { best = n; unit = id; }
+    }
+    routes[r] = { strength: a.strength, level, armor, unit };
   }
   return { tick: world.tick, routes };
 }

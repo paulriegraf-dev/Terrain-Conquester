@@ -55,6 +55,15 @@ describe('Terra-Former: Lane-Synergien', () => {
     lane(w3, [4, 5], 'mud');
     lane(w3, [7, 8], 'rubble');
     assert.equal(computeSynergy(w3, 0).base, null, 'keine 1+1-Synergien');
+
+    // Seit 24.10.: X muss in der Lane nicht vorherrschen – genug Kacheln reichen.
+    const w4 = new World({ map: openMap, seed: 1, ...tf });
+    lane(w4, [0, 1], 'forest');
+    lane(w4, [2], 'mud', 2, 19);
+    lane(w4, [7, 8], 'forest');
+    const s4 = computeSynergy(w4, 0);
+    assert.equal(s4.lanes[0], 'mud', 'oben herrscht Matsch vor');
+    assert.equal(s4.base, 'forest', 'trotzdem Wald-Doppel');
   });
 
   it('Schneesturm: Gegner auf eigenem Schnee werden mit jeder Sekunde langsamer – bis 60 %', () => {
