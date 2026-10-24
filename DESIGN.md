@@ -1634,7 +1634,7 @@ Sie sollen Überwindung kosten – man soll sich zweimal überlegen, ob man den 
 
 ### Konter-Tafel und Schaden nach der Runde (24.10. abends)
 
-- **Konter-Tafel auf dem Spielfeld (optional):** Taste H oder „Konter“ unter Ansicht blendet oben rechts eine kleine Konter-Matrix ein – deine Einheiten gegen die des Gegners, nur Farben (grün schnell … rot langsam), umschaltbar auf „Gegner → du“. Der Browser merkt sich an/aus und die Richtung. Gleiche Berechnung wie die Übersicht (F1).
+- **Konter-Tafel auf dem Spielfeld (optional):** Taste H oder „Konter“ unter Ansicht blendet oben rechts eine kleine Konter-Matrix ein – deine Einheiten gegen die des Gegners, nur Farben (grün stark … rot schwach), umschaltbar auf „Gegner → du“. Statt Kürzeln zeigt sie die Einheiten so, wie sie auf dem Spielfeld aussehen (Form, Spielerfarbe), die Legende sagt „stark · gut · mäßig · schwach“; an der Kopfzeile lässt sie sich verschieben. Der Browser merkt sich an/aus, Richtung und Stelle. Gleiche Berechnung wie die Übersicht (F1).
 - **Schaden nach der Runde:** Die Rundenend-Karte zeigt neben der Statistik je Seite den Gesamtschaden, welche eigenen Einheiten am meisten Schaden gemacht haben und woran er ging (Top 5, mit Balken). Die Simulation zählt dafür je Spieler `damageBy` (eigene Einheitenart) und `damageTo` (getroffene Art).
 - **Gespeicherte Partien:** Liegen im Ordner `partien/` (erste: Multiplayer auf Felsenpass, Technoclan gegen Myriaden, 17 Minuten).
 

@@ -1,4 +1,5 @@
 import { ARMOR_NAMES } from '../data/combat';
+import { unitIcon } from '../render/unitIcon';
 import { FACTIONS, FACTION_IDS, buildingIds } from '../data/factions';
 import type { FactionId } from '../data/factions';
 import { MOVE_PROFILES, MOVE_PROFILE_IDS } from '../data/movement';
@@ -122,6 +123,8 @@ const LIFE_TEXT = ['wenig', 'mittel', 'viel', 'sehr viel'] as const;
 function lifeLevel(hp: number): 0 | 1 | 2 | 3 {
   return hp <= 100 ? 0 : hp <= 200 ? 1 : hp <= 320 ? 2 : 3;
 }
+/** Kurzfassung für die Konter-Tafel auf dem Spielfeld (Wunsch 24.10.: „stark / schwach“ statt Zeiten). */
+const STRENGTH_TEXT = ['schwach', 'mäßig', 'gut', 'stark'] as const;
 const COUNTER_TEXT = ['langsam (über 32 s)', 'mäßig (bis 32 s)', 'schnell (bis 16 s)', 'sehr schnell (bis 8 s)'] as const;
 
 /** Kleiner Balken unter einer Zahl: Anteil am Höchstwert aller Einheiten (zum schnellen Vergleichen). */
@@ -174,24 +177,25 @@ function counterLevel(a: UnitDef, target: UnitDef): 0 | 1 | 2 | 3 {
  * Konter-Matrix (Zeilen = Angreifer, Spalten = Ziele), nur Farben. `compact`: kleine Fassung für die
  * Konter-Tafel auf dem Spielfeld (Kürzel statt Namen).
  */
-export function counterMatrix(attacker: FactionId, target: FactionId, compact = false): string {
+export function counterMatrix(attacker: FactionId, target: FactionId, compact = false, colors?: [string, string]): string {
   const mine = factionEntries(attacker).filter((e) => UNITS[e.unit].weapon);
   const theirs = factionEntries(target);
   const head = theirs.map((e) => {
     const u = UNITS[e.unit];
     const tip = escapeHtml(`${u.name} · ${ARMOR_NAMES[u.armor]}`);
     return compact
-      ? `<th title="${tip}"><span class="cx-glyph cx-glyph-s" data-f="${target}">${escapeHtml(u.letter)}</span></th>`
+      ? `<th title="${tip}"><img class="cx-icon" alt="${escapeHtml(u.name)}" src="${unitIcon(e.unit, colors?.[1])}"></th>`
       : `<th class="cx-vert" title="${tip}"><span class="cx-armor-text" data-a="${u.armor}">${escapeHtml(u.name)}</span></th>`;
   }).join('');
   const rows = mine.map(({ unit }) => {
     const a = UNITS[unit];
     const cells = theirs.map(({ unit: t }) => {
       const l = counterLevel(a, UNITS[t]);
-      return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${UNITS[t].name}: ${COUNTER_TEXT[l]}${a.kamikaze ? ' (eine Explosion)' : ''}`)}"></td>`;
+      const word = compact ? STRENGTH_TEXT[l] : COUNTER_TEXT[l];
+      return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${UNITS[t].name}: ${word}${a.kamikaze ? ' (eine Explosion)' : ''}`)}"></td>`;
     }).join('');
     const label = compact
-      ? `<span class="cx-glyph cx-glyph-s" data-f="${attacker}">${escapeHtml(a.letter)}</span>`
+      ? `<img class="cx-icon" alt="${escapeHtml(a.name)}" src="${unitIcon(unit, colors?.[0])}">`
       : `<span class="cx-glyph" data-f="${attacker}">${escapeHtml(a.letter)}</span>${escapeHtml(a.name)} <span class="cx-armor" data-a="${a.armor}">${ARMOR_NAMES[a.armor].slice(0, 1)}</span>`;
     return `<tr><th scope="row" title="${escapeHtml(`${a.name}: ${a.role}`)}">${label}</th>${cells}</tr>`;
   }).join('');

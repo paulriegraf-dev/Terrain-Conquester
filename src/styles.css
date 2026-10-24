@@ -762,3 +762,20 @@ body.start-mode .sp-fields { gap: 7px; }
 .dmg-bar { height: 5px; background: var(--raise); border-radius: 2px; overflow: hidden; }
 .dmg-bar i { display: block; height: 100%; background: var(--brass); }
 .dmg-num { font-family: var(--font-data); font-size: 0.7rem; color: var(--muted); text-align: right; }
+/* Konter-Tafel größer, verschiebbar, mit Einheitenbildern (24.10.) */
+.counter-board { padding: 8px 10px; touch-action: none; }
+.cb-head { cursor: grab; user-select: none; flex-wrap: wrap; font-size: 0.75rem; }
+.cb-head:active { cursor: grabbing; }
+.cb-grip { color: var(--brass); font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.06em; }
+.cb-legend i[data-l="2"] { background: rgba(123, 211, 137, 0.2); }
+.cb-legend i[data-l="1"] { background: rgba(240, 184, 74, 0.3); }
+.cx-icon { display: block; width: 22px; height: 22px; image-rendering: auto; }
+.cx-mini .cx-dot { min-width: 24px; width: 24px; height: 24px; border: 2px solid rgba(13, 19, 16, 0.9); }
+.cx-mini thead th { padding: 0 1px 3px; }
+.cx-mini tbody th { padding-right: 4px; }
+.cx-mini .cx-r[data-l="3"] { background: rgba(123, 211, 137, 0.55); }
+.cx-mini .cx-r[data-l="2"] { background: rgba(123, 211, 137, 0.22); }
+.cx-mini .cx-r[data-l="1"] { background: rgba(240, 184, 74, 0.3); }
+.cx-mini .cx-r[data-l="0"] { background: rgba(255, 95, 109, 0.35); }
+.cb-legend i[data-l="3"] { background: rgba(123, 211, 137, 0.55); }
+.cb-legend i[data-l="2"] { background: rgba(123, 211, 137, 0.22); }

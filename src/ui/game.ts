@@ -33,6 +33,7 @@ import { counterLine } from '../sim/counters';
 import { SITE_NAMES } from '../sim/systems/sites';
 import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
+import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
 import { Hud } from './hud';
 import { commandsFor } from './commands';
@@ -128,7 +129,7 @@ export class Game {
   private nextSnapshot = 0;
   private lastSaved: SavedMatch | null = null;
   /** Konter-Tafel auf dem Spielfeld (optional, Wunsch 24.10.): an/aus und Richtung, gemerkt im Browser. */
-  private counterBoard = { on: false, flip: false };
+  private counterBoard: { on: boolean; flip: boolean; x?: number; y?: number } = { on: false, flip: false };
   private counterBoardKey = '';
 
   constructor(
@@ -143,12 +144,13 @@ export class Game {
     this.titleFx = fx ? new TitleFx(fx) : null;
     try {
       const cb = JSON.parse(localStorage.getItem('tc-counter-board') ?? 'null') as { on?: boolean; flip?: boolean } | null;
-      if (cb) this.counterBoard = { on: !!cb.on, flip: !!cb.flip };
+      if (cb) this.counterBoard = { on: !!cb.on, flip: !!cb.flip, x: (cb as { x?: number }).x, y: (cb as { y?: number }).y };
     } catch {
       /* ohne Speicher: aus */
     }
     this.bindInput();
     this.bindLobbyInputs();
+    this.bindCounterBoardDrag();
     new ResizeObserver(() => this.resize()).observe(frameEl);
     // Netz: Laufzeit messen – und weiterrechnen, wenn der Tab im Hintergrund liegt (dort ruht requestAnimationFrame).
     window.setInterval(() => this.netTick(performance.now()), 250);
@@ -1610,6 +1612,45 @@ export class Game {
     }
   }
 
+  /** Konter-Tafel mit der Maus verschieben (an der Kopfzeile ziehen); die Stelle merkt sich der Browser. */
+  private bindCounterBoardDrag(): void {
+    const el = this.doc.getElementById('counter-board');
+    const head = el?.querySelector<HTMLElement>('.cb-head');
+    if (!el || !head) return;
+    let start: { px: number; py: number; x: number; y: number } | null = null;
+    const place = (x: number, y: number): void => {
+      const frame = this.frameEl.getBoundingClientRect();
+      const nx = Math.max(0, Math.min(frame.width - el.offsetWidth, x));
+      const ny = Math.max(0, Math.min(frame.height - el.offsetHeight, y));
+      el.style.left = `${nx}px`;
+      el.style.top = `${ny}px`;
+      el.style.right = 'auto';
+      this.counterBoard.x = nx;
+      this.counterBoard.y = ny;
+    };
+    head.addEventListener('pointerdown', (ev) => {
+      if ((ev.target as HTMLElement).closest('button')) return;
+      ev.preventDefault();
+      start = { px: ev.clientX, py: ev.clientY, x: el.offsetLeft, y: el.offsetTop };
+      head.setPointerCapture(ev.pointerId);
+    });
+    head.addEventListener('pointermove', (ev) => {
+      if (start) place(start.x + ev.clientX - start.px, start.y + ev.clientY - start.py);
+    });
+    const end = (): void => {
+      if (!start) return;
+      start = null;
+      this.saveCounterBoard();
+    };
+    head.addEventListener('pointerup', end);
+    head.addEventListener('pointercancel', end);
+    this.applyCounterBoardPos = (): void => {
+      if (this.counterBoard.x !== undefined && this.counterBoard.y !== undefined) place(this.counterBoard.x, this.counterBoard.y);
+    };
+  }
+
+  private applyCounterBoardPos: () => void = () => {};
+
   private saveCounterBoard(): void {
     try {
       localStorage.setItem('tc-counter-board', JSON.stringify(this.counterBoard));
@@ -1625,8 +1666,10 @@ export class Game {
     const overlay = !this.doc.getElementById('end-overlay')!.hidden || !this.doc.getElementById('start-overlay')!.hidden;
     const show = this.counterBoard.on && mode !== 'demo' && !this.titleOpen && !overlay;
     (this.doc.getElementById('layer-counters') as HTMLElement).setAttribute('aria-pressed', String(this.counterBoard.on));
+    const wasHidden = el.hidden;
     el.hidden = !show;
     if (!show) return;
+    if (wasHidden) requestAnimationFrame(() => this.applyCounterBoardPos());
     const me = this.session.human;
     const mine = this.session.factions[me];
     const theirs = this.session.factions[otherPlayer(me)];
@@ -1634,7 +1677,11 @@ export class Game {
     if (key === this.counterBoardKey) return;
     this.counterBoardKey = key;
     this.doc.getElementById('cb-flip')!.textContent = this.counterBoard.flip ? 'Gegner → du' : 'Du → Gegner';
-    this.doc.getElementById('cb-body')!.innerHTML = this.counterBoard.flip ? counterMatrix(theirs, mine, true) : counterMatrix(mine, theirs, true);
+    const myColor = PALETTE.player[me];
+    const theirColor = PALETTE.player[otherPlayer(me)];
+    this.doc.getElementById('cb-body')!.innerHTML = this.counterBoard.flip
+      ? counterMatrix(theirs, mine, true, [theirColor, myColor])
+      : counterMatrix(mine, theirs, true, [myColor, theirColor]);
   }
 
   /** Partie im Browser speichern (Befehle, Startwert, Lagebilder) – für später: Replays, Fehlersuche, KI-Training. */
