@@ -278,7 +278,9 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     ],
     // 22.10.: Fabriken 20 % schneller – wenige, teure Einheiten, aber zügiger Nachschub. Mit der Lebensuhr der
     // Myriaden ergab das im Test 25 : 23 (vorher 20 : 28; ohne Lebensuhr 10 : 38).
-    productionSpeed: 1.2,
+    // 24.10.: ein Drittel schneller (≈ 1,33). Der Technoclan war nach dem Umbau die schwächste Fraktion; mit dem
+    // schwächeren Verspotter stand es Technoclan–Myriaden 31 : 37 und Technoclan–Terra-Former 30 : 31 (je 72 Partien).
+    productionSpeed: 4 / 3,
     network: true,
     hero: { unit: 'commander', cost: 200, respawnSeconds: 45, leadsWaves: true },
   },

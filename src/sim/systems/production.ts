@@ -42,7 +42,7 @@ function producePlayer(world: World, owner: PlayerId): void {
       pr.route = pr.pendingRoute;
       pr.pendingRoute = null;
     }
-    if (pr.paused || pr.job) {
+    if (pr.paused || pr.job || (world.rules.researchPause && researchBusy(world, e))) {
       // Pausiert oder im Umbau (Umrüsten, Stufe, Forschung): keine Produktion.
       pr.blockedBy = 'none';
       continue;
@@ -120,4 +120,16 @@ export function spawnPoint(world: World, building: Entity, route: Route, profile
     best.y += oy;
   }
   return best;
+}
+
+/** Test-Schalter researchPause: Forscht der Spieler an der Einheit dieser Fabrik, steht die erste solche Fabrik still. */
+function researchBusy(world: World, building: Entity): boolean {
+  const p = world.players[building.owner];
+  if (p.labs.length === 0) return false;
+  const unit = building.producer!.unit;
+  if (!p.labs.some((l) => p.faction.upgrades.find((u) => u.id === l.upgrade)?.unit === unit)) return false;
+  for (const e of world.entities) {
+    if (e.alive && e.owner === building.owner && e.producer && e.producer.unit === unit) return e === building;
+  }
+  return false;
 }

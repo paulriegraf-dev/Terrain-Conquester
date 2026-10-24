@@ -405,8 +405,12 @@ const RAW: Record<UnitId, UnitInput> = {
     recycle: { radius: 5, unit: 'drone' },
     hero: true,
     shape: 'diamond', letter: 'Ω', role: 'Held: Gegner, die in seiner Nähe fallen, werden zu Myr-Drohnen',
-  },  taunter: {
-    id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 300, toughness: 8, save: 4,
+  },
+  // 24.10.: 100 statt 300 Leben. Geworfene Verspotter landen mitten in der gegnerischen Linie und schluckten im
+  // Spätspiel über die Hälfte des Technoclan-Schadens (Schadens-Diagnose). Mit 100 Leben: Terra-Former gegen
+  // Myriaden 34 : 28 statt 13 : 53, Technoclan gegen Myriaden 17 : 54 statt 8 : 62 (je 72 Partien).
+  taunter: {
+    id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 100, toughness: 8, save: 4,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.5, vision: 5, spawnInterval: 0, supply: 0.5,
     weapon: { shots: 1, cooldown: 2, range: 1.5, skill: 4, strength: 5, ap: 0, damage: 10, type: 'rifle' },
     taunt: { radius: 3 }, expires: 60,

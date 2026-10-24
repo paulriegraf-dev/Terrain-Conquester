@@ -70,3 +70,30 @@ export const HQ_PATHS: Readonly<Record<HqPathId, HqPathDef>> = {
 };
 
 export const HQ_PATH_IDS: readonly HqPathId[] = ['intel', 'market', 'terrain'];
+
+/**
+ * Zahlen der Wirkungen (für Simulationen veränderbar). Arrays: Wert je erreichter Stufe 0–5.
+ */
+export const HQ_FX = {
+  scoutDiscount: 10,
+  scoutDelay: 5,
+  structureVision: 3,
+  disguiseFactor: 2,
+  autoScoutSeconds: 20,
+  orderDiscount: 15,
+  extraOrders: 1,
+  /** Lieferverträge: Anteil der Preisbremse, der bei den eigenen Fabriken ankommt. */
+  priceBrake: 0.5,
+  /** Großbestellung: Preisschub und Dauer. */
+  orderStrength: 2,
+  orderSeconds: 45,
+  /** Börsenmacht. */
+  income: 1.15,
+  maxEnergy: 200,
+  gorges: [0, 2, 2, 3, 3, 4] as number[],
+  gorgeSeconds: 4,
+  shaping: 2 / 3,
+  extraWalls: [0, 0, 1, 1, 3, 3] as number[],
+  wallHp: 1.5,
+  enemyReach: 4,
+};

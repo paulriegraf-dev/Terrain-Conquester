@@ -35,7 +35,7 @@ export function shapingBlocked(world: World, p: PlayerId, x: number, y: number):
     if (reach > 0 && nearCell(world, x, y, reach, (j) => controllerAt(world, j) !== owner)) return null;
     return 'Nicht im gegnerischen Gebiet';
   }
-  if (world.map.buildZone[i] === BUILD_ZONE.neutral) return null; // Niemandsland: überall
+  if (world.rules.shapeNoMansLand && world.map.buildZone[i] === BUILD_ZONE.neutral) return null; // Niemandsland: überall
   if (nearCell(world, x, y, SHAPING_REACH, (j) => controllerAt(world, j) === p)) return null;
   return `Nur im eigenen Gebiet, im Niemandsland und bis ${SHAPING_REACH} Kacheln vor die Grenze`;
 }

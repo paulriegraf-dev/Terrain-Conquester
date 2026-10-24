@@ -1,6 +1,8 @@
 import { MOVE_PROFILE_IDS, MOVE_PROFILES } from '../data/movement';
 import { allReachable } from './flowfield';
+import { waypointCells } from './map';
 import type { CellRect } from './types';
+import { ROUTES } from './types';
 import type { World } from './world';
 
 /**
@@ -17,6 +19,16 @@ export function pathsStayOpen(world: World, extra: readonly CellRect[] = []): bo
   const mustReach: CellRect[] = [map.hq[1], ...extra];
   for (const e of world.entities) {
     if (e.alive && e.kind === 'building' && e.rect) mustReach.push(e.rect);
+  }
+  if (world.rules.strictPaths) {
+    // Test-Schalter: wie vor dem 24.10. – alle Außenposten und Routen-Wegpunkte müssen erreichbar bleiben.
+    mustReach.push(...map.pads.map((p) => p.rect));
+    for (const route of ROUTES) {
+      for (const c of waypointCells(map, route)) {
+        const x = c % map.width;
+        mustReach.push({ x, y: (c - x) / map.width, w: 1, h: 1 });
+      }
+    }
   }
   return MOVE_PROFILE_IDS.every((id) => allReachable(world.grid, map.hq[0], mustReach, MOVE_PROFILES[id]));
 }

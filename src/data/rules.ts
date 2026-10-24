@@ -271,6 +271,14 @@ export interface Rules {
   targetFocus: number;
   focusReach: number;
   spotterRange: number;
+  /**
+   * Test-Schalter (24.10., Standard aus): `researchPause` – Forschung legt wie früher eine Fabrik der Einheit still
+   * (die mit der kleinsten ID). `strictPaths` – wie früher müssen alle Routen-Wegpunkte erreichbar bleiben.
+   */
+  researchPause: boolean;
+  strictPaths: boolean;
+  /** Gelände formen und Erdwall im ganzen Niemandsland (24.10.; false = wie vorher nur bis 6 Kacheln vor die Grenze). */
+  shapeNoMansLand: boolean;
   /** So lange (Sekunden) dauert es, bis ein neuer Marschbefehl greift. */
   routeChangeSeconds: number;
   /** Marschbefehl sofort umstellen statt nach der Umstellzeit: kostet so viel Energie. */
@@ -384,6 +392,9 @@ export const RULES: Rules = {
   targetFocus: 0,
   focusReach: 0,
   spotterRange: 0,
+  researchPause: false,
+  strictPaths: false,
+  shapeNoMansLand: true,
   // Pause für alle eigenen Fabriken (22.10.): Je Fabrik nutzte die KI den Eilauftrag in der
   // HQ-Schlacht fast jede Minute an jeder Fabrik – Runden dauerten im Median 22:36 statt 18:00 ohne.
   rushOrder: { perSecond: 1.5, min: 20, cooldownSeconds: 60, perPlayer: true },
