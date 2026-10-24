@@ -25,6 +25,17 @@ Echtzeit-Strategie-Runden (Ziel 13–20 Minuten) mit kostenloser automatischer T
 | `npm run typecheck` | TypeScript prüfen |
 | `npm run check` | Alles zusammen: Typen, Tests, Build |
 
+## Multiplayer (1 gegen 1)
+
+Im Startbildschirm **Multiplayer** wählen:
+
+1. **Raum erstellen** – du bekommst einen Raum-Code und einen Link. Schick den Link deinem Mitspieler (oder er gibt den Code bei „Beitreten“ ein).
+2. In der **Lobby** wählt jeder seine Fraktion (der andere sieht sie). Der Host wählt Karte, Spielbeschleuniger (Patt-Auflöser) und seine Seite und startet.
+3. **Vorbereitung:** Jeder formt verdeckt sein Gelände; die Runde beginnt, wenn beide „Bereit“ drücken.
+4. **Im Spiel:** kein Tempo (immer 1×), der Nebel bleibt an. Pausieren kann nur der Host (Leertaste) – in der Pause lassen sich Einheiten, Fabriken und die Übersicht (F1) ansehen. Das Menü (F10) hält das Spiel nicht an: Aufgeben, Übersicht, Musik, Lautstärke, zurück zum Startbildschirm. Nach der Runde geht es zurück in die Lobby.
+
+Technik: **Lockstep** – beide Rechner rechnen das ganze Spiel selbst und tauschen nur Befehle aus. Die Eingabeverzögerung richtet sich nach dem Ping des Langsameren; alle 2 Sekunden vergleichen beide einen Fingerabdruck des Spielstands. Die Verbindung läuft über WebRTC (PeerJS, Browser zu Browser; die Bibliothek wird beim Öffnen eines Raums von unpkg geladen). Beide brauchen dieselbe Spielversion – am einfachsten die GitHub-Seite. Zum Ausprobieren ohne Internet: „Test: zwei Tabs in diesem Browser“.
+
 ## Steuerung
 
 Unten am Spielfeld sitzt die **Befehlskonsole**: links die Auswahl, in der Mitte die Hinweiszeile, rechts das Befehlsraster. Jeder Knopf zeigt seine Taste, das Raster wechselt mit der Auswahl.
@@ -73,11 +84,12 @@ src/
     commands.ts    die Befehle, über die alles gesteuert wird
   ai/        Gegner-KI – nutzt dieselben Befehle und denselben Nebel wie du
   render/    Debug-Darstellung auf Canvas (wird später durch Pixel-Art ersetzt)
-  ui/        HUD, Befehlsraster (commands.ts), Eingabe, Spielschleife, Replay
+  ui/        HUD, Befehlsraster (commands.ts), Eingabe, Spielschleife, Replay, Lobby, Titelbild (titleFx.ts)
+  net/       Multiplayer: Lockstep, Raum (PeerJS / zwei Tabs), Nachrichten, Spielversion
   match.ts   Partien ohne Bildschirm (Tests, Balance, Replays)
 tests/       automatische Tests
 scripts/     Build, Dev-Server, Balance-Simulation, Fraktions-Duell, Vergleichsläufe (experiment.ts)
-assets/      Musik (wird beim Bauen eingebettet)
+assets/      Musik und Pixel-Grafiken (sprites/technoclan, aus PixelLab/Aseprite) – werden beim Bauen eingebettet
 ```
 
 ```mermaid
@@ -110,4 +122,4 @@ flowchart LR
 
 ## Musik
 
-Musik im Spiel: „8-bit music for game“ (freesound community, Pixabay-Lizenz).
+Musik im Spiel: „8-bit music for game“ (freesound community, Pixabay-Lizenz). Musik an/aus und die Lautstärke stellt jeder bei sich ein (Titelbild und Menü) – im Multiplayer unabhängig voneinander.

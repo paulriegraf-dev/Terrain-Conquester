@@ -14,7 +14,7 @@ const result = await build({
   minify: true,
   write: false,
   legalComments: 'none',
-  loader: { '.mp3': 'dataurl' },
+  loader: { '.mp3': 'dataurl', '.png': 'dataurl' },
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = await readFile('src/styles.css', 'utf8');

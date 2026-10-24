@@ -46,6 +46,8 @@ export interface HudInput {
   paused: boolean;
   /** Gebäude, dessen Verkauf auf Bestätigung wartet (0 = keins). */
   sellArmed: number;
+  /** Multiplayer: kein Tempo, kein Nebel-Schalter; pausieren nur der Host. */
+  online?: { host: boolean } | null;
 }
 
 export interface EndSummary {
@@ -56,6 +58,8 @@ export interface EndSummary {
   sideNames: [string, string];
   canReplay: boolean;
   replayNote: string;
+  /** Multiplayer: „Zurück in die Lobby“ statt „Neue Runde“. */
+  lobby?: boolean;
 }
 
 type ActionHandler = (action: string, data: DOMStringMap, el: HTMLElement) => void;
@@ -152,6 +156,11 @@ export class Hud {
       endSummary: q('end-summary'),
       endStats: q('end-stats'),
       endReplay: q<HTMLButtonElement>('btn-replay'),
+      endAgain: q<HTMLButtonElement>('btn-again'),
+      endLobby: q<HTMLButtonElement>('btn-lobby'),
+      resignButton: q<HTMLButtonElement>('btn-resign'),
+      toTitleButton: q<HTMLButtonElement>('btn-to-title'),
+      spFields: q('sp-fields'),
       endNote: q('end-note'),
     };
 
@@ -268,12 +277,16 @@ export class Hud {
     this.el.unitsBreakdown.textContent = UNIT_IDS.filter((id) => counts[id] > 0).map((id) => `${UNITS[id].name} ${counts[id]}`).join(' · ') || 'noch keine';
 
     // Ansicht
-    for (const btn of this.el.speedGroup.querySelectorAll<HTMLElement>('[data-speed]')) {
+    for (const btn of this.el.speedGroup.querySelectorAll<HTMLButtonElement>('[data-speed]')) {
       const s = Number(btn.dataset.speed);
       btn.setAttribute('aria-pressed', String(s === 0 ? input.paused : !input.paused && s === input.speed));
+      // Multiplayer: kein Tempo; die Pause hat nur der Host.
+      btn.disabled = !!input.online && (s !== 0 || !input.online.host);
+      btn.title = input.online ? (s === 0 ? (input.online.host ? 'Pause für beide (Leertaste) – ihr könnt dabei Einheiten, Fabriken und die Übersicht ansehen' : 'Pausieren kann nur der Host') : 'Im Multiplayer läuft das Spiel immer in 1×') : s === 0 ? 'Pause (Leertaste)' : '';
     }
     this.el.layerFog.setAttribute('aria-pressed', String(view.fog));
-    this.el.layerFog.disabled = view.human === null;
+    this.el.layerFog.disabled = view.human === null || !!input.online;
+    this.el.layerFog.title = input.online ? 'Im Multiplayer bleibt der Nebel an' : '';
     this.el.layerGrid.setAttribute('aria-pressed', String(view.grid));
     this.el.layerVision.setAttribute('aria-pressed', String(view.visionRings));
     this.el.layerInfluence.setAttribute('aria-pressed', String(view.influence));
@@ -297,7 +310,8 @@ export class Hud {
   }
 
   sideNames(session: Session): [string, string] {
-    if (session.mode === 'play') return session.human === 0 ? ['Dein HQ', 'KI-HQ'] : ['KI-HQ', 'Dein HQ'];
+    const other = session.lockstep ? 'Gegner-HQ' : 'KI-HQ';
+    if (session.mode === 'play') return session.human === 0 ? ['Dein HQ', other] : [other, 'Dein HQ'];
     const strat = (p: PlayerId): string => {
       const ai = session.ais.find((a) => a.player === p);
       return ai ? `KI ${AI_STRATEGIES[ai.strategyId].name}` : p === 0 ? 'Links' : 'Rechts';
@@ -582,6 +596,8 @@ export class Hud {
   showStart(
     maps: readonly { id: string; name: string; description: string }[],
     ingame?: { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId },
+    /** Menü während einer Multiplayer-Runde: Das Spiel läuft weiter, nur Aufgeben, Übersicht, Musik. */
+    online = false,
   ): void {
     if (!this.el.overtimeSelect.options.length) {
       this.el.overtimeSelect.innerHTML = OVERTIME_VARIANT_IDS.map((id) => `<option value="${id}">${escapeHtml(OVERTIME_VARIANTS[id].name)}</option>`).join('');
@@ -630,15 +646,21 @@ export class Hud {
       const sideRadio = this.doc.querySelector<HTMLInputElement>(`input[name="opt-side"][value="${ingame.side}"]`);
       if (sideRadio) sideRadio.checked = true;
     }
-    this.el.startEyebrow.textContent = ingame ? 'Pause · Menü' : 'Neue Runde · gegen die KI';
-    this.el.startTitle.textContent = ingame ? 'Runde pausiert' : 'Erobere das Gelände';
-    this.el.startLede.hidden = !!ingame;
+    this.el.startEyebrow.textContent = online ? 'Menü · Multiplayer' : ingame ? 'Pause · Menü' : 'Neue Runde · gegen die KI';
+    this.el.startTitle.textContent = online ? 'Das Spiel läuft weiter' : ingame ? 'Runde pausiert' : 'Erobere das Gelände';
+    this.el.startLede.hidden = !!ingame || online;
+    this.el.spFields.hidden = online;
+    this.el.startButton.hidden = online;
     this.el.startButton.textContent = ingame ? 'Neu starten' : 'Runde starten';
-    this.el.resumeButton.hidden = !ingame;
-    this.el.mainMenuButton.hidden = !ingame;
-    this.el.startFine.textContent = ingame
-      ? 'Neu starten beginnt eine frische Runde mit den Einstellungen oben – gleiche Karte oder eine andere. Aufgeben führt zurück zum Startbildschirm.'
-      : 'Dahinter läuft eine Vorschau: die KI gegen sich selbst.';
+    this.el.resumeButton.hidden = !ingame && !online;
+    this.el.mainMenuButton.hidden = !ingame || online;
+    this.el.resignButton.hidden = !online;
+    this.el.toTitleButton.hidden = !ingame && !online;
+    this.el.startFine.textContent = online
+      ? 'Im Multiplayer hält das Menü das Spiel nicht an – pausieren kann nur der Host (Leertaste). Zurück zum Startbildschirm heißt aufgeben.'
+      : ingame
+        ? 'Neu starten beginnt eine frische Runde mit den Einstellungen oben – gleiche Karte oder eine andere. Aufgeben führt zur Vorschau, der Startbildschirm zur Wahl zwischen KI und Multiplayer.'
+        : 'Dahinter läuft eine Vorschau: die KI gegen sich selbst.';
     this.el.endOverlay.hidden = true;
     this.el.startOverlay.hidden = false;
   }
@@ -685,6 +707,8 @@ export class Hud {
       rows.map(([label, f]) => `<tr><th>${label}</th><td>${num(f(s.stats[0]))}</td><td>${num(f(s.stats[1]))}</td></tr>`).join('') +
       '</tbody>';
     this.el.endReplay.hidden = !s.canReplay;
+    this.el.endAgain.hidden = !!s.lobby;
+    this.el.endLobby.hidden = !s.lobby;
     this.el.endNote.textContent = s.replayNote;
     this.el.endNote.hidden = !s.replayNote;
     this.el.startOverlay.hidden = true;

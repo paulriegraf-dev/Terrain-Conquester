@@ -59,6 +59,11 @@ export class Renderer {
   }
 
   /** Muss das Spielfeld neu ausgelegt werden (Rückraum hat sich geöffnet)? */
+  /** Gezeichnete Zwischenstände verwerfen (z. B. wenn die Welt ausgetauscht wurde). */
+  invalidate(): void {
+    this.terrainKey = '';
+  }
+
   needsLayout(world: World): boolean {
     const v = Renderer.visibleColumns(world);
     return v.x0 !== this.viewX0 || v.cols !== this.viewCols;

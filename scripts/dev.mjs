@@ -10,7 +10,7 @@ const ctx = await context({
   format: 'esm',
   target: 'es2022',
   sourcemap: true,
-  loader: { '.mp3': 'dataurl' },
+  loader: { '.mp3': 'dataurl', '.png': 'dataurl' },
   outfile: 'build/app.js',
   banner: { js: "new EventSource('/esbuild').addEventListener('change', () => location.reload());" },
   logLevel: 'info',

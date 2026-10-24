@@ -12,14 +12,19 @@
 </head>
 <body>
 <div class="title-screen" id="title-screen">
+  <canvas class="title-fx" id="title-fx" aria-hidden="true"></canvas>
   <div class="title-inner">
     <p class="title-kicker">Prototyp · Echtzeit-Strategie ohne Mikro</p>
     <h1 class="title-name"><span>Terrain</span><span class="title-dash">-</span><span>Conquester</span></h1>
     <p class="title-lede">Fabriken setzen, Fronten halten, Gelände formen – und das gegnerische HQ erobern.</p>
     <div class="title-actions">
-      <button type="button" class="btn-primary title-play" id="btn-title-play" data-action="title-play">Spielen <kbd>↵</kbd></button>
-      <button type="button" class="btn" data-action="codex" title="Einheiten, Konter und Gelände auf einen Blick">Übersicht: Einheiten &amp; Gelände</button>
+      <button type="button" class="btn-primary title-play" id="btn-title-play" data-action="title-play">Gegen die KI <kbd>↵</kbd></button>
+      <button type="button" class="btn-primary title-play title-mp" data-action="mp-open">Multiplayer</button>
+    </div>
+    <div class="title-actions title-actions-small">
+      <button type="button" class="btn" data-action="codex" title="Einheiten, Konter und Gelände auf einen Blick">Übersicht: Einheiten &amp; Gelände <kbd>F1</kbd></button>
       <button type="button" class="btn" id="btn-music" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
+      <label class="vol" title="Lautstärke der Musik (nur bei dir)">Lautstärke <input type="range" min="0" max="100" step="5" data-volume aria-label="Lautstärke der Musik"></label>
       <label class="btn title-file">Startmusik wählen…<input type="file" accept="audio/*" id="music-file" hidden></label>
     </div>
     <p class="title-note" id="music-note">Startmusik bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
@@ -87,6 +92,7 @@
             <p class="eyebrow" id="start-eyebrow">Neue Runde · gegen die KI</p>
             <h1 class="card-title" id="start-title">Erobere das Gelände</h1>
             <p class="lede" id="start-lede">Du setzt Fabriken in deine Bauzonen, und sie schicken automatisch Truppen los. Du lenkst sie mit Marschbefehlen, konterst, was du im Nebel entdeckst, und formst das Gelände. Wer das gegnerische HQ zuerst zerstört, gewinnt. Befehle findest du unten am Spielfeld – jeder Knopf zeigt seine Taste.</p>
+            <div class="sp-fields" id="sp-fields">
             <div class="field">
               <label for="opt-map">Karte</label>
               <select id="opt-map"></select>
@@ -124,16 +130,30 @@
                 </div>
               </fieldset>
             </div>
+            </div>
             <div class="btn-row">
               <button type="button" class="btn-primary" id="btn-start" data-action="start">Runde starten</button>
               <button type="button" class="btn" id="btn-resume" data-action="resume" hidden>Weiterspielen <kbd>Esc</kbd></button>
               <button type="button" class="btn" id="btn-mainmenu" data-action="new-round" hidden>Runde aufgeben</button>
+              <button type="button" class="btn" id="btn-resign" data-action="mp-resign" hidden>Aufgeben</button>
+              <button type="button" class="btn" id="btn-to-title" data-action="to-title" hidden>Zurück zum Startbildschirm</button>
               <button type="button" class="btn" data-action="codex" title="Einheiten, Konter und Gelände auf einen Blick (F1)">Übersicht <kbd>F1</kbd></button>
               <button type="button" class="btn" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
+              <label class="vol" title="Lautstärke der Musik (nur bei dir)">Lautstärke <input type="range" min="0" max="100" step="5" data-volume aria-label="Lautstärke der Musik"></label>
             </div>
             <p class="fine" id="start-fine">Dahinter läuft eine Vorschau: die KI gegen sich selbst.</p>
           </div>
         </div>
+
+        <div class="overlay" id="mp-overlay" hidden>
+          <div class="card mp-card" id="mp-card"></div>
+        </div>
+
+        <div class="pause-banner" id="pause-banner" hidden>
+          <span id="pause-text">Pause</span>
+          <button type="button" class="btn-primary" id="pause-resume" data-action="mp-resume">Weiter <kbd>Leertaste</kbd></button>
+        </div>
+        <p class="net-banner" id="net-banner" role="status" hidden></p>
 
         <div class="overlay" id="end-overlay" hidden>
           <div class="card end-card">
@@ -144,7 +164,9 @@
             <p class="fine" id="end-note" hidden></p>
             <div class="btn-row">
               <button type="button" class="btn-primary" id="btn-again" data-action="new-round">Neue Runde</button>
+              <button type="button" class="btn-primary" id="btn-lobby" data-action="mp-lobby" hidden>Zurück in die Lobby</button>
               <button type="button" class="btn" id="btn-replay" data-action="replay">Replay ansehen</button>
+              <button type="button" class="btn" id="btn-end-title" data-action="to-title">Zum Startbildschirm</button>
             </div>
           </div>
         </div>

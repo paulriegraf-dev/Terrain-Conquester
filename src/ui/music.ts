@@ -14,6 +14,7 @@ export type Track = 'menu' | 'game';
 const DB = 'terrain-conquester';
 const STORE = 'music';
 const KEY_ENABLED = 'tc-music-enabled';
+const KEY_VOLUME = 'tc-music-volume';
 
 export class Music {
   private readonly audio: HTMLAudioElement;
@@ -22,12 +23,16 @@ export class Music {
   private menuName: string | null = null;
   private unlocked = false;
   enabled = true;
+  /** Lautstärke 0–1 (Regler; gilt nur auf diesem Rechner – im Multiplayer hat jeder seine eigene). */
+  volume = 0.7;
 
   constructor(doc: Document) {
     this.audio = new Audio();
     this.audio.loop = true;
     try {
       this.enabled = localStorage.getItem(KEY_ENABLED) !== '0';
+      const v = Number(localStorage.getItem(KEY_VOLUME));
+      if (localStorage.getItem(KEY_VOLUME) !== null && Number.isFinite(v)) this.volume = Math.max(0, Math.min(1, v));
     } catch {
       /* ohne Speicher: Musik an */
     }
@@ -56,6 +61,16 @@ export class Music {
     this.enabled = on;
     try {
       localStorage.setItem(KEY_ENABLED, on ? '1' : '0');
+    } catch {
+      /* egal */
+    }
+    this.apply();
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    try {
+      localStorage.setItem(KEY_VOLUME, String(this.volume));
     } catch {
       /* egal */
     }
@@ -114,7 +129,8 @@ export class Music {
     }
     const src = this.srcFor(this.current);
     // Ohne eigene Startmusik läuft im Menü die Spiel-Musik leiser.
-    this.audio.volume = this.current === 'menu' && !this.menuUrl ? 0.25 : 0.45;
+    const base = this.current === 'menu' && !this.menuUrl ? 0.36 : 0.64;
+    this.audio.volume = Math.max(0, Math.min(1, base * this.volume));
     if (this.audio.dataset.src !== src) {
       this.audio.dataset.src = src;
       this.audio.src = src;

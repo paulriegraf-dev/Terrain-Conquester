@@ -1587,6 +1587,20 @@ Wunsch des Nutzers: Die Boni der Terra-Former sollen auf jedem passenden Boden w
 - **Unverändert eigener Boden:** Rufen (2×2-Block selbst geformt), Schlammmonster-Gelege und Lane-Synergien zählen weiter nur, was der Spieler selbst geformt hat. Beim Halten stellen sich Verbände weiter nur im eigenen oder umkämpften Gebiet auf passenden Boden.
 - Simulation: angefangen, auf Wunsch des Nutzers pausiert (erst 54 von 216 Partien, nur 2 von 6 Karten – noch nicht aussagekräftig). Der nächste Lauf (später oder nachts) prüft den Stand mit Koloss 12 s gleich mit.
 
+## Umgesetzt (24.10. abends): Multiplayer (M5 vorgezogen), Startbildschirm, Lautstärke
+
+Wunsch des Nutzers: M5 vorziehen, damit sich das Spiel mit der jetzigen Grafik zu zweit testen lässt.
+
+- **Ablauf:** Startbildschirm → Multiplayer → Raum erstellen (Code + Link) oder beitreten. In der 1-gegen-1-Lobby wählt jeder seine Fraktion (für den anderen sichtbar); der Host wählt Karte, Spielbeschleuniger (Patt-Auflöser) und Seite und startet. Die Vorbereitung läuft verdeckt; die Runde beginnt, wenn beide bereit sind. Nach der Runde zurück in die Lobby.
+- **Lockstep:** Beide rechnen das Spiel selbst, verschickt werden nur Befehle. Jeder Befehl gilt für einen Tick in der Zukunft (Eingabeverzögerung = halber Ping des Langsameren in Ticks + 2, mindestens 2, höchstens 15); ein Tick läuft erst, wenn die Eingaben beider da sind. Alle 2 s ein Fingerabdruck (hashWorld) – weicht er ab, meldet der Lagebericht es. Tests: zwei Sessions mit nachgebauter, schwankender Leitung und KI-Befehlen über `issue` bleiben gleich; Pause, hohe Laufzeit, Abweichungs-Erkennung.
+- **Vorbereitung:** Jeder formt in seiner eigenen Welt; sind beide bereit, wird die Welt neu aufgebaut und bekommt die Platzierungen beider (links zuerst).
+- **Im Multiplayer:** kein Tempo, kein Nebel-Schalter, das Menü hält nichts an. Pausieren nur der Host – die Pause steht in seiner Eingabe für einen Tick, beide halten nach genau diesem Tick an; „Weiter“ nennt denselben Tick. In der Pause bleiben Auswahl, Fabrik-Infos und die Übersicht (F1) bedienbar. Gegen die KI bleibt alles wie bisher (Tempo, Pause, Nebel).
+- **Verbindung:** PeerJS (WebRTC) über den öffentlichen PeerJS-Vermittler (inklusive TURN-Relais), die Bibliothek kommt beim Öffnen eines Raums von unpkg (feste Version 1.5.4). Zum Testen ohne Internet: zwei Tabs im selben Browser (BroadcastChannel). Spielversion = Fingerabdruck der Spielwerte – verschiedene Stände dürfen nicht zusammen spielen.
+- **Grenze:** Beim Lockstep hat jeder Rechner den ganzen Spielstand – wer technisch versiert ist, könnte den Nebel auslesen. Unter Freunden egal.
+- **Startbildschirm:** „Gegen die KI“ oder „Multiplayer“; davor kämpfen die Technoclan-Pixel-Figuren des Nutzers (PixelLab/Aseprite, `assets/sprites/technoclan`) in den beiden Spielerfarben gegeneinander. Menü (F10): „Zurück zum Startbildschirm“.
+- **Startkarte ohne Scrollen:** Hinter der Karte nur noch das Schlachtfeld (Kopfleiste, Konsole und Lageleiste ausgeblendet), die Vorschau läuft im 4×-Tempo; geprüft bei 1920×1080, 1366×768, 1280×650 und 390×844.
+- **Musik:** Lautstärke-Regler (Titelbild und Menü), gespeichert nur in diesem Browser – im Multiplayer stellt jeder seine eigene ein.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
@@ -1596,7 +1610,7 @@ Wunsch des Nutzers: Die Boni der Terra-Former sollen auf jedem passenden Boden w
 - **Danach:** HQ-Erweiterungen wie bei Galactic Forces (Waffenlabor, Panzerung, Versorgung) und Gebäude-Upgrades.
 - **M3 – Grafik:** eigener Grafikstil (z. B. Pixel-Art, Top-down oder 2.5D) als neuer Renderer, dazu Sound.
 - **M4 – Abwechslung:** Fraktionen mit eigenen Einheiten und Bewegungsprofilen, Gebäudeauswahl vor der Runde (Draft) und Kartenereignisse.
-- **M5 – Multiplayer:** Lockstep. Die Simulation ist dafür vorbereitet.
+- **M5 – Multiplayer:** vorgezogen und umgesetzt (24.10. abends), siehe „Umgesetzt (24.10. abends): Multiplayer“. Offen: Test über das echte Internet mit zwei Geräten, Wiedereinstieg nach Verbindungsabbruch, eigener Vermittlungsserver statt des öffentlichen PeerJS-Dienstes.
 - **Spielmodus-Idee: Wellen-Modus** (Wunsch des Nutzers, 24.10. – als zusätzlicher Modus, kein Ersatz):
   - Etwa alle 30 s planen beide Seiten und dürfen eine begrenzte Zahl an Aktionen ausführen. Danach werden die Einheiten gebaut und ziehen auf ihre Lanes.
   - Aufklärung und Täuschung werden zum Kern: Man kontert den Plan des Gegners, bevor die Welle läuft, und schneidet seine Basis Schritt für Schritt ein.

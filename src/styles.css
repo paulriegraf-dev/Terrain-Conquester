@@ -637,3 +637,88 @@ select {
 .cx-f[data-f="myriaden"], .cx-glyph[data-f="myriaden"] { color: #ff8fc2; }
 .cx-f[data-f="terraformer"], .cx-glyph[data-f="terraformer"] { color: #9be37b; }
 .cx-glyph[data-f] { border-color: currentColor; }
+
+/* ---------------------------------------------------------------- Startmodus (24.10.): nur das Schlachtfeld, Karte ohne Scrollen */
+body.start-mode .app { height: 100vh; height: 100dvh; grid-template-rows: minmax(0, 1fr); }
+body.start-mode .topbar,
+body.start-mode .side,
+body.start-mode .console { display: none; }
+body.start-mode .layout { grid-template-columns: minmax(0, 1fr); }
+body.start-mode .stage { grid-template-rows: minmax(0, 1fr); }
+body.start-mode .board-frame { min-height: 0; overflow: hidden; }
+body.start-mode .overlay {
+  position: absolute; inset: 0; place-items: center start; overflow: hidden;
+  padding: clamp(8px, 2.5vw, 28px);
+  background: linear-gradient(90deg, rgba(9, 13, 11, 0.82) 0, rgba(9, 13, 11, 0.45) 38%, rgba(9, 13, 11, 0.08) 70%);
+}
+body.start-mode .card { width: min(440px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45); }
+body.start-mode .start-card, body.start-mode .mp-card { gap: 9px; padding: 16px 18px; }
+body.start-mode .start-card .lede { font-size: var(--step--1); color: var(--muted); }
+body.start-mode .start-card .field { gap: 4px; }
+body.start-mode .start-card .field-note { min-height: 0; font-size: 0.75rem; }
+body.start-mode .start-card .card-title { font-size: var(--step-1); }
+body.start-mode .mode-banner { left: auto; right: 10px; }
+.sp-fields { display: grid; gap: 10px; }
+body.start-mode .sp-fields { gap: 7px; }
+@media (max-height: 760px) {
+  body.start-mode #start-lede, body.start-mode #map-desc, body.start-mode #faction-desc { display: none; }
+}
+@media (max-width: 600px) {
+  body.start-mode .overlay { place-items: end center; background: linear-gradient(0deg, rgba(9, 13, 11, 0.9) 0, rgba(9, 13, 11, 0.5) 55%, transparent); padding: 8px; }
+  body.start-mode .card { width: 100%; }
+}
+
+/* Lautstärke */
+.vol { display: inline-flex; align-items: center; gap: 8px; font-size: var(--step--1); color: var(--muted); }
+.vol input[type="range"] { width: 110px; accent-color: var(--brass); }
+
+/* ---------------------------------------------------------------- Titelbild: Pixel-Gefecht */
+.title-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; }
+.title-inner { position: relative; z-index: 1; }
+.title-actions-small .btn { padding: 6px 12px; }
+.title-mp { background: transparent; color: var(--brass); }
+.title-mp:hover { background: rgba(232, 176, 74, 0.12); }
+
+/* ---------------------------------------------------------------- Multiplayer-Lobby */
+.mp-card .small-lede { font-size: var(--step--1); color: var(--muted); }
+.mp-join { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.mp-label { font-size: var(--step--1); color: var(--muted); }
+.mp-input {
+  min-width: 0; padding: 7px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--raise);
+  font-family: var(--font-data); letter-spacing: 0.18em; text-transform: uppercase;
+}
+.mp-input:focus { border-color: var(--brass); outline: none; }
+.mp-check { display: flex; gap: 8px; align-items: center; font-size: 0.8rem; color: var(--muted); }
+.mp-error { margin: 0; color: var(--bad); font-size: var(--step--1); }
+.mp-code-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.mp-code { font-family: var(--font-display); font-size: 2rem; letter-spacing: 0.12em; color: var(--brass); }
+.mp-link { word-break: break-all; font-family: var(--font-data); }
+.mp-status { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--step--1); }
+.mp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); animation: mp-blink 1.2s infinite; }
+.mp-dot[data-s="ok"] { background: var(--good); animation: none; }
+@keyframes mp-blink { 50% { opacity: 0.3; } }
+.mp-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mp-player { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); }
+.mp-player.me { border-color: var(--brass); }
+.mp-who small { color: var(--muted); font-size: 0.75rem; margin-left: 4px; }
+.mp-faction { font-weight: 600; }
+.mp-faction[data-f="technoclan"] { color: #5cc8ff; }
+.mp-faction[data-f="myriaden"] { color: #ff8fc2; }
+.mp-faction[data-f="terraformer"] { color: #9be37b; }
+.mp-faction[data-f=""] { color: var(--muted); font-weight: 400; }
+.mp-settings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mp-summary { margin: 0; font-size: var(--step--1); color: var(--muted); }
+.mp-summary b { color: var(--text); }
+
+/* Pause (Host) und Netz-Hinweise auf dem Spielfeld */
+.pause-banner {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 3;
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px; max-width: calc(100% - 20px);
+  background: var(--panel); border: 1px solid var(--brass); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: var(--step--1);
+}
+.pause-banner .btn-primary { padding: 5px 12px; }
+.net-banner {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 3; margin: 0;
+  padding: 6px 12px; background: var(--panel); border: 1px solid var(--warn); border-radius: 4px; font-size: var(--step--1); color: var(--warn);
+}

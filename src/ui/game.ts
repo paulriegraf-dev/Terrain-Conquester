@@ -41,6 +41,14 @@ import { createView } from './view';
 import { renderCodex } from './codex';
 import type { CodexState } from './codex';
 import type { ViewState } from './view';
+import { Lockstep } from '../net/lockstep';
+import type { NetMsg, OnlineMatch } from '../net/protocol';
+import { LocalRoom, PeerRoom, newRoomCode, normalizeCode } from '../net/room';
+import type { Room, RoomStatus } from '../net/room';
+import { gameVersion } from '../net/version';
+import { defaultLobbySettings, renderLobby } from './lobby';
+import type { LobbyView } from './lobby';
+import { TitleFx } from './titleFx';
 
 interface FinishedMatch {
   mapId: string;
@@ -92,6 +100,22 @@ export class Game {
   private codexOpen = false;
   private codex: CodexState = { tab: 'units', faction: 'technoclan', enemy: 'myriaden' };
 
+  // ---------------------------------------------------------------- Multiplayer (24.10.)
+  private room: Room | null = null;
+  private lobby: LobbyView = { role: null, status: 'idle', detail: '', code: '', link: '', local: false, settings: defaultLobbySettings(), ping: 0, joinCode: '', copied: false };
+  private lobbyOpen = false;
+  /** In einer Multiplayer-Runde: bin ich Host? */
+  private mp: { host: boolean } | null = null;
+  private netRtt = 0;
+  private netRemoteRtt = 0;
+  private lastPing = 0;
+  private stalledSince = 0;
+  private desyncShown = false;
+  /** Multiplayer-Runde außerhalb der Simulation beendet (Aufgabe, Verbindungsabbruch). */
+  private onlineEnded = false;
+  private shownWorld: World | null = null;
+  private readonly titleFx: TitleFx | null;
+
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly frameEl: HTMLElement,
@@ -100,14 +124,32 @@ export class Game {
     this.renderer = new Renderer(canvas);
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
+    const fx = doc.getElementById('title-fx') as HTMLCanvasElement | null;
+    this.titleFx = fx ? new TitleFx(fx) : null;
     this.bindInput();
+    this.bindLobbyInputs();
     new ResizeObserver(() => this.resize()).observe(frameEl);
+    // Netz: Laufzeit messen – und weiterrechnen, wenn der Tab im Hintergrund liegt (dort ruht requestAnimationFrame).
+    window.setInterval(() => this.netTick(performance.now()), 250);
   }
 
   start(): void {
     this.bindTitle();
     this.startDemo();
     this.hud.setupTimeline(this.session.world.rules);
+    // Einladungslink (…?raum=CODE): gleich in die Lobby und beitreten.
+    const params = new URLSearchParams(location.search);
+    const code = normalizeCode(params.get('raum') ?? '');
+    if (code) {
+      this.closeTitle();
+      this.lobby.local = params.get('lokal') === '1';
+      this.openLobby();
+      this.joinRoom(code);
+    } else {
+      this.titleFx?.start();
+    }
+    // Kleiner Diagnose-Zugang (Multiplayer-Tests, Fehlersuche): Tick und Fingerabdruck der Welt.
+    (window as unknown as { __tc?: unknown }).__tc = { tick: () => this.session.world.tick, hash: () => hashWorld(this.session.world), mode: () => this.session.mode, online: () => !!this.session.lockstep, delay: () => this.session.lockstep?.delay ?? null };
     requestAnimationFrame(this.frame);
   }
 
@@ -115,19 +157,23 @@ export class Game {
 
   private startDemo(): void {
     this.music.play('menu');
+    this.mp = null;
+    this.doc.body.classList.add('start-mode');
     this.session = new Session('demo', pick(MAPS).id, randomSeed(), 'normal');
     // Etwas vorspulen, damit beim Öffnen schon etwas los ist.
     for (let i = 0; i < 100 * this.session.world.tps && !this.session.world.result; i++) this.session.step();
     this.resetView('demo');
     this.hud.clearLog();
     this.hud.log(this.session.world.seconds, 'Vorschau: Die KI spielt gegen sich selbst. Starte eine eigene Runde.', 'info');
-    this.hud.showStart(MAPS);
+    if (this.lobbyOpen) this.renderLobbyCard();
+    else this.hud.showStart(MAPS);
   }
 
   /** `factions` = [deine Fraktion, Fraktion der KI]; `side` = deine Seite (0 links, 1 rechts). */
   private startMatch(mapId: string, level: AiLevel, factions: [FactionId, FactionId], overtime: OvertimeVariant = 'off', side: PlayerId = 0): void {
     const id = mapId === 'random' ? pick(MAPS).id : mapId;
     this.menuOpen = false;
+    this.doc.body.classList.remove('start-mode');
     this.music.play('game');
     const bySide: [FactionId, FactionId] = side === 0 ? factions : [factions[1], factions[0]];
     this.session = new Session('play', id, randomSeed(), level, bySide, undefined, overtime, side);
@@ -144,6 +190,7 @@ export class Game {
     if (!this.lastMatch) return;
     this.replayOf = this.lastMatch;
     const m = this.lastMatch;
+    this.doc.body.classList.remove('start-mode');
     this.music.play('game');
     this.session = new Session('replay', m.mapId, m.seed, m.level, m.factions, m.log, m.overtime, m.human);
     this.resetView('replay');
@@ -167,6 +214,8 @@ export class Game {
     this.endHandled = false;
     this.demoRestartAt = 0;
     this.seenEnemies.clear();
+    this.shownWorld = this.session.world;
+    this.renderer.invalidate();
     this.lastHqHp = this.session.world.hq(this.session.human)?.hp ?? 0;
     this.wallWasReady = true;
     this.resize();
@@ -176,7 +225,7 @@ export class Game {
     const map = this.session?.world.map;
     if (!map) return;
     // Großer Bildschirm: Spielfeld füllt den freien Platz. Kleiner: nur nach Breite (Seite scrollt).
-    const stacked = window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
+    const stacked = !this.doc.body.classList.contains('start-mode') && window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
     this.renderer.resize(this.frameEl.clientWidth, stacked ? Infinity : this.frameEl.clientHeight, this.session.world);
   }
 
@@ -186,8 +235,12 @@ export class Game {
     const dt = Math.min(250, now - (this.lastTime || now));
     this.lastTime = now;
     const tickMs = 1000 / this.session.world.tps;
-    if (!this.paused && !this.menuOpen && !this.session.prepActive && !this.session.world.result) {
-      this.acc += dt * this.speed;
+    // Die Vorschau hinter der Startkarte läuft im Zeitraffer.
+    const speed = this.session.mode === 'demo' ? 4 : this.speed;
+    if (this.session.lockstep) {
+      if (!this.doc.hidden) this.advanceOnline(dt, now);
+    } else if (!this.paused && !this.menuOpen && !this.session.prepActive && !this.session.world.result) {
+      this.acc += dt * speed;
       let steps = 0;
       while (this.acc >= tickMs && steps < 60 && !this.session.world.result) {
         this.session.step();
@@ -197,14 +250,17 @@ export class Game {
       if (steps >= 60) this.acc = 0;
     }
     const world = this.session.world;
+    if (world !== this.shownWorld) this.onWorldSwapped();
     this.processEvents(world);
     this.followSelection(world);
-    const alpha = this.paused || world.result ? 1 : Math.min(1, this.acc / tickMs);
+    const sharedPause = !!this.session.lockstep?.paused;
+    const alpha = this.paused || sharedPause || world.result ? 1 : Math.min(1, this.acc / tickMs);
     // Notfallverlegung: Öffnet sich ein Rückraum, wird die Karte breiter.
     if (this.renderer.needsLayout(world)) this.resize();
     this.renderer.draw(world, alpha, this.view);
-    this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused, sellArmed: this.hudSellArmed }, now);
+    this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused || sharedPause, sellArmed: this.hudSellArmed, online: this.session.lockstep ? { host: !!this.mp?.host } : null }, now);
     this.updateStatusLine(world);
+    this.updateNetUi(now);
     if (world.result && !this.endHandled) this.onEnd(now);
     if (this.demoRestartAt && now >= this.demoRestartAt) {
       this.demoRestartAt = 0;
@@ -391,6 +447,23 @@ export class Game {
       return;
     }
     const duration = clock(result.tick / world.tps);
+    if (this.session.lockstep) {
+      this.saveLastMatch();
+      const me = this.session.human;
+      const won = result.winner === me;
+      const lost = result.winner === otherPlayer(me);
+      this.hud.showEnd({
+        eyebrow: `Multiplayer · ${duration} · ${world.map.def.name}`,
+        title: won ? 'Sieg' : lost ? 'Niederlage' : 'Unentschieden',
+        summary: won ? 'Das HQ deines Gegners ist gefallen.' : lost ? 'Dein HQ ist gefallen.' : 'Beide HQs sind gleichzeitig gefallen.',
+        stats: [world.players[me].stats, world.players[otherPlayer(me)].stats],
+        sideNames: ['Du', 'Gegner'],
+        canReplay: true,
+        replayNote: '',
+        lobby: this.room?.status === 'connected',
+      });
+      return;
+    }
     if (this.session.mode === 'play') {
       const ai = this.session.ais[0]!;
       const strat = AI_STRATEGIES[ai.strategyId];
@@ -533,8 +606,8 @@ export class Game {
     }
     if (key === 'f1') {
       ev.preventDefault();
-      // In der eigenen Runde erst das Menü (pausiert), dann die Übersicht darüber.
-      if (!this.titleOpen && !this.menuOpen && this.session.mode === 'play' && !this.session.world.result) this.toggleMenu();
+      // In der eigenen Runde erst das Menü (pausiert), dann die Übersicht darüber. Im Multiplayer läuft das Spiel weiter.
+      if (!this.titleOpen && !this.menuOpen && this.session.mode === 'play' && !this.session.world.result && !this.session.lockstep) this.toggleMenu();
       this.openCodex();
       return;
     }
@@ -557,10 +630,12 @@ export class Game {
       }
       return;
     }
+    if (this.lobbyOpen) return;
     const handled = ((): boolean => {
       switch (key) {
         case ' ':
-          this.paused = !this.paused;
+          if (this.session.lockstep) this.toggleOnlinePause();
+          else this.paused = !this.paused;
           return true;
         case 'escape':
           this.back();
@@ -569,7 +644,8 @@ export class Game {
           this.onAction('layer', { layer: 'influence' });
           return true;
         case 'n':
-          this.onAction('layer', { layer: 'fog' });
+          if (this.session.lockstep) this.hud.flash('Im Multiplayer bleibt der Nebel an');
+          else this.onAction('layer', { layer: 'fog' });
           return true;
         case 'g':
           this.onAction('layer', { layer: 'grid' });
@@ -617,9 +693,19 @@ export class Game {
     this.titleOpen = false;
     const el = this.doc.getElementById('title-screen');
     if (el) el.hidden = true;
+    this.titleFx?.stop();
+  }
+
+  /** Zurück zum Startbildschirm (Wahl: gegen die KI oder Multiplayer). */
+  private showTitle(): void {
+    this.titleOpen = true;
+    const el = this.doc.getElementById('title-screen');
+    if (el) el.hidden = false;
+    this.titleFx?.start();
   }
 
   private syncMusicButtons(): void {
+    for (const r of this.doc.querySelectorAll<HTMLInputElement>('input[data-volume]')) r.value = String(Math.round(this.music.volume * 100));
     for (const b of this.doc.querySelectorAll<HTMLElement>('[data-action="music-toggle"]')) {
       b.textContent = this.music.enabled ? '♪ Musik an' : '♪ Musik aus';
       b.setAttribute('aria-pressed', String(this.music.enabled));
@@ -654,6 +740,13 @@ export class Game {
   private toggleMenu(): void {
     if (this.menuOpen) {
       this.closeMenu();
+      return;
+    }
+    if (this.lobbyOpen) return;
+    if (this.session.lockstep && !this.session.world.result && !this.onlineEnded) {
+      // Multiplayer: Menü ohne Pause – Aufgeben, Startbildschirm, Übersicht, Musik.
+      this.menuOpen = true;
+      this.hud.showStart(MAPS, undefined, true);
       return;
     }
     if (this.session.mode === 'play' && !this.session.world.result) {
@@ -709,6 +802,46 @@ export class Game {
         break;
       case 'title-play':
         this.closeTitle();
+        if (this.lobbyOpen) this.closeLobby();
+        break;
+      case 'to-title':
+        this.leaveToTitle();
+        break;
+      case 'mp-open':
+        this.closeTitle();
+        this.openLobby();
+        break;
+      case 'mp-host':
+        this.hostRoom();
+        break;
+      case 'mp-join':
+        this.joinRoom(this.lobby.joinCode);
+        break;
+      case 'mp-leave':
+        this.leaveRoom();
+        this.closeLobby();
+        break;
+      case 'mp-copy':
+        void navigator.clipboard?.writeText(this.lobby.link).then(() => {
+          this.lobby.copied = true;
+          this.renderLobbyCard();
+        }).catch(() => this.hud.flash('Kopieren ging nicht – Link bitte markieren und kopieren'));
+        break;
+      case 'mp-start':
+        this.startOnline();
+        break;
+      case 'mp-resume':
+        if (this.mp?.host) this.session.lockstep?.resume();
+        break;
+      case 'mp-resign':
+        if (this.session.lockstep && !this.session.world.result && !this.onlineEnded) {
+          this.room?.send({ k: 'resign' });
+          this.endOnline('Aufgegeben', 'Du hast die Runde aufgegeben.', false);
+        }
+        break;
+      case 'mp-lobby':
+        this.room?.send({ k: 'lobbyReturn' });
+        this.returnToLobby();
         break;
       case 'codex':
         this.openCodex();
@@ -864,6 +997,17 @@ export class Game {
         this.session.issue({ type: 'scout' });
         break;
       case 'prep-ready':
+        if (this.session.lockstep) {
+          if (!this.session.prepActive || this.session.myPrepDone) break;
+          const cmds = this.session.finishPrep();
+          this.room?.send({ k: 'prep', cmds });
+          this.view.swap = null;
+          if (this.session.prepActive) {
+            this.hud.log(0, 'Du bist bereit. Warte, bis dein Gegner sein Gelände geformt hat …', 'info');
+            this.hud.flash('Warte auf deinen Gegner …');
+          }
+          break;
+        }
         if (this.session.prepActive) {
           this.session.finishPrep();
           this.view.prep = false;
@@ -888,6 +1032,10 @@ export class Game {
         break;
       case 'speed': {
         const s = Number(data.speed);
+        if (this.session.lockstep) {
+          if (s === 0) this.toggleOnlinePause();
+          break;
+        }
         if (s === 0) this.paused = !this.paused;
         else {
           this.speed = s;
@@ -896,7 +1044,7 @@ export class Game {
         break;
       }
       case 'layer':
-        if (data.layer === 'fog' && this.view.human !== null) this.view.fog = !this.view.fog;
+        if (data.layer === 'fog' && this.view.human !== null && !this.session.lockstep) this.view.fog = !this.view.fog;
         if (data.layer === 'grid') this.view.grid = !this.view.grid;
         if (data.layer === 'vision') this.view.visionRings = !this.view.visionRings;
         if (data.layer === 'influence') this.view.influence = !this.view.influence;
@@ -920,7 +1068,7 @@ export class Game {
     if (!this.view.swap || human === null) return;
     if (this.view.prep) {
       // Vorbereitung: nur Klicks (kein Ziehen) – jede Fläche ist eine der wenigen Platzierungen.
-      if (!notify) return;
+      if (!notify || this.session.myPrepDone) return;
       const check = checkPrep(this.session.world, human, cell.x, cell.y, this.view.swap.terrain);
       if (check.ok) this.session.prepPlace({ type: 'prepTerrain', x: cell.x, y: cell.y, terrain: this.view.swap.terrain });
       else this.hud.flash(check.reason);
@@ -951,6 +1099,422 @@ export class Game {
 
   private setFlow(profile: MoveProfileId | null): void {
     this.view.flow = profile ? { profile, towardHq: 1 } : null;
+  }
+
+  // ------------------------------------------------------------------ Multiplayer
+
+  /** Lockstep-Schleife: rechnen, solange die Eingaben beider da sind; sonst warten. */
+  private advanceOnline(dt: number, now: number): void {
+    const s = this.session;
+    const ls = s.lockstep;
+    if (!ls || s.prepActive || s.world.result || this.onlineEnded) {
+      this.stalledSince = 0;
+      return;
+    }
+    if (ls.paused) {
+      this.acc = 0;
+      this.stalledSince = 0;
+      return;
+    }
+    const tickMs = 1000 / s.world.tps;
+    this.acc += dt;
+    let steps = 0;
+    let blocked = false;
+    while (this.acc >= tickMs && steps < 60 && !s.world.result) {
+      if (!s.tryStep()) {
+        blocked = true;
+        break;
+      }
+      this.acc -= tickMs;
+      steps++;
+    }
+    if (blocked) {
+      // Nicht beliebig aufstauen – nach dem Warten nur kurz aufholen.
+      this.acc = Math.min(this.acc, tickMs * 8);
+      if (!this.stalledSince) this.stalledSince = now;
+    } else {
+      this.stalledSince = 0;
+    }
+  }
+
+  /** Alle 250 ms: Laufzeit messen (jede Sekunde) und im Hintergrund-Tab weiterrechnen. */
+  private netTick(now: number): void {
+    if (this.room?.status === 'connected' && now - this.lastPing >= 1000) {
+      this.lastPing = now;
+      const ls = this.session.lockstep;
+      if (ls) ls.ping(now);
+      else this.room.send({ k: 'ping', ts: now, rtt: Math.round(this.netRtt) });
+    }
+    if (this.doc.hidden && this.session.lockstep) {
+      const dt = Math.min(2000, now - (this.lastTime || now));
+      this.lastTime = now;
+      this.advanceOnline(dt, now);
+    }
+  }
+
+  /** Die Welt wurde ausgetauscht (Multiplayer: Vorbereitung beider fertig) – Anzeige nachziehen. */
+  private onWorldSwapped(): void {
+    this.shownWorld = this.session.world;
+    this.renderer.invalidate();
+    this.lastSeq = 0;
+    this.acc = 0;
+    this.view.prep = false;
+    this.view.swap = null;
+    this.view.selected = null;
+    this.resize();
+    if (this.session.lockstep && !this.session.prepActive) {
+      this.hud.log(0, 'Beide sind bereit – die Runde beginnt. Wähle unten ein Gebäude (1 2 3) und setz es in eine Bauzone.', 'good');
+    }
+  }
+
+  /** Pause-Banner, Warte-Hinweis, Abweichung. */
+  private updateNetUi(now: number): void {
+    const ls = this.session.lockstep;
+    const banner = this.doc.getElementById('pause-banner')!;
+    const net = this.doc.getElementById('net-banner')!;
+    const paused = !!ls?.paused && !this.onlineEnded && !this.session.world.result;
+    banner.hidden = !paused;
+    if (paused) {
+      this.doc.getElementById('pause-text')!.textContent = this.mp?.host
+        ? 'Pause für beide – Einheiten, Fabriken und Übersicht (F1) bleiben offen.'
+        : 'Der Host hat pausiert – Einheiten, Fabriken und Übersicht (F1) bleiben offen.';
+      (this.doc.getElementById('pause-resume') as HTMLButtonElement).hidden = !this.mp?.host;
+    }
+    let text = '';
+    if (ls && !this.onlineEnded && !this.session.world.result) {
+      if (this.session.prepActive && this.session.myPrepDone) text = 'Warte, bis dein Gegner bereit ist …';
+      else if (this.stalledSince && now - this.stalledSince > 1200) text = 'Warte auf deinen Mitspieler … (Verbindung langsam)';
+      if (ls.desyncAt !== null && !this.desyncShown) {
+        this.desyncShown = true;
+        this.hud.log(this.session.world.seconds, `Achtung: Die Spielstände beider Rechner weichen ab (seit ${clock(ls.desyncAt / this.session.world.tps)}). Bitte melden – das Replay hilft beim Suchen.`, 'bad');
+      }
+    }
+    if (net.textContent !== text) net.textContent = text;
+    net.hidden = !text;
+  }
+
+  private toggleOnlinePause(): void {
+    const ls = this.session.lockstep;
+    if (!ls || this.session.prepActive || this.session.world.result || this.onlineEnded) return;
+    if (!this.mp?.host) {
+      this.hud.flash('Pausieren kann nur der Host');
+      return;
+    }
+    if (ls.paused) ls.resume();
+    else {
+      ls.requestPause();
+      this.hud.flash('Pause kommt gleich – für beide');
+    }
+  }
+
+  private openLobby(): void {
+    this.lobbyOpen = true;
+    this.menuOpen = false;
+    if (this.session.mode !== 'demo') this.startDemo();
+    this.hud.hideOverlays();
+    this.renderLobbyCard();
+  }
+
+  private closeLobby(): void {
+    this.lobbyOpen = false;
+    this.doc.getElementById('mp-overlay')!.hidden = true;
+    if (this.session.mode === 'demo') this.hud.showStart(MAPS);
+  }
+
+  private renderLobbyCard(): void {
+    if (!this.lobbyOpen) return;
+    this.hud.hideOverlays();
+    const card = this.doc.getElementById('mp-card')!;
+    card.innerHTML = renderLobby(this.lobby);
+    this.doc.getElementById('mp-overlay')!.hidden = false;
+  }
+
+  private bindLobbyInputs(): void {
+    const onChange = (ev: Event): void => {
+      const el = ev.target as HTMLInputElement | HTMLSelectElement;
+      if (el.matches('input[data-volume]')) {
+        this.music.setVolume(Number(el.value) / 100);
+        this.syncMusicButtons();
+        return;
+      }
+      const key = el.dataset.mp;
+      if (!key) return;
+      const st = this.lobby.settings;
+      const host = this.room?.role === 'host';
+      switch (key) {
+        case 'code':
+          this.lobby.joinCode = normalizeCode(el.value);
+          return;
+        case 'local':
+          this.lobby.local = (el as HTMLInputElement).checked;
+          return;
+        case 'faction':
+          if (!FACTIONS[el.value as FactionId]) return;
+          if (host) {
+            st.hostFaction = el.value as FactionId;
+            this.sendLobby();
+          } else {
+            st.guestFaction = el.value as FactionId;
+            this.room?.send({ k: 'pick', faction: st.guestFaction });
+          }
+          break;
+        case 'map':
+          if (host) st.mapId = el.value;
+          this.sendLobby();
+          break;
+        case 'overtime':
+          if (host) st.overtime = el.value as typeof st.overtime;
+          this.sendLobby();
+          break;
+        case 'side':
+          if (host) st.hostSide = el.value === '1' ? 1 : 0;
+          this.sendLobby();
+          break;
+        default:
+          return;
+      }
+      if (ev.type === 'change') this.renderLobbyCard();
+    };
+    this.doc.addEventListener('change', onChange);
+    this.doc.addEventListener('input', (ev) => {
+      const el = ev.target as HTMLElement;
+      if (el.matches('input[data-volume]') || (el as HTMLInputElement).dataset.mp === 'code') onChange(ev);
+    });
+    this.doc.addEventListener('keydown', (ev) => {
+      const el = ev.target as HTMLElement;
+      if (ev.key === 'Enter' && (el as HTMLInputElement).dataset?.mp === 'code') {
+        ev.preventDefault();
+        this.lobby.joinCode = normalizeCode((el as HTMLInputElement).value);
+        this.joinRoom(this.lobby.joinCode);
+      }
+    });
+  }
+
+  private makeRoom(role: 'host' | 'guest', code: string): Room {
+    const events = {
+      status: (st: RoomStatus, detail?: string) => this.onRoomStatus(st, detail),
+      message: (m: NetMsg) => this.onNet(m),
+    };
+    return this.lobby.local ? new LocalRoom(role, code, events) : new PeerRoom(role, code, events);
+  }
+
+  private hostRoom(): void {
+    this.leaveRoom();
+    const code = newRoomCode();
+    this.lobby = { ...this.lobby, role: 'host', status: 'connecting', detail: '', code, copied: false, ping: 0, settings: { ...this.lobby.settings, guestFaction: null } };
+    this.lobby.link = `${location.origin}${location.pathname}?raum=${code}${this.lobby.local ? '&lokal=1' : ''}`;
+    this.room = this.makeRoom('host', code);
+    this.renderLobbyCard();
+  }
+
+  private joinRoom(raw: string): void {
+    const code = normalizeCode(raw);
+    if (!code) {
+      this.lobby.detail = 'Bitte einen Raum-Code eingeben.';
+      this.renderLobbyCard();
+      return;
+    }
+    this.leaveRoom();
+    this.lobby = { ...this.lobby, role: 'guest', status: 'connecting', detail: '', code, link: '', copied: false, ping: 0 };
+    this.lobby.settings = { ...defaultLobbySettings(), guestFaction: this.lobby.settings.guestFaction ?? 'technoclan' };
+    this.room = this.makeRoom('guest', code);
+    this.renderLobbyCard();
+  }
+
+  private leaveRoom(): void {
+    if (!this.room) return;
+    this.room.send({ k: 'bye' });
+    this.room.close();
+    this.room = null;
+    this.lobby = { ...this.lobby, role: null, status: 'idle', detail: '', code: '', link: '', ping: 0, copied: false };
+    this.netRtt = 0;
+    this.netRemoteRtt = 0;
+  }
+
+  private onRoomStatus(st: RoomStatus, detail?: string): void {
+    this.lobby.status = st;
+    this.lobby.detail = detail ?? '';
+    if (st === 'connected') {
+      this.room?.send({ k: 'hello', v: gameVersion() });
+      if (this.room?.role === 'guest') this.room.send({ k: 'pick', faction: this.lobby.settings.guestFaction ?? 'technoclan' });
+    }
+    if ((st === 'closed' || st === 'error') && this.session.lockstep && !this.session.world.result && !this.onlineEnded) {
+      this.endOnline('Verbindung verloren', detail || 'Die Verbindung zum Mitspieler ist abgebrochen.', null);
+      return;
+    }
+    this.renderLobbyCard();
+  }
+
+  private sendLobby(): void {
+    if (this.room?.role === 'host') this.room.send({ k: 'lobby', lobby: this.lobby.settings });
+  }
+
+  private onNet(m: NetMsg): void {
+    const now = performance.now();
+    const ls = this.session.lockstep;
+    switch (m.k) {
+      case 'hello':
+        if (m.v !== gameVersion()) {
+          this.lobby.detail = 'Ihr habt unterschiedliche Spielversionen – bitte beide die Seite neu laden (Strg+F5).';
+          this.lobby.status = 'error';
+          this.room?.close();
+          this.room = null;
+          this.renderLobbyCard();
+          return;
+        }
+        if (this.room?.role === 'host') this.sendLobby();
+        break;
+      case 'lobby':
+        if (this.room?.role === 'guest') {
+          const mine = this.lobby.settings.guestFaction;
+          this.lobby.settings = { ...m.lobby, guestFaction: mine ?? m.lobby.guestFaction };
+          this.renderLobbyCard();
+        }
+        break;
+      case 'pick':
+        if (this.room?.role === 'host' && FACTIONS[m.faction]) {
+          this.lobby.settings.guestFaction = m.faction;
+          this.sendLobby();
+          this.renderLobbyCard();
+        }
+        break;
+      case 'start':
+        if (this.room?.role === 'guest') this.startOnlineMatch(m.match);
+        break;
+      case 'prep':
+        if (ls) this.session.receivePrep(m.cmds);
+        break;
+      case 'ping':
+        if (ls) ls.onMessage(m, now);
+        else this.room?.send({ k: 'pong', ts: m.ts });
+        this.netRemoteRtt = m.rtt;
+        break;
+      case 'pong': {
+        if (ls) {
+          ls.onMessage(m, now);
+          this.netRtt = ls.rtt;
+        } else {
+          const sample = Math.max(0, now - m.ts);
+          this.netRtt = this.netRtt === 0 ? sample : this.netRtt * 0.7 + sample * 0.3;
+        }
+        this.lobby.ping = this.netRtt;
+        const el = this.doc.getElementById('mp-ping');
+        if (el) el.textContent = ` · Ping ${Math.round(this.netRtt)} ms`;
+        break;
+      }
+      case 'f':
+      case 'resume':
+      case 'hash':
+        ls?.onMessage(m, now);
+        break;
+      case 'resign':
+        if (ls && !this.session.world.result && !this.onlineEnded) this.endOnline('Sieg', 'Dein Gegner hat aufgegeben.', true);
+        break;
+      case 'lobbyReturn':
+        if (ls && !this.session.world.result && !this.onlineEnded) this.endOnline('Sieg', 'Dein Gegner hat die Runde verlassen.', true);
+        break;
+      case 'bye':
+        this.onRoomStatus('closed', 'Dein Mitspieler hat den Raum verlassen.');
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Host: Runde starten – beide bekommen dieselben Daten. */
+  private startOnline(): void {
+    const st = this.lobby.settings;
+    if (this.room?.role !== 'host' || this.room.status !== 'connected' || !st.guestFaction) return;
+    const worst = Math.max(this.netRtt, this.netRemoteRtt);
+    const match: OnlineMatch = {
+      mapId: st.mapId === 'random' ? pick(MAPS).id : st.mapId,
+      seed: randomSeed(),
+      factions: st.hostSide === 0 ? [st.hostFaction, st.guestFaction] : [st.guestFaction, st.hostFaction],
+      overtime: st.overtime,
+      hostSide: st.hostSide,
+      delay: Math.max(3, Math.min(15, Math.ceil(worst / 2 / 50) + 2)),
+    };
+    this.room.send({ k: 'start', match });
+    this.startOnlineMatch(match);
+  }
+
+  private startOnlineMatch(m: OnlineMatch): void {
+    const host = this.room?.role === 'host';
+    const me: PlayerId = host ? m.hostSide : otherPlayer(m.hostSide);
+    const ls = new Lockstep(me, host, (msg) => this.room?.send(msg), m.delay);
+    ls.rtt = this.netRtt;
+    ls.remoteRtt = this.netRemoteRtt;
+    this.mp = { host };
+    this.onlineEnded = false;
+    this.desyncShown = false;
+    this.stalledSince = 0;
+    this.menuOpen = false;
+    this.lobbyOpen = false;
+    this.closeTitle();
+    this.doc.getElementById('mp-overlay')!.hidden = true;
+    this.doc.body.classList.remove('start-mode');
+    this.music.play('game');
+    this.session = new Session('play', m.mapId, m.seed, 'normal', m.factions, undefined, m.overtime, me, ls);
+    this.resetView('play');
+    this.hud.hideOverlays();
+    this.hud.clearLog();
+    const where = me === 0 ? 'links' : 'rechts';
+    this.hud.log(0, `Multiplayer auf ${this.session.world.map.def.name}, du spielst ${where} (${FACTIONS[m.factions[me]].name} gegen ${FACTIONS[m.factions[otherPlayer(me)]].name}). Vorbereitung: Forme bis zu ${this.session.world.players[me].prepLeft} Flächen in deiner Hälfte – dein Gegner sieht sie nicht. Enter = Bereit.`, 'info');
+    this.view.prep = true;
+    this.view.swap = { terrain: 'forest' };
+  }
+
+  private saveLastMatch(): void {
+    const world = this.session.world;
+    this.lastMatch = {
+      mapId: this.session.mapId,
+      seed: this.session.seed,
+      level: this.session.level,
+      factions: this.session.factions,
+      overtime: this.session.overtime,
+      human: this.session.human,
+      log: [...world.log],
+      hash: hashWorld(world),
+      ticks: world.tick,
+    };
+  }
+
+  /** Multiplayer-Runde außerhalb der Simulation beenden (Aufgabe, Abbruch). won: true/false/null = offen. */
+  private endOnline(title: string, summary: string, won: boolean | null): void {
+    this.onlineEnded = true;
+    this.menuOpen = false;
+    const world = this.session.world;
+    const me = this.session.human;
+    this.hud.showEnd({
+      eyebrow: `Multiplayer · ${clock(world.seconds)} · ${world.map.def.name}`,
+      title: won === null ? title : won ? 'Sieg' : 'Niederlage',
+      summary,
+      stats: [world.players[me].stats, world.players[otherPlayer(me)].stats],
+      sideNames: ['Du', 'Gegner'],
+      canReplay: false,
+      replayNote: '',
+      lobby: this.room?.status === 'connected',
+    });
+  }
+
+  /** Nach der Runde: beide zurück in die Lobby (Verbindung bleibt). */
+  private returnToLobby(): void {
+    this.mp = null;
+    this.onlineEnded = false;
+    this.lobbyOpen = true;
+    this.startDemo();
+    this.renderLobbyCard();
+  }
+
+  /** Menü → Zurück zum Startbildschirm (im Multiplayer: aufgeben und Raum verlassen). */
+  private leaveToTitle(): void {
+    if (this.session.lockstep && !this.session.world.result && !this.onlineEnded) this.room?.send({ k: 'resign' });
+    this.leaveRoom();
+    this.lobbyOpen = false;
+    this.doc.getElementById('mp-overlay')!.hidden = true;
+    this.menuOpen = false;
+    this.startDemo();
+    this.showTitle();
   }
 
   // ------------------------------------------------------------------ Statuszeile
