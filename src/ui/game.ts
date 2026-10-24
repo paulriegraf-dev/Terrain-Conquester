@@ -38,7 +38,7 @@ import { Hud } from './hud';
 import { commandsFor } from './commands';
 import { Session } from './session';
 import { createView } from './view';
-import { renderCodex } from './codex';
+import { counterMatrix, renderCodex } from './codex';
 import type { CodexState } from './codex';
 import type { ViewState } from './view';
 import { Lockstep } from '../net/lockstep';
@@ -127,6 +127,9 @@ export class Game {
   private snapshots: Snapshot[] = [];
   private nextSnapshot = 0;
   private lastSaved: SavedMatch | null = null;
+  /** Konter-Tafel auf dem Spielfeld (optional, Wunsch 24.10.): an/aus und Richtung, gemerkt im Browser. */
+  private counterBoard = { on: false, flip: false };
+  private counterBoardKey = '';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -138,6 +141,12 @@ export class Game {
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
     const fx = doc.getElementById('title-fx') as HTMLCanvasElement | null;
     this.titleFx = fx ? new TitleFx(fx) : null;
+    try {
+      const cb = JSON.parse(localStorage.getItem('tc-counter-board') ?? 'null') as { on?: boolean; flip?: boolean } | null;
+      if (cb) this.counterBoard = { on: !!cb.on, flip: !!cb.flip };
+    } catch {
+      /* ohne Speicher: aus */
+    }
     this.bindInput();
     this.bindLobbyInputs();
     new ResizeObserver(() => this.resize()).observe(frameEl);
@@ -308,6 +317,7 @@ export class Game {
     this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused || sharedPause, sellArmed: this.hudSellArmed, online: this.session.lockstep ? { host: !!this.mp?.host } : null }, now);
     this.updateStatusLine(world);
     this.updateNetUi(now);
+    this.updateCounterBoard();
     if (world.result && !this.endHandled) this.onEnd(now);
     if (this.demoRestartAt && now >= this.demoRestartAt) {
       this.demoRestartAt = 0;
@@ -708,6 +718,9 @@ export class Game {
         case 'g':
           this.onAction('layer', { layer: 'grid' });
           return true;
+        case 'h':
+          this.onAction('layer', { layer: 'counters' });
+          return true;
         case 'v':
           this.onAction('layer', { layer: 'vision' });
           return true;
@@ -873,6 +886,14 @@ export class Game {
         void allMatches().then((all) => {
           if (all.length) downloadJson(`terrain-conquester-partien-${new Date().toISOString().slice(0, 10)}-${all.length}.json`, { version: gameVersion(), matches: all });
         });
+        break;
+      case 'cb-flip':
+        this.counterBoard.flip = !this.counterBoard.flip;
+        this.saveCounterBoard();
+        break;
+      case 'cb-close':
+        this.counterBoard.on = false;
+        this.saveCounterBoard();
         break;
       case 'to-title':
         this.leaveToTitle();
@@ -1134,6 +1155,10 @@ export class Game {
         if (data.layer === 'grid') this.view.grid = !this.view.grid;
         if (data.layer === 'vision') this.view.visionRings = !this.view.visionRings;
         if (data.layer === 'influence') this.view.influence = !this.view.influence;
+        if (data.layer === 'counters') {
+          this.counterBoard.on = !this.counterBoard.on;
+          this.saveCounterBoard();
+        }
         break;
       default:
         break;
@@ -1583,6 +1608,33 @@ export class Game {
       default:
         break;
     }
+  }
+
+  private saveCounterBoard(): void {
+    try {
+      localStorage.setItem('tc-counter-board', JSON.stringify(this.counterBoard));
+    } catch {
+      /* egal */
+    }
+  }
+
+  /** Konter-Tafel: nur in eigenen Runden und Replays, neu gezeichnet nur bei Änderungen. */
+  private updateCounterBoard(): void {
+    const el = this.doc.getElementById('counter-board')!;
+    const mode = this.session.mode;
+    const overlay = !this.doc.getElementById('end-overlay')!.hidden || !this.doc.getElementById('start-overlay')!.hidden;
+    const show = this.counterBoard.on && mode !== 'demo' && !this.titleOpen && !overlay;
+    (this.doc.getElementById('layer-counters') as HTMLElement).setAttribute('aria-pressed', String(this.counterBoard.on));
+    el.hidden = !show;
+    if (!show) return;
+    const me = this.session.human;
+    const mine = this.session.factions[me];
+    const theirs = this.session.factions[otherPlayer(me)];
+    const key = `${mine}|${theirs}|${this.counterBoard.flip}`;
+    if (key === this.counterBoardKey) return;
+    this.counterBoardKey = key;
+    this.doc.getElementById('cb-flip')!.textContent = this.counterBoard.flip ? 'Gegner → du' : 'Du → Gegner';
+    this.doc.getElementById('cb-body')!.innerHTML = this.counterBoard.flip ? counterMatrix(theirs, mine, true) : counterMatrix(mine, theirs, true);
   }
 
   /** Partie im Browser speichern (Befehle, Startwert, Lagebilder) – für später: Replays, Fehlersuche, KI-Training. */

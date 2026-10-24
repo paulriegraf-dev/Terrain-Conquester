@@ -150,6 +150,15 @@
           <div class="card mp-card" id="mp-card"></div>
         </div>
 
+        <div class="counter-board" id="counter-board" hidden>
+          <div class="cb-head">
+            <button type="button" class="btn-mini" id="cb-flip" data-action="cb-flip" title="Richtung wechseln">Du → Gegner</button>
+            <span class="cb-legend"><i data-l="3"></i>schnell <i data-l="0"></i>langsam</span>
+            <button type="button" class="btn-mini" data-action="cb-close" title="Konter-Tafel ausblenden (H)">✕</button>
+          </div>
+          <div class="cb-body" id="cb-body"></div>
+        </div>
+
         <div class="pause-banner" id="pause-banner" hidden>
           <span id="pause-text">Pause</span>
           <button type="button" class="btn-primary" id="pause-resume" data-action="mp-resume">Weiter <kbd>Leertaste</kbd></button>
@@ -161,7 +170,10 @@
             <p class="eyebrow" id="end-eyebrow"></p>
             <h2 class="card-title" id="end-title"></h2>
             <p class="lede" id="end-summary"></p>
-            <div class="table-wrap"><table class="stats" id="end-stats"></table></div>
+            <div class="end-body">
+              <div class="table-wrap"><table class="stats" id="end-stats"></table></div>
+              <div class="end-damage" id="end-damage"></div>
+            </div>
             <p class="fine" id="end-note" hidden></p>
             <div class="btn-row">
               <button type="button" class="btn-primary" id="btn-again" data-action="new-round">Neue Runde</button>
@@ -241,6 +253,7 @@
           <button type="button" class="chip" id="layer-fog" data-action="layer" data-layer="fog" aria-pressed="false">Nebel <kbd>N</kbd></button>
           <button type="button" class="chip" id="layer-grid" data-action="layer" data-layer="grid" aria-pressed="false">Raster <kbd>G</kbd></button>
           <button type="button" class="chip" id="layer-vision" data-action="layer" data-layer="vision" aria-pressed="false">Sicht <kbd>V</kbd></button>
+          <button type="button" class="chip" id="layer-counters" data-action="layer" data-layer="counters" aria-pressed="false" title="Konter-Tafel auf dem Spielfeld ein- oder ausblenden">Konter <kbd>H</kbd></button>
         </div>
         <label class="flow-pick">
           <span>Flussfeld <kbd>F</kbd></span>

@@ -1632,6 +1632,12 @@ Sie sollen Überwindung kosten – man soll sich zweimal überlegen, ob man den 
 - **Ausweichen nach Abstand:** Ab 1,5 Kacheln Abstand zum Schützen +1 Ausweichen, je weitere Kachel +1, höchstens +4. Nahkampf trifft normal, Plasmawerfer und Gunner (3 Kacheln) deutlich schlechter, Scharfschützen und Artillerie nur noch mit dem Mindestwurf (1 von 6).
 - **Losstürmen:** Wer sie mit einer Waffe bis 5 Kacheln Reichweite beschießt, den greifen sie 8 s lang an – auch über ihre Leine hinaus (bis 8 Kacheln vom Matsch). Artillerie und Batterien mit großer Reichweite lösen das nicht aus – gegen die hilft ihnen das Ausweichen.
 
+### Konter-Tafel und Schaden nach der Runde (24.10. abends)
+
+- **Konter-Tafel auf dem Spielfeld (optional):** Taste H oder „Konter“ unter Ansicht blendet oben rechts eine kleine Konter-Matrix ein – deine Einheiten gegen die des Gegners, nur Farben (grün schnell … rot langsam), umschaltbar auf „Gegner → du“. Der Browser merkt sich an/aus und die Richtung. Gleiche Berechnung wie die Übersicht (F1).
+- **Schaden nach der Runde:** Die Rundenend-Karte zeigt neben der Statistik je Seite den Gesamtschaden, welche eigenen Einheiten am meisten Schaden gemacht haben und woran er ging (Top 5, mit Balken). Die Simulation zählt dafür je Spieler `damageBy` (eigene Einheitenart) und `damageTo` (getroffene Art).
+- **Gespeicherte Partien:** Liegen im Ordner `partien/` (erste: Multiplayer auf Felsenpass, Technoclan gegen Myriaden, 17 Minuten).
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.

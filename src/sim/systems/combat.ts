@@ -24,6 +24,8 @@ interface Hit {
   /** Schaden pro Wunde (Überschuss über ein Modell hinaus verfällt). */
   damage: number;
   attacker: PlayerId;
+  /** Wer geschossen hat (Einheitenart, Gebäude, HQ) – für die Schadens-Statistik nach der Runde. */
+  src?: string;
 }
 
 /**
@@ -105,11 +107,11 @@ export function updateCombat(world: World): void {
     if (def?.kamikaze) {
       // Eine einzige Explosion: der erwartete Schaden in einem Schlag.
       const spread = t.kind === 'unit' ? Math.min(world.rules.kamikazeSpread, aliveModels(t)) : 0;
-      if (spread > 1) hits.push({ target: t, wounds: spread, damage: (damage * expected) / spread, attacker: e.owner });
-      else hits.push({ target: t, wounds: 1, damage: damage * expected, attacker: e.owner });
+      if (spread > 1) hits.push({ target: t, wounds: spread, damage: (damage * expected) / spread, attacker: e.owner, src: e.defId });
+      else hits.push({ target: t, wounds: 1, damage: damage * expected, attacker: e.owner, src: e.defId });
       sacrificed.push(e);
     } else {
-      collect(w.acc, t, expected, damage, e.owner, hits);
+      collect(w.acc, t, expected, damage, e.owner, hits, e.defId);
     }
     if (w.def.splash) splashHits(world, e, t, shots, factor, bonus, hits, blast);
     // Durchschuss: der nächste Gegner hinter dem Ziel bekommt einen Teil der Schüsse ab.
@@ -117,7 +119,7 @@ export function updateCombat(world: World): void {
       const behind = nextBehind(world, e, t);
       if (behind) {
         const dmg = damagePerWound(world, e, behind);
-        if (dmg > 0) collect(w.acc, behind, shots * w.def.pierce * factor * woundsPerShot(w.def, defenseOf(world, behind, e), bonus), dmg, e.owner, hits);
+        if (dmg > 0) collect(w.acc, behind, shots * w.def.pierce * factor * woundsPerShot(w.def, defenseOf(world, behind, e), bonus), dmg, e.owner, hits, e.defId);
       }
     }
     trimAccumulator(w.acc, t.id);
@@ -148,6 +150,12 @@ export function updateCombat(world: World): void {
     if (!t.alive) continue;
     for (let k = 0; k < h.wounds && t.alive; k++) {
       const dealt = Math.min(h.damage, currentModelWounds(t));
+      // Statistik nach der Runde: Schaden je eigener Einheitenart und je getroffener Art.
+      const st = world.players[h.attacker].stats;
+      const src = h.src ?? '?';
+      const to = t.kind === 'unit' ? t.defId : t.kind;
+      st.damageBy[src] = (st.damageBy[src] ?? 0) + dealt;
+      st.damageTo[to] = (st.damageTo[to] ?? 0) + dealt;
       t.hp -= dealt;
       if (t.kind === 'hq') world.players[h.attacker].stats.hqDamageDealt += dealt;
       if (t.hp <= 1e-6) {
@@ -284,14 +292,14 @@ function shieldMap(world: World): Map<number, number> {
 const ACC_LIMIT = 24;
 
 /** Erwartete Wunden sammeln; ganze Wunden werden zu Treffern. */
-function collect(acc: Map<number, number>, t: Entity, expected: number, damage: number, attacker: PlayerId, hits: Hit[]): void {
+function collect(acc: Map<number, number>, t: Entity, expected: number, damage: number, attacker: PlayerId, hits: Hit[], src?: string): void {
   const sum = (acc.get(t.id) ?? 0) + expected;
   const wounds = Math.floor(sum + 1e-9);
   const rest = sum - wounds;
   // Neu einsortieren: Zuletzt beschossene Ziele stehen hinten (siehe trimAccumulator).
   acc.delete(t.id);
   if (rest > 1e-9) acc.set(t.id, rest);
-  if (wounds > 0) hits.push({ target: t, wounds, damage, attacker });
+  if (wounds > 0) hits.push({ target: t, wounds, damage, attacker, src });
 }
 
 /**
@@ -361,6 +369,6 @@ function splashHits(world: World, shooter: Entity, target: Entity, shots: number
     const damage = damagePerWound(world, shooter, o);
     if (damage <= 0) continue;
     const n = (shots + blastShots(blast, o)) * factor * 0.5;
-    collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o, shooter), bonus), damage, shooter.owner, hits);
+    collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o, shooter), bonus), damage, shooter.owner, hits, shooter.defId);
   }
 }

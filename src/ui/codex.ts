@@ -158,35 +158,51 @@ function unitsTab(state: CodexState): string {
     </table></div>`;
 }
 
-/** Konter-Tabelle: Sekunden, bis ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) ausschaltet. */
-function countersTab(state: CodexState): string {
-  const mine = factionEntries(state.faction).filter((e) => UNITS[e.unit].weapon);
-  const theirs = factionEntries(state.enemy);
-  const head = theirs.map((e) => `<th class="cx-vert" title="${escapeHtml(`${UNITS[e.unit].name} · ${ARMOR_NAMES[UNITS[e.unit].armor]}, ${num(UNITS[e.unit].hp)} Leben`)}"><span class="cx-armor-text" data-a="${UNITS[e.unit].armor}">${escapeHtml(UNITS[e.unit].name)}</span></th>`).join('');
+/** Stufe 0–3 eines Konters (Angreifer gegen Ziel): wie schnell ein voller Verband den anderen ausschaltet. */
+function counterLevel(a: UnitDef, target: UnitDef): 0 | 1 | 2 | 3 {
+  const w = a.weapon!;
+  const { d, wounds } = defenseOfUnit(target);
+  if (a.kamikaze) {
+    const share = (woundsPerShot(w, d) * Math.min(w.damage, wounds)) / target.hp;
+    return share >= 0.5 ? 3 : share >= 0.25 ? 2 : share >= 0.1 ? 1 : 0;
+  }
+  const s = target.hp / Math.max(0.01, dps(a, w, d, wounds));
+  return s <= 8 ? 3 : s <= 16 ? 2 : s <= 32 ? 1 : 0;
+}
+
+/**
+ * Konter-Matrix (Zeilen = Angreifer, Spalten = Ziele), nur Farben. `compact`: kleine Fassung für die
+ * Konter-Tafel auf dem Spielfeld (Kürzel statt Namen).
+ */
+export function counterMatrix(attacker: FactionId, target: FactionId, compact = false): string {
+  const mine = factionEntries(attacker).filter((e) => UNITS[e.unit].weapon);
+  const theirs = factionEntries(target);
+  const head = theirs.map((e) => {
+    const u = UNITS[e.unit];
+    const tip = escapeHtml(`${u.name} · ${ARMOR_NAMES[u.armor]}`);
+    return compact
+      ? `<th title="${tip}"><span class="cx-glyph cx-glyph-s" data-f="${target}">${escapeHtml(u.letter)}</span></th>`
+      : `<th class="cx-vert" title="${tip}"><span class="cx-armor-text" data-a="${u.armor}">${escapeHtml(u.name)}</span></th>`;
+  }).join('');
   const rows = mine.map(({ unit }) => {
     const a = UNITS[unit];
-    const w = a.weapon!;
     const cells = theirs.map(({ unit: t }) => {
-      const target = UNITS[t];
-      const { d, wounds } = defenseOfUnit(target);
-      if (a.kamikaze) {
-        const blast = woundsPerShot(w, d) * Math.min(w.damage, wounds);
-        const share = blast / target.hp;
-        const l = share >= 0.5 ? 3 : share >= 0.25 ? 2 : share >= 0.1 ? 1 : 0;
-        return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${target.name}: ${COUNTER_TEXT[l]} (eine Explosion)`)}"></td>`;
-      }
-      const s = target.hp / Math.max(0.01, dps(a, w, d, wounds));
-      const l = s <= 8 ? 3 : s <= 16 ? 2 : s <= 32 ? 1 : 0;
-      return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${target.name}: ${COUNTER_TEXT[l]}`)}"></td>`;
+      const l = counterLevel(a, UNITS[t]);
+      return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${UNITS[t].name}: ${COUNTER_TEXT[l]}${a.kamikaze ? ' (eine Explosion)' : ''}`)}"></td>`;
     }).join('');
-    return `<tr><th scope="row" title="${escapeHtml(a.role)}"><span class="cx-glyph" data-f="${state.faction}">${escapeHtml(a.letter)}</span>${escapeHtml(a.name)} <span class="cx-armor" data-a="${a.armor}">${ARMOR_NAMES[a.armor].slice(0, 1)}</span></th>${cells}</tr>`;
+    const label = compact
+      ? `<span class="cx-glyph cx-glyph-s" data-f="${attacker}">${escapeHtml(a.letter)}</span>`
+      : `<span class="cx-glyph" data-f="${attacker}">${escapeHtml(a.letter)}</span>${escapeHtml(a.name)} <span class="cx-armor" data-a="${a.armor}">${ARMOR_NAMES[a.armor].slice(0, 1)}</span>`;
+    return `<tr><th scope="row" title="${escapeHtml(`${a.name}: ${a.role}`)}">${label}</th>${cells}</tr>`;
   }).join('');
+  return `<table class="cx-table cx-matrix${compact ? ' cx-mini' : ''}"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** Konter-Tabelle: wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) ausschaltet. */
+function countersTab(state: CodexState): string {
   return `${factionChips(state, 'faction', 'Angreifer')}${factionChips(state, 'enemy', 'Ziel')}
-    <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: eine Explosion nimmt <span class="cx-key" data-l="3">die Hälfte und mehr</span> <span class="cx-key" data-l="2">ein Viertel</span> <span class="cx-key" data-l="1">ein Zehntel</span> <span class="cx-key" data-l="0">weniger</span> seiner Leben. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen.</p>
-    <div class="cx-scroll"><table class="cx-table cx-matrix">
-      <thead><tr><th></th>${head}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>`;
+    <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: eine Explosion nimmt <span class="cx-key" data-l="3">die Hälfte und mehr</span> <span class="cx-key" data-l="2">ein Viertel</span> <span class="cx-key" data-l="1">ein Zehntel</span> <span class="cx-key" data-l="0">weniger</span> seiner Leben. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen. Die Tafel gibt es auch auf dem Spielfeld (Taste H).</p>
+    <div class="cx-scroll">${counterMatrix(state.faction, state.enemy)}</div>`;
 }
 
 function bonusText(b: GroundBonus): string {

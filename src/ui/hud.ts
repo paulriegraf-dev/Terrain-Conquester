@@ -157,6 +157,7 @@ export class Hud {
       endStats: q('end-stats'),
       endReplay: q<HTMLButtonElement>('btn-replay'),
       endAgain: q<HTMLButtonElement>('btn-again'),
+      endDamage: q('end-damage'),
       endLobby: q<HTMLButtonElement>('btn-lobby'),
       resignButton: q<HTMLButtonElement>('btn-resign'),
       toTitleButton: q<HTMLButtonElement>('btn-to-title'),
@@ -706,6 +707,7 @@ export class Hud {
       `<thead><tr><th></th><th>${escapeHtml(s.sideNames[0])}</th><th>${escapeHtml(s.sideNames[1])}</th></tr></thead><tbody>` +
       rows.map(([label, f]) => `<tr><th>${label}</th><td>${num(f(s.stats[0]))}</td><td>${num(f(s.stats[1]))}</td></tr>`).join('') +
       '</tbody>';
+    this.el.endDamage.innerHTML = damageOverview(s.stats, s.sideNames);
     this.el.endReplay.hidden = !s.canReplay;
     this.el.endAgain.hidden = !!s.lobby;
     this.el.endLobby.hidden = !s.lobby;
@@ -812,4 +814,39 @@ function buildingUpgradeLabel(faction: FactionDef, u: BuildingUpgradeDef): strin
     if (size) return `Gelege ${size}`;
   }
   return u.name;
+}
+
+/** Name einer Schadensquelle oder eines Ziels in der Statistik (Einheitenart, HQ, Gebäude, Erdwall). */
+function damageName(id: string): string {
+  if (id in UNITS) return UNITS[id as UnitId].name;
+  if (id === 'hq') return 'HQ';
+  if (id === 'building') return 'Gebäude';
+  if (id === 'wall') return 'Erdwälle';
+  if (id in BUILDINGS) return 'Gebäude';
+  return 'Sonstiges';
+}
+
+/**
+ * Schadens-Übersicht nach der Runde (Wunsch 24.10.): je Seite der Gesamtschaden, welche eigenen Einheiten am meisten
+ * Schaden gemacht haben und woran er ging – als kleine Balken.
+ */
+function damageOverview(stats: [PlayerStats, PlayerStats], names: [string, string]): string {
+  const top = (m: Record<string, number>, n: number): [string, number][] => {
+    const merged = new Map<string, number>();
+    for (const [k, v] of Object.entries(m)) merged.set(damageName(k), (merged.get(damageName(k)) ?? 0) + v);
+    return [...merged].sort((a, b) => b[1] - a[1]).slice(0, n);
+  };
+  const list = (rows: [string, number][], total: number): string =>
+    rows.length === 0
+      ? '<li class="muted">–</li>'
+      : rows.map(([name, v]) => `<li><span class="dmg-name">${escapeHtml(name)}</span><span class="dmg-bar"><i style="width:${Math.max(3, Math.round((v / Math.max(1, total)) * 100))}%"></i></span><span class="dmg-num">${num(v)}</span></li>`).join('');
+  const side = (st: PlayerStats, name: string, k: number): string => {
+    const total = Object.values(st.damageBy ?? {}).reduce((a, b) => a + b, 0);
+    return `<section class="dmg-side" data-side="${k}">
+      <h3>${escapeHtml(name)} <span class="dmg-total">${num(total)} Schaden</span></h3>
+      <p class="dmg-label">Meister Schaden durch</p><ol class="dmg-list">${list(top(st.damageBy ?? {}, 5), total)}</ol>
+      <p class="dmg-label">Meister Schaden an</p><ol class="dmg-list">${list(top(st.damageTo ?? {}, 5), total)}</ol>
+    </section>`;
+  };
+  return `<h3 class="dmg-title">Schaden</h3><div class="dmg-grid">${side(stats[0], names[0], 0)}${side(stats[1], names[1], 1)}</div>`;
 }

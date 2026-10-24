@@ -160,3 +160,17 @@ describe('Schlammmonster (24.10. abends)', () => {
     assert.equal(world.get(m.charge!.target)?.defId === 'battery', false, 'nicht auf die Artillerie');
   });
 });
+
+describe('Schadens-Statistik (24.10.)', () => {
+  it('zählt Schaden je eigener Einheitenart und je getroffener Art', async () => {
+    const { runAiMatch } = await import('../src/match');
+    const { MAPS } = await import('../src/data/maps');
+    const { world } = runAiMatch({ map: MAPS[0]!, seed: 3, factions: ['technoclan', 'myriaden'], maxTicks: 8 * 60 * 20 });
+    for (const p of world.players) {
+      const by = Object.values(p.stats.damageBy).reduce((a, b) => a + b, 0);
+      const to = Object.values(p.stats.damageTo).reduce((a, b) => a + b, 0);
+      assert.ok(by > 0, 'Schaden gezählt');
+      assert.ok(Math.abs(by - to) < 1e-6, 'gleiche Summe von beiden Seiten gesehen');
+    }
+  });
+});

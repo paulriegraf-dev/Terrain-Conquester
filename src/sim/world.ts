@@ -95,6 +95,9 @@ export interface PlayerStats {
   orders: number;
   disguises: number;
   scouts: number;
+  /** Schaden je eigener Einheitenart (auch 'hq', Gebäude) und je getroffener Art (Einheit oder 'building'/'hq'/'wall'). */
+  damageBy: Record<string, number>;
+  damageTo: Record<string, number>;
 }
 
 /**
@@ -816,6 +819,8 @@ export class World {
       stats: {
         spawned: emptyUnitCounts(),
         lost: emptyUnitCounts(),
+        damageBy: {},
+        damageTo: {},
         kills: 0,
         buildingsBuilt: 0,
         buildingsLost: 0,
