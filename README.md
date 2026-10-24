@@ -33,6 +33,7 @@ Im Startbildschirm **Multiplayer** wählen:
 2. In der **Lobby** wählt jeder seine Fraktion (der andere sieht sie). Der Host wählt Karte, Spielbeschleuniger (Patt-Auflöser) und seine Seite und startet.
 3. **Vorbereitung:** Jeder formt verdeckt sein Gelände; die Runde beginnt, wenn beide „Bereit“ drücken.
 4. **Im Spiel:** kein Tempo (immer 1×), der Nebel bleibt an. Pausieren kann nur der Host (Leertaste) – in der Pause lassen sich Einheiten, Fabriken und die Übersicht (F1) ansehen. Das Menü (F10) hält das Spiel nicht an: Aufgeben, Übersicht, Musik, Lautstärke, zurück zum Startbildschirm. Nach der Runde geht es zurück in die Lobby.
+5. **Verbindungsabbruch:** Die Runde endet nicht. Der andere wartet (mit Uhr, nach 20 s auch „Runde beenden“). Kommt das Netz zurück, geht es nahtlos weiter. Hat jemand die Seite geschlossen oder neu geladen: einfach dieselbe Adresse wieder öffnen (sie enthält den Raum, beim Host auch, dass er Host war) – der Rechner holt sich den Stand vom anderen, rechnet die Runde nach und spielt an derselben Stelle weiter.
 
 Technik: **Lockstep** – beide Rechner rechnen das ganze Spiel selbst und tauschen nur Befehle aus. Die Eingabeverzögerung richtet sich nach dem Ping des Langsameren; alle 2 Sekunden vergleichen beide einen Fingerabdruck des Spielstands. Die Verbindung läuft über WebRTC (PeerJS, Browser zu Browser; die Bibliothek wird beim Öffnen eines Raums von unpkg geladen). Beide brauchen dieselbe Spielversion – am einfachsten die GitHub-Seite. Zum Ausprobieren ohne Internet: „Test: zwei Tabs in diesem Browser“.
 

@@ -11,6 +11,8 @@ import type { Mode } from './view';
 import type { PlayerId } from '../sim/types';
 import { otherPlayer } from '../sim/types';
 import type { Lockstep } from '../net/lockstep';
+import type { RejoinPayload } from '../net/protocol';
+import { hashWorld } from '../sim/hash';
 
 /**
  * Eine laufende Partie aus Sicht der Oberfläche: die Welt plus wer Befehle gibt.
@@ -92,6 +94,59 @@ export class Session {
     return [...this.myPrep];
   }
 
+  /** Wiedereinstieg: Die Runde wird bis zu diesem Tick aus dem Befehlsprotokoll nachgerechnet. */
+  catchUp: { byTick: Map<number, PlayerCommand[]>; target: number; hash: string; total: number } | null = null;
+  /** Nach dem Nachrechnen: stimmt der Fingerabdruck mit dem des anderen überein? */
+  catchUpMismatch = false;
+
+  /** Stand für den Wiedereinstieg des anderen (dieser Rechner hält die Runde). */
+  rejoinPayload(match: RejoinPayload['match']): RejoinPayload {
+    const ls = this.lockstep!;
+    return {
+      match,
+      holderSide: this.human,
+      freshPrep: this.theirPrep,
+      holderPrep: this.myPrepDone ? [...this.myPrep] : null,
+      started: !this.prepActive,
+      log: this.prepActive ? [] : this.world.log.filter((c) => c.cmd.type !== 'prepTerrain'),
+      tick: this.prepActive ? 0 : this.world.tick,
+      hash: hashWorld(this.world),
+      ls: ls.snapshot(),
+    };
+  }
+
+  /** Neu geladen: Vorbereitungen übernehmen und die laufende Runde nachrechnen (siehe `catchUpStep`). */
+  restore(p: RejoinPayload): void {
+    if (p.freshPrep) {
+      this.myPrep.push(...p.freshPrep);
+      this.myPrepDone = true;
+    }
+    if (p.holderPrep) this.theirPrep = p.holderPrep;
+    this.maybeBeginOnline();
+    if (!p.started || this.prepActive) return;
+    const byTick = new Map<number, PlayerCommand[]>();
+    for (const c of p.log) {
+      const list = byTick.get(c.tick) ?? [];
+      list.push({ player: c.player, cmd: c.cmd });
+      byTick.set(c.tick, list);
+    }
+    this.catchUp = { byTick, target: p.tick, hash: p.hash, total: p.tick };
+  }
+
+  /** Nachrechnen in Häppchen (Zeitbudget in ms) – true, solange noch etwas fehlt. */
+  catchUpStep(budgetMs: number): boolean {
+    const cu = this.catchUp;
+    if (!cu) return false;
+    const end = performance.now() + budgetMs;
+    while (this.world.tick < cu.target && !this.world.result) {
+      this.world.step(cu.byTick.get(this.world.tick) ?? []);
+      if ((this.world.tick & 63) === 0 && performance.now() > end) return true;
+    }
+    this.catchUpMismatch = hashWorld(this.world) !== cu.hash;
+    this.catchUp = null;
+    return false;
+  }
+
   /** Multiplayer: Der Gegner ist mit der Vorbereitung fertig. */
   receivePrep(cmds: Command[]): void {
     this.theirPrep = cmds;
@@ -126,6 +181,7 @@ export class Session {
       this.step();
       return true;
     }
+    if (this.catchUp) return false;
     const tick = this.world.tick;
     ls.pump(tick);
     if (!ls.canStep(tick)) return false;

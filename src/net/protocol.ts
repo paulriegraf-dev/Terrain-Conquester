@@ -1,6 +1,6 @@
 import type { FactionId } from '../data/factions';
 import type { OvertimeVariant } from '../data/rules';
-import type { Command } from '../sim/commands';
+import type { Command, TimedCommand } from '../sim/commands';
 import type { PlayerId } from '../sim/types';
 
 /**
@@ -8,8 +8,8 @@ import type { PlayerId } from '../sim/types';
  * Verwaltungsdaten über die Leitung – beide Rechner rechnen das ganze Spiel selbst (Lockstep).
  */
 export type NetMsg =
-  /** Erste Nachricht beider Seiten: gleiche Spielversion? */
-  | { k: 'hello'; v: string }
+  /** Erste Nachricht beider Seiten: gleiche Spielversion? `match` = laufende Runde (für den Wiedereinstieg). */
+  | { k: 'hello'; v: string; match?: string | null }
   /** Host → Gast: Stand der Lobby (Karte, Beschleuniger, Seiten, Fraktionen beider). */
   | { k: 'lobby'; lobby: LobbySettings }
   /** Gast → Host: gewählte Fraktion. */
@@ -32,7 +32,41 @@ export type NetMsg =
   /** Zurück in die Lobby (nach Rundenende). */
   | { k: 'lobbyReturn' }
   /** Raum verlassen. */
-  | { k: 'bye' };
+  | { k: 'bye' }
+  /** Nach kurzem Abbruch (beide haben die Runde noch): „Ich habe deine Eingaben bis Tick `have`.“ */
+  | { k: 'resync'; have: number }
+  /** Antwort darauf: eigene Eingaben a…b neu (nur nicht leere Ticks), Pausen und Fortsetzungen. */
+  | { k: 'fs'; a: number; b: number; frames: [number, Command[]][]; pauses: number[]; resumes: number[] }
+  /** Wiedereinstieg nach Neuladen: der ganze Stand in Stücken (JSON-Text, siehe RejoinPayload). */
+  | { k: 'rj'; i: number; n: number; s: string };
+
+/** Was ein neu geladener Rechner braucht, um wieder in die laufende Runde zu kommen. */
+export interface RejoinPayload {
+  match: OnlineMatch;
+  /** Seite dessen, der den Stand schickt. */
+  holderSide: PlayerId;
+  /** Vorbereitung des Neuen (falls er schon bereit war) und des Haltenden. */
+  freshPrep: Command[] | null;
+  holderPrep: Command[] | null;
+  /** Runde läuft schon (beide Vorbereitungen fertig). */
+  started: boolean;
+  /** Alle ausgeführten Befehle (ohne Vorbereitung) – zum Nachrechnen bis `tick`. */
+  log: TimedCommand[];
+  tick: number;
+  hash: string;
+  ls: LockstepSnapshot;
+}
+
+export interface LockstepSnapshot {
+  sentUpTo: number;
+  remoteUpTo: number;
+  local: [number, Command[]][];
+  remote: [number, Command[]][];
+  pauseTicks: number[];
+  resumed: number[];
+  pausedAt: number | null;
+  delay: number;
+}
 
 export interface LobbySettings {
   mapId: string;

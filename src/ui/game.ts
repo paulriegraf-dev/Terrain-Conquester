@@ -42,7 +42,7 @@ import { renderCodex } from './codex';
 import type { CodexState } from './codex';
 import type { ViewState } from './view';
 import { Lockstep } from '../net/lockstep';
-import type { NetMsg, OnlineMatch } from '../net/protocol';
+import type { NetMsg, OnlineMatch, RejoinPayload } from '../net/protocol';
 import { LocalRoom, PeerRoom, newRoomCode, normalizeCode } from '../net/room';
 import type { Room, RoomStatus } from '../net/room';
 import { gameVersion } from '../net/version';
@@ -114,6 +114,12 @@ export class Game {
   /** Multiplayer-Runde außerhalb der Simulation beendet (Aufgabe, Verbindungsabbruch). */
   private onlineEnded = false;
   private shownWorld: World | null = null;
+  /** Laufende Multiplayer-Runde (für den Wiedereinstieg). */
+  private mpMatch: OnlineMatch | null = null;
+  /** Verbindung während der Runde abgebrochen – seit wann (0 = verbunden). */
+  private reconnectSince = 0;
+  /** Wiedereinstieg: Stücke des Stands. */
+  private rjParts: string[] = [];
   private readonly titleFx: TitleFx | null;
 
   constructor(
@@ -131,6 +137,8 @@ export class Game {
     new ResizeObserver(() => this.resize()).observe(frameEl);
     // Netz: Laufzeit messen – und weiterrechnen, wenn der Tab im Hintergrund liegt (dort ruht requestAnimationFrame).
     window.setInterval(() => this.netTick(performance.now()), 250);
+    // Seite wird geschlossen oder neu geladen: Verbindung sauber trennen (der andere wartet dann auf die Rückkehr).
+    window.addEventListener('pagehide', () => this.room?.close());
   }
 
   start(): void {
@@ -144,7 +152,9 @@ export class Game {
       this.closeTitle();
       this.lobby.local = params.get('lokal') === '1';
       this.openLobby();
-      this.joinRoom(code);
+      // h=1: Diese Seite war der Host (neu geladen) – denselben Raum wieder öffnen.
+      if (params.get('h') === '1') this.hostRoom(code);
+      else this.joinRoom(code);
     } else {
       this.titleFx?.start();
     }
@@ -237,7 +247,10 @@ export class Game {
     const tickMs = 1000 / this.session.world.tps;
     // Die Vorschau hinter der Startkarte läuft im Zeitraffer.
     const speed = this.session.mode === 'demo' ? 4 : this.speed;
-    if (this.session.lockstep) {
+    if (this.session.catchUp) {
+      this.session.catchUpStep(14);
+      if (!this.session.catchUp) this.onCatchUpDone();
+    } else if (this.session.lockstep) {
       if (!this.doc.hidden) this.advanceOnline(dt, now);
     } else if (!this.paused && !this.menuOpen && !this.session.prepActive && !this.session.world.result) {
       this.acc += dt * speed;
@@ -251,7 +264,7 @@ export class Game {
     }
     const world = this.session.world;
     if (world !== this.shownWorld) this.onWorldSwapped();
-    this.processEvents(world);
+    if (!this.session.catchUp) this.processEvents(world);
     this.followSelection(world);
     const sharedPause = !!this.session.lockstep?.paused;
     const alpha = this.paused || sharedPause || world.result ? 1 : Math.min(1, this.acc / tickMs);
@@ -830,6 +843,11 @@ export class Game {
       case 'mp-start':
         this.startOnline();
         break;
+      case 'mp-stop-wait':
+        this.reconnectSince = 0;
+        this.leaveRoom();
+        this.endOnline('Verbindung verloren', 'Dein Mitspieler ist nicht zurückgekommen.', null);
+        break;
       case 'mp-resume':
         if (this.mp?.host) this.session.lockstep?.resume();
         break;
@@ -1181,7 +1199,15 @@ export class Game {
       (this.doc.getElementById('pause-resume') as HTMLButtonElement).hidden = !this.mp?.host;
     }
     let text = '';
-    if (ls && !this.onlineEnded && !this.session.world.result) {
+    let giveUp = false;
+    const cu = this.session.catchUp;
+    if (cu) {
+      text = `Hole die laufende Runde auf … ${Math.floor((this.session.world.tick / Math.max(1, cu.total)) * 100)} %`;
+    } else if (ls && this.reconnectSince && !this.onlineEnded && !this.session.world.result) {
+      const secs = Math.floor((now - this.reconnectSince) / 1000);
+      text = `Verbindung unterbrochen – warte auf deinen Mitspieler (${clock(secs)}). Lädt er die Seite mit dem Raum-Link neu, geht es hier weiter.`;
+      giveUp = secs >= 20;
+    } else if (ls && !this.onlineEnded && !this.session.world.result) {
       if (this.session.prepActive && this.session.myPrepDone) text = 'Warte, bis dein Gegner bereit ist …';
       else if (this.stalledSince && now - this.stalledSince > 1200) text = 'Warte auf deinen Mitspieler … (Verbindung langsam)';
       if (ls.desyncAt !== null && !this.desyncShown) {
@@ -1189,7 +1215,19 @@ export class Game {
         this.hud.log(this.session.world.seconds, `Achtung: Die Spielstände beider Rechner weichen ab (seit ${clock(ls.desyncAt / this.session.world.tps)}). Bitte melden – das Replay hilft beim Suchen.`, 'bad');
       }
     }
-    if (net.textContent !== text) net.textContent = text;
+    const key = `${giveUp ? 'b' : ''}|${text}`;
+    if (net.dataset.key !== key) {
+      net.dataset.key = key;
+      net.textContent = text;
+      if (giveUp) {
+        const btn = this.doc.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-mini';
+        btn.dataset.action = 'mp-stop-wait';
+        btn.textContent = 'Runde beenden';
+        net.append(' ', btn);
+      }
+    }
     net.hidden = !text;
   }
 
@@ -1298,9 +1336,10 @@ export class Game {
     return this.lobby.local ? new LocalRoom(role, code, events) : new PeerRoom(role, code, events);
   }
 
-  private hostRoom(): void {
+  private hostRoom(fixedCode?: string): void {
     this.leaveRoom();
-    const code = newRoomCode();
+    const code = fixedCode ?? newRoomCode();
+    this.setUrl(`?raum=${code}&h=1${this.lobby.local ? '&lokal=1' : ''}`);
     this.lobby = { ...this.lobby, role: 'host', status: 'connecting', detail: '', code, copied: false, ping: 0, settings: { ...this.lobby.settings, guestFaction: null } };
     this.lobby.link = `${location.origin}${location.pathname}?raum=${code}${this.lobby.local ? '&lokal=1' : ''}`;
     this.room = this.makeRoom('host', code);
@@ -1315,14 +1354,25 @@ export class Game {
       return;
     }
     this.leaveRoom();
+    this.setUrl(`?raum=${code}${this.lobby.local ? '&lokal=1' : ''}`);
     this.lobby = { ...this.lobby, role: 'guest', status: 'connecting', detail: '', code, link: '', copied: false, ping: 0 };
     this.lobby.settings = { ...defaultLobbySettings(), guestFaction: this.lobby.settings.guestFaction ?? 'technoclan' };
     this.room = this.makeRoom('guest', code);
     this.renderLobbyCard();
   }
 
+  /** Adresse der Seite anpassen – so findet ein Neuladen in denselben Raum zurück. */
+  private setUrl(search: string): void {
+    try {
+      history.replaceState(null, '', `${location.pathname}${search}`);
+    } catch {
+      /* z. B. in einer Vorschau ohne eigene Adresse */
+    }
+  }
+
   private leaveRoom(): void {
     if (!this.room) return;
+    this.setUrl('');
     this.room.send({ k: 'bye' });
     this.room.close();
     this.room = null;
@@ -1335,11 +1385,20 @@ export class Game {
     this.lobby.status = st;
     this.lobby.detail = detail ?? '';
     if (st === 'connected') {
-      this.room?.send({ k: 'hello', v: gameVersion() });
+      this.room?.send({ k: 'hello', v: gameVersion(), match: this.activeMatchId() });
       if (this.room?.role === 'guest') this.room.send({ k: 'pick', faction: this.lobby.settings.guestFaction ?? 'technoclan' });
     }
-    if ((st === 'closed' || st === 'error') && this.session.lockstep && !this.session.world.result && !this.onlineEnded) {
-      this.endOnline('Verbindung verloren', detail || 'Die Verbindung zum Mitspieler ist abgebrochen.', null);
+    if ((st === 'closed' || st === 'error') && this.activeMatchId()) {
+      if (st === 'error' && this.reconnectSince) {
+        this.reconnectSince = 0;
+        this.endOnline('Verbindung verloren', detail || 'Die Verbindung zum Mitspieler ist abgebrochen.', null);
+        return;
+      }
+      // Nicht gleich beenden: Der andere kann zurückkommen (Netz wieder da, Seite neu geladen).
+      if (!this.reconnectSince) {
+        this.reconnectSince = performance.now();
+        this.hud.log(this.session.world.seconds, 'Verbindung unterbrochen – warte auf deinen Mitspieler. Lädt er die Seite mit dem Raum-Link neu, geht es an derselben Stelle weiter.', 'warn');
+      }
       return;
     }
     this.renderLobbyCard();
@@ -1362,7 +1421,42 @@ export class Game {
           this.renderLobbyCard();
           return;
         }
+        {
+          const mine = this.activeMatchId();
+          if (mine && m.match === mine && ls) {
+            // Kurzer Abbruch, beide haben die Runde noch: verlorene Eingaben nachschicken lassen.
+            this.room?.send({ k: 'resync', have: ls.have });
+            this.reconnected();
+            break;
+          }
+          if (mine && !m.match) {
+            // Der andere hat neu geladen: ihm den Stand schicken.
+            this.sendRejoin();
+            this.reconnected();
+            break;
+          }
+          if (!mine && m.match) {
+            this.lobby.detail = 'Hole die laufende Runde …';
+            this.renderLobbyCard();
+            break;
+          }
+        }
         if (this.room?.role === 'host') this.sendLobby();
+        break;
+      case 'resync':
+        if (ls) this.room?.send(ls.resendFrom(m.have));
+        break;
+      case 'fs':
+        ls?.onMessage(m, now);
+        break;
+      case 'rj':
+        if (m.i === 0) this.rjParts = [];
+        this.rjParts[m.i] = m.s;
+        if (this.rjParts.filter((x) => x !== undefined).length === m.n) {
+          const text = this.rjParts.join('');
+          this.rjParts = [];
+          this.adoptRejoin(JSON.parse(text) as RejoinPayload);
+        }
         break;
       case 'lobby':
         if (this.room?.role === 'guest') {
@@ -1414,11 +1508,75 @@ export class Game {
         if (ls && !this.session.world.result && !this.onlineEnded) this.endOnline('Sieg', 'Dein Gegner hat die Runde verlassen.', true);
         break;
       case 'bye':
-        this.onRoomStatus('closed', 'Dein Mitspieler hat den Raum verlassen.');
+        if (this.activeMatchId()) this.endOnline('Sieg', 'Dein Mitspieler hat den Raum verlassen.', true);
+        else this.onRoomStatus('closed', 'Dein Mitspieler hat den Raum verlassen.');
         break;
       default:
         break;
     }
+  }
+
+  /** Kennung der laufenden Multiplayer-Runde (null = keine). */
+  private activeMatchId(): string | null {
+    const m = this.mpMatch;
+    if (!m || !this.session.lockstep || this.onlineEnded || this.session.world.result) return null;
+    return `${m.seed}:${m.mapId}`;
+  }
+
+  private reconnected(): void {
+    if (!this.reconnectSince) return;
+    this.reconnectSince = 0;
+    this.hud.log(this.session.world.seconds, 'Wieder verbunden – es geht weiter.', 'good');
+  }
+
+  /** Den ganzen Stand an den neu geladenen Mitspieler schicken (in Stücken). */
+  private sendRejoin(): void {
+    if (!this.mpMatch || !this.session.lockstep) return;
+    const text = JSON.stringify(this.session.rejoinPayload(this.mpMatch));
+    const size = 12000;
+    const n = Math.max(1, Math.ceil(text.length / size));
+    for (let i = 0; i < n; i++) this.room?.send({ k: 'rj', i, n, s: text.slice(i * size, (i + 1) * size) });
+  }
+
+  /** Neu geladen: den Stand des anderen übernehmen und die Runde nachrechnen. */
+  private adoptRejoin(p: RejoinPayload): void {
+    const me = otherPlayer(p.holderSide);
+    const host = me === p.match.hostSide;
+    const ls = Lockstep.mirror(p.ls, me, host, (msg) => this.room?.send(msg), p.tick);
+    ls.rtt = this.netRtt;
+    ls.remoteRtt = this.netRemoteRtt;
+    this.mpMatch = p.match;
+    this.mp = { host };
+    this.onlineEnded = false;
+    this.desyncShown = false;
+    this.stalledSince = 0;
+    this.reconnectSince = 0;
+    this.menuOpen = false;
+    this.lobbyOpen = false;
+    this.closeTitle();
+    this.doc.getElementById('mp-overlay')!.hidden = true;
+    this.doc.body.classList.remove('start-mode');
+    this.music.play('game');
+    const m = p.match;
+    this.session = new Session('play', m.mapId, m.seed, 'normal', m.factions, undefined, m.overtime, me, ls);
+    this.resetView('play');
+    this.hud.hideOverlays();
+    this.hud.clearLog();
+    this.session.restore(p);
+    this.hud.log(0, `Zurück in der Runde auf ${this.session.world.map.def.name} (du spielst ${me === 0 ? 'links' : 'rechts'}).`, 'good');
+    if (this.session.prepActive) {
+      this.view.prep = true;
+      this.view.swap = this.session.myPrepDone ? null : { terrain: 'forest' };
+    }
+  }
+
+  private onCatchUpDone(): void {
+    const world = this.session.world;
+    // Die Ereignisse des Nachrechnens nicht alle in den Lagebericht schreiben.
+    for (const ev of world.events) this.lastSeq = Math.max(this.lastSeq, ev.seq);
+    this.acc = 0;
+    this.renderer.invalidate();
+    this.hud.log(world.seconds, this.session.catchUpMismatch ? 'Achtung: Nach dem Nachrechnen weicht der Spielstand ab – bitte melden.' : 'Runde aufgeholt – weiter geht’s.', this.session.catchUpMismatch ? 'bad' : 'good');
   }
 
   /** Host: Runde starten – beide bekommen dieselben Daten. */
@@ -1441,6 +1599,8 @@ export class Game {
   private startOnlineMatch(m: OnlineMatch): void {
     const host = this.room?.role === 'host';
     const me: PlayerId = host ? m.hostSide : otherPlayer(m.hostSide);
+    this.mpMatch = m;
+    this.reconnectSince = 0;
     const ls = new Lockstep(me, host, (msg) => this.room?.send(msg), m.delay);
     ls.rtt = this.netRtt;
     ls.remoteRtt = this.netRemoteRtt;

@@ -3,7 +3,7 @@ import { hashWorld } from '../sim/hash';
 import type { PlayerId } from '../sim/types';
 import { otherPlayer } from '../sim/types';
 import type { World } from '../sim/world';
-import type { NetMsg } from './protocol';
+import type { LockstepSnapshot, NetMsg } from './protocol';
 
 /**
  * Lockstep (Multiplayer, 24.10.): Beide Rechner rechnen dasselbe Spiel. Jeder schickt seine Befehle
@@ -39,6 +39,12 @@ export class Lockstep {
   private readonly resumed = new Set<number>();
   private pending: Command[] = [];
   private pauseRequested = false;
+  /** Alle eigenen nicht leeren Eingaben, Pausen und Fortsetzungen – für das Nachsenden nach einem Abbruch. */
+  private readonly sentLog = new Map<number, Command[]>();
+  private readonly sentPauses = new Set<number>();
+  private readonly resumeLog = new Set<number>();
+  /** Zuletzt gerechneter Tick. */
+  private lastTaken = -1;
   private readonly myHashes = new Map<number, string>();
   private readonly theirHashes = new Map<number, string>();
 
@@ -76,6 +82,7 @@ export class Lockstep {
     if (!this.isHost || this.pausedAt === null) return;
     const at = this.pausedAt;
     this.pausedAt = null;
+    this.resumeLog.add(at);
     this.send({ k: 'resume', at });
   }
 
@@ -94,10 +101,12 @@ export class Lockstep {
     const c = this.pending;
     this.pending = [];
     this.local.set(want, c);
+    if (c.length) this.sentLog.set(want, c);
     const msg: NetMsg = { k: 'f', a, b: want, c };
     if (this.pauseRequested) {
       msg.p = 1;
       this.pauseTicks.add(want);
+      this.sentPauses.add(want);
       this.pauseRequested = false;
     }
     this.sentUpTo = want;
@@ -116,6 +125,7 @@ export class Lockstep {
     const theirs = this.remote.get(tick) ?? [];
     this.local.delete(tick);
     this.remote.delete(tick);
+    this.lastTaken = tick;
     // Feste Reihenfolge nach Spieler – world.step mischt danach fair.
     const first: PlayerId = 0;
     const lists: [PlayerId, Command[]][] = this.me === first ? [[this.me, mine], [otherPlayer(this.me), theirs]] : [[otherPlayer(this.me), theirs], [this.me, mine]];
@@ -146,6 +156,18 @@ export class Lockstep {
         this.remoteUpTo = Math.max(this.remoteUpTo, m.b);
         break;
       }
+      case 'fs': {
+        const frames = new Map(m.frames);
+        for (let t = Math.max(m.a, this.lastTaken + 1); t <= m.b; t++) this.remote.set(t, frames.get(t) ?? []);
+        for (const t of m.pauses) if (t > this.lastTaken) this.pauseTicks.add(t);
+        for (const at of m.resumes) {
+          this.resumed.add(at);
+          this.pauseTicks.delete(at);
+          if (this.pausedAt === at) this.pausedAt = null;
+        }
+        this.remoteUpTo = Math.max(this.remoteUpTo, m.b);
+        break;
+      }
       case 'resume':
         this.resumed.add(m.at);
         this.pauseTicks.delete(m.at);
@@ -169,6 +191,52 @@ export class Lockstep {
       default:
         break;
     }
+  }
+
+  /** Bis hierher habe ich die Eingaben des Gegners (für „resync“ nach einem Abbruch). */
+  get have(): number {
+    return this.remoteUpTo;
+  }
+
+  /** Nach einem Abbruch: eigene Eingaben ab `have + 1` noch einmal (was unterwegs verloren ging). */
+  resendFrom(have: number): NetMsg {
+    const frames: [number, Command[]][] = [];
+    for (const [t, c] of this.sentLog) if (t > have && t <= this.sentUpTo) frames.push([t, c]);
+    return { k: 'fs', a: have + 1, b: this.sentUpTo, frames, pauses: [...this.sentPauses].filter((t) => t > have), resumes: [...this.resumeLog] };
+  }
+
+  /** Stand für den Wiedereinstieg des anderen (aus Sicht dieses Rechners). */
+  snapshot(): LockstepSnapshot {
+    return {
+      sentUpTo: this.sentUpTo,
+      remoteUpTo: this.remoteUpTo,
+      local: [...this.local],
+      remote: [...this.remote],
+      pauseTicks: [...this.pauseTicks],
+      resumed: [...this.resumed],
+      pausedAt: this.pausedAt,
+      delay: this.delay,
+    };
+  }
+
+  /** Lockstep des Neuen aus dem Stand des anderen (Seiten getauscht) – weiter ab Tick `tick`. */
+  static mirror(snap: LockstepSnapshot, me: PlayerId, isHost: boolean, send: (m: NetMsg) => void, tick: number): Lockstep {
+    const ls = new Lockstep(me, isHost, send, snap.delay);
+    ls.sentUpTo = snap.remoteUpTo;
+    ls.remoteUpTo = snap.sentUpTo;
+    for (const [t, c] of snap.remote) {
+      ls.local.set(t, c);
+      if (c.length) ls.sentLog.set(t, c);
+    }
+    for (const [t, c] of snap.local) ls.remote.set(t, c);
+    for (const t of snap.pauseTicks) ls.pauseTicks.add(t);
+    for (const t of snap.resumed) {
+      ls.resumed.add(t);
+      if (isHost) ls.resumeLog.add(t);
+    }
+    ls.pausedAt = snap.pausedAt;
+    ls.lastTaken = tick - 1;
+    return ls;
   }
 
   /** Laufzeit messen (etwa jede Sekunde). */

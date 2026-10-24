@@ -11,6 +11,9 @@ import type { NetMsg } from './protocol';
  */
 export type RoomRole = 'host' | 'guest';
 export type RoomStatus = 'connecting' | 'waiting' | 'connected' | 'closed' | 'error';
+/** Nach einem Abbruch versucht der Gast es so oft wieder (alle 2,5 s, gut 3 Minuten). */
+const RETRY_MS = 2500;
+const RETRY_MAX = 80;
 
 const PEER_PREFIX = 'terrain-conquester-';
 const PEERJS_URLS = [
@@ -101,10 +104,30 @@ export class PeerRoom extends Room {
   private peer: PeerLike | null = null;
   private conn: PeerConn | null = null;
   private closed = false;
+  /** Gast: nach einem Abbruch immer wieder verbinden. */
+  private retries = 0;
+  private retryTimer = 0;
+  /** Host: Anmeldeversuche mit demselben Code (nach Neuladen ist der alte Name kurz noch belegt). */
+  private hostTries = 0;
 
   constructor(role: RoomRole, code: string, events: RoomEvents) {
     super(role, code, events);
     void this.open();
+  }
+
+  /** Gast: neuer Verbindungsversuch zum Host (nach einem Abbruch). */
+  private retry(): void {
+    if (this.closed || this.role !== 'guest' || this.conn?.open) return;
+    if (this.retries++ >= RETRY_MAX) {
+      this.setStatus('error', 'Der Mitspieler kommt nicht zurück.');
+      return;
+    }
+    const peer = this.peer;
+    if (!peer) return;
+    if (peer.disconnected) peer.reconnect();
+    this.attach(peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'json' }));
+    clearTimeout(this.retryTimer);
+    this.retryTimer = window.setTimeout(() => this.retry(), RETRY_MS);
   }
 
   private async open(): Promise<void> {
@@ -121,6 +144,14 @@ export class PeerRoom extends Room {
     peer.on('error', (err) => {
       if (this.closed) return;
       const type = err?.type ?? '';
+      // Host lädt neu: Der alte Name ist kurz noch belegt – noch einmal versuchen.
+      if (type === 'unavailable-id' && this.role === 'host' && this.hostTries++ < 10) {
+        peer.destroy();
+        window.setTimeout(() => void this.open(), 2000);
+        return;
+      }
+      // Gast wartet auf die Rückkehr des Hosts: „nicht gefunden“ ist dann normal.
+      if (type === 'peer-unavailable' && this.retries > 0) return;
       const text =
         type === 'unavailable-id' ? 'Diesen Raum-Code gibt es schon – bitte einen neuen Raum erstellen.' :
         type === 'peer-unavailable' ? 'Kein Raum mit diesem Code gefunden (oder der Host ist nicht mehr da).' :
@@ -155,17 +186,29 @@ export class PeerRoom extends Room {
 
   private attach(conn: PeerConn): void {
     this.conn = conn;
-    conn.on('open', () => this.setStatus('connected'));
+    conn.on('open', () => {
+      if (this.conn !== conn) return;
+      this.retries = 0;
+      clearTimeout(this.retryTimer);
+      this.setStatus('connected');
+    });
     conn.on('data', (data) => {
       if (data && typeof data === 'object' && 'k' in (data as object)) this.events.message(data as NetMsg);
     });
     conn.on('close', () => {
       if (this.conn !== conn || this.closed) return;
+      const wasOpen = this.status === 'connected';
       this.conn = null;
-      this.setStatus('closed', 'Die Verbindung zum Mitspieler ist abgebrochen.');
+      if (wasOpen) this.setStatus('closed', 'Die Verbindung zum Mitspieler ist abgebrochen.');
+      if (this.role === 'guest') {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = window.setTimeout(() => this.retry(), wasOpen ? 500 : RETRY_MS);
+      }
     });
     conn.on('error', (err) => {
-      if (!this.closed) this.setStatus('error', `Verbindungsfehler: ${err?.message ?? err?.type ?? ''}`);
+      if (this.closed || this.conn !== conn) return;
+      if (this.role === 'guest' && this.retries > 0) return; // Wiederholung läuft
+      this.setStatus('error', `Verbindungsfehler: ${err?.message ?? err?.type ?? ''}`);
     });
   }
 
@@ -175,6 +218,7 @@ export class PeerRoom extends Room {
 
   close(): void {
     this.closed = true;
+    clearTimeout(this.retryTimer);
     try {
       this.conn?.close();
       this.peer?.destroy();
@@ -198,15 +242,14 @@ export class LocalRoom extends Room {
     this.channel.onmessage = (ev: MessageEvent) => this.onRaw(ev.data as { from: string; to?: string; kind: string; m?: NetMsg });
     queueMicrotask(() => {
       if (role === 'host') this.setStatus('waiting');
-      else {
-        const knock = (): void => {
-          if (this.peerId || this.closed) return;
-          this.channel.postMessage({ from: this.me, kind: 'knock' });
-          this.helloTimer = window.setTimeout(knock, 500);
-        };
-        knock();
-      }
+      else this.knock();
     });
+  }
+
+  private knock(): void {
+    if (this.peerId || this.closed) return;
+    this.channel.postMessage({ from: this.me, kind: 'knock' });
+    this.helloTimer = window.setTimeout(() => this.knock(), 500);
   }
 
   private onRaw(d: { from: string; to?: string; kind: string; m?: NetMsg }): void {
@@ -227,7 +270,8 @@ export class LocalRoom extends Room {
     }
     if (d.kind === 'bye' && d.from === this.peerId) {
       this.peerId = null;
-      this.setStatus('closed', 'Der andere Tab hat den Raum verlassen.');
+      this.setStatus('closed', 'Die Verbindung zum anderen Tab ist abgebrochen.');
+      if (this.role === 'guest') this.knock(); // auf die Rückkehr des Hosts warten
       return;
     }
     if (d.kind === 'msg' && d.from === this.peerId && d.m) this.events.message(d.m);
