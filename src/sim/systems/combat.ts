@@ -1,4 +1,5 @@
 import { UNITS } from '../../data/units';
+import { flankFactor } from './flank';
 import { energyCap } from './economy';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import type { UnitId } from '../../data/units';
@@ -69,6 +70,7 @@ export function updateCombat(world: World): void {
     if (damage <= 0) continue;
     if (e.tf) damage *= ambushFactor(world, e) * synergyDamageFactor(world, e); // Hinterhalt, Blühende Wiese
     if (e.weaken && world.tick < e.weaken.until) damage *= e.weaken.damage; // geschwächt (Schlammschleuder)
+    damage *= flankFactor(world, e); // Flankenangriff nach dem Überqueren einer gegnerischen Schlucht
 
     // Myriaden: Masse als Stärke, Munition wörtlich, Kamikaze.
     const def = e.kind === 'unit' ? UNITS[e.defId as UnitId] : undefined;

@@ -171,6 +171,12 @@ export interface Rules {
   unitSpeed: number;
   /** Anteil der Baukosten, den man beim Verkaufen zurückbekommt. */
   sellRefund: number;
+  /** Jede weitere eigene Schlucht kostet so viel mehr (24.10. abends). */
+  gorgeCostStep: number;
+  /** Flankenangriff: Wer eine gegnerische Schlucht überquert hat, macht so lange mehr Schaden. */
+  flank: { seconds: number; damage: number };
+  /** Myriaden-Superbrut: zwei Bruten auf höchster Stufe verschmelzen. */
+  superBrood: { cost: number; seconds: number; speed: number; clutchBonus: number; hp: number };
   /** Wiederaufbau: So lange nach dem Verkauf bekommt die nächste neue Fabrik den Stufen-Bonus (Sekunden). */
   rebuildSeconds: number;
   /** Umwidmen: so lange steht die Fabrik still (Sekunden). */
@@ -325,6 +331,10 @@ export const RULES: Rules = {
   unitSpeed: 1,
   // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
   sellRefund: 0.7,
+  gorgeCostStep: 30,
+  flank: { seconds: 18, damage: 1.3 },
+  // Doppelte Produktion zweier Bruten, dazu +15 % (gilt als eingespielt); Gelege +4; mehr Leben – aber ein Ziel statt zwei.
+  superBrood: { cost: 150, seconds: 25, speed: 2.3, clutchBonus: 4, hp: 1.8 },
   rebuildSeconds: 60,
   convertSeconds: 20,
   firstSpawnFactor: 0.5,

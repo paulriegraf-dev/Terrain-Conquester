@@ -76,3 +76,64 @@ describe('Umwidmen', () => {
     assert.equal(world.players[0].stats.lost.formerMeadow, 0, 'zählt nicht als Verlust');
   });
 });
+
+describe('Schluchten und Flankenangriff (24.10. abends)', () => {
+  it('jede weitere Schlucht kostet 30 mehr', async () => {
+    const { swapCostAt } = await import('../src/sim/systems/abilities');
+    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['technoclan', 'myriaden'] });
+    const first = swapCostAt(world, 0, 8, 'gorge').cost;
+    // eine fertige eigene Schlucht (8 Kacheln)
+    for (let k = 0; k < 8; k++) world.dug[k] = 1;
+    assert.equal(swapCostAt(world, 0, 8, 'gorge').cost, first + 30);
+  });
+
+  it('Schweber über eine gegnerische Schlucht: danach 18 s mehr Schaden, eigene Schluchten zählen nicht', async () => {
+    const { flankFactor } = await import('../src/sim/systems/flank');
+    const { TERRAIN_INDEX } = await import('../src/data/terrain');
+    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['technoclan', 'myriaden'] });
+    const h = world.addUnit(0, UNITS.hoverscout, { x: 10.5, y: 7.5 }, 'mid');
+    const i = world.grid.index(10, 7);
+    world.grid.setTerrain(i, TERRAIN_INDEX.gorge);
+    world.dug[i] = 1; // eigene Schlucht
+    world.step();
+    h.pos = { x: 11.5, y: 7.5 };
+    world.step();
+    assert.equal(flankFactor(world, h), 1, 'eigene Schlucht: kein Bonus');
+    world.dug[i] = 2; // gegnerische Schlucht
+    h.pos = { x: 10.5, y: 7.5 };
+    world.step();
+    h.pos = { x: 11.5, y: 7.5 };
+    world.step();
+    assert.equal(flankFactor(world, h), 1.3);
+    stepTimes(world, 18 * world.tps + 2);
+    assert.equal(flankFactor(world, h), 1);
+  });
+});
+
+describe('Myriaden-Superbrut', () => {
+  it('zwei Bruten auf Stufe III → eine Superbrut: doppelt + 15 %, Gelege +4, Platz frei, nicht umwidmen', async () => {
+    const { factorySpeed } = await import('../src/sim/systems/production');
+    const { clutchSize } = await import('../src/sim/systems/myr');
+    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['myriaden', 'technoclan'] });
+    const a = world.addBuilding(0, BUILDINGS.barracks, { x: 3, y: 0, w: 2, h: 2 });
+    const b = world.addBuilding(0, BUILDINGS.barracks, { x: 3, y: 6, w: 2, h: 2 });
+    a.producer!.level = 3;
+    const speed = factorySpeed(world, a);
+    const clutch = clutchSize(world, a)!;
+    world.step([cmd(0, { type: 'mergeBroods', entityId: a.id })]);
+    assert.equal(world.players[0].labs.length, 0);
+    assert.equal(a.producer!.job, null, 'Partner fehlt (zweite Brut erst Stufe I) – nichts passiert');
+    b.producer!.level = 3;
+    world.step([cmd(0, { type: 'mergeBroods', entityId: a.id })]);
+    assert.equal((a.producer!.job as { kind: string } | null)?.kind, 'merge');
+    assert.equal((b.producer!.job as { kind: string } | null)?.kind, 'merge');
+    stepTimes(world, 25 * world.tps + 2);
+    assert.equal(b.alive, false, 'die zweite Brut geht auf');
+    assert.equal(a.producer!.super, true);
+    assert.equal(a.name, 'Superbrut');
+    assert.ok(Math.abs(factorySpeed(world, a) - speed * 2.3) < 1e-9);
+    assert.equal(clutchSize(world, a), clutch + 4);
+    assert.equal(checkConvert(world, a, 'workshop').ok, false);
+    assert.equal(world.players[0].stats.buildingsLost, 0);
+  });
+});

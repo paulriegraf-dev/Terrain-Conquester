@@ -27,7 +27,8 @@ export type SimEventData =
   | { type: 'order'; owner: PlayerId; part: PartId }
   /** Eilauftrag: Eine Fabrik hat ihren nächsten Verband sofort geliefert. */
   | { type: 'rush'; owner: PlayerId; name: string; unit: string; cost: number }
-  | { type: 'factory'; owner: PlayerId; entityId: number; kind: 'retool' | 'level' | 'research' | 'convert'; name: string }
+  | { type: 'flank'; owner: PlayerId; name: string; pos: Vec2 }
+  | { type: 'factory'; owner: PlayerId; entityId: number; kind: 'retool' | 'level' | 'research' | 'convert' | 'merge'; name: string }
   | { type: 'bounty'; owner: PlayerId; amount: number; name: string }
   | { type: 'stance'; owner: PlayerId; route: Route; stance: 'defend' | 'hold' | 'push' }
   | { type: 'swap'; owner: PlayerId; index: number; terrain: string }

@@ -49,6 +49,8 @@ import { gameVersion } from '../net/version';
 import { defaultLobbySettings, renderLobby } from './lobby';
 import type { LobbyView } from './lobby';
 import { TitleFx } from './titleFx';
+import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
+import type { SavedMatch, Snapshot } from './replays';
 
 interface FinishedMatch {
   mapId: string;
@@ -121,6 +123,10 @@ export class Game {
   /** Wiedereinstieg: Stücke des Stands. */
   private rjParts: string[] = [];
   private readonly titleFx: TitleFx | null;
+  /** Gespeicherte Partien: Lagebilder der laufenden Runde und die zuletzt gespeicherte Partie. */
+  private snapshots: Snapshot[] = [];
+  private nextSnapshot = 0;
+  private lastSaved: SavedMatch | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -224,6 +230,8 @@ export class Game {
     this.endHandled = false;
     this.demoRestartAt = 0;
     this.seenEnemies.clear();
+    this.snapshots = [];
+    this.nextSnapshot = 0;
     this.shownWorld = this.session.world;
     this.renderer.invalidate();
     this.lastHqHp = this.session.world.hq(this.session.human)?.hp ?? 0;
@@ -285,6 +293,11 @@ export class Game {
     }
     const world = this.session.world;
     if (world !== this.shownWorld) this.onWorldSwapped();
+    // Lagebild alle 30 s (für gespeicherte Partien).
+    if (this.session.mode === 'play' && !this.session.prepActive && !this.session.catchUp && world.tick >= this.nextSnapshot) {
+      this.snapshots.push(snapshotOf(world));
+      this.nextSnapshot = world.tick + 30 * world.tps;
+    }
     if (!this.session.catchUp) this.processEvents(world);
     this.followSelection(world);
     const sharedPause = !!this.session.lockstep?.paused;
@@ -338,7 +351,7 @@ export class Game {
           break;
         case 'factory':
           if (ev.owner === human) {
-            const what = ev.kind === 'retool' ? 'umgerüstet' : ev.kind === 'level' ? 'hochgestuft' : ev.kind === 'convert' ? 'umgewidmet' : 'Forschung abgeschlossen';
+            const what = ev.kind === 'retool' ? 'umgerüstet' : ev.kind === 'level' ? 'hochgestuft' : ev.kind === 'convert' ? 'umgewidmet' : ev.kind === 'merge' ? 'verschmolzen – doppelte Produktion, größeres Gelege' : 'Forschung abgeschlossen';
             this.hud.log(s, `${ev.name}: ${what}`, 'good');
           }
           break;
@@ -357,6 +370,16 @@ export class Game {
             // Sammel-Signal: Wo der gegnerische Commander sammelt, ist für alle sichtbar markiert.
             const h = world.players[ev.owner].hero;
             this.hud.log(s, `Der Gegner sammelt Truppen beim ${ev.name}${h ? ` (${ROUTE_NAMES[h.route]})` : ''} – Markierung auf der Karte`, 'warn');
+          }
+          break;
+        case 'flank':
+          if (ev.tick - this.lastFlankLog < 8 * world.tps) break;
+          if (ev.owner === human) {
+            this.lastFlankLog = ev.tick;
+            this.hud.log(s, `Flankenangriff: ${ev.name} hat eine gegnerische Schlucht überquert – +${Math.round((world.rules.flank.damage - 1) * 100)} % Schaden für ${world.rules.flank.seconds} s`, 'good');
+          } else if (human !== null && world.players[human].vision.isVisible(Math.floor(ev.pos.x), Math.floor(ev.pos.y))) {
+            this.lastFlankLog = ev.tick;
+            this.hud.log(s, `Der Gegner kommt über deine Schlucht (${ev.name}) – Flankenangriff!`, 'warn');
           }
           break;
         case 'bounty':
@@ -482,6 +505,7 @@ export class Game {
     const duration = clock(result.tick / world.tps);
     if (this.session.lockstep) {
       this.saveLastMatch();
+      this.recordMatch(result.winner, result.reason);
       const me = this.session.human;
       const won = result.winner === me;
       const lost = result.winner === otherPlayer(me);
@@ -511,6 +535,7 @@ export class Game {
         hash: hashWorld(world),
         ticks: world.tick,
       };
+      this.recordMatch(result.winner, result.reason);
       const me = this.session.human;
       const won = result.winner === me;
       const lost = result.winner === otherPlayer(me);
@@ -717,6 +742,7 @@ export class Game {
       void this.music.setMenuTrack(file).then(() => this.syncMusicButtons());
     });
     this.syncMusicButtons();
+    this.syncSavedCount();
     // Gespeicherte Startmusik wird asynchron geladen – kurz danach den Hinweis aktualisieren.
     setTimeout(() => this.syncMusicButtons(), 400);
   }
@@ -731,6 +757,7 @@ export class Game {
 
   /** Zurück zum Startbildschirm (Wahl: gegen die KI oder Multiplayer). */
   private showTitle(): void {
+    this.syncSavedCount();
     this.titleOpen = true;
     const el = this.doc.getElementById('title-screen');
     if (el) el.hidden = false;
@@ -822,11 +849,13 @@ export class Game {
     };
     switch (action) {
       case 'start': {
+        this.saveAbandoned();
         const opts = this.hud.startOptions();
         this.startMatch(opts.mapId, opts.level, opts.factions, opts.overtime, opts.side);
         break;
       }
       case 'new-round':
+        this.saveAbandoned();
         this.menuOpen = false;
         this.startDemo();
         break;
@@ -836,6 +865,14 @@ export class Game {
       case 'title-play':
         this.closeTitle();
         if (this.lobbyOpen) this.closeLobby();
+        break;
+      case 'save-match':
+        if (this.lastSaved) downloadJson(`terrain-conquester-partie-${this.lastSaved.date.slice(0, 16).replace(/[:T]/g, '-')}.json`, this.lastSaved);
+        break;
+      case 'export-matches':
+        void allMatches().then((all) => {
+          if (all.length) downloadJson(`terrain-conquester-partien-${new Date().toISOString().slice(0, 10)}-${all.length}.json`, { version: gameVersion(), matches: all });
+        });
         break;
       case 'to-title':
         this.leaveToTitle();
@@ -936,6 +973,11 @@ export class Game {
           this.view.swap = null;
           this.view.selected = null;
         }
+        break;
+      }
+      case 'merge': {
+        const b = own();
+        if (b) this.session.issue({ type: 'mergeBroods', entityId: b.id });
         break;
       }
       case 'convert-to': {
@@ -1099,6 +1141,7 @@ export class Game {
   }
 
   private hudSellArmed = 0;
+  private lastFlankLog = -1e9;
   private lastSwapTerrain: TerrainId = 'forest';
   private gorgeVertical = true;
   private lastPainted: { x: number; y: number } | null = null;
@@ -1542,6 +1585,41 @@ export class Game {
     }
   }
 
+  /** Partie im Browser speichern (Befehle, Startwert, Lagebilder) – für später: Replays, Fehlersuche, KI-Training. */
+  private recordMatch(winner: PlayerId | null, reason: string): void {
+    const s = this.session;
+    const world = s.world;
+    if (s.mode !== 'play' || world.tick < 20 * world.tps) return; // ganz kurze Runden nicht
+    const m: SavedMatch = {
+      id: `${Date.now()}-${s.seed}`,
+      date: new Date().toISOString(),
+      version: gameVersion(),
+      mode: s.lockstep ? 'multiplayer' : 'ki',
+      mapId: s.mapId,
+      seed: s.seed,
+      factions: [s.factions[0], s.factions[1]],
+      overtime: s.overtime,
+      human: s.human,
+      level: s.lockstep ? undefined : s.level,
+      result: { winner, reason, seconds: Math.round(world.seconds) },
+      log: [...world.log],
+      hash: hashWorld(world),
+      snapshots: [...this.snapshots, snapshotOf(world)],
+    };
+    this.lastSaved = m;
+    void saveMatch(m).then(() => this.syncSavedCount());
+  }
+
+  /** Zahl der gespeicherten Partien auf dem Knopf im Titelbild. */
+  private syncSavedCount(): void {
+    void allMatches().then((all) => {
+      const b = this.doc.getElementById('btn-export-matches');
+      if (!b) return;
+      b.textContent = `Gespeicherte Partien (${all.length}) herunterladen`;
+      (b as HTMLButtonElement).disabled = all.length === 0;
+    });
+  }
+
   /** Kennung der laufenden Multiplayer-Runde (null = keine). */
   private activeMatchId(): string | null {
     const m = this.mpMatch;
@@ -1668,6 +1746,7 @@ export class Game {
   /** Multiplayer-Runde außerhalb der Simulation beenden (Aufgabe, Abbruch). won: true/false/null = offen. */
   private endOnline(title: string, summary: string, won: boolean | null): void {
     this.onlineEnded = true;
+    this.recordMatch(won === null ? null : won ? this.session.human : otherPlayer(this.session.human), won === null ? 'abbruch' : 'aufgabe');
     this.menuOpen = false;
     const world = this.session.world;
     const me = this.session.human;
@@ -1693,7 +1772,14 @@ export class Game {
   }
 
   /** Menü → Zurück zum Startbildschirm (im Multiplayer: aufgeben und Raum verlassen). */
+  /** Runde gegen die KI abgebrochen: trotzdem speichern (als Aufgabe). */
+  private saveAbandoned(): void {
+    const s = this.session;
+    if (s.mode === 'play' && !s.lockstep && !s.world.result && !s.prepActive) this.recordMatch(otherPlayer(s.human), 'aufgabe');
+  }
+
   private leaveToTitle(): void {
+    this.saveAbandoned();
     if (this.session.lockstep && !this.session.world.result && !this.onlineEnded) this.room?.send({ k: 'resign' });
     this.leaveRoom();
     this.lobbyOpen = false;

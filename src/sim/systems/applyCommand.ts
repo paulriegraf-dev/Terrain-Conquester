@@ -14,7 +14,7 @@ import { prepTerrain } from './prep';
 import { castWall, swapTerrain } from './abilities';
 import { DISGUISE } from '../../data/abilities';
 import { placeOrder } from './market';
-import { convertFactory, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
+import { convertFactory, mergeBroods, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
 import { triggerEmergency } from './emergency';
 import { orderScout } from './scout';
 import { routeChangeSeconds } from './sites';
@@ -38,6 +38,11 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
   switch (cmd.type) {
     case 'build':
       return build(world, player, cmd.x, cmd.y, cmd.building);
+    case 'mergeBroods': {
+      const b = ownBuilding(world, player, cmd.entityId);
+      if (typeof b === 'string') return fail(b);
+      return mergeBroods(world, b);
+    }
     case 'convertFactory': {
       const b = ownBuilding(world, player, cmd.entityId);
       if (typeof b === 'string') return fail(b);

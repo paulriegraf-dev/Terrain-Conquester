@@ -1618,6 +1618,13 @@ Wunsch des Nutzers: Anpassen soll sich lohnen, aber nicht zu leicht fallen – d
 - **Terra-Former:** Beim Umwidmen wechseln die Terraformer aus dieser Fabrik die Linie (Säer → Brecher usw.; die Einheiten merken sich ihre Fabrik). Wächter bleiben, geformter Boden bleibt liegen. Der Gebäude-Ausbau gilt je Linie – die neue Linie hat ihn nur, wenn er dort schon erforscht ist.
 - Forschung geht beim Verkaufen und Umwidmen nie verloren – sie gilt zentral für die Einheitenart.
 
+## Umgesetzt (24.10. abends): Schluchten, Flankenangriff, Superbrut, gespeicherte Partien
+
+- **Schluchten teurer, je mehr man hat:** 80 Energie für die erste, jede weitere (stehend oder im Bau) +30 (80, 110, 140 …). Gezielt sperren bleibt günstig, alles zumauern nicht. Zuschütten ging schon vorher: das Gelände-Werkzeug auf eine Schlucht im eigenen Gebiet.
+- **Flankenangriff:** Wer eine vom Gegner gegrabene Schlucht überquert (Schweber), macht danach 18 s lang 30 % mehr Schaden. Nur Überqueren zählt (Wunsch des Nutzers: keine seltsamen Wechselwirkungen), natürliche und eigene Schluchten nicht. Der Lagebericht meldet es beiden Seiten.
+- **Myriaden-Superbrut (Idee des Nutzers):** Zwei Bruten auf Stufe III verschmelzen (150 Energie, 25 s, in denen beide nichts bauen). Danach: doppelte Produktion und +15 % (die neue Brut gilt als eingespielt), Gelege +4, 80 % mehr Leben; der Platz der zweiten Brut wird frei. Endgültig – nicht umwidmen; fällt sie, fehlt die halbe Brut. Die Myriaden sind die Einzigen, die ihre Brut auf Stufe III bringen müssen – die Superbrut macht das zum Spätspiel-Ziel.
+- **Gespeicherte Partien:** Jede eigene Partie (gegen die KI, auch abgebrochen, und Multiplayer) landet im Browser: Startwert, alle Befehle, Ergebnis, Spielversion und alle 30 s ein Lagebild (Energie, Einheiten und Gebäude je Art, Gebiet, HQ-Leben, Forschung) – das bleibt lesbar, auch wenn sich die Werte ändern. Herunterladen: am Rundenende „Partie herunterladen“, im Titelbild alle auf einmal. Gedacht für später: die Regel-KI per Selbstspiel abstimmen und mit echten Partien vergleichen (Stufe 2 der KI-Idee), erst danach eine lernende KI.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.

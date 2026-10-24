@@ -65,7 +65,9 @@ export type FactoryJob =
   | { kind: 'retool'; unit: UnitId; startTick: number; doneTick: number }
   | { kind: 'level'; level: number; startTick: number; doneTick: number }
   /** Umwidmen (24.10.): Die Fabrik wird zu einer anderen Gebäudeart (Stufe bleibt, soweit es sie dort gibt). */
-  | { kind: 'convert'; to: BuildingId; startTick: number; doneTick: number };
+  | { kind: 'convert'; to: BuildingId; startTick: number; doneTick: number }
+  /** Superbrut (Myriaden): verschmilzt mit `partner`; `lead` = diese Brut bleibt stehen. */
+  | { kind: 'merge'; partner: number; lead: boolean; startTick: number; doneTick: number };
 
 export interface ProducerState {
   /** Einheit, die die Fabrik gerade baut (eine der freigeschalteten). */
@@ -96,12 +98,18 @@ export interface ProducerState {
   levelPaid?: number;
   /** Wiederaufbau-Bonus: so viele nächste Stufen kosten die Hälfte und dauern halb so lang. */
   bonusLevels?: number;
+  /** Myriaden-Superbrut: aus zwei Bruten verschmolzen. */
+  super?: boolean;
 }
 
 export interface Entity {
   id: number;
   /** Einheit: aus dieser Fabrik (Entity-ID) – für das Umwidmen der Terra-Former-Linien. */
   fromBuilding?: number;
+  /** Steht gerade auf einer gegnerischen Schlucht (Schweber). */
+  onGorge?: boolean;
+  /** Flankenangriff: bis zu diesem Tick mehr Schaden (nach dem Überqueren einer gegnerischen Schlucht). */
+  flankUntil?: number;
   owner: PlayerId;
   kind: EntityKind;
   /** Schlüssel in den Daten (z. B. 'trooper', 'barracks', 'hq'). */

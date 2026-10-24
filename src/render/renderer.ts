@@ -774,7 +774,7 @@ export class Renderer {
 
     const cx = (r.x + r.w / 2) * t;
     const cy = (r.y + r.h / 2) * t;
-    const label = e.kind === 'hq' ? 'HQ' : `${world.players[e.owner].faction.buildings[shown!.defId]?.letter ?? '?'}${shown!.level > 1 ? shown!.level : ''}`;
+    const label = e.kind === 'hq' ? 'HQ' : `${world.players[e.owner].faction.buildings[shown!.defId]?.letter ?? '?'}${e.producer?.super && shown!.defId === e.defId ? '★' : shown!.level > 1 ? shown!.level : ''}`;
     ctx.fillStyle = color;
     ctx.font = `${Math.round(t * (e.kind === 'hq' ? 0.9 : 0.85))}px ${PIXEL}`;
     ctx.textAlign = 'center';

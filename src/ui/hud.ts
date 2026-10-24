@@ -729,7 +729,9 @@ function buildingInfo(e: Entity, world: World): string {
       ? `Rüstet um auf ${UNITS[job.unit].name}`
       : job.kind === 'convert'
         ? `Wird umgewidmet zu ${world.players[e.owner].faction.buildings[job.to]?.name ?? job.to}`
-        : `Wird auf Stufe ${job.level} ausgebaut`
+        : job.kind === 'merge'
+          ? job.lead ? 'Verschmilzt zur Superbrut' : 'Geht in der Superbrut auf'
+          : `Wird auf Stufe ${job.level} ausgebaut`
     : '';
   const status = job
     ? `${jobText} – noch ${Math.ceil((job.doneTick - world.tick) / tps)} s`

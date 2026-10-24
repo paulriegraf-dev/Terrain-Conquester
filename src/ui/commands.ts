@@ -8,7 +8,7 @@ import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { UNITS } from '../data/units';
 import { buildCost } from '../sim/costs';
 import type { BuildingId } from '../data/buildings';
-import { checkConvert, checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { checkConvert, checkMerge, mergePartner, checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { sellValue } from '../sim/systems/applyCommand';
 import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
@@ -470,7 +470,20 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     tip: `Eilauftrag: ${UNITS[pr.unit].name} kommt sofort heraus – für ${rushRules.perSecond} Energie je Sekunde Restzeit (mindestens ${rushRules.min}), danach ${rushRules.cooldownSeconds} s Pause für Eilaufträge ${rushRules.perPlayer ? 'an allen eigenen Fabriken' : 'an dieser Fabrik'}. ${rush.ok ? `Jetzt ${rush.cost} Energie.` : rush.reason}`,
     action: 'rush-order',
   });
-  return { title: `Befehle · Stufe ${pr.level}${(pr.bonusLevels ?? 0) > 0 ? ` · Wiederaufbau ×${pr.bonusLevels}` : ''}`, buttons };
+  // Myriaden: zwei Bruten auf höchster Stufe → Superbrut (eigene Zeile, nur wenn es passt).
+  if (fb.clutch && !pr.super && pr.level >= (fb.levels ?? fb.tiers.length)) {
+    const m = checkMerge(world, e);
+    const partner = mergePartner(world, e);
+    const sb = world.rules.superBrood;
+    buttons.push({
+      id: 'merge', glyph: '⧉', label: 'Superbrut', key: 'j', cost: sb.cost,
+      disabled: !canAct || !m.ok,
+      pending: job?.kind === 'merge' ? `Verschmelzen ${secs(job.doneTick)}s` : undefined,
+      tip: `Mit ${partner ? 'der nächsten Brut auf höchster Stufe' : 'einer zweiten Brut auf höchster Stufe'} zur Superbrut verschmelzen: ${sb.seconds} s bauen beide nichts, dann steht hier eine Superbrut – doppelte Produktion und +${Math.round((sb.speed / 2 - 1) * 100)} %, Gelege +${sb.clutchBonus}, mehr Leben. Der Platz der anderen wird frei. Endgültig: nicht umwidmen – und fällt sie, fehlt die halbe Brut. ${m.ok ? '' : m.reason}`,
+      action: 'merge',
+    });
+  }
+  return { title: `Befehle · ${pr.super ? 'Superbrut' : `Stufe ${pr.level}`}${(pr.bonusLevels ?? 0) > 0 ? ` · Wiederaufbau ×${pr.bonusLevels}` : ''}`, buttons };
 }
 
 /** Untermenü Umwidmen: alle anderen Gebäudearten der eigenen Fraktion. */

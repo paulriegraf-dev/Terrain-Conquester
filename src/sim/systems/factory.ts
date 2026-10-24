@@ -222,6 +222,7 @@ export function checkConvert(world: World, e: Entity, to: BuildingId): Check {
   const faction = world.players[e.owner].faction;
   if (!faction.buildings[to]) return { ok: false, reason: 'Diese Gebäudeart gibt es bei deiner Fraktion nicht' };
   if (to === e.defId) return { ok: false, reason: 'Ist schon diese Gebäudeart' };
+  if (pr.super) return { ok: false, reason: 'Eine Superbrut lässt sich nicht umwidmen' };
   if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
   const cost = Math.max(0, Math.round(buildPriceNow(world, e.owner, to) - buildPriceNow(world, e.owner, e.defId as BuildingId)));
   if (world.players[e.owner].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
@@ -235,6 +236,76 @@ export function convertFactory(world: World, e: Entity, to: BuildingId): Command
   e.paid = (e.paid ?? 0) + c.cost;
   e.producer!.job = { kind: 'convert', to, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) };
   return { ok: true };
+}
+
+/** Ist diese Brut bereit zum Verschmelzen (Myriaden, höchste Stufe, frei, noch keine Superbrut)? */
+function mergeReady(world: World, e: Entity): boolean {
+  const pr = e.producer;
+  if (!e.alive || !pr || pr.super || pr.job) return false;
+  const fb = world.players[e.owner].faction.buildings[e.defId as BuildingId];
+  return !!fb?.clutch && pr.level >= maxLevel(world, e.owner, e.defId as BuildingId);
+}
+
+/** Passende zweite Brut für eine Superbrut: die nächste eigene Brut gleicher Art auf höchster Stufe. */
+export function mergePartner(world: World, e: Entity): Entity | null {
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  for (const o of world.entities) {
+    if (o === e || o.owner !== e.owner || o.defId !== e.defId || !mergeReady(world, o)) continue;
+    const d = (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2;
+    if (d < bestD || (d === bestD && best && o.id < best.id)) {
+      bestD = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
+/**
+ * Myriaden-Superbrut (24.10. abends, Idee des Nutzers): Zwei Bruten auf höchster Stufe verschmelzen. Beide bauen dabei
+ * nichts; danach steht eine Superbrut am Platz der ersten (doppelte Produktion + 15 %, Gelege +4, mehr Leben), der Platz
+ * der zweiten wird frei. Endgültig: Eine Superbrut lässt sich nicht umwidmen. Ein Ziel statt zwei – das Risiko ist gewollt.
+ */
+export function checkMerge(world: World, e: Entity): Check & { partner?: Entity } {
+  const fb = world.players[e.owner].faction.buildings[e.defId as BuildingId];
+  if (!fb?.clutch || !e.producer) return { ok: false, reason: 'Nur Myriaden-Bruten verschmelzen' };
+  if (e.producer.super) return { ok: false, reason: 'Ist schon eine Superbrut' };
+  if (e.producer.job) return { ok: false, reason: 'Brut ist gerade beschäftigt' };
+  if (e.producer.level < maxLevel(world, e.owner, e.defId as BuildingId)) return { ok: false, reason: `Erst auf Stufe ${maxLevel(world, e.owner, e.defId as BuildingId)}` };
+  const partner = mergePartner(world, e);
+  if (!partner) return { ok: false, reason: 'Es braucht eine zweite Brut auf höchster Stufe' };
+  const sb = world.rules.superBrood;
+  if (world.players[e.owner].energy < sb.cost) return { ok: false, reason: `Zu wenig Energie (${sb.cost} nötig)` };
+  return { ok: true, cost: sb.cost, seconds: sb.seconds, partner };
+}
+
+export function mergeBroods(world: World, e: Entity): CommandResult {
+  const c = checkMerge(world, e);
+  if (!c.ok) return c;
+  const b = c.partner!;
+  pay(world, e.owner, c.cost);
+  e.paid = (e.paid ?? 0) + c.cost;
+  const doneTick = world.tick + Math.round(c.seconds * world.tps);
+  e.producer!.job = { kind: 'merge', partner: b.id, lead: true, startTick: world.tick, doneTick };
+  b.producer!.job = { kind: 'merge', partner: e.id, lead: false, startTick: world.tick, doneTick };
+  return { ok: true };
+}
+
+function applyMerge(world: World, e: Entity, partnerId: number): void {
+  const b = world.get(partnerId);
+  const pr = e.producer!;
+  if (!b?.alive || !b.producer) return; // zweite Brut ist gefallen: nichts passiert (das Geld ist weg)
+  const sb = world.rules.superBrood;
+  e.paid = (e.paid ?? 0) + (b.paid ?? 0);
+  pr.levelPaid = (pr.levelPaid ?? 0) + (b.producer.levelPaid ?? 0);
+  pr.unitSince = Math.min(pr.unitSince, b.producer.unitSince);
+  pr.super = true;
+  e.name = 'Superbrut';
+  const share = e.maxHp > 0 ? e.hp / e.maxHp : 1;
+  e.maxHp = Math.round(BUILDINGS[e.defId as BuildingId].hp * sb.hp);
+  e.hp = Math.max(1, e.maxHp * share);
+  b.producer.job = null;
+  world.destroy(b, null); // still – kein Verlust, der Platz wird frei (ein Gelege darin schlüpft)
 }
 
 function applyConvert(world: World, e: Entity, to: BuildingId): void {
@@ -289,6 +360,14 @@ export function updateFactories(world: World): void {
       pr.level = job.level;
     } else if (job.kind === 'convert') {
       applyConvert(world, e, job.to);
+    } else if (job.kind === 'merge') {
+      // Die zweite Brut wartet – die erste schließt ab. Ist die erste gefallen, baut die zweite einfach weiter.
+      if (!job.lead && world.get(job.partner)?.alive) continue;
+      if (!job.lead) {
+        pr.job = null;
+        continue;
+      }
+      applyMerge(world, e, job.partner);
     }
     pr.job = null;
     world.emit({ type: 'factory', owner: e.owner, entityId: e.id, kind: job.kind, name: e.name });

@@ -50,7 +50,7 @@ export function clutchSize(world: World, building: Entity): number | null {
   if (!sizes || !building.producer) return null;
   // Seit 24.10. zentral über den Gebäude-Ausbau „Gelege II/III“ (vorher mit der Fabrikstufe).
   const tier = buildingUpgradeLevel(world, building.owner, building.defId as BuildingId, 'clutch');
-  return sizes[Math.min(sizes.length - 1, tier)]!;
+  return sizes[Math.min(sizes.length - 1, tier)]! + (building.producer.super ? world.rules.superBrood.clutchBonus : 0);
 }
 
 /** Ins Gelege legen; ist es voll, schlüpft alles. */

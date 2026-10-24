@@ -26,6 +26,7 @@
       <button type="button" class="btn" id="btn-music" data-action="music-toggle" aria-pressed="true">♪ Musik an</button>
       <label class="vol" title="Lautstärke der Musik (nur bei dir)">Lautstärke <input type="range" min="0" max="100" step="5" data-volume aria-label="Lautstärke der Musik"></label>
       <label class="btn title-file">Startmusik wählen…<input type="file" accept="audio/*" id="music-file" hidden></label>
+      <button type="button" class="btn" id="btn-export-matches" data-action="export-matches" title="Alle hier gespeicherten Partien (gegen die KI und Multiplayer) als eine Datei – z. B. für den Ordner „Terrain Conquester“" disabled>Gespeicherte Partien (0) herunterladen</button>
     </div>
     <p class="title-note" id="music-note">Startmusik bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
   </div>
@@ -166,6 +167,7 @@
               <button type="button" class="btn-primary" id="btn-again" data-action="new-round">Neue Runde</button>
               <button type="button" class="btn-primary" id="btn-lobby" data-action="mp-lobby" hidden>Zurück in die Lobby</button>
               <button type="button" class="btn" id="btn-replay" data-action="replay">Replay ansehen</button>
+              <button type="button" class="btn" data-action="save-match" title="Diese Partie als Datei – Befehle, Startwert und Lagebilder alle 30 s">Partie herunterladen</button>
               <button type="button" class="btn" id="btn-end-title" data-action="to-title">Zum Startbildschirm</button>
             </div>
           </div>

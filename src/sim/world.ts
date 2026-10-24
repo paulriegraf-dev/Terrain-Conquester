@@ -1,4 +1,5 @@
 import { HQ } from '../data/buildings';
+import { updateFlank } from './systems/flank';
 import type { BuildingDef, BuildingId } from '../data/buildings';
 import { FACTIONS } from '../data/factions';
 import type { FactionDef, FactionId, UpgradeEffect } from '../data/factions';
@@ -375,6 +376,7 @@ export class World {
     updateMyr(this);
     updateTargeting(this);
     updateMovement(this);
+    updateFlank(this);
     updateCombat(this);
     updateLifespans(this);
     this.removeDead();

@@ -39,6 +39,10 @@ Technik: **Lockstep** – beide Rechner rechnen das ganze Spiel selbst und tausc
 
 ## Steuerung
 
+**Partien speichern:** Jede Partie wird im Browser gespeichert (Befehle, Ergebnis, Lagebilder alle 30 s). Am Rundenende „Partie herunterladen“, im Titelbild alle auf einmal.
+
+**Myriaden-Superbrut:** Zwei Bruten auf Stufe III verschmelzen (J): doppelte Produktion +15 %, größeres Gelege, ein Bauplatz wird frei – aber ein Ziel statt zwei.
+
 **Fabriken anpassen:** Verkaufen (X, zweimal) gibt 70 % von Bau und Stufen zurück; die nächste neue Fabrik stuft sich danach eine Weile günstiger und schneller hoch. Umwidmen (K) macht aus einer Fabrik eine andere Gebäudeart – Platz und Stufe bleiben, 20 s Stillstand.
 
 Unten am Spielfeld sitzt die **Befehlskonsole**: links die Auswahl, in der Mitte die Hinweiszeile, rechts das Befehlsraster. Jeder Knopf zeigt seine Taste, das Raster wechselt mit der Auswahl.

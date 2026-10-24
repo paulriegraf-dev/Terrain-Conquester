@@ -47,7 +47,7 @@ export function settleFactor(world: World, e: Entity): number {
 
 /** Tempo genau dieser Fabrik: Markt, Phase, Synergie, Notfall – und Einspielen. */
 export function factorySpeed(world: World, e: Entity): number {
-  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e);
+  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1);
 }
 
 /**
