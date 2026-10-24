@@ -527,6 +527,8 @@ function disguiseCommands(ctx: CommandContext, e: Entity): CommandSet {
   const { world, view, canAct } = ctx;
   const faction = world.players[e.owner].faction;
   const fb = faction.buildings;
+  // Vorauswahl passt nicht zur Fraktion (z. B. Schwerwerk bei den Terra-Formern): erste eigene Gebäudeart.
+  if (!fb[view.disguiseAs]) view.disguiseAs = buildingIds(faction)[0]!;
   const buttons: CommandButton[] = buildingIds(faction).map((id) => ({
     id: `as-${id}`, glyph: fb[id]!.letter, label: `als ${fb[id]!.name}`, key: BUILDINGS[id].key,
     disabled: !canAct, pressed: view.disguiseAs === id,

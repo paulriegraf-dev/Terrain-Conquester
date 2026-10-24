@@ -242,6 +242,27 @@ export class Game {
   // ------------------------------------------------------------------ Schleife
 
   private readonly frame = (now: number): void => {
+    // Fehler dürfen die Schleife nicht anhalten (sonst „friert“ das Spiel ein): melden und weiterlaufen.
+    try {
+      this.frameBody(now);
+    } catch (e) {
+      this.reportError(e);
+    }
+    requestAnimationFrame(this.frame);
+  };
+
+  private readonly reportedErrors = new Set<string>();
+  private reportError(e: unknown): void {
+    const err = e instanceof Error ? e : new Error(String(e));
+    const where = (err.stack ?? '').split('\n').slice(1, 3).map((l) => l.trim()).join(' · ');
+    const key = `${err.message}|${where}`;
+    console.error(err);
+    if (this.reportedErrors.has(key)) return;
+    this.reportedErrors.add(key);
+    this.hud.log(this.session.world.seconds, `Programmfehler (bitte melden, am besten mit Screenshot): ${err.message} – ${where}`, 'bad');
+  }
+
+  private frameBody(now: number): void {
     const dt = Math.min(250, now - (this.lastTime || now));
     this.lastTime = now;
     const tickMs = 1000 / this.session.world.tps;
@@ -279,8 +300,7 @@ export class Game {
       this.demoRestartAt = 0;
       this.startDemo();
     }
-    requestAnimationFrame(this.frame);
-  };
+  }
 
   // ------------------------------------------------------------------ Lagebericht
 

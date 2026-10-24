@@ -153,6 +153,8 @@ export interface Rules {
   ticksPerSecond: number;
   startEnergy: number;
   maxEnergy: number;
+  /** Forschung, Ausbau und Stufen: höchstens so viel teurer durch den Markt (Faktor, 24.10. abends). */
+  upgradePriceMax: number;
   /** Grund-Einkommen pro Sekunde. */
   energyPerSecond: number;
   /**
@@ -310,6 +312,7 @@ export const RULES: Rules = {
   ticksPerSecond: 20,
   startEnergy: 150,
   maxEnergy: 400,
+  upgradePriceMax: 1.5,
   energyPerSecond: 3,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,
   // Täuschung und Konter Zeit zum Greifen haben. Vorher 21 (Technoclan) bzw. 34 (Myriaden) Verbände pro Minute.

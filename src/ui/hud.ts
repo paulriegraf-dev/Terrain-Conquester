@@ -440,7 +440,7 @@ export class Hud {
       } else if (view.human !== null && e.owner !== view.human && e.producer) {
         const seen = apparentBuilding(world, e, view.human);
         const next = intelNextSeconds(world, seen);
-        title = `${world.players[e.owner].faction.buildings[seen.defId]!.name} (Gegner)`;
+        title = `${world.players[e.owner].faction.buildings[seen.defId]?.name ?? 'Gebäude'} (Gegner)`;
         html =
           `${hpLine(e)}<p>Stufe ${seen.level} · baut ${UNITS[seen.unit].name}</p>` +
           `<p>${next === null ? 'Produziert gerade nicht (Umbau oder Pause)' : `Nächster Verband in ${num(Math.ceil(next))} s`}</p>` +
@@ -741,7 +741,7 @@ function buildingInfo(e: Entity, world: World): string {
     ? `<p class="warn">Marschbefehl ${ROUTE_NAMES[pr.route]} → ${ROUTE_NAMES[pr.pendingRoute]} in ${Math.ceil((pr.routeChangeTick - world.tick) / tps)} s</p>`
     : `<p>Marschbefehl ${ROUTE_NAMES[pr.route]}${pr.produced === 0 ? ' · erster Befehl greift sofort' : ''}</p>`;
   const disguised = e.disguise && world.tick < e.disguise.until
-    ? `<p>Getarnt als ${world.players[e.owner].faction.buildings[e.disguise.as]!.name}, ${ROUTE_NAMES[e.disguise.route]} – noch ${Math.ceil((e.disguise.until - world.tick) / tps)} s</p>`
+    ? `<p>Getarnt als ${world.players[e.owner].faction.buildings[e.disguise.as]?.name ?? '?'}, ${ROUTE_NAMES[e.disguise.route]} – noch ${Math.ceil((e.disguise.until - world.tick) / tps)} s</p>`
     : '';
   const bar = job ? (world.tick - job.startTick) / Math.max(1, job.doneTick - job.startTick) : pr.progress / pr.intervalTicks;
   const enemy = world.players[e.owner === 0 ? 1 : 0].faction.id;

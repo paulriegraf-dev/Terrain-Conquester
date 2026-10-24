@@ -1,3 +1,4 @@
+import { buildingIds } from '../data/factions';
 import { MOVE_PROFILES } from '../data/movement';
 import { checkPrep, inOwnHalf } from '../sim/systems/prep';
 import { aliveModels } from '../sim/systems/combat';
@@ -773,7 +774,7 @@ export class Renderer {
 
     const cx = (r.x + r.w / 2) * t;
     const cy = (r.y + r.h / 2) * t;
-    const label = e.kind === 'hq' ? 'HQ' : `${world.players[e.owner].faction.buildings[shown!.defId]!.letter}${shown!.level > 1 ? shown!.level : ''}`;
+    const label = e.kind === 'hq' ? 'HQ' : `${world.players[e.owner].faction.buildings[shown!.defId]?.letter ?? '?'}${shown!.level > 1 ? shown!.level : ''}`;
     ctx.fillStyle = color;
     ctx.font = `${Math.round(t * (e.kind === 'hq' ? 0.9 : 0.85))}px ${PIXEL}`;
     ctx.textAlign = 'center';
@@ -839,7 +840,7 @@ export class Renderer {
       ctx.font = `${Math.round(t * 0.8)}px ${PIXEL}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${world.players[enemy].faction.buildings[rec.defId]!.letter}${rec.level > 1 ? rec.level : ''}`, (r.x + r.w / 2) * t, (r.y + r.h / 2) * t + 1);
+      ctx.fillText(`${world.players[enemy].faction.buildings[rec.defId]?.letter ?? '?'}${rec.level > 1 ? rec.level : ''}`, (r.x + r.w / 2) * t, (r.y + r.h / 2) * t + 1);
       this.drawRouteMark(enemy, rec.route, (r.x + r.w) * t - t * 0.45, r.y * t + t * 0.45, 0.55);
       if (t >= 14) {
         ctx.fillStyle = 'rgba(230,235,230,0.7)';
@@ -1251,8 +1252,10 @@ export class Renderer {
     } else if (sel.kind === 'pad') {
       const pad = world.map.pads[sel.padId];
       if (!pad || world.padBuilding[pad.id] !== 0) return;
-      for (const id of ['barracks', 'workshop', 'foundry'] as const) {
-        const profile = UNITS[world.players[view.human ?? 0].faction.buildings[id]!.tiers[0]!].move;
+      // Alle Gebäude der eigenen Fraktion (24.10.: vorher fest Kaserne/Hangar/Schwerwerk – Absturz bei den Terra-Formern).
+      const faction = world.players[view.human ?? 0].faction;
+      for (const id of buildingIds(faction)) {
+        const profile = UNITS[faction.buildings[id]!.tiers[0]!].move;
         paths.push({ profile, points: predictPath(world, pad.rect, view.human ?? 0, pad.zone, profile) });
       }
     } else {

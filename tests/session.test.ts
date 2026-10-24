@@ -24,3 +24,4 @@ describe('Partie aus Sicht der Oberfläche', () => {
     assert.equal(s.world.players[1].prepLeft, before - 1);
   });
 });
+

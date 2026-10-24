@@ -79,8 +79,9 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
     case 'disguise': {
       const b = ownBuilding(world, player, cmd.entityId);
       if (typeof b === 'string') return fail(b);
-      if (!BUILDINGS[cmd.as] || !ROUTES.includes(cmd.route)) return fail('Ungültige Tarnung');
       const p = world.players[player];
+      // Nur als eigenes Gebäude der eigenen Fraktion (Terra-Former haben z. B. kein Schwerwerk).
+      if (!BUILDINGS[cmd.as] || !p.faction.buildings[cmd.as] || !ROUTES.includes(cmd.route)) return fail('Ungültige Tarnung');
       if (p.energy < DISGUISE.cost) return fail(`Zu wenig Energie (${DISGUISE.cost} nötig)`);
       p.energy -= DISGUISE.cost;
       p.stats.energySpent += DISGUISE.cost;

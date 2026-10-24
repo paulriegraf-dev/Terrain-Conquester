@@ -50,7 +50,7 @@ export function checkLevelUp(world: World, e: Entity): Check {
   if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
   const step = faction.levelUpgrades[pr.level - 1];
   if (!step) return { ok: false, reason: 'Keine weitere Stufe' };
-  const cost = Math.round(step.cost * marketFactor(world, e));
+  const cost = upgradePrice(world, step.cost, marketFactor(world, e));
   if (world.players[e.owner].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost, seconds: step.seconds };
 }
@@ -66,6 +66,17 @@ export function researchableUnits(world: World, p: PlayerId): UnitId[] {
     for (const u of unlockedUnits(world, e)) if (!out.includes(u)) out.push(u);
   }
   return out;
+}
+
+/**
+ * Preis für Forschung, Gebäude-Ausbau und Fabrikstufen (24.10. abends): Der Markt verteuert höchstens um die
+ * Hälfte, und nichts kostet mehr als drei Viertel des Energie-Maximums. Vorher trieben große Armeen (vor allem
+ * Terra-Former ohne Einheitenlimit) die Marktpreise so hoch, dass Stufe III über 400 Energie kostete – nicht
+ * kaufbar, weil der Speicher bei 400 voll ist.
+ */
+export function upgradePrice(world: World, base: number, factor: number): number {
+  const cap = Math.floor((world.rules.maxEnergy * 0.75) / 5) * 5;
+  return Math.min(cap, Math.round(base * Math.min(factor, world.rules.upgradePriceMax)));
 }
 
 /** Forschungspreis: steigt mit dem Marktpreis des Bauteils der Einheit. */
@@ -97,7 +108,7 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
     if (other) return { ok: false, reason: `Gabelung: schon ${other.name} gewählt` };
   }
   if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
-  const cost = Math.round(u.cost * researchPriceFactor(world, u.unit));
+  const cost = upgradePrice(world, u.cost, researchPriceFactor(world, u.unit));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost, seconds: u.seconds };
 }
@@ -120,7 +131,7 @@ function checkBuildingUpgrade(world: World, owner: PlayerId, u: BuildingUpgradeD
   }
   if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon ausgebaut' };
   if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
-  const cost = Math.round(u.cost * buildPriceFactor(world, BUILDINGS[u.building].part));
+  const cost = upgradePrice(world, u.cost, buildPriceFactor(world, BUILDINGS[u.building].part));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost, seconds: u.seconds };
 }

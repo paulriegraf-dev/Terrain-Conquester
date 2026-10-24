@@ -1602,6 +1602,12 @@ Wunsch des Nutzers: M5 vorziehen, damit sich das Spiel mit der jetzigen Grafik z
 - **Startkarte ohne Scrollen:** Hinter der Karte nur noch das Schlachtfeld (Kopfleiste, Konsole und Lageleiste ausgeblendet), die Vorschau läuft im 4×-Tempo; geprüft bei 1920×1080, 1366×768, 1280×650 und 390×844.
 - **Musik:** Lautstärke-Regler (Titelbild und Menü), gespeichert nur in diesem Browser – im Multiplayer stellt jeder seine eigene ein.
 
+### Behoben (24.10. abends)
+
+- **Spiel fror ein (Terra-Former):** Ein Klick auf einen freien Außenposten zeichnet die Wege der möglichen Truppen – fest für Kaserne, Hangar und Schwerwerk. Die Terra-Former haben diese Gebäude nicht, die Zeichnung brach ab und mit ihr die Spielschleife (Bild ohne Einheiten und Nebel). Jetzt: Gebäude der eigenen Fraktion. Dazu: Tarnung nur noch als eigene Gebäudeart (Terra-Former konnten sich als „Schwerwerk“ tarnen), und ein Programmfehler hält die Schleife nicht mehr an, sondern steht im Lagebericht.
+- **Upgrades zu teuer:** Forschung, Gebäude-Ausbau und Fabrikstufen hingen voll am Marktpreis. Große Armeen (vor allem Terra-Former ohne Einheitenlimit) trieben die Preise so hoch, dass Stufe III über 400 Energie kostete – nicht kaufbar, der Speicher fasst 400. Jetzt verteuert der Markt höchstens um die Hälfte (rules.upgradePriceMax 1,5), und nichts kostet mehr als 300.
+- **Übersicht:** Leben in Worten (wenig, mittel, viel, sehr viel; die Zahl im Tooltip), Konter-Tabelle nur noch als Farben.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.

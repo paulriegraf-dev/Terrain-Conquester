@@ -117,6 +117,13 @@ function threats(f: FactionId, armor: ArmorClass): string {
   return parts.join(' · ') || '–';
 }
 
+/** Leben in Worten (Wunsch 24.10.: keine genauen Zahlen in der Übersicht – die stehen im Tooltip). */
+const LIFE_TEXT = ['wenig', 'mittel', 'viel', 'sehr viel'] as const;
+function lifeLevel(hp: number): 0 | 1 | 2 | 3 {
+  return hp <= 100 ? 0 : hp <= 200 ? 1 : hp <= 320 ? 2 : 3;
+}
+const COUNTER_TEXT = ['langsam (über 32 s)', 'mäßig (bis 32 s)', 'schnell (bis 16 s)', 'sehr schnell (bis 8 s)'] as const;
+
 /** Kleiner Balken unter einer Zahl: Anteil am Höchstwert aller Einheiten (zum schnellen Vergleichen). */
 function bar(value: number, max: number): string {
   return `<span class="cx-bar"><i style="width:${Math.max(4, Math.min(100, Math.round((value / Math.max(1e-9, max)) * 100)))}%"></i></span>`;
@@ -136,7 +143,7 @@ function unitsTab(state: CodexState): string {
       <th scope="row" title="${escapeHtml(u.role)}"><span class="cx-glyph" data-f="${f}">${escapeHtml(u.letter)}</span>${escapeHtml(u.name)}<span class="cx-role">${escapeHtml(u.role)}</span></th>
       <td class="cx-src">${escapeHtml(source)}</td>
       <td><span class="cx-armor" data-a="${u.armor}">${ARMOR_NAMES[u.armor]}</span></td>
-      <td class="cx-num">${num(u.hp)}${models > 1 ? ` <span class="cx-sub">(${models} Modelle)</span>` : ''}${bar(u.hp, maxHp)}</td>
+      <td class="cx-life" data-l="${lifeLevel(u.hp)}" title="${escapeHtml(`${num(u.hp)} Leben${models > 1 ? ` (${models} Modelle)` : ''}`)}">${LIFE_TEXT[lifeLevel(u.hp)]}${bar(u.hp, maxHp)}</td>
       <td class="cx-num">${range}</td>
       <td class="cx-num">${num(u.speed, 1)} <span class="cx-move" data-move="${u.move}">${MOVE_PROFILES[u.move].name}</span>${bar(u.speed, maxSpeed)}</td>
       ${CLASSES.map((a) => ratingCell(u, a)).join('')}
@@ -166,16 +173,16 @@ function countersTab(state: CodexState): string {
         const blast = woundsPerShot(w, d) * Math.min(w.damage, wounds);
         const share = blast / target.hp;
         const l = share >= 0.5 ? 3 : share >= 0.25 ? 2 : share >= 0.1 ? 1 : 0;
-        return `<td class="cx-r" data-l="${l}" title="${escapeHtml(`Eine Explosion: ${Math.round(share * 100)} % seiner Leben`)}">${Math.round(share * 100)} %</td>`;
+        return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${target.name}: ${COUNTER_TEXT[l]} (eine Explosion)`)}"></td>`;
       }
       const s = target.hp / Math.max(0.01, dps(a, w, d, wounds));
       const l = s <= 8 ? 3 : s <= 16 ? 2 : s <= 32 ? 1 : 0;
-      return `<td class="cx-r" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${target.name}: etwa ${num(s, 0)} s`)}">${s >= 100 ? '99+' : num(s, 0)}</td>`;
+      return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${target.name}: ${COUNTER_TEXT[l]}`)}"></td>`;
     }).join('');
     return `<tr><th scope="row" title="${escapeHtml(a.role)}"><span class="cx-glyph" data-f="${state.faction}">${escapeHtml(a.letter)}</span>${escapeHtml(a.name)} <span class="cx-armor" data-a="${a.armor}">${ARMOR_NAMES[a.armor].slice(0, 1)}</span></th>${cells}</tr>`;
   }).join('');
   return `${factionChips(state, 'faction', 'Angreifer')}${factionChips(state, 'enemy', 'Ziel')}
-    <p class="cx-lede">Sekunden, bis ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: Anteil seiner Leben je Explosion. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen.</p>
+    <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: eine Explosion nimmt <span class="cx-key" data-l="3">die Hälfte und mehr</span> <span class="cx-key" data-l="2">ein Viertel</span> <span class="cx-key" data-l="1">ein Zehntel</span> <span class="cx-key" data-l="0">weniger</span> seiner Leben. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen.</p>
     <div class="cx-scroll"><table class="cx-table cx-matrix">
       <thead><tr><th></th>${head}</tr></thead>
       <tbody>${rows}</tbody>
