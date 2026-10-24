@@ -40,6 +40,8 @@ import { commandsFor } from './commands';
 import { Session } from './session';
 import { createView } from './view';
 import { counterMatrix, renderCodex } from './codex';
+import { weaponRoleOf } from './weaponRole';
+const ARMOR_LABEL: Partial<Record<string, string>> = { infantry: 'Infanterie', light: 'Leicht', heavy: 'Schwer' };
 import type { CodexState } from './codex';
 import type { ViewState } from './view';
 import { Lockstep } from '../net/lockstep';
@@ -1930,7 +1932,7 @@ export class Game {
           ? ` · Protokolle: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')}${world.tick < unit.net.ascendUntil ? ' (Aufstieg!)' : ''}`
           : unit.net && unit.net.id !== 0 ? ' · im Netz' : '';
         this.hud.setStatus(
-          `${unit.name} (${who}) · ${Math.ceil(unit.hp)}/${unit.maxHp}${squad}${net} · ${counterLine(unit.defId as UnitId, enemyFaction)} · Widerstand ${unit.toughness}, Rüstung ${save}${profile} · ${ROUTE_NAMES[m.route]} · ${MOVE_PROFILES[m.profile].name}`,
+          `${unit.name} (${who}) · ${Math.ceil(unit.hp)}/${unit.maxHp}${squad}${net} · ${weaponRoleOf(unit.defId as UnitId).label} · Panzerung ${ARMOR_LABEL[unit.armor as 'infantry' | 'light' | 'heavy'] ?? unit.armor} · ${counterLine(unit.defId as UnitId, enemyFaction)} · Widerstand ${unit.toughness}, Rüstung ${save}${profile} · ${ROUTE_NAMES[m.route]} · ${MOVE_PROFILES[m.profile].name}`,
         );
         return;
       }

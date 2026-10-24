@@ -13,6 +13,8 @@ import { referenceDefense, relativeEffect, woundsPerShot } from '../sim/systems/
 import type { Defense } from '../sim/systems/hitmath';
 import type { ArmorClass } from '../sim/types';
 import { escapeHtml, num } from './format';
+import { roleBadge, weaponRole } from './weaponRole';
+import type { RoleTarget } from './weaponRole';
 
 /**
  * Übersicht (Wunsch des Nutzers, 24.10.): Einheiten, Konter und Gelände auf einen Blick – im Startbildschirm und im
@@ -136,6 +138,60 @@ function bar(value: number, max: number): string {
   return `<span class="cx-bar"><i style="width:${Math.max(4, Math.min(100, Math.round((value / Math.max(1e-9, max)) * 100)))}%"></i></span>`;
 }
 
+/**
+ * Konter-Dreieck (Wunsch 25.10.): Welche Waffenart knackt welche Panzerung – mit den eigenen Einheiten dieser Art.
+ * Gilt als Faustregel: Werte, Fläche und Schwarm verschieben das im Einzelfall.
+ */
+function triangle(f: FactionId): string {
+  const groups: { target: RoleTarget; title: string }[] = [
+    { target: 'heavy', title: 'Durchschlag → Schwer' },
+    { target: 'light', title: 'Kanone → Leicht' },
+    { target: 'infantry', title: 'Splitter → Infanterie' },
+    { target: 'structure', title: 'Belagerung → Gebäude' },
+    { target: 'allround', title: 'Gewehr → alles ein bisschen' },
+  ];
+  const units = factionEntries(f).map((e) => UNITS[e.unit]);
+  const cells = groups.map((g) => {
+    const mine = units.filter((u) => weaponRole(u).target === g.target);
+    const names = mine.length ? mine.map((u) => escapeHtml(u.name) + (weaponRole(u).label !== g.title.split(' ')[0] ? ` <i>(${weaponRole(u).label})</i>` : '')).join(', ') : '–';
+    return `<div class="cx-tri-cell" data-a="${g.target}"><b class="cx-armor" data-a="${g.target}">${g.title}</b><span>${names}</span></div>`;
+  }).join('');
+  return `<div class="cx-tri" title="Faustregel – die Punkte in der Tabelle zeigen die echte Wirkung">${cells}</div>`;
+}
+
+/** Waffenart gegen Panzerung in Prozent (wie in klassischen Echtzeit-Strategiespielen) – Mittel aller Einheiten dieser Art. */
+function roleChart(): string {
+  const order = ['Durchschlag', 'Sprengkopf', 'Zersetzung', 'Kanone', 'Splitter', 'Belagerung', 'Gewehr'];
+  const byRole = new Map<string, { target: RoleTarget; units: UnitDef[] }>();
+  for (const u of Object.values(UNITS)) {
+    if (!u.weapon) continue;
+    const r = weaponRole(u);
+    const g = byRole.get(r.label) ?? { target: r.target, units: [] };
+    g.units.push(u);
+    byRole.set(r.label, g);
+  }
+  const rows = order.filter((l) => byRole.has(l)).map((label) => {
+    const g = byRole.get(label)!;
+    const cells = CLASSES.map((a) => {
+      const ref = referenceDefense(a);
+      const pct = (d: Defense): number => Math.round((g.units.reduce((s, u) => s + relativeEffect(u.weapon!, d, ref.wounds), 0) / g.units.length) * 100);
+      let v = pct(ref.defense);
+      let extra = '';
+      if (label === 'Zersetzung' && a === 'heavy') {
+        const max = Math.max(...g.units.map((u) => u.corrode?.max ?? 0));
+        const full = pct({ ...ref.defense, save: Math.min(7, ref.defense.save + max) });
+        extra = ` <small title="bei voller Zersetzung (Rüstung −${max}) – hilft auch allen anderen eigenen Einheiten">→ ${full}%</small>`;
+      }
+      const l = v >= 140 ? 3 : v >= 100 ? 2 : v >= 60 ? 1 : 0;
+      return `<td class="cx-r cx-pct" data-l="${l}">${v}%${extra}</td>`;
+    }).join('');
+    const names = g.units.map((u) => u.name).join(', ');
+    return `<tr><th scope="row" title="${escapeHtml(names)}"><span class="cx-armor" data-a="${g.target}">${label}</span></th>${cells}</tr>`;
+  }).join('');
+  return `<h3 class="cx-h3" style="margin-top:0">Waffenart gegen Panzerung</h3><p class="cx-lede">100 % = Durchschnittswirkung dieser Waffen. Mittel aller Einheiten der Art (Namen im Tooltip), ohne Upgrades und Gelände.</p>
+    <div class="cx-scroll"><table class="cx-table cx-chart"><thead><tr><th>Waffe</th><th>Infanterie</th><th>Leicht</th><th>Schwer</th><th>Gebäude</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 function unitsTab(state: CodexState): string {
   const f = state.faction;
   const all = Object.values(UNITS);
@@ -150,6 +206,7 @@ function unitsTab(state: CodexState): string {
       <th scope="row" title="${escapeHtml(u.role)}"><span class="cx-glyph" data-f="${f}">${escapeHtml(u.letter)}</span>${escapeHtml(u.name)}<span class="cx-role">${escapeHtml(u.role)}</span></th>
       <td class="cx-src">${escapeHtml(source)}</td>
       <td><span class="cx-armor" data-a="${u.armor}">${ARMOR_NAMES[u.armor]}</span></td>
+      <td>${roleBadge(u)}</td>
       <td class="cx-life" data-l="${lifeLevel(u.hp)}" title="${escapeHtml(`${num(u.hp)} Leben${models > 1 ? ` (${models} Modelle)` : ''}`)}">${LIFE_TEXT[lifeLevel(u.hp)]}${bar(u.hp, maxHp)}</td>
       <td class="cx-num">${range}</td>
       <td class="cx-num">${num(u.speed, 1)} <span class="cx-move" data-move="${u.move}">${MOVE_PROFILES[u.move].name}</span>${bar(u.speed, maxSpeed)}</td>
@@ -158,9 +215,10 @@ function unitsTab(state: CodexState): string {
     </tr>`;
   }).join('');
   return `${factionChips(state, 'faction', 'Fraktion')}
+    ${triangle(f)}
     <p class="cx-lede">Wirkung gegen die vier Panzerungen – im Vergleich zur eigenen Durchschnittswirkung der Waffe: <span class="cx-key" data-l="3">●●●● stark</span> <span class="cx-key" data-l="2">●●● gut</span> <span class="cx-key" data-l="1">●● mäßig</span> <span class="cx-key" data-l="0">● schwach</span>. Panzerung farbig: <span class="cx-armor" data-a="infantry">Infanterie</span> <span class="cx-armor" data-a="light">Leicht</span> <span class="cx-armor" data-a="heavy">Schwer</span>. Balken = Anteil am höchsten Wert aller Einheiten. Mit der Maus über einem Feld: Schaden je Sekunde gegen ein Vergleichsziel. Tempo in Kacheln je Sekunde.</p>
     <div class="cx-scroll"><table class="cx-table">
-      <thead><tr><th>Einheit</th><th>Woher</th><th>Panzerung</th><th>Leben</th><th>Reichw.</th><th>Tempo</th><th>gg. Infanterie</th><th>gg. Leicht</th><th>gg. Schwer</th><th>gg. Gebäude</th><th title="Je Fraktion die drei Einheiten mit dem meisten Schaden gegen diese Panzerung">Gefährlich für sie</th></tr></thead>
+      <thead><tr><th>Einheit</th><th>Woher</th><th>Panzerung</th><th title="Waffenart: Farbe = die Panzerung, die sie knackt">Waffe</th><th>Leben</th><th>Reichw.</th><th>Tempo</th><th>gg. Infanterie</th><th>gg. Leicht</th><th>gg. Schwer</th><th>gg. Gebäude</th><th title="Je Fraktion die drei Einheiten mit dem meisten Schaden gegen diese Panzerung">Gefährlich für sie</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
@@ -188,7 +246,7 @@ export function counterMatrix(attacker: FactionId, target: FactionId, compact = 
     const u = UNITS[e.unit];
     const tip = escapeHtml(`${u.name} · ${ARMOR_NAMES[u.armor]}`);
     return compact
-      ? `<th title="${tip}"><img class="cx-icon" alt="${escapeHtml(u.name)}" src="${unitIcon(e.unit, colors?.[1])}"></th>`
+      ? `<th title="${tip}" class="cx-headarmor" data-a="${u.armor}"><img class="cx-icon" alt="${escapeHtml(u.name)}" src="${unitIcon(e.unit, colors?.[1])}"></th>`
       : `<th class="cx-vert" title="${tip}"><span class="cx-armor-text" data-a="${u.armor}">${escapeHtml(u.name)}</span></th>`;
   }).join('');
   const rows = mine.map(({ unit }) => {
@@ -199,16 +257,18 @@ export function counterMatrix(attacker: FactionId, target: FactionId, compact = 
       return `<td class="cx-r cx-dot" data-l="${l}" title="${escapeHtml(`${a.name} gegen ${UNITS[t].name}: ${word}${a.kamikaze ? ' (eine Explosion)' : ''}`)}"></td>`;
     }).join('');
     const label = compact
-      ? `<img class="cx-icon" alt="${escapeHtml(a.name)}" src="${unitIcon(unit, colors?.[0])}">`
+      ? `<span class="cx-rowlabel"><img class="cx-icon" alt="${escapeHtml(a.name)}" src="${unitIcon(unit, colors?.[0])}">${roleBadge(a, true)}</span>`
       : `<span class="cx-glyph" data-f="${attacker}">${escapeHtml(a.letter)}</span>${escapeHtml(a.name)} <span class="cx-armor" data-a="${a.armor}">${ARMOR_NAMES[a.armor].slice(0, 1)}</span>`;
-    return `<tr><th scope="row" title="${escapeHtml(`${a.name}: ${a.role}`)}">${label}</th>${cells}</tr>`;
+    return `<tr><th scope="row" title="${escapeHtml(`${a.name} · ${weaponRole(a).label} · Panzerung ${ARMOR_NAMES[a.armor]} – ${a.role}`)}">${label}</th>${cells}</tr>`;
   }).join('');
   return `<table class="cx-table cx-matrix${compact ? ' cx-mini' : ''}"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** Konter-Tabelle: wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) ausschaltet. */
 function countersTab(state: CodexState): string {
-  return `${factionChips(state, 'faction', 'Angreifer')}${factionChips(state, 'enemy', 'Ziel')}
+  return `${roleChart()}
+    <h3 class="cx-h3">Einheit gegen Einheit</h3>
+    ${factionChips(state, 'faction', 'Angreifer')}${factionChips(state, 'enemy', 'Ziel')}
     <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: eine Explosion nimmt <span class="cx-key" data-l="3">die Hälfte und mehr</span> <span class="cx-key" data-l="2">ein Viertel</span> <span class="cx-key" data-l="1">ein Zehntel</span> <span class="cx-key" data-l="0">weniger</span> seiner Leben. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen. Die Tafel gibt es auch auf dem Spielfeld (Taste H).</p>
     <div class="cx-scroll">${counterMatrix(state.faction, state.enemy)}</div>`;
 }

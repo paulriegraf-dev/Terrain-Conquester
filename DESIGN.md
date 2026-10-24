@@ -1632,6 +1632,14 @@ Sie sollen Überwindung kosten – man soll sich zweimal überlegen, ob man den 
 - **Ausweichen nach Abstand:** Ab 1,5 Kacheln Abstand zum Schützen +1 Ausweichen, je weitere Kachel +1, höchstens +4. Nahkampf trifft normal, Plasmawerfer und Gunner (3 Kacheln) deutlich schlechter, Scharfschützen und Artillerie nur noch mit dem Mindestwurf (1 von 6).
 - **Losstürmen:** Wer sie mit einer Waffe bis 5 Kacheln Reichweite beschießt, den greifen sie 8 s lang an – auch über ihre Leine hinaus (bis 8 Kacheln vom Matsch). Artillerie und Batterien mit großer Reichweite lösen das nicht aus – gegen die hilft ihnen das Ausweichen.
 
+### Waffenarten sichtbar (25.10.)
+
+- **Waffenart je Einheit**, abgeleitet aus dem, was die Waffe wirklich knackt (nicht nur aus dem Schadenstyp): Durchschlag/Sprengkopf → Schwer, Kanone → Leicht, Splitter → Infanterie, Belagerung → Gebäude, Gewehr = ohne Schwerpunkt, Zersetzung (Myr-Drohnen) = Gewehr, das Schwere für die ganze Armee weicher macht. Farbe = Farbe der Panzerung, die sie knackt.
+- **Übersicht, Einheiten:** Spalte „Waffe“ und oben ein Konter-Dreieck mit den eigenen Einheiten je Waffenart.
+- **Übersicht, Konter:** Tabelle „Waffenart gegen Panzerung“ in Prozent (100 % = Durchschnitt der Waffe, Mittel aller Einheiten der Art; Zersetzung zeigt zusätzlich den Wert bei voller Zersetzung) – nach dem Vorbild klassischer Angriffs-/Rüstungstabellen. Darunter wie bisher Einheit gegen Einheit.
+- **Im Spiel:** Konter-Tafel zeigt neben jedem eigenen Bild ein Kürzel der Waffenart, die Spaltenköpfe sind nach Panzerung unterstrichen; Statuszeile beim Überfahren einer Einheit und Fabrik-Tooltips nennen Waffenart und Panzerung.
+- Faustregel für den Einstieg; die echte Wirkung zeigen die Punkte bzw. Farben.
+
 ### Konter-Tafel und Schaden nach der Runde (24.10. abends)
 
 - **Konter-Tafel auf dem Spielfeld (optional):** Taste H oder „Konter“ unter Ansicht blendet oben rechts eine kleine Konter-Matrix ein – deine Einheiten gegen die des Gegners, nur Farben (grün stark … rot schwach), umschaltbar auf „Gegner → du“. Statt Kürzeln zeigt sie die Einheiten so, wie sie auf dem Spielfeld aussehen (Form, Spielerfarbe), die Legende sagt „stark · gut · mäßig · schwach“; an der Kopfzeile lässt sie sich verschieben. Der Browser merkt sich an/aus, Richtung und Stelle. Gleiche Berechnung wie die Übersicht (F1).

@@ -14,6 +14,7 @@ import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
 import { routeChangeSeconds } from '../sim/systems/sites';
 import { counterLine } from '../sim/counters';
+import { weaponRoleOf } from './weaponRole';
 import { gorgeAreas, swapCostAt, wallCount } from '../sim/systems/abilities';
 import { disguiseFactor, gorgeLimit, scoutCost, scoutDelay, scoutNamesUnits, wallLimit } from '../sim/systems/hq';
 import type { Entity } from '../sim/entity';
@@ -371,8 +372,8 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
       pressed: pr.unit === u,
       pending: retooling ? `Umrüsten ${secs(job.doneTick)}s` : undefined,
       tip: unlocked
-        ? `${def.name}: ${def.role} – ${counterLine(u, enemyFaction)}. ${pr.unit === u ? 'Wird gerade gebaut.' : `Umrüsten dauert ${world.rules.retoolSeconds} s, der Fortschritt bleibt erhalten – das Einspielen beginnt von vorn.`}`
-        : `${def.name} (${def.role} – ${counterLine(u, enemyFaction)}) – braucht Stufe ${k + 1}. Mit S hochstufen.`,
+        ? `${def.name}: ${def.role} – ${weaponRoleOf(u).label} · ${counterLine(u, enemyFaction)}. ${pr.unit === u ? 'Wird gerade gebaut.' : `Umrüsten dauert ${world.rules.retoolSeconds} s, der Fortschritt bleibt erhalten – das Einspielen beginnt von vorn.`}`
+        : `${def.name} (${def.role} – ${weaponRoleOf(u).label} · ${counterLine(u, enemyFaction)}) – braucht Stufe ${k + 1}. Mit S hochstufen.`,
       action: 'select-unit',
       data: { unit: u },
     });
