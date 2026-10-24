@@ -269,6 +269,16 @@ export interface UnitDef {
   hitWeaken?: { seconds: number; speed: number; damage: number };
   /** Gestaltwandler (Hainhüter): bekommt auf jedem Boden den Boden-Bonus des Wächters dieser Art. */
   shapeshift?: boolean;
+  /**
+   * Ausweichen nach Abstand (Schlammmonster, 24.10. abends): Je weiter der Schütze weg ist, desto schwerer zu treffen –
+   * ab `start` Kacheln je `per` Kacheln +1 Ausweichen, höchstens `max`. Fernkampf trifft sie kaum.
+   */
+  dodge?: { start: number; per: number; max: number };
+  /**
+   * Losstürmen (Schlammmonster): Wer sie mit einer Waffe bis `maxRange` Reichweite beschießt, den greifen sie
+   * `seconds` lang an – auch über ihre Leine hinaus (bis `reach` Kacheln vom Matsch).
+   */
+  charge?: { maxRange: number; seconds: number; reach: number };
   /** Leine (Schlammmonster): entfernt sich höchstens so weit von eigenem Boden seiner Art. */
   leash?: { radius: number };
   /** Held: kommt nicht aus einer Fabrik, sondern über ein HQ-Upgrade; einer pro Spieler. */
@@ -549,11 +559,14 @@ const RAW: Record<UnitId, UnitInput> = {
     hero: true,
     shape: 'diamond', letter: 'Λ', role: 'Held: viele eigene Verbände → verschmilzt Gelände (jeder Boden zählt als eigener), wenige → kopiert eine gerufene Einheit',
   },  mudling: {
-    id: 'mudling', name: 'Schlammmonster', armor: 'infantry', hp: 30, models: 3, toughness: 3, save: 6,
+    // 24.10. abends (Wunsch des Nutzers): 60 statt 30 Leben, Ausweichen nach Abstand, stürmen auf Nah- und Mitteldistanz-Schützen los.
+    id: 'mudling', name: 'Schlammmonster', armor: 'infantry', hp: 60, models: 3, toughness: 3, save: 6,
     speed: 1.4, move: 'foot', part: 'arms', radius: 0.25, vision: 5, spawnInterval: 0, summoned: true, supply: 0,
     weapon: { shots: 1, cooldown: 1.0, range: 1.5, skill: 4, strength: 3, ap: 0, damage: 4, type: 'rifle' },
     ground: 'mud', leash: { radius: 4 },
-    shape: 'circle', letter: 's', role: 'Kriecht aus eigenen Matschflächen (Gelege) – bleibt in deren Nähe: eine lokale Bedrohung',
+    dodge: { start: 1.5, per: 1, max: 4 },
+    charge: { maxRange: 5, seconds: 8, reach: 8 },
+    shape: 'circle', letter: 's', role: 'Kriecht aus eigenen Matschflächen (Gelege): je weiter der Schütze, desto schwerer zu treffen – wer sie aus kurzer oder mittlerer Reichweite beschießt, den stürmen sie an',
   },
 
 };

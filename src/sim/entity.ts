@@ -106,6 +106,8 @@ export interface Entity {
   id: number;
   /** Einheit: aus dieser Fabrik (Entity-ID) – für das Umwidmen der Terra-Former-Linien. */
   fromBuilding?: number;
+  /** Schlammmonster: stürmt bis `until` auf diesen Gegner los (auch über die Leine hinaus). */
+  charge?: { target: number; until: number };
   /** Steht gerade auf einer gegnerischen Schlucht (Schweber). */
   onGorge?: boolean;
   /** Flankenangriff: bis zu diesem Tick mehr Schaden (nach dem Überqueren einer gegnerischen Schlucht). */

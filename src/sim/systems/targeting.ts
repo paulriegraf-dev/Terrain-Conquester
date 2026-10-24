@@ -183,7 +183,9 @@ export function updateTargeting(world: World): void {
     const softThrow = canThrow && !!ld!.soft;
     const throwReach = softThrow && canChase ? world.rules.launcherAdvance : 0;
     const focusReach = canChase && world.rules.focusReach > 0 ? world.rules.focusReach : 0;
-    const searchRange = baseSearch + Math.max(hunt, throwReach, focusReach);
+    // Schlammmonster beim Losstürmen: den Schützen auch weiter weg suchen (bis zu seiner Reichweite und etwas mehr).
+    const chargeReach = e.charge && world.tick < e.charge.until && udef?.charge ? udef.charge.maxRange + 2 - baseSearch : 0;
+    const searchRange = baseSearch + Math.max(hunt, throwReach, focusReach, chargeReach);
     const siege = !!e.mover && isSiege(w.def);
     // Artillerie sucht Bauwerke weiter (sie rückt bis auf volle Reichweite an sie heran).
     const structureRange = siege && canChase ? range + SIEGE_ADVANCE : searchRange;
@@ -233,7 +235,8 @@ export function updateTargeting(world: World): void {
       if (d > (t.kind === 'unit' ? searchRange : structureRange)) return;
       if (!canAttack(world, e, t)) return;
       if (!allowed(t, d, 0)) return;
-      if (udef?.leash && !leashOk(world, e, t)) return; // Schlammmonster: nur nahe eigenem Matsch
+      const charging = !!e.charge && e.charge.target === t.id && world.tick < e.charge.until;
+      if (udef?.leash && !leashOk(world, e, t, charging)) return; // Schlammmonster: nur nahe eigenem Matsch (beim Losstürmen weiter)
       // Ziele, gegen die die eigene Waffe stark ist, wirken „näher“ → Konter greifen gezielt.
       const factor = softThrow ? softness(t) : targetFactor(world, w.def, t);
       if (hunt > 0 && d > baseSearch && factor < 1.25) return; // weit weg nur Lieblingsziele (deutlich überdurchschnittlich)
@@ -251,6 +254,7 @@ export function updateTargeting(world: World): void {
       // Verspotten (Myr-Verspotter): Gegner in seinem Umkreis schießen bevorzugt auf ihn.
       const taunt = t.kind === 'unit' ? UNITS[t.defId as keyof typeof UNITS]?.taunt : undefined;
       if (taunt && dist(e.pos, t.pos) <= taunt.radius) score = rank * 1000 + (score - rank * 1000) * 0.25;
+      if (charging) score = rank * 1000; // Losstürmen: genau dieser Gegner zuerst
       // Gleichstand: kleinere ID gewinnt – unabhängig von der Suchreihenfolge.
       if (score < bestScore || (score === bestScore && best && t.id < best.id)) {
         bestScore = score;

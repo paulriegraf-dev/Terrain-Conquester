@@ -98,7 +98,10 @@ export function updateCombat(world: World): void {
     const blast = rock ? undefined : w.def.blast; // Felsen: kein Explosiv-Bonus gegen Masse
     const apBonus = swarmAp + (e.tf ? synergyApBonus(world, e) : 0);
     const wdef = apBonus > 0 ? { ...w.def, ap: w.def.ap + apBonus } : w.def;
-    const expected = (shots + blastShots(blast, t)) * woundsPerShot(wdef, defenseOf(world, t), bonus) * factor;
+    const expected = (shots + blastShots(blast, t)) * woundsPerShot(wdef, defenseOf(world, t, e), bonus) * factor;
+    // Schlammmonster: Wer sie aus kurzer oder mittlerer Reichweite beschießt, den stürmen sie an.
+    const charge = t.kind === 'unit' && e.kind === 'unit' ? UNITS[t.defId as UnitId].charge : undefined;
+    if (charge && w.def.range <= charge.maxRange) t.charge = { target: e.id, until: world.tick + Math.round(charge.seconds * world.tps) };
     if (def?.kamikaze) {
       // Eine einzige Explosion: der erwartete Schaden in einem Schlag.
       const spread = t.kind === 'unit' ? Math.min(world.rules.kamikazeSpread, aliveModels(t)) : 0;
@@ -114,7 +117,7 @@ export function updateCombat(world: World): void {
       const behind = nextBehind(world, e, t);
       if (behind) {
         const dmg = damagePerWound(world, e, behind);
-        if (dmg > 0) collect(w.acc, behind, shots * w.def.pierce * factor * woundsPerShot(w.def, defenseOf(world, behind), bonus), dmg, e.owner, hits);
+        if (dmg > 0) collect(w.acc, behind, shots * w.def.pierce * factor * woundsPerShot(w.def, defenseOf(world, behind, e), bonus), dmg, e.owner, hits);
       }
     }
     trimAccumulator(w.acc, t.id);
@@ -358,6 +361,6 @@ function splashHits(world: World, shooter: Entity, target: Entity, shots: number
     const damage = damagePerWound(world, shooter, o);
     if (damage <= 0) continue;
     const n = (shots + blastShots(blast, o)) * factor * 0.5;
-    collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o), bonus), damage, shooter.owner, hits);
+    collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o, shooter), bonus), damage, shooter.owner, hits);
   }
 }

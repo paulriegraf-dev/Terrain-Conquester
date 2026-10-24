@@ -137,3 +137,26 @@ describe('Myriaden-Superbrut', () => {
     assert.equal(world.players[0].stats.buildingsLost, 0);
   });
 });
+
+describe('Schlammmonster (24.10. abends)', () => {
+  it('je weiter der Schütze, desto mehr Ausweichen; Nah- und Mitteldistanz-Schützen werden angestürmt', async () => {
+    const { defenseOf } = await import('../src/sim/systems/hitmath');
+    const { TERRAIN_INDEX } = await import('../src/data/terrain');
+    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['terraformer', 'technoclan'] });
+    for (let y = 5; y < 10; y++) for (let x = 8; x < 13; x++) {
+      const i = world.grid.index(x, y);
+      world.grid.setTerrain(i, TERRAIN_INDEX.mud);
+      world.formed[i] = 1;
+    }
+    const m = world.addUnit(0, UNITS.mudling, { x: 10.5, y: 7.5 }, 'mid');
+    m.tf!.home = { x: 10.5, y: 7.5 };
+    const near = world.addUnit(1, UNITS.plasma, { x: 12.5, y: 7.5 }, 'mid');
+    const far = world.addUnit(1, UNITS.battery, { x: 17.5, y: 7.5 }, 'mid');
+    assert.equal(defenseOf(world, m).evasion, 0);
+    assert.ok(defenseOf(world, m, near).evasion >= 1);
+    assert.equal(defenseOf(world, m, far).evasion, 4, 'Artillerie aus der Ferne: kaum zu treffen');
+    for (let k = 0; k < 40 && !m.charge; k++) world.step();
+    assert.ok(m.charge, 'beschossen – stürmt los');
+    assert.equal(world.get(m.charge!.target)?.defId === 'battery', false, 'nicht auf die Artillerie');
+  });
+});

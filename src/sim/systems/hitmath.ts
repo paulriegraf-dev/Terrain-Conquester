@@ -1,4 +1,6 @@
 import { ARMOR_REFERENCE } from '../../data/combat';
+import { UNITS } from '../../data/units';
+import type { UnitId } from '../../data/units';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import type { WeaponDef } from '../../data/units';
 import type { Entity } from '../entity';
@@ -6,6 +8,7 @@ import type { ArmorClass } from '../types';
 import { ARMOR_CLASSES } from '../types';
 import type { World } from '../world';
 import { groundSaveBonus } from './terraform';
+import { dist } from '../math';
 
 /**
  * Kampfrechnung nach Tabletop-Vorbild (Warhammer 40k), aber ohne Würfel:
@@ -77,14 +80,20 @@ export function effectiveness(w: WeaponDef, d: Defense, modelWounds: number): nu
   return woundsPerShot(w, d) * Math.min(w.damage * structure, modelWounds);
 }
 
-/** Verteidigungswerte eines Ziels – mit Deckung, wenn eine Einheit im Wald steht. */
-export function defenseOf(world: World, t: Entity): Defense {
+/** Verteidigungswerte eines Ziels – mit Deckung, wenn eine Einheit im Wald steht; `from` = Schütze (Ausweichen nach Abstand). */
+export function defenseOf(world: World, t: Entity, from?: Entity): Defense {
   const unit = t.kind === 'unit';
   const cell = world.grid.index(Math.floor(t.pos.x), Math.floor(t.pos.y));
   const cover = unit && world.grid.terrain[cell] === TERRAIN_INDEX.forest ? 1 : 0;
   // Terra-Former: Rüstungsbonus auf Boden ihrer Art (Steinwächter auf Geröll)
   const save = t.tf ? Math.max(2, t.save - groundSaveBonus(world, t)) : t.save;
-  return { armor: t.armor, toughness: t.toughness, save, evasion: t.evasion, big: !unit, cover };
+  let evasion = t.evasion;
+  const dodge = unit && from ? UNITS[t.defId as UnitId]?.dodge : undefined;
+  if (dodge) {
+    const d = dist(t.pos, from!.pos);
+    evasion += Math.min(dodge.max, Math.max(0, Math.floor((d - dodge.start) / dodge.per) + (d > dodge.start ? 1 : 0)));
+  }
+  return { armor: t.armor, toughness: t.toughness, save, evasion, big: !unit, cover };
 }
 
 /** Vergleichsziel einer Panzerungsklasse (siehe ARMOR_REFERENCE). */

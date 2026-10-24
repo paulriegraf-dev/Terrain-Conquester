@@ -541,10 +541,11 @@ export function nearOwnGround(world: World, p: PlayerId, ground: number, x: numb
 }
 
 /** Leine (Schlammmonster): Ziel nur in der Nähe eigenen Matschs; ohne Ziel zurück zum Nest. */
-export function leashOk(world: World, e: Entity, t: Entity): boolean {
+export function leashOk(world: World, e: Entity, t: Entity, charging = false): boolean {
   const def = UNITS[e.defId as UnitId];
   if (!def.leash || !def.ground) return true;
-  return nearOwnGround(world, e.owner, TERRAIN_INDEX[def.ground], t.pos.x, t.pos.y, mudLeash(world, e.owner, def.leash.radius));
+  const radius = charging && def.charge ? Math.max(def.charge.reach, mudLeash(world, e.owner, def.leash.radius)) : mudLeash(world, e.owner, def.leash.radius);
+  return nearOwnGround(world, e.owner, TERRAIN_INDEX[def.ground], t.pos.x, t.pos.y, radius);
 }
 
 function updateLeashed(world: World, e: Entity, def: UnitDef): void {

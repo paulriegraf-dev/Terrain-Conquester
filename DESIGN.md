@@ -1625,6 +1625,13 @@ Wunsch des Nutzers: Anpassen soll sich lohnen, aber nicht zu leicht fallen – d
 - **Myriaden-Superbrut (Idee des Nutzers):** Zwei Bruten auf Stufe III verschmelzen (150 Energie, 25 s, in denen beide nichts bauen). Danach: doppelte Produktion und +15 % (die neue Brut gilt als eingespielt), Gelege +4, 80 % mehr Leben; der Platz der zweiten Brut wird frei. Endgültig – nicht umwidmen; fällt sie, fehlt die halbe Brut. Die Myriaden sind die Einzigen, die ihre Brut auf Stufe III bringen müssen – die Superbrut macht das zum Spätspiel-Ziel.
 - **Gespeicherte Partien:** Jede eigene Partie (gegen die KI, auch abgebrochen, und Multiplayer) landet im Browser: Startwert, alle Befehle, Ergebnis, Spielversion und alle 30 s ein Lagebild (Energie, Einheiten und Gebäude je Art, Gebiet, HQ-Leben, Forschung) – das bleibt lesbar, auch wenn sich die Werte ändern. Herunterladen: am Rundenende „Partie herunterladen“, im Titelbild alle auf einmal. Gedacht für später: die Regel-KI per Selbstspiel abstimmen und mit echten Partien vergleichen (Stufe 2 der KI-Idee), erst danach eine lernende KI.
 
+### Schlammmonster gestärkt (24.10. abends, Wunsch des Nutzers)
+
+Sie sollen Überwindung kosten – man soll sich zweimal überlegen, ob man den Weg durch den Matsch nimmt. Anzahl unverändert.
+- **60 statt 30 Leben** (3 Modelle à 20), Reichweite unverändert (Nahkampf).
+- **Ausweichen nach Abstand:** Ab 1,5 Kacheln Abstand zum Schützen +1 Ausweichen, je weitere Kachel +1, höchstens +4. Nahkampf trifft normal, Plasmawerfer und Gunner (3 Kacheln) deutlich schlechter, Scharfschützen und Artillerie nur noch mit dem Mindestwurf (1 von 6).
+- **Losstürmen:** Wer sie mit einer Waffe bis 5 Kacheln Reichweite beschießt, den greifen sie 8 s lang an – auch über ihre Leine hinaus (bis 8 Kacheln vom Matsch). Artillerie und Batterien mit großer Reichweite lösen das nicht aus – gegen die hilft ihnen das Ausweichen.
+
 ## Roadmap
 
 - **M2 – Gerüst:** siehe Plan oben. Dazu die Entscheidung über Wellen und eine stärkere KI.
