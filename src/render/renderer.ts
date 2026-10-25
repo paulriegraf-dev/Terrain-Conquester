@@ -142,6 +142,7 @@ export class Renderer {
     if (view.fog && view.human !== null) this.drawFog(world, view.human, view.prep);
     this.drawIntelGhosts(world, view);
     this.drawGatherSignals(world, view);
+    this.drawBurrows(world);
     if (view.visionRings) this.drawVisionRings(world, view);
     if (view.grid) this.drawGrid(world);
     this.drawCursor(world, view);
@@ -350,7 +351,15 @@ export class Renderer {
       ctx.fillStyle = color;
       ctx.strokeStyle = PALETTE.outline;
       ctx.lineWidth = 1;
-      if (f.unit === 'taunter') {
+      if (f.charge) {
+        // Sprengladung (Sprengetopp): kleine Bombe
+        ctx.fillStyle = '#2a2420';
+        ctx.beginPath();
+        ctx.arc(gx, gy - lift, Math.max(2, t * 0.14), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e0a040';
+        ctx.fillRect(gx - 1, gy - lift - Math.max(2, t * 0.14) - 2, 2, 2);
+      } else if (f.unit === 'taunter') {
         ctx.beginPath();
         ctx.arc(gx, gy - lift, Math.max(3, t * 0.42), 0, Math.PI * 2);
         ctx.fill();
@@ -364,6 +373,27 @@ export class Renderer {
           ctx.fillRect(gx + ox - s / 2, gy - lift + oy - s / 2, s, s);
         }
       }
+    }
+  }
+
+  /**
+   * Eingegrabene Drohnen (Myr-Kanone, 25.10.): ein pochender Radar-Ring – auch im Nebel, damit der Gegner ahnt, dass
+   * dort etwas lauert. Je näher der Ausbruch, desto schneller pocht er.
+   */
+  private drawBurrows(world: World): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    for (const g of world.burrows) {
+      const left = Math.max(0, g.breakAt - world.tick) / world.tps;
+      const speed = left < 1.5 ? 0.35 : 0.15;
+      const k = (Math.sin(world.tick * speed) + 1) / 2;
+      ctx.strokeStyle = withAlpha(PALETTE.player[g.owner], 0.35 + 0.5 * k);
+      ctx.lineWidth = Math.max(1, t * 0.08);
+      ctx.beginPath();
+      ctx.arc(g.pos.x * t, g.pos.y * t, (0.6 + 0.8 * k) * t, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = withAlpha(PALETTE.player[g.owner], 0.5);
+      for (const p of g.pods) ctx.fillRect(p.pos.x * t - 1.5, p.pos.y * t - 1.5, 3, 3);
     }
   }
 
@@ -922,6 +952,32 @@ export class Renderer {
       }
       ctx.stroke();
     }
+    // 25.10.: Zustände sichtbar machen – geschwächt (Schlammschleuder), verwurzelt (Hainhüter), zersetzt (Myr).
+    if (e.weaken && tick < e.weaken.until) {
+      ctx.fillStyle = 'rgba(120,86,46,0.45)';
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (e.root && tick < e.root.until) {
+      ctx.strokeStyle = 'rgba(110,190,90,0.95)';
+      ctx.lineWidth = Math.max(1.5, t * 0.09);
+      for (let k = 0; k < 6; k++) {
+        const a0 = (k / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a0) * r * 1.1, y + Math.sin(a0) * r * 1.1);
+        ctx.quadraticCurveTo(x + Math.cos(a0 + 0.4) * r * 1.9, y + Math.sin(a0 + 0.4) * r * 1.9, x + Math.cos(a0 + 0.1) * r * 2.2, y + Math.sin(a0 + 0.1) * r * 2.2);
+        ctx.stroke();
+      }
+    }
+    if (e.corrosion && tick < e.corrosion.until && e.corrosion.level > 0) {
+      ctx.fillStyle = 'rgba(170,220,60,0.85)';
+      const s = Math.max(1.5, t * 0.09);
+      for (let k = 0; k < e.corrosion.level * 3; k++) {
+        const a0 = (k / (e.corrosion.level * 3)) * Math.PI * 2 + tick * 0.05;
+        ctx.fillRect(x + Math.cos(a0) * r * 1.3 - s / 2, y + Math.sin(a0) * r * 1.3 - s / 2, s, s);
+      }
+    }
     const shape = UNITS[e.defId as UnitId].shape;
     // Getarnt (Borkenschützen im Wald): halb durchsichtig
     const camo = camouflageRange(world, e) !== null;
@@ -983,12 +1039,38 @@ export class Renderer {
       ctx.textBaseline = 'middle';
       ctx.fillText(UNITS[e.defId as UnitId].letter, x, y + 0.5);
     }
+    const field = UNITS[e.defId as UnitId].field;
+    if (field && t >= 8) {
+      // Verspotter: Schadensfeld
+      ctx.fillStyle = withAlpha(PALETTE.player[e.owner], 0.08 + 0.04 * Math.sin(tick * 0.2));
+      ctx.beginPath();
+      ctx.arc(x, y, field.radius * t, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (e.support && t >= 10) {
       ctx.strokeStyle = withAlpha(PALETTE.player[e.owner], 0.18);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(x, y, e.support.radius * t, 0, Math.PI * 2);
       ctx.stroke();
+    }
+    // Myr-Kanone im Stein-Modus: drei graue Steine über ihr.
+    if (e.stoneMode && t >= 8) {
+      ctx.fillStyle = '#9a9488';
+      ctx.strokeStyle = PALETTE.outline;
+      ctx.lineWidth = 1;
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.arc(x + k * r * 0.7, y - r * 1.9, Math.max(1.5, r * 0.28), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    // Sprengetopp: übrige Ladungen als kleine Punkte.
+    if (e.charges && e.charges > 0 && t >= 8) {
+      ctx.fillStyle = '#e0a040';
+      const s2 = Math.max(1.5, t * 0.08);
+      for (let k = 0; k < e.charges; k++) ctx.fillRect(x - r + k * s2 * 1.6, y - r * 1.8, s2, s2);
     }
     if (e.hp < e.maxHp) this.hpBar(x - r, y - r - 4, r * 2, e.hp / e.maxHp, 2);
   }

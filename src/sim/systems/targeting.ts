@@ -179,14 +179,17 @@ export function updateTargeting(world: World): void {
     const hunt = canChase && world.rules.kamikazeHunt > 0 && udef?.kamikaze ? world.rules.kamikazeHunt : 0;
     // Werfer mit Ladung (Myr-Kanone): sucht weiche Ziele weiter weg und rückt dafür bis an die eigene Front vor.
     const ld = udef?.launch;
-    const canThrow = !!ld && !!e.launcher && (e.launcher.load > 0 || !!ld.take);
+    // Myr-Kanone (25.10.): Stein-Modus, wenn rundum überwiegend Schwere stehen (mit Hysterese).
+    if (udef?.stoneMode) updateStoneMode(e, udef.stoneMode, idx.units);
+    const stone = !!e.stoneMode;
+    const canThrow = !stone && !!ld && !!e.launcher && (e.launcher.load > 0 || !!ld.take);
     const softThrow = canThrow && !!ld!.soft;
     const throwReach = softThrow && canChase ? world.rules.launcherAdvance : 0;
     const focusReach = canChase && world.rules.focusReach > 0 ? world.rules.focusReach : 0;
     // Schlammmonster beim Losstürmen: den Schützen auch weiter weg suchen (bis zu seiner Reichweite und etwas mehr).
     const chargeReach = e.charge && world.tick < e.charge.until && udef?.charge ? udef.charge.maxRange + 2 - baseSearch : 0;
     const searchRange = baseSearch + Math.max(hunt, throwReach, focusReach, chargeReach);
-    const siege = !!e.mover && isSiege(w.def);
+    const siege = !!e.mover && isSiege(w.def) && !stone;
     // Artillerie sucht Bauwerke weiter (sie rückt bis auf volle Reichweite an sie heran).
     const structureRange = siege && canChase ? range + SIEGE_ADVANCE : searchRange;
     // Halten und Verteidigen: nicht übers Niemandsland nachsetzen (nur Front-Truppen jagen weiter).
@@ -238,7 +241,7 @@ export function updateTargeting(world: World): void {
       const charging = !!e.charge && e.charge.target === t.id && world.tick < e.charge.until;
       if (udef?.leash && !leashOk(world, e, t, charging)) return; // Schlammmonster: nur nahe eigenem Matsch (beim Losstürmen weiter)
       // Ziele, gegen die die eigene Waffe stark ist, wirken „näher“ → Konter greifen gezielt.
-      const factor = softThrow ? softness(t) : targetFactor(world, w.def, t);
+      const factor = softThrow ? softness(t) : stone ? (t.kind === 'unit' && t.armor === 'heavy' ? 2 : 0.7) : targetFactor(world, w.def, t);
       if (hunt > 0 && d > baseSearch && factor < 1.25) return; // weit weg nur Lieblingsziele (deutlich überdurchschnittlich)
       if (focusReach > 0 && hunt === 0 && throwReach === 0 && d > baseSearch && (t.kind !== 'unit' || factor < 1.5)) return;
       // Zielaufklärung (Test-Schalter): Fernkampf trifft nur, was er selbst sieht oder ein eigener Späher nahe am Ziel.
@@ -277,4 +280,26 @@ export function updateTargeting(world: World): void {
     }
     w.targetId = best ? best.id : 0;
   }
+}
+
+/**
+ * Stein-Modus der Myr-Kanone: Anteil schwerer gegnerischer Verbände im Umkreis. Ab `enter` an, unter `leave` aus –
+ * dazwischen bleibt es, wie es ist (kein Flackern). Ohne Gegner rundum bleibt der Modus ebenfalls.
+ */
+function updateStoneMode(e: Entity, sm: { enter: number; leave: number; radius: number }, units: SpatialGrid): void {
+  let heavy = 0;
+  let all = 0;
+  const r2 = sm.radius * sm.radius;
+  units.forEachNear(e.pos.x, e.pos.y, sm.radius + MAX_UNIT_RADIUS, (o) => {
+    if (!o.alive || o.owner === e.owner || o.kind !== 'unit') return;
+    const dx = o.pos.x - e.pos.x;
+    const dy = o.pos.y - e.pos.y;
+    if (dx * dx + dy * dy > r2) return;
+    all++;
+    if (o.armor === 'heavy') heavy++;
+  });
+  if (all === 0) return;
+  const share = heavy / all;
+  if (!e.stoneMode && share >= sm.enter) e.stoneMode = true;
+  else if (e.stoneMode && share < sm.leave) e.stoneMode = false;
 }

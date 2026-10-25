@@ -60,9 +60,9 @@ describe('Fabrikmodell: Beimischung', () => {
     }
     const hatched = world.entities.filter((e) => e.alive && e.owner === 0 && e.kind === 'unit');
     assert.equal(hatched.filter((e) => e.defId === 'hound').length, 1);
-    // 24.10. abends: dazu jeder 6. Verband ein Sprengetopp (Beimischung schon ab Stufe I)
-    assert.equal(hatched.filter((e) => e.defId === 'bomber').length, 1);
-    assert.equal(hatched.filter((e) => e.defId === 'drone').length, 4);
+    // 25.10.: keine Sprengetopp-Beimischung mehr (Sprengetopps nur noch als eigene Linie der Brut)
+    assert.equal(hatched.filter((e) => e.defId === 'bomber').length, 0);
+    assert.equal(hatched.filter((e) => e.defId === 'drone').length, 5);
   });
 
   it('Kaserne ab Stufe III: jeder vierte Verband ist ein Nano-Heiler', () => {

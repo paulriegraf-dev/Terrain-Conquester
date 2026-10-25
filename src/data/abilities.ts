@@ -115,7 +115,8 @@ export const SWAP: SwapAbilityDef = {
  * Was man vorbereitet, sieht der Gegner erst, wenn er hinschaut (Nebel).
  */
 export const PREP = {
-  targets: ['meadow', 'forest', 'mud', 'snow'] as readonly TerrainId[],
+  // 25.10.: Geröll ist in der Vorbereitung wählbar (Myr-Kanone, Terra-Former-Geröll-Linie)
+  targets: ['meadow', 'forest', 'mud', 'snow', 'rubble'] as readonly TerrainId[],
   brush: 3,
 };
 

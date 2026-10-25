@@ -71,6 +71,21 @@ export interface Flight {
   land: number;
   route: Route;
   impact?: { radius: number; damage: number };
+  /** Sammelangriff (Myr-Kanone): gelandete Drohnen graben sich ein, siehe LaunchDef.burrow. */
+  burrow?: { seconds: number; refreshes: number; maxSeconds: number; radius: number };
+  /** Sprengladung (Myr-Sprengetopp): kein Verband, sondern eine Explosion am Ziel. */
+  charge?: { target: number; damage: number; radius: number; weapon: WeaponDef };
+}
+
+/** Eingegrabene Drohnen (Myr-Kanone, Sammelangriff): schlüpfen gemeinsam bei `breakAt`. */
+export interface Burrow {
+  owner: PlayerId;
+  pos: Vec2;
+  route: Route;
+  pods: { unit: UnitId; models: number; pos: Vec2 }[];
+  first: number;
+  breakAt: number;
+  refreshes: number;
 }
 
 export interface PlayerStats {
@@ -100,6 +115,8 @@ export interface PlayerStats {
   damageTo: Record<string, number>;
   /** Schaden je eigener Einheitenart und Zielart (`art>einheit|building|wall|hq`) – nur Statistik (Auswertung der Läufe). */
   damageSplit: Record<string, number>;
+  /** Lebensdauer gefallener Einheiten je Art: [Summe Sekunden, Anzahl] – nur Statistik. */
+  lifetime: Record<string, [number, number]>;
 }
 
 /**
@@ -278,6 +295,8 @@ export class World {
   readonly mudNests: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
   /** Myriaden: geworfene Myrs im Flug (Kanone, Katapult). */
   flights: Flight[] = [];
+  /** Eingegrabene Drohnen-Einschläge der Myr-Kanone (Sammelangriff, 25.10.). */
+  burrows: Burrow[] = [];
   /** Terra-Former: laufende Verschmelzungen des Landformers (dort zählt jeder Boden als eigener). */
   merges: { owner: PlayerId; x: number; y: number; r: number; until: number }[] = [];
   /** Spuren im Schnee: letzter Tick, in dem eine Einheit der Seite dort war (−1 = nie). */
@@ -553,6 +572,11 @@ export class World {
         boost: 0,
       },
     };
+    // Sprengetopp (25.10.): erst Ladungen werfen – solange er welche hat, gilt die Wurfweite.
+    if (def.charges && e.weapon) {
+      e.charges = def.charges.count;
+      e.weapon.def = { ...e.weapon.def, range: Math.max(e.weapon.def.range, def.charges.range) };
+    }
     this.insert(e);
     this.players[owner].stats.spawned[def.id]++;
     return e;
@@ -670,7 +694,13 @@ export class World {
     }
     if (killer === null) return;
     const stats = this.players[e.owner].stats;
-    if (e.kind === 'unit') stats.lost[e.defId as UnitId]++;
+    if (e.kind === 'unit') {
+      stats.lost[e.defId as UnitId]++;
+      // Lebensdauer im Kampf (25.10.): Sekunden vom Erscheinen bis zum Tod, je Einheitenart aufsummiert.
+      const life = (stats.lifetime[e.defId] ??= [0, 0]);
+      life[0] += (this.tick - e.bornTick) / this.tps;
+      life[1]++;
+    }
     if (e.kind === 'building') stats.buildingsLost++;
     if (killer !== e.owner) this.players[killer].stats.kills++;
     this.emit({ type: 'death', owner: e.owner, kind: e.kind, name: e.name, pos: { x: e.pos.x, y: e.pos.y } });
@@ -824,6 +854,7 @@ export class World {
         damageBy: {},
         damageTo: {},
         damageSplit: {},
+        lifetime: {},
         kills: 0,
         buildingsBuilt: 0,
         buildingsLost: 0,

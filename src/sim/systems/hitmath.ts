@@ -90,6 +90,8 @@ export function defenseOf(world: World, t: Entity, from?: Entity): Defense {
   // Zersetzung (Myr-Drohnen): Rüstung kurz schlechter.
   if (t.corrosion && world.tick < t.corrosion.until) save = Math.min(7, save + t.corrosion.level);
   let evasion = t.evasion;
+  // Verwurzelt (Hainhüter, 25.10.): alle treffen besser.
+  if (t.root && world.tick < t.root.until) evasion -= t.root.hitBonus;
   const dodge = unit && from ? UNITS[t.defId as UnitId]?.dodge : undefined;
   if (dodge) {
     const d = dist(t.pos, from!.pos);

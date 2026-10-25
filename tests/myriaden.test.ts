@@ -19,6 +19,12 @@ function dummy(world: World, owner: 0 | 1, unit: keyof typeof UNITS, x: number, 
   return u;
 }
 
+/** Sprengetopp ohne Ladungen (25.10.): sofort Kamikaze, wie vor den Sprengladungen. */
+function asKamikaze(b: Entity): void {
+  b.charges = 0;
+  b.weapon!.def = { ...b.weapon!.def, range: UNITS.bomber.weapon!.range };
+}
+
 describe('Myriaden: Aufbau', () => {
   it('eigene Gebäude und Start-Einheiten', () => {
     const world = new World({ map: openMap, seed: 1, rules: { ...noIncome, startEnergy: 400 }, ...myr });
@@ -62,6 +68,7 @@ describe('Myriaden: Eigenheiten', () => {
     const target = dummy(world, 1, 'gunner', 24.5, 13.5);
     target.weapon = undefined;
     const b = dummy(world, 0, 'bomber', 23.9, 13.5);
+    asKamikaze(b);
     b.weapon!.targetId = target.id;
     world.step();
     assert.equal(b.alive, false);
@@ -74,6 +81,7 @@ describe('Myriaden: Eigenheiten', () => {
       const target = dummy(world, 1, 'wardForest', 24.5, 13.5);
       target.weapon = undefined;
       const b = dummy(world, 0, 'bomber', 23.9, 13.5);
+      asKamikaze(b);
       b.weapon!.targetId = target.id;
       const hp = target.hp;
       world.step();
@@ -89,6 +97,7 @@ describe('Myriaden: Eigenheiten', () => {
       const tank = dummy(world, 1, 'specialForest', 27.5, 13.5);
       tank.weapon = undefined;
       const b = world.addUnit(0, UNITS.bomber, { x: 23.0, y: 13.5 }, 'mid');
+      asKamikaze(b);
       world.players[0].stance.mid = 'push';
       stepTimes(world, world.rules.visionEvery + 2);
       return b.weapon!.targetId === tank.id ? 1 : 0;

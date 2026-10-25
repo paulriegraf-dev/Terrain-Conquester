@@ -25,7 +25,7 @@ export function checkPrep(world: World, p: PlayerId, x: number, y: number, terra
   const cells: number[] = [];
   const fail = (reason: string): PrepCheck => ({ ok: false, reason, cells });
   if (world.tick !== 0) return fail('Die Vorbereitung ist vorbei');
-  if (!PREP.targets.includes(terrain)) return fail('In der Vorbereitung nur Wiese, Wald, Matsch oder Schnee');
+  if (!PREP.targets.includes(terrain)) return fail('In der Vorbereitung nur Wiese, Wald, Matsch, Schnee oder Geröll');
   if (world.players[p].prepLeft <= 0) return fail('Keine Platzierungen mehr übrig');
   const grid = world.grid;
   const r = Math.floor(PREP.brush / 2);

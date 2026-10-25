@@ -16,6 +16,7 @@ import { waveLeader } from './hero';
 import type { Slot } from './formation';
 import { frenzyOf } from './lifespan';
 import { groundSpeedFactor } from './terraform';
+import { rushFactor } from './myr';
 
 /** Wie stark sich überlappende Einheiten auseinanderschieben (0..1). */
 const SEPARATION = 0.5;
@@ -47,6 +48,7 @@ export function updateMovement(world: World): void {
   for (const e of world.entities) {
     if (!e.alive || !e.mover) continue;
     if (e.stunnedUntil !== undefined && world.tick < e.stunnedUntil) continue; // betäubt (Notfallverlegung)
+    if (e.root && world.tick < e.root.until) continue; // verwurzelt (Hainhüter)
     const m = e.mover;
     const profile = MOVE_PROFILES[m.profile];
     if (unitOrder(world, e) === 'push') updateDeployment(world, e);
@@ -58,7 +60,8 @@ export function updateMovement(world: World): void {
     // Welle: auf dem Marsch im Tempo des Commanders (im Kampf frei).
     const lead = escortLeader(world, e);
     const base = lead && !(target && target.alive) ? escortSpeed(world, e, lead) : m.speed;
-    const speed = base * aura * rage * ground * (grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1);
+    const rush = rushFactor(world, e); // Myr-Drohnen: Nachschub nahe der Basis schneller, Ansturm
+    const speed = base * aura * rage * ground * rush * (grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1);
 
     let dir: Vec2 = { x: 0, y: 0 };
     let chasing = false;

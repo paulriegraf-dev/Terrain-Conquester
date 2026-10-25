@@ -1732,6 +1732,39 @@ Je Karte (Myr:TC · Myr:TF · TC:TF): Felsenpass 11:1 · 3:9 · 2:10; Felsenpass
 2. Technoclan braucht Hilfe oder die Terra-Former eine Bremse, bevor man Technoclan gegen Myriaden anfasst.
 3. Das KI-Verhalten (einfache KI) beeinflusst die Zahlen: Strategien und Gelände werden noch nicht klug gespielt (siehe Wunsch unten).
 
+### Balance-Patch 1 (25.10., mit dem Nutzer besprochen)
+
+Stand davor auf GitHub: Branch `claude/stand-vor-balance-patch-1` (zum Zurückrollen).
+
+**Zahlen:**
+
+| Einheit | Änderung |
+|---|---|
+| Hover Scout | 3 Modelle à 35 Leben (105), je 1 Schuss alle 0,65 s, Range 3,5 – gegen Infanterie 21,3 → 16,4 |
+| Plasmawerfer | Range 2,8 → 3,5, 150 → 120 Leben, Schaden je Wunde 7 → 6,3 (−10 %) |
+| Technogunner | 2 Modelle à 150 (300), je 1 Schuss / 1,2 s, Schaden 36, Range 3 → 2,5 – gegen Schwer 23,7 → 26,7 |
+| Koloss | Range 4 → 3,1, 360 → 400 Leben, Tempo 1,0 → 1,15 |
+| Myr-Drohnen | Range 3,2 → 2,5, Abklingzeit 0,8 → 0,6 (+33 % Schaden und schnellere Zersetzung) |
+| Myr-Verspotter | 100 → 130 Leben; Einschlag (Katapult) 30 → 25 |
+| Lawinenrufer | 14 Schüsse × 8 Schaden alle 3 s (Frostatem), Range 4 → 3, 260 → 240 Leben – gegen Infanterie 5,3 → 12,4 |
+| Steppenjäger | Abklingzeit 0,9 → 1,0 (−10 %) |
+| Hainhüter | Stärke 6 → 8 (gegen Schwere 0,8 → 1,3) |
+| Frontbrecher | Stärke 10 → 8 (gegen Leicht 17,8 → 14,2, gegen Gebäude 20 → 13,3) |
+| Myr-Brut | keine Sprengetopp-Beimischung mehr |
+| Schlammmonster | Eier nur noch aus einem vollen 3×3-Matschfeld (fieldMin 7 → 9) |
+
+**Neue Mechaniken:**
+- **Myr-Kanone, zwei Modi:** Stehen im Umkreis 7 mindestens 60 % schwere Verbände (zurück unter 40 %), wirft sie keine Drohnen, sondern Steine, doppelt so oft, und zielt auf Schwere. Jeder erwartete Steintreffer zählt für die Zersetzung wie 10 Drohnenschüsse, mit Geröll im Umkreis 2 bis Stufe 2; ohne Geröll nur wie 3 Schüsse und höchstens Stufe 1. Anzeige: drei Steine über der Kanone.
+- **Myr-Kanone, Sammelangriff:** Geworfene Drohnen graben sich ein (unverwundbar, Lebensuhr steht) und brechen nach 4,5 s aus. Jeder weitere eigene Einschlag im Umkreis 2,5 frischt auf; beim 5. Einschlag oder spätestens 12 s nach dem ersten brechen alle zugleich aus. Der Gegner sieht einen pochenden Radar-Ring, auch im Nebel.
+- **Sprengetopp:** wirft erst 4 Sprengladungen (je 110 Schaden, Wurfweite 3,5, alle 2,5 s, Fläche 1 mit halber Wirkung), bevorzugt auf Schwere; danach Kamikaze mit 40 % der bisherigen Explosion.
+- **Verspotter:** nach dem Einschlag ein Schadensfeld (Radius 2, 4 Schaden/s an Gegnern), das ihn selbst 1 Leben/s kostet.
+- **Schlammschleuder:** jeder 5. Angriff macht die Kachel des Ziels dauerhaft zu eigenem Matsch.
+- **Hainhüter, Verwurzelung:** 8 s Beschuss durch Hainhüter (Lücken bis 3 s) verwurzeln einen Schweren 4 s: Er bewegt sich nicht und wird von allen um 1 besser getroffen, danach 10 s immun.
+- **Drohnen-Sturmlauf:** nahe eigener Gebäude und HQ bis +50 % Tempo, abnehmend bis 14 Kacheln Abstand. Ansturm: greifen mindestens 3 Drohnen-Verbände im Umkreis 3 zugleich an, +30 % Tempo für 4 s (dann 8 s Pause).
+- **Geröll** ist in der Vorbereitung wählbar (Taste 5). Die KI der Myriaden legt Geröll hinter ihre Linien, für die Kanonen.
+- **Sichtbar:** geschwächt (brauner Schein), verwurzelt (grüne Ranken), zersetzt (grüne Punkte je Stufe), Sprengladungen über dem Sprengetopp, Schadensfeld des Verspotters.
+- **Statistik:** Lebensdauer gefallener Einheiten je Art (`lifetime`), für die nächsten Läufe.
+
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 
 - **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.

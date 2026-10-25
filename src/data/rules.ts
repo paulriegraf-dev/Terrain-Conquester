@@ -402,7 +402,7 @@ export const RULES: Rules = {
     formSeconds: 2, ritualSeconds: 4, cooldownSeconds: 90, workRadius: 2, advanceStep: 1.5, frontOffset: 2,
     preparedRadius: 16, maxSummons: 0, summonEvery: 20, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
-  mud: { fieldMin: 7, eggSeconds: 10, clutch: 3, max: 15 },
+  mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },
   synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },
   // Gelände in der eigenen Hälfte (23.10.): 3 Vorbereitungs-Flächen mehr, danach dort 10 statt 15 Energie und 2 statt 3 s
   shaping: { prepExtra: 3, homeCost: 0.67, homeSeconds: 0.67 },

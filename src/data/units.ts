@@ -196,6 +196,12 @@ export interface LaunchDef {
   cooldown: number;
   /** Aufprall: kleine Explosion (Schaden je Gegner im Radius). */
   impact?: { radius: number; damage: number };
+  /**
+   * Sammelangriff (25.10., Myr-Kanone): Gelandete Drohnen bleiben eingegraben (unverwundbar, Lebensuhr steht) und
+   * brechen nach `seconds` aus. Jeder weitere Einschlag im Umkreis `radius` frischt die Frist auf (höchstens
+   * `refreshes`-mal, dann schlüpfen alle sofort), spätestens `maxSeconds` nach dem ersten Einschlag.
+   */
+  burrow?: { seconds: number; refreshes: number; maxSeconds: number; radius: number };
   /** Zielt auf weiche Ziele (Unbewaffnete, Artillerie, Leichte) – nie direkt auf Panzer oder Bauwerke. */
   soft?: boolean;
 }
@@ -284,6 +290,35 @@ export interface UnitDef {
    * Schüsse eine Stufe schlechter (höchstens `max`), nach `seconds` ohne Treffer ist es vorbei. Masse knackt so Panzer.
    */
   corrode?: { shotsPerLevel: number; max: number; seconds: number };
+  /**
+   * Stein-Modus (25.10., Myr-Kanone): Stehen um sie herum überwiegend Schwere (ab `enter`, zurück unter `leave`,
+   * gezählt nach Verbänden im Umkreis `radius`), wirft sie keine Drohnen, sondern Steine – `rate`-mal so oft – und
+   * jeder erwartete Treffer auf ein schweres Ziel zählt wie `perHit` Drohnenschüsse für die Zersetzung. Mit Geröll
+   * im Umkreis `rubbleRadius` voller Wert (bis `max` Stufen), ohne Geröll `perHitPlain` (bis `maxPlain`).
+   */
+  stoneMode?: { enter: number; leave: number; radius: number; rate: number; rubbleRadius: number; perHit: number; perHitPlain: number; max: number; maxPlain: number; shotsPerLevel: number; seconds: number };
+  /**
+   * Sprengladungen (25.10., Myr-Sprengetopp): wirft erst `count` Ladungen (je `damage`, Wurfweite `range`, alle
+   * `cooldown` s, Flugzeit `flight` s, Fläche `radius` mit halbem Schaden), bevorzugt auf Schwere; danach wird er
+   * zum Kamikaze mit `kamikazeFactor` seines Explosionsschadens.
+   */
+  charges?: { count: number; damage: number; range: number; cooldown: number; flight: number; radius: number; kamikazeFactor: number };
+  /** Schadensfeld (25.10., Myr-Verspotter): Gegner im Radius nehmen `dps`, er selbst `selfDps` Schaden je Sekunde. */
+  field?: { radius: number; dps: number; selfDps: number };
+  /**
+   * Sturmlauf (25.10., Myr-Drohnen): nahe eigener Gebäude und HQ bis `homeBonus` schneller, abnehmend bis `falloff`
+   * Kacheln Abstand. Ansturm: greifen mindestens `squads` eigene Verbände dieser Art im Umkreis `radius` zugleich an,
+   * bekommen sie `seconds` s lang +`bonus` Tempo (danach `cooldown` s Pause).
+   */
+  rush?: { homeBonus: number; falloff: number; squads: number; radius: number; bonus: number; seconds: number; cooldown: number };
+  /** Matsch-Treffer (25.10., Schlammschleuder): jeder `every`-te Angriff macht die Kachel des Ziels dauerhaft zu Matsch. */
+  mudOnHit?: { every: number };
+  /**
+   * Verwurzeln (25.10., Hainhüter): Wird ein schwerer Gegner insgesamt `after` s lang von Hainhütern beschossen (Lücken
+   * bis `gap` s zählen nicht als Pause), steht er `seconds` s fest und wird von allen um `hitBonus` besser getroffen;
+   * danach `immune` s immun.
+   */
+  root?: { after: number; gap: number; seconds: number; hitBonus: number; immune: number };
   /** Leine (Schlammmonster): entfernt sich höchstens so weit von eigenem Boden seiner Art. */
   leash?: { radius: number };
   /** Held: kommt nicht aus einer Fabrik, sondern über ein HQ-Upgrade; einer pro Spieler. */
@@ -309,9 +344,9 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'circle', letter: 'R', role: 'Anti-Panzer auf Distanz, wenig Leben',
   },
   plasma: {
-    id: 'plasma', protocol: 'area', name: 'Plasmawerfer', armor: 'light', hp: 150, toughness: 5, save: 4,
+    id: 'plasma', protocol: 'area', name: 'Plasmawerfer', armor: 'light', hp: 120, toughness: 5, save: 4,
     speed: 1.4, move: 'wheels', part: 'arms', radius: 0.4, vision: 6, spawnInterval: 6,
-    weapon: { shots: 8, cooldown: 1.0, range: 2.8, skill: 3, strength: 3, ap: 1, damage: 7, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
+    weapon: { shots: 8, cooldown: 1.0, range: 3.5, skill: 3, strength: 3, ap: 1, damage: 6.3, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
     shape: 'triangle', letter: 'P', role: 'Flächenschaden, kontert Infanterie und Masse',
   },
   nanomedic: {
@@ -321,9 +356,9 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'cross', letter: '+', role: 'Heilt eigene Einheiten in der Nähe – automatisch',
   },
   hoverscout: {
-    id: 'hoverscout', protocol: 'mark', name: 'Hover Scout', armor: 'light', hp: 100, toughness: 4, save: 5,
+    id: 'hoverscout', protocol: 'mark', name: 'Hover Scout', armor: 'light', hp: 105, models: 3, toughness: 4, save: 5,
     speed: 2.6, move: 'hover', part: 'wheels', radius: 0.35, vision: 10, spawnInterval: 6,
-    weapon: { shots: 3, cooldown: 0.5, range: 3, skill: 3, strength: 5, ap: 1, damage: 10, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 0.65, range: 3.5, skill: 3, strength: 5, ap: 1, damage: 10, type: 'rifle' },
     shape: 'triangle', letter: 'H', role: 'Sehr schnell, große Sicht, schwebt über Schluchten',
   },
   battery: {
@@ -333,18 +368,20 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'diamond', letter: 'B', role: 'Artillerie: sehr weit, stark gegen Gebäude, zerbrechlich',
   },
   gunner: {
-    id: 'gunner', protocol: 'pierce', name: 'Technogunner', armor: 'heavy', hp: 280, toughness: 7, save: 3,
+    id: 'gunner', protocol: 'pierce', name: 'Technogunner', armor: 'heavy', hp: 300, models: 2, toughness: 7, save: 3,
     speed: 0.9, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.45, vision: 6, spawnInterval: 8,
-    weapon: { shots: 2, cooldown: 1.2, range: 3, skill: 3, strength: 5, ap: 4, damage: 32, type: 'pierce', anti: { heavy: 3 } },
+    weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 3, strength: 5, ap: 4, damage: 36, type: 'pierce', anti: { heavy: 3 } },
     shape: 'square', letter: 'T', role: 'Linienbrecher: zäh, knackt Panzer',
   },
   // 24.10. abends (Entscheidung des Nutzers): alle 12 statt 10 s. Erste Schadensdaten: Der Koloss machte je
   // Fabrik-Sekunde so viel Schaden wie die Scharfschützen (gegen Myriaden) bzw. am meisten von allen (gegen
   // Terra-Former). Der Technogunner bleibt unverändert.
+  // 25.10. Balance-Patch 1 (Nutzer): Koloss Range 3,1, 400 Leben, schneller; Gunner 2 Modelle à 150, je 1 Schuss à 36, Range 2,5;
+  // Hover 3 Modelle à 35, 1 Schuss alle 0,65 s, Range 3,5; Plasma Range 3,5, 120 Leben, −10 % Schaden. Stand davor: Branch claude/stand-vor-balance-patch-1.
   colossus: {
-    id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 360, toughness: 9, save: 3,
-    speed: 1.0, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 12,
-    weapon: { shots: 3, cooldown: 2, range: 4, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
+    id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 400, toughness: 9, save: 3,
+    speed: 1.15, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 12,
+    weapon: { shots: 3, cooldown: 2, range: 3.1, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
     shape: 'square', letter: 'K', role: 'Schwerer Kampfpanzer: stark gegen leichte Fahrzeuge und Gebäude',
   },
 
@@ -363,9 +400,11 @@ const RAW: Record<UnitId, UnitInput> = {
   drone: {
     id: 'drone', name: 'Myr-Drohnen', armor: 'infantry', hp: 64, models: 8, toughness: 3, save: 5,
     speed: 1.7, move: 'foot', part: 'arms', binds: { arms: 0.35 }, supply: 0.5, radius: 0.25, vision: 5, spawnInterval: 2.3,
-    weapon: { shots: 1, cooldown: 0.8, range: 3.2, skill: 4, strength: 5, ap: 1, damage: 2.3, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 0.6, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 2.3, type: 'rifle' },
     swarm: { perNeighbor: 0.06, max: 0.6, radius: 2.5 },
     corrode: { shotsPerLevel: 40, max: 2, seconds: 4 },
+    // 25.10.: Speerspitze – Reichweite 2,5, schnell nahe der eigenen Basis, Ansturm ab 3 Verbänden
+    rush: { homeBonus: 0.5, falloff: 14, squads: 3, radius: 3, bonus: 0.3, seconds: 4, cooldown: 8 },
     // Lebensuhr (22.10.): 40 s volles Leben, danach sinkt der Höchstwert gleichmäßig, bis der Verband mit 120 s
     // verfällt; ab 90 s (75 % der Lebenszeit) Todeswut: +50 % Feuerrate, +30 % Tempo. Der Hund lässt Drohnen in
     // seiner Nähe halb so schnell altern, „Lebensdauer I/II“ verlängert die Uhr um je 30 s.
@@ -377,8 +416,10 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 2.1, move: 'foot', part: 'arms', radius: 0.3, vision: 5, spawnInterval: 4,
     weapon: { shots: 1, cooldown: 1, range: 0.9, skill: 2, strength: 10, ap: 4, damage: 540, type: 'pierce', anti: { heavy: 3 } },
     kamikaze: true,
+    // 25.10.: erst 4 Sprengladungen werfen (bevorzugt auf Schwere), dann Kamikaze mit 40 % der Explosion
+    charges: { count: 4, damage: 110, range: 3.5, cooldown: 2.5, flight: 0.8, radius: 1, kamikazeFactor: 0.4 },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
-    shape: 'triangle', letter: 'x', role: 'Kamikaze: sucht sich Panzer und sprengt sich – extrem gegen Schwere; aus der Brut auch als Beimischung',
+    shape: 'triangle', letter: 'x', role: 'Wirft 4 Sprengladungen auf Panzer, danach Kamikaze – extrem gegen Schwere',
   },
   hound: {
     id: 'hound', name: 'Myriaden-Hund', armor: 'infantry', hp: 108, models: 3, toughness: 4, save: 5,
@@ -393,9 +434,11 @@ const RAW: Record<UnitId, UnitInput> = {
     // Steine (wenn keine Drohne zum Werfen da ist): direkter Schaden mit etwas Fläche
     weapon: { shots: 3, cooldown: 2.0, range: 7, skill: 4, strength: 6, ap: 1, damage: 12, type: 'siege', splash: 1.0, structureDamage: 1.5 },
     // 23.10.: wirft eigene Drohnen (3 Modelle) zu weichen Zielen hinter der Front
-    launch: { unit: 'drone', models: 3, load: 3, max: 3, regen: 30, take: { radius: 3, models: 3 }, range: 7, flight: 1.5, cooldown: 4, soft: true },
+    launch: { unit: 'drone', models: 3, load: 3, max: 3, regen: 30, take: { radius: 3, models: 3 }, range: 7, flight: 1.5, cooldown: 4, soft: true, burrow: { seconds: 4.5, refreshes: 4, maxSeconds: 12, radius: 2.5 } },
+    // 25.10.: ab 60 % Schwere rundum Steine statt Drohnen, doppelt so oft, mit Zersetzung (voll nur mit Geröll in der Nähe)
+    stoneMode: { enter: 0.6, leave: 0.4, radius: 7, rate: 2, rubbleRadius: 2, perHit: 10, perHitPlain: 3, max: 2, maxPlain: 1, shotsPerLevel: 40, seconds: 4 },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
-    shape: 'triangle', letter: 'k', role: 'Drohnen-Werfer: wirft eigene Drohnen über die Front zu weichen Zielen – ohne Drohnen Steine',
+    shape: 'triangle', letter: 'k', role: 'Drohnen-Werfer: wirft eigene Drohnen hinter die Front, die sich eingraben und gesammelt ausbrechen; vor vielen Schweren Steine mit Zersetzung (voll mit Geröll)',
   },
 
   catapult: {
@@ -404,7 +447,7 @@ const RAW: Record<UnitId, UnitInput> = {
     // Steine (ohne Verspotter): Artillerie, stark gegen Gebäude
     weapon: { shots: 2, cooldown: 3.2, range: 7.5, skill: 4, strength: 8, ap: 1, damage: 55, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0 },
     // 23.10.: wirft den Myr-Verspotter in die gegnerische Linie
-    launch: { unit: 'taunter', load: 4, max: 4, regen: 18, range: 7.5, flight: 2, cooldown: 6, impact: { radius: 1.5, damage: 30 } },
+    launch: { unit: 'taunter', load: 4, max: 4, regen: 18, range: 7.5, flight: 2, cooldown: 6, impact: { radius: 1.5, damage: 25 } },
     swarm: { perNeighbor: 0, max: 0, radius: 0 },
     shape: 'diamond', letter: 'c', role: 'Wirft Myr-Verspotter in die gegnerische Linie – ohne Verspotter Steine gegen Gebäude',
   },
@@ -429,11 +472,13 @@ const RAW: Record<UnitId, UnitInput> = {
   // Spätspiel über die Hälfte des Technoclan-Schadens (Schadens-Diagnose). Mit 100 Leben: Terra-Former gegen
   // Myriaden 34 : 28 statt 13 : 53, Technoclan gegen Myriaden 17 : 54 statt 8 : 62 (je 72 Partien).
   taunter: {
-    id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 100, toughness: 8, save: 4,
+    id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 130, toughness: 8, save: 4,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.5, vision: 5, spawnInterval: 0, supply: 0.5,
     weapon: { shots: 1, cooldown: 2, range: 1.5, skill: 4, strength: 5, ap: 0, damage: 10, type: 'rifle' },
     taunt: { radius: 3 }, expires: 60,
-    shape: 'square', letter: 'V', role: 'Geworfen vom Katapult: zieht das Feuer auf sich (Verspotten), nach 60 s tot',
+    // 25.10.: Einschlag 25 Schaden (Katapult), danach ein Schadensfeld um ihn – das ihn selbst langsam aufzehrt
+    field: { radius: 2, dps: 4, selfDps: 1 },
+    shape: 'square', letter: 'V', role: 'Geworfen vom Katapult: Einschlag, dann Schadensfeld um ihn; zieht das Feuer auf sich (Verspotten), nach 60 s tot',
   },
 
 
@@ -458,7 +503,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 160, toughness: 5, save: 4,
     speed: 2.0, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
-    weapon: { shots: 3, cooldown: 0.9, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 } },
+    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
     shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',
   },
@@ -481,9 +526,10 @@ const RAW: Record<UnitId, UnitInput> = {
   specialForest: {
     id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 380, toughness: 8, save: 3,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 6, ap: 1, damage: 15, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 8, ap: 1, damage: 15, type: 'rifle' },
     ground: 'forest', shapeshift: true,
-    shape: 'square', letter: 'H', role: 'Langsamer Tank, wenig Schaden – Gestaltwandler: auf jedem Boden bekommt er den Bonus des Wächters dieser Art',
+    root: { after: 8, gap: 3, seconds: 4, hitBonus: 1, immune: 10 },
+    shape: 'square', letter: 'H', role: 'Langsamer Tank – verwurzelt Schwere nach 8 s Beschuss (alle treffen sie dann besser); Gestaltwandler: auf jedem Boden der Bonus des Wächters dieser Art',
   },
 
   wardMud: {
@@ -506,8 +552,9 @@ const RAW: Record<UnitId, UnitInput> = {
     speed: 0.8, move: 'tracks', part: 'plates', radius: 0.5, vision: 7, spawnInterval: 0, summoned: true,
     weapon: { shots: 2, cooldown: 2.0, range: 5.5, skill: 4, strength: 5, ap: 1, damage: 14, type: 'splinter', splash: 1.6 },
     hitWeaken: { seconds: 3, speed: 0.6, damage: 0.75 },
+    mudOnHit: { every: 5 },
     ground: 'mud', groundBonus: { range: 1 },
-    shape: 'square', letter: 'M', role: 'Schleudert Schlamm: Flächenschaden, Getroffene sind 3 s langsamer und schwächer',
+    shape: 'square', letter: 'M', role: 'Schleudert Schlamm: Flächenschaden, Getroffene sind 3 s langsamer und schwächer; jeder 5. Angriff macht die Zielkachel zu Matsch',
   },
 
   wardSnow: {
@@ -527,9 +574,9 @@ const RAW: Record<UnitId, UnitInput> = {
   },
 
   specialSnow: {
-    id: 'specialSnow', name: 'Lawinenrufer', armor: 'heavy', hp: 260, toughness: 6, save: 4,
+    id: 'specialSnow', name: 'Lawinenrufer', armor: 'heavy', hp: 240, toughness: 6, save: 4,
     speed: 1.0, move: 'hover', part: 'plates', radius: 0.45, vision: 7, spawnInterval: 0, summoned: true,
-    weapon: { shots: 3, cooldown: 1.5, range: 4, skill: 4, strength: 4, ap: 1, damage: 10, type: 'splinter', splash: 1.4 },
+    weapon: { shots: 14, cooldown: 3, range: 3, skill: 4, strength: 4, ap: 1, damage: 8, type: 'splinter', splash: 1.4 },
     ground: 'snow', groundBonus: { frostWave: { every: 15, radius: 3.5, stun: 1.5 } },
     shape: 'triangle', letter: 'L', role: 'Kontrolle und Zähigkeit: Flächenschaden, Frostwelle friert Gegner auf Schnee kurz ein (alle 15 s)',
   },
@@ -552,7 +599,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialRubble: {
     id: 'specialRubble', name: 'Frontbrecher', armor: 'heavy', hp: 420, toughness: 9, save: 3,
     speed: 0.6, move: 'tracks', part: 'plates', radius: 0.5, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 1, cooldown: 2.5, range: 3.5, skill: 3, strength: 10, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
+    weapon: { shots: 1, cooldown: 2.5, range: 3.5, skill: 3, strength: 8, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
     ground: 'rubble', groundBonus: { save: 1 },
     shape: 'diamond', letter: 'F', role: 'Frontbrecher: schwer und langsam, hoher Einzelschaden, wenige Angriffe, leichte Fläche – auf Geröll Rüstung +1',
   },

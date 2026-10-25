@@ -40,6 +40,9 @@ export type SimEventData =
   | { type: 'summon'; owner: PlayerId; name: string; pos: Vec2 }
   /** Myriaden: Gelege geschlüpft, Wurf gestartet, Wurf gelandet. */
   | { type: 'hatch'; owner: PlayerId; count: number; pos: Vec2 }
+  | { type: 'rooted'; owner: PlayerId; pos: Vec2 }
+  | { type: 'burrowBreak'; owner: PlayerId; pos: Vec2; count: number }
+  | { type: 'mudHit'; owner: PlayerId; pos: Vec2 }
   | { type: 'launch'; owner: PlayerId; unit: UnitId; from: Vec2; to: Vec2; land: number }
   | { type: 'land'; owner: PlayerId; unit: UnitId; pos: Vec2 }
   /** Terra-Former: Schlammmonster schlüpfen aus einem Matschfeld. */

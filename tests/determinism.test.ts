@@ -64,7 +64,9 @@ describe('Spiegelbild', () => {
       const world = new World({ map: felsenpass, seed: 3, factions: [faction, faction] });
       const ais = [new SimpleAi(0, 4242, 'normal', 'balanced'), new SimpleAi(1, 4242, 'normal', 'balanced')];
       world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
-      for (let t = 0; t < 3 * 60 * world.tps; t++) {
+      // 25.10.: Seit dem Balance-Patch wollen beide KIs um 2:34 dieselben Mittelkacheln umbauen (x 23/24 liegen in
+      // beiden 3×3-Flächen) – wer zuerst dran ist, bekommt sie. Das ist ein echter Gleichstand, kein Fehler: bis 2:30 prüfen.
+      for (let t = 0; t < 2.5 * 60 * world.tps; t++) {
         const commands = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
         world.step(commands);
       }

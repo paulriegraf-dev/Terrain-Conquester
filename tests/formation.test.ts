@@ -33,12 +33,12 @@ describe('Formationen', () => {
 
   it('Halten: gestaffelt nach Reichweite – Fernkämpfer stehen hinter den Nahkämpfern', () => {
     const world = new World({ map: felsenpass, seed: 1, rules: calm });
-    const near = squad(world, 'plasma', 6, 8.5);
+    const near = squad(world, 'gunner', 6, 8.5); // 25.10.: Plasma hat jetzt 3,5 Reichweite – der Gunner (2,5) ist der klare Nahkämpfer
     const far = squad(world, 'sniper', 6, 6.5);
     stepTimes(world, 40 * world.tps);
     const front = mean(near.map((u) => u.pos.x));
     const back = mean(far.map((u) => u.pos.x));
-    assert.ok(back < front - 1, `Scharfschützen bei x ${back.toFixed(1)}, Plasmawerfer bei x ${front.toFixed(1)}`);
+    assert.ok(back < front - 1, `Scharfschützen bei x ${back.toFixed(1)}, Gunner bei x ${front.toFixed(1)}`);
   });
 
   it('Front: Kolonne bis zur gegnerischen Basis, dort ausschwärmen (das HQ zählt doppelt) – und es bleibt so', () => {

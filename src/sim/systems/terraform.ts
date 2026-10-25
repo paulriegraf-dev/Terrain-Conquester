@@ -704,6 +704,20 @@ export function onHit(world: World, shooter: Entity, target: Entity): void {
     target.weaken = { until: world.tick + Math.round(w.seconds * world.tps), speed: w.speed, damage: w.damage };
     if (hasSynergy(world, shooter.owner, 'mud', 'rubble')) target.dot = { until: world.tick + 3 * world.tps, dps: 4, owner: shooter.owner };
   }
+  // Schlammschleuder (25.10.): jeder `every`-te Angriff macht die Kachel des Ziels dauerhaft zu Matsch.
+  if (def.mudOnHit) {
+    shooter.mudHits = (shooter.mudHits ?? 0) + 1;
+    if (shooter.mudHits >= def.mudOnHit.every) {
+      shooter.mudHits = 0;
+      const i = world.grid.index(Math.floor(target.pos.x), Math.floor(target.pos.y));
+      if (convertible(world, i, shooter.owner, TERRAIN_INDEX.mud)) {
+        world.grid.setTerrain(i, TERRAIN_INDEX.mud);
+        world.formed[i] = shooter.owner + 1;
+        world.players[shooter.owner].vision.learn(i);
+        world.emit({ type: 'mudHit', owner: shooter.owner, pos: { x: Math.floor(target.pos.x) + 0.5, y: Math.floor(target.pos.y) + 0.5 } });
+      }
+    }
+  }
   if (shooter.defId === 'mudling' && hasSynergy(world, shooter.owner, 'mud', 'snow')) slowDown(world, target, world.tick + Math.round(1.5 * world.tps), 0.7);
 }
 

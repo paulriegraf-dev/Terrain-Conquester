@@ -241,7 +241,7 @@ function frontCommands(ctx: CommandContext): CommandSet {
   return { title: 'Fronten', buttons };
 }
 
-/** Vorbereitungsphase: Bodenart wählen (1–4) und „Bereit“. */
+/** Vorbereitungsphase: Bodenart wählen (1–5) und „Bereit“. */
 function prepCommands(ctx: CommandContext): CommandSet {
   const { world, view } = ctx;
   const left = world.players[view.human ?? 0].prepLeft;

@@ -180,7 +180,7 @@ describe('Durchbruch und Schutz', () => {
     b.shieldUntil = 0;
     b.hp = 1;
     world.hq(0)!.weapon = undefined;
-    world.addUnit(1, UNITS.colossus, { x: 6.5, y: 0.5 }, 'top').mover!.speed = 0; // nur das Gebäude in Reichweite, nicht das HQ
+    world.addUnit(1, UNITS.colossus, { x: 5.6, y: 0.5 }, 'top').mover!.speed = 0; // nur das Gebäude in Reichweite, nicht das HQ
     const energy = world.players[1].energy;
     stepTimes(world, 3 * world.tps);
     assert.equal(b.alive, false);
@@ -195,7 +195,7 @@ describe('Durchbruch und Schutz', () => {
     const b = lastBuilding(world);
     b.producer!.paused = true;
     world.hq(0)!.weapon = undefined;
-    world.addUnit(1, UNITS.colossus, { x: 6.5, y: 0.5 }, 'top').mover!.speed = 0; // nur das Gebäude in Reichweite, nicht das HQ
+    world.addUnit(1, UNITS.colossus, { x: 5.6, y: 0.5 }, 'top').mover!.speed = 0; // nur das Gebäude in Reichweite, nicht das HQ
     stepTimes(world, 5 * world.tps);
     assert.equal(b.hp, b.maxHp, 'unter Bauschutz kein Schaden');
     stepTimes(world, world.rules.front.buildShieldSeconds * world.tps);

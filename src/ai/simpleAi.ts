@@ -229,6 +229,10 @@ export class SimpleAi {
     const plans: { x: number; y: number; terrain: TerrainId }[] = [];
     const routes = this.rng.shuffled(ROUTES);
     const anchors = routes.map((r) => holdAnchor(world, this.player, r));
+    // Myriaden (25.10.): Geröll hinter die eigene Linie – dort stehen die Kanonen, mit Geröll zersetzen ihre Steine voll.
+    if (me.faction.id === 'myriaden') {
+      for (const a of anchors) if (a) plans.push({ x: Math.floor(a.pos.x - a.dir.x * 3), y: Math.floor(a.pos.y - a.dir.y * 3), terrain: 'rubble' });
+    }
     // Terra-Former: Eröffnungs-Linien wählen und deren Boden vorbereiten (eigener Boden zählt für Terraformer).
     if (AI_TUNING.tfPrep && me.faction.id === 'terraformer') {
       const lines = this.rng.shuffled(buildingIds(me.faction).filter((id) => me.faction.buildings[id]!.former)).slice(0, 2);

@@ -2,14 +2,14 @@ import { UNITS } from '../../data/units';
 import { flankFactor } from './flank';
 import { energyCap } from './economy';
 import { TERRAIN_INDEX } from '../../data/terrain';
-import type { UnitId } from '../../data/units';
+import type { UnitDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { dist } from '../math';
 import type { PlayerId } from '../types';
 import type { World } from '../world';
 import { controllerAt } from './influence';
 import { homeAdvantage, siegeMultiplier } from './front';
-import { defenseOf, woundsPerShot } from './hitmath';
+import { defenseOf, hitChance, woundsPerShot } from './hitmath';
 import { commandBonus } from './hero';
 import { aimPoint, rangeTo } from './targeting';
 import { frenzyOf } from './lifespan';
@@ -17,7 +17,7 @@ import { ambushFactor, dugInFactor, onHit } from './terraform';
 import { tryLaunch } from './myr';
 import { synergyApBonus, synergyDamageFactor } from './synergy';
 
-interface Hit {
+export interface Hit {
   target: Entity;
   /** So viele Wunden kommen durch – jede trifft ein Modell. */
   wounds: number;
@@ -63,8 +63,16 @@ export function updateCombat(world: World): void {
     // Bauschutz: Neue Gebäude sind kurz unangreifbar.
     if (t.shieldUntil !== undefined && world.tick < t.shieldUntil) continue;
     // Werfer (Myr-Kanone, -Katapult): statt eines Schusses eigene Myrs werfen, solange eine Ladung da ist.
-    const launch = e.kind === 'unit' ? UNITS[e.defId as UnitId].launch : undefined;
-    if (launch && rangeTo(e, t) <= launch.range && tryLaunch(world, e, t, consumed)) {
+    const udef = e.kind === 'unit' ? UNITS[e.defId as UnitId] : undefined;
+    // Sprengetopp (25.10.): erst die Sprengladungen werfen, danach Kamikaze.
+    if (udef?.charges && (e.charges ?? 0) > 0) {
+      throwCharge(world, e, t, udef.charges);
+      w.ready = Math.max(1, Math.round(udef.charges.cooldown * world.tps));
+      continue;
+    }
+    // Werfer (Myr-Kanone, -Katapult) – die Kanone im Stein-Modus wirft keine Drohnen.
+    const launch = udef?.launch;
+    if (launch && !e.stoneMode && rangeTo(e, t) <= launch.range && tryLaunch(world, e, t, consumed)) {
       w.ready = Math.max(1, Math.round(launch.cooldown * world.tps));
       continue;
     }
@@ -110,10 +118,24 @@ export function updateCombat(world: World): void {
       c.until = world.tick + Math.round(corrode.seconds * world.tps);
       t.corrosion = c;
     }
+    // Myr-Kanone im Stein-Modus (25.10.): Steintreffer auf Schwere zersetzen – voll nur mit Geröll in der Nähe.
+    const sm = e.stoneMode && t.kind === 'unit' && t.armor === 'heavy' ? def?.stoneMode : undefined;
+    if (sm) {
+      const rubble = nearTerrain(world, e, RUBBLE, sm.rubbleRadius);
+      const c = t.corrosion && world.tick < t.corrosion.until ? t.corrosion : { shots: 0, level: 0, until: 0 };
+      c.shots += shots * hitChance(w.def, defenseOf(world, t, e), bonus) * (rubble ? sm.perHit : sm.perHitPlain);
+      c.level = Math.max(c.level, Math.min(rubble ? sm.max : sm.maxPlain, Math.floor(c.shots / sm.shotsPerLevel)));
+      c.until = world.tick + Math.round(sm.seconds * world.tps);
+      t.corrosion = c;
+    }
+    // Hainhüter (25.10.): anhaltender Beschuss verwurzelt Schwere.
+    if (def?.root && t.kind === 'unit' && t.armor === 'heavy') addRoot(world, t, def.root, w.cooldownTicks / world.tps);
     // Schlammmonster: Wer sie aus kurzer oder mittlerer Reichweite beschießt, den stürmen sie an.
     const charge = t.kind === 'unit' && e.kind === 'unit' ? UNITS[t.defId as UnitId].charge : undefined;
     if (charge && w.def.range <= charge.maxRange) t.charge = { target: e.id, until: world.tick + Math.round(charge.seconds * world.tps) };
     if (def?.kamikaze) {
+      // Sprengetopp nach seinen Ladungen (25.10.): nur noch ein Teil der Explosion.
+      if (def.charges) damage *= def.charges.kamikazeFactor;
       // Eine einzige Explosion: der erwartete Schaden in einem Schlag.
       const spread = t.kind === 'unit' ? Math.min(world.rules.kamikazeSpread, aliveModels(t)) : 0;
       if (spread > 1) hits.push({ target: t, wounds: spread, damage: (damage * expected) / spread, attacker: e.owner, src: e.defId });
@@ -135,7 +157,7 @@ export function updateCombat(world: World): void {
     // Todeswut (Lebensuhr): alte Verbände feuern schneller.
     const rage = e.lifespan ? frenzyOf(world, e) : null;
     // Netz-Aufstieg (Technoclan): kurz schnelleres Feuer.
-    const rate = (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1);
+    const rate = (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
     w.ready = rate !== 1 ? Math.max(1, Math.round(w.cooldownTicks / rate)) : w.cooldownTicks;
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer
     world.emit({
@@ -154,6 +176,14 @@ export function updateCombat(world: World): void {
     }
   }
 
+  applyHits(world, hits);
+  for (const e of sacrificed) world.destroy(e, e.owner);
+}
+
+const RUBBLE = TERRAIN_INDEX.rubble;
+
+/** Treffer anwenden: je Wunde ein Modell, Überschuss verfällt; Statistik, Tod, Beute (auch für Ladungen und Felder). */
+export function applyHits(world: World, hits: Hit[]): void {
   for (const h of hits) {
     const t = h.target;
     if (!t.alive) continue;
@@ -183,10 +213,52 @@ export function updateCombat(world: World): void {
       }
     }
   }
-  for (const e of sacrificed) world.destroy(e, e.owner);
 }
 
-const RUBBLE = TERRAIN_INDEX.rubble;
+/** Sprengladung werfen (Myr-Sprengetopp): fliegt `flight` s, explodiert dann am Ziel (siehe landCharge in myr.ts). */
+function throwCharge(world: World, e: Entity, t: Entity, c: NonNullable<UnitDef['charges']>): void {
+  e.charges = (e.charges ?? 0) - 1;
+  const base = UNITS[e.defId as UnitId].weapon!;
+  world.flights.push({
+    owner: e.owner,
+    unit: e.defId as UnitId,
+    models: 0,
+    from: { x: e.pos.x, y: e.pos.y },
+    to: { x: t.pos.x, y: t.pos.y },
+    start: world.tick,
+    land: world.tick + Math.max(1, Math.round(c.flight * world.tps)),
+    route: e.mover?.route ?? 'mid',
+    charge: { target: t.id, damage: c.damage, radius: c.radius, weapon: { ...base, damage: c.damage } },
+  });
+  world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: { x: t.pos.x, y: t.pos.y }, heavy: true });
+  // Keine Ladung mehr: zurück zur Kamikaze-Reichweite.
+  if (e.charges <= 0 && e.weapon) e.weapon.def = { ...e.weapon.def, range: base.range };
+}
+
+/** Verwurzelung sammeln (Hainhüter): Beschuss-Sekunden auf diesem Ziel; Lücken über `gap` s setzen zurück. */
+function addRoot(world: World, t: Entity, r: NonNullable<UnitDef['root']>, seconds: number): void {
+  const st = t.root ?? { seconds: 0, last: -1e9, until: 0, immuneUntil: 0, hitBonus: r.hitBonus };
+  if (world.tick < st.until || world.tick < st.immuneUntil) {
+    t.root = st;
+    return;
+  }
+  if (world.tick - st.last > r.gap * world.tps) st.seconds = 0;
+  st.seconds += seconds;
+  st.last = world.tick;
+  if (st.seconds >= r.after) {
+    st.until = world.tick + Math.round(r.seconds * world.tps);
+    st.immuneUntil = st.until + Math.round(r.immune * world.tps);
+    st.hitBonus = r.hitBonus;
+    st.seconds = 0;
+    world.emit({ type: 'rooted', owner: t.owner, pos: { x: t.pos.x, y: t.pos.y } });
+  }
+  t.root = st;
+}
+
+/** Verwurzelt? (bewegt sich nicht, wird besser getroffen) */
+export function isRooted(world: World, e: Entity): boolean {
+  return !!e.root && world.tick < e.root.until;
+}
 
 /** Der nächste gegnerische Verband hinter dem Ziel (in Schussrichtung, höchstens 2 Kacheln dahinter, nah an der Linie). */
 function nextBehind(world: World, shooter: Entity, target: Entity): Entity | null {

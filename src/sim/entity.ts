@@ -155,6 +155,16 @@ export interface Entity {
   dot?: { until: number; dps: number; owner: PlayerId };
   /** Schneesturm (Terra-Former-Synergie): so viele Sekunden steht die Einheit schon im Sturm. */
   storm?: number;
+  /** Myr-Kanone (25.10.): Stein-Modus aktiv (viele Schwere rundum). */
+  stoneMode?: boolean;
+  /** Myr-Drohnen (25.10.): Tempo-Faktor nahe der eigenen Basis (alle 10 Ticks neu), Ansturm bis/nächster ab (Ticks). */
+  rush?: { home: number; until: number; next: number };
+  /** Myr-Sprengetopp (25.10.): übrige Sprengladungen. */
+  charges?: number;
+  /** Schlammschleuder (25.10.): Angriffe seit dem letzten Matsch-Treffer. */
+  mudHits?: number;
+  /** Hainhüter-Verwurzelung (25.10.): Beschuss-Sekunden, letzter Hainhüter-Treffer, verwurzelt bis, immun bis (Ticks). */
+  root?: { seconds: number; last: number; until: number; immuneUntil: number; hitBonus: number };
   /** Werfer (Myr-Kanone, -Katapult): Ladungen, nächste eigene Ladung (Tick). */
   launcher?: { load: number; nextRegen: number };
   /**

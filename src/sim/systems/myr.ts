@@ -4,8 +4,10 @@ import { UNITS } from '../../data/units';
 import type { LaunchDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import type { PlayerId, Vec2 } from '../types';
-import type { Flight, World } from '../world';
-import { aliveModels, currentModelWounds } from './combat';
+import type { Burrow, Flight, World } from '../world';
+import { aliveModels, applyHits, currentModelWounds } from './combat';
+import type { Hit } from './combat';
+import { defenseOf, woundsPerShot } from './hitmath';
 import { lifeCap } from './lifespan';
 import { controllerAt } from './influence';
 import { spawnPoint } from './production';
@@ -35,7 +37,9 @@ export function updateMyr(world: World): void {
     }
   }
   if (world.flights.length > 0) landFlights(world);
+  if (world.burrows.length > 0) breakBurrows(world);
   if (world.tick % tps === 0) {
+    damageFields(world);
     mergeSquads(world);
     emergencyHatch(world);
   }
@@ -164,6 +168,7 @@ export function tryLaunch(world: World, e: Entity, t: Entity, consumed: Map<Enti
     land: world.tick + Math.max(1, Math.round(def.flight * world.tps)),
     route: e.mover?.route ?? 'mid',
     impact: def.impact,
+    burrow: def.burrow,
   };
   world.flights.push(flight);
   world.emit({ type: 'launch', owner: e.owner, unit: def.unit, from: flight.from, to: flight.to, land: flight.land });
@@ -194,10 +199,18 @@ function landFlights(world: World): void {
   if (landed.length === 0) return;
   world.flights = world.flights.filter((f) => world.tick < f.land);
   for (const f of landed) {
+    if (f.charge) {
+      landCharge(world, f);
+      continue;
+    }
     const def = UNITS[f.unit];
     const profile = MOVE_PROFILES[def.move];
     let pos = f.to;
     if (!world.grid.isPassable(Math.floor(pos.x), Math.floor(pos.y), profile)) pos = nearestPassable(world, pos, profile) ?? f.from;
+    if (f.burrow) {
+      burrowPod(world, f, pos, f.burrow);
+      continue;
+    }
     const u = world.addUnit(f.owner, def, pos, f.route);
     if (f.models < u.models) u.hp = Math.min(u.hp, f.models * u.modelWounds);
     u.mover!.committed = true; // gelandet in der gegnerischen Linie: kämpft dort weiter
@@ -235,6 +248,132 @@ function nearestPassable(world: World, pos: Vec2, profile: (typeof MOVE_PROFILES
     }
   }
   return null;
+}
+
+// ------------------------------------------------------------------ Sammelangriff (25.10.)
+
+/**
+ * Ein Drohnen-Einschlag gräbt sich ein: Liegt schon eine eigene Brut im Umkreis, kommt er dazu und frischt die
+ * Frist auf (bis `refreshes`-mal, dann brechen alle sofort aus) – sonst beginnt eine neue Brut. Eingegraben sind
+ * die Drohnen keine Einheiten: unverwundbar, ihre Lebensuhr steht, sie zählen nicht aufs Limit.
+ */
+function burrowPod(world: World, f: Flight, pos: Vec2, b: NonNullable<Flight['burrow']>): void {
+  const r2 = b.radius * b.radius;
+  const pod = { unit: f.unit, models: f.models, pos: { x: pos.x, y: pos.y } };
+  const group = world.burrows.find((g) => g.owner === f.owner && (g.pos.x - pos.x) ** 2 + (g.pos.y - pos.y) ** 2 <= r2);
+  if (!group) {
+    world.burrows.push({ owner: f.owner, pos: { x: pos.x, y: pos.y }, route: f.route, pods: [pod], first: world.tick, breakAt: world.tick + Math.round(b.seconds * world.tps), refreshes: 0 });
+    world.emit({ type: 'land', owner: f.owner, unit: f.unit, pos: { x: pos.x, y: pos.y } });
+    return;
+  }
+  group.pods.push(pod);
+  group.refreshes++;
+  const latest = group.first + Math.round(b.maxSeconds * world.tps);
+  group.breakAt = group.refreshes >= b.refreshes ? world.tick : Math.min(latest, world.tick + Math.round(b.seconds * world.tps));
+  world.emit({ type: 'land', owner: f.owner, unit: f.unit, pos: { x: pos.x, y: pos.y } });
+}
+
+/** Fällige Bruten brechen aus: alle Einschläge werden zugleich zu Verbänden, die sofort angreifen. */
+function breakBurrows(world: World): void {
+  const due = world.burrows.filter((g) => world.tick >= g.breakAt);
+  if (due.length === 0) return;
+  world.burrows = world.burrows.filter((g) => world.tick < g.breakAt);
+  for (const g of due) {
+    let n = 0;
+    for (const pod of g.pods) {
+      const u = world.addUnit(g.owner, UNITS[pod.unit], pod.pos, g.route);
+      if (pod.models < u.models) u.hp = Math.min(u.hp, pod.models * u.modelWounds);
+      u.mover!.committed = true;
+      u.mover!.passedWaypoint = true;
+      n += pod.models;
+    }
+    world.emit({ type: 'burrowBreak', owner: g.owner, pos: { x: g.pos.x, y: g.pos.y }, count: n });
+  }
+}
+
+/** Eingegrabene Myrs eines Spielers (für die Anzeige und die Statistik). */
+export function burrowedModels(g: Burrow): number {
+  return g.pods.reduce((a, p) => a + p.models, 0);
+}
+
+// ------------------------------------------------------------------ Sprengladungen (25.10.)
+
+/** Sprengladung schlägt ein: Ziel (falls noch in der Nähe) voll, andere Gegner im Radius mit halber Wirkung. */
+function landCharge(world: World, f: Flight): void {
+  const c = f.charge!;
+  const hits: Hit[] = [];
+  const r2 = c.radius * c.radius;
+  const main = world.get(c.target);
+  const mainHit = !!main && main.alive && (main.pos.x - f.to.x) ** 2 + (main.pos.y - f.to.y) ** 2 <= (c.radius + main.radius) ** 2;
+  for (const o of world.entities) {
+    if (!o.alive || o.owner === f.owner || (o.kind !== 'unit' && o !== main)) continue;
+    const isMain = mainHit && o === main;
+    if (!isMain && (o.pos.x - f.to.x) ** 2 + (o.pos.y - f.to.y) ** 2 > r2) continue;
+    const expected = woundsPerShot(c.weapon, defenseOf(world, o)) * (isMain ? 1 : 0.5);
+    if (expected > 0) hits.push({ target: o, wounds: 1, damage: c.damage * expected, attacker: f.owner, src: f.unit });
+  }
+  applyHits(world, hits);
+  world.emit({ type: 'land', owner: f.owner, unit: f.unit, pos: { x: f.to.x, y: f.to.y } });
+}
+
+// ------------------------------------------------------------------ Schadensfeld (25.10., Verspotter)
+
+/** Einmal je Sekunde: Gegner im Feld eines Verspotters nehmen Schaden, er selbst zehrt sich langsam auf. */
+function damageFields(world: World): void {
+  const hits: Hit[] = [];
+  for (const e of world.entities) {
+    if (!e.alive || e.kind !== 'unit') continue;
+    const field = UNITS[e.defId as UnitId].field;
+    if (!field) continue;
+    const r2 = field.radius * field.radius;
+    for (const o of world.entities) {
+      if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
+      if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 > r2) continue;
+      hits.push({ target: o, wounds: 1, damage: field.dps, attacker: e.owner, src: e.defId });
+    }
+    e.hp -= field.selfDps;
+    if (e.hp <= 1e-6) {
+      e.hp = 0;
+      world.destroy(e, null);
+    }
+  }
+  if (hits.length) applyHits(world, hits);
+}
+
+// ------------------------------------------------------------------ Sturmlauf (25.10., Drohnen)
+
+/**
+ * Tempo-Faktor der Drohnen: nahe eigener Gebäude/HQ schneller (Nachschub läuft schnell nach vorn), an der Front
+ * normal; im Ansturm (mehrere Verbände greifen zugleich an) kurz zusätzlich schneller.
+ */
+export function rushFactor(world: World, e: Entity): number {
+  const r = e.kind === 'unit' ? UNITS[e.defId as UnitId].rush : undefined;
+  if (!r) return 1;
+  const st = (e.rush ??= { home: 0, until: 0, next: 0 });
+  if (world.tick % 10 === 0 || st.home === 0) {
+    let best = Infinity;
+    for (const o of world.entities) {
+      if (!o.alive || o.owner !== e.owner || (o.kind !== 'building' && o.kind !== 'hq')) continue;
+      const d = (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2;
+      if (d < best) best = d;
+    }
+    const d = Math.sqrt(best);
+    st.home = 1 + r.homeBonus * Math.max(0, 1 - d / r.falloff);
+    // Ansturm: genug eigene Verbände dieser Art greifen in der Nähe zugleich an.
+    if (world.tick >= st.next && e.weapon && e.weapon.targetId) {
+      const r2 = r.radius * r.radius;
+      let n = 0;
+      for (const o of world.entities) {
+        if (!o.alive || o.owner !== e.owner || o.defId !== e.defId || !o.weapon?.targetId) continue;
+        if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= r2) n++;
+      }
+      if (n >= r.squads) {
+        st.until = world.tick + Math.round(r.seconds * world.tps);
+        st.next = st.until + Math.round(r.cooldown * world.tps);
+      }
+    }
+  }
+  return st.home * (world.tick < st.until ? 1 + r.bonus : 1);
 }
 
 // ------------------------------------------------------------------ Teilverbände vereinen

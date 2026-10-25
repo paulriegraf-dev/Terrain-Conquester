@@ -35,7 +35,7 @@ describe('Myriaden-Umbau: Gelege', () => {
     }
     assert.equal(before, 5, 'vor dem Schlüpfen lagen 5 im Gelege');
     assert.equal(count(world, 'drone') + count(world, 'bomber'), 6, 'alle 6 schlüpfen auf einmal');
-    assert.equal(count(world, 'bomber'), 1, 'jeder 6. Verband ein Sprengetopp (Beimischung)');
+    assert.equal(count(world, 'bomber'), 0, 'keine Sprengetopp-Beimischung mehr (25.10.)');
     assert.equal(brood.producer!.clutch!.length, 0);
     // Die Lebensuhr läuft erst ab dem Schlüpfen
     for (const d of world.entities.filter((e) => e.alive && e.defId === 'drone')) assert.ok(d.lifespan!.age <= 1);
@@ -70,6 +70,11 @@ describe('Myriaden-Umbau: Drohnen-Werfer (Kanone)', () => {
     const load = cannon.launcher!.load;
     stepTimes(world, 3 * world.tps);
     assert.equal(cannon.launcher!.load, load - 1, 'eine Ladung geworfen');
+    // 25.10.: Die Drohnen graben sich ein und brechen erst nach 4,5 s aus (Sammelangriff).
+    assert.equal(world.burrows.length, 1, 'eingegraben');
+    assert.equal(world.entities.some((e) => e.alive && e.owner === 0 && e.defId === 'drone'), false, 'noch nicht geschlüpft');
+    cannon.weapon = undefined; // keine weiteren Würfe
+    stepTimes(world, 5 * world.tps);
     const landed = world.entities.find((e) => e.alive && e.owner === 0 && e.defId === 'drone');
     assert.ok(landed, 'ein Drohnen-Verband ist gelandet');
     assert.ok(Math.abs(landed.pos.x - 24.5) < 2.5, `beim Ziel (x ${landed.pos.x.toFixed(1)})`);
@@ -90,6 +95,8 @@ describe('Myriaden-Umbau: Drohnen-Werfer (Kanone)', () => {
       if (drone) drone.weapon = undefined;
       const hp = target.hp;
       stepTimes(world, 3 * world.tps);
+      cannon.weapon!.def = { ...cannon.weapon!.def, range: 0 }; // nur ein Wurf bzw. eine Steinsalve
+      stepTimes(world, 6 * world.tps);
       const landed = world.entities.some((e) => e.alive && e.owner === 0 && e.defId === 'drone' && e !== drone);
       return { damage: hp - target.hp, drone, landed };
     };
