@@ -1857,3 +1857,4 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - **Gelände formen im eigenen Kartendrittel immer erlaubt** – unabhängig von Sicht und Einflussgebiet (sonst wie bisher: eigenes Gebiet, Niemandsland, 3 Kacheln vor die Grenze, sichtbar).
 - **Replay-Fehler behoben:** Replays wendeten die Vorbereitungs-Flächen im ersten Schritt nach Spielern sortiert an statt in der Reihenfolge der Partie – überlappten Flächen, lief das Replay auseinander (Felsenpass-Partie des Nutzers). Jetzt wie in der Partie (`ReplayRunner` → `world.prepare`).
 - Spielstil-Analyse zweier Partien: `auswertung/2026-10-25-spielstil-zwei-partien.md`.
+- **KI-Spieltendenz (Nutzer, 25.10. abends):** Die fünf Punkte aus der Spielstil-Analyse gelten als gewünschte Richtung für die KI (Konzentration statt Lane-Wechsel, Konter-Zusammensetzung, Angriffsbahn einebnen, Wellen über mehrere Lanes, früh Stufen und Forschung). Umsetzung, KI-Verhalten allgemein und Replays laufen in einem eigenen Chat.
