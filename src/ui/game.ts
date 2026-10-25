@@ -893,9 +893,9 @@ export class Game {
 
   /** Entwurf des Startbilds (A–D) – zum Vergleichen, merkt sich der Browser. */
   private setTitleVariant(v: string): void {
-    const variant = (['a', 'b', 'd'].includes(v) ? v : 'a') as TitleVariant;
+    const variant = (['a', 'b', 'd', 'e', 'f', 'g', 'h'].includes(v) ? v : 'a') as TitleVariant;
     const el = this.doc.getElementById('title-screen');
-    if (el) for (const x of ['a', 'b', 'd']) el.classList.toggle(`ts-${x}`, x === variant);
+    if (el) for (const x of ['a', 'b', 'd', 'e', 'f', 'g', 'h']) el.classList.toggle(`ts-${x}`, x === variant);
     for (const b of this.doc.querySelectorAll<HTMLElement>('[data-action="title-variant"]')) b.setAttribute('aria-pressed', String(b.dataset.variant === variant));
     this.titleHero?.setVariant(variant);
     try {

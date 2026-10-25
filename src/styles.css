@@ -1047,3 +1047,36 @@ body.start-mode .sp-fields { gap: 7px; }
 }
 /* Tutorial-Ring: Rand nach innen, damit er genau auf dem Knopf sitzt */
 .tut-ring { box-sizing: border-box; }
+/* Brakk-Entwürfe (25.10. abends, Ganzkörper des Nutzers) */
+.title-screen.ts-g { background: radial-gradient(ellipse at 66% 40%, #2a2f66 0%, #0c1328 45%, #05070f 100%); }
+.ts-g .title-fx, .ts-g .title-logo { display: none; }
+.ts-g .tp { right: auto; left: clamp(16px, 4vw, 64px); width: min(360px, calc(100vw - 32px)); }
+.ts-g .tp-board::before { left: auto; right: -12px; transform: scaleX(-1); }
+.ts-g .tp-logo { display: grid; justify-items: center; margin: 0 0 18px; font-family: var(--font-display); color: var(--brass); font-size: 1.7rem; line-height: 1; text-shadow: 0 3px 0 #6b4a12, 0 0 18px rgba(232, 176, 74, 0.3); }
+.ts-g .tp-board { background: linear-gradient(180deg, #3a2a1c, #241910 60%, #1a120b); box-shadow: inset 0 0 0 2px #6b4f33, inset 0 0 0 5px #1a120b, 0 10px 30px rgba(0, 0, 0, 0.6); }
+.title-screen.ts-e {
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(200, 230, 255, 0.35), transparent 45%),
+    linear-gradient(180deg, #1f3550 0%, #3d6080 40%, #7a9bb6 70%, #2a4560 100%);
+}
+.ts-e .title-fx { display: none; }
+.ts-e .title-logo { left: auto; right: clamp(16px, 4vw, 64px); top: auto; bottom: 48px; text-align: right; }
+.ts-e .title-logo .title-name { justify-content: flex-end; }
+.ts-e .title-lede, .ts-e .title-kicker { color: #e6f2fb; }
+.title-screen.ts-f {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.0) 40%, rgba(10, 6, 8, 0.75) 100%),
+    radial-gradient(ellipse at 60% 70%, rgba(255, 110, 50, 0.35), transparent 50%),
+    linear-gradient(180deg, #2b1a2a 0%, #5a2a2a 45%, #8a4a2a 70%, #1a0f10 100%);
+}
+.ts-f .title-logo { left: auto; right: clamp(16px, 4vw, 64px); top: auto; bottom: 48px; text-align: right; }
+.ts-f .title-logo .title-name { justify-content: flex-end; }
+.title-screen.ts-h {
+  background:
+    radial-gradient(ellipse 18% 6% at 30% 22%, rgba(255, 255, 255, 0.85), transparent 70%),
+    radial-gradient(ellipse 24% 7% at 60% 14%, rgba(255, 255, 255, 0.75), transparent 70%),
+    linear-gradient(180deg, #5d9fe0 0%, #9cc8f0 50%, #d8ecff 75%, #6f8f5a 75.5%, #4c6b3c 100%);
+}
+.ts-h .title-fx { opacity: 0.8; }
+.ts-h .title-lede, .ts-h .title-kicker { color: #0f1a24; text-shadow: none; }
+.ts-h .title-name { text-shadow: 0 4px 0 #6b4a12, 0 0 2px #000, 0 6px 14px rgba(0, 0, 0, 0.45); }
