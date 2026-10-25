@@ -1812,3 +1812,6 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - **Reinrassig** (eigener Baustein dominiert, doppelter Ring): bekommt die Spezialisierung der eigenen Art dazu (Scharfschütze Ansitz, Plasma Glutteppich, Hover Rudeljagd, Batterie Salvenfeuer, Gunner Panzerkeil, Koloss Stahlwand). Ist das schon ihr Verbund, wirkt er ×1,5.
 - **Hybrid** (fremder Baustein dominiert, gestrichelter Ring): bekommt die Waffenart dieses Bausteins dazu und nimmt je Panzerungsklasse das bessere „anti“ (Panzerjagd und Durchschlag: Durchschlag, Fläche: Splitter, Weitsicht: Belagerung inkl. Gebäudebonus, Panzerung: Kanone). Zielmarkierung gibt stattdessen Treffen +1. Gunner und Scharfschütze liefern bewusst beide „Durchschlag“.
 - Ziel: Typendurchbrechung und Individualisierung über Eliten. Der Scharfschütze soll nicht das Wundermittel sein; die Grundwerte bleiben vorerst, wie sie sind.
+
+### Nachtrag 25.10. abends: Produktionstempo
+- `productionTime` 5 → 4: Alle Fabriken aller Fraktionen bauen 20 % schneller (Drohnen 9,2 s, Halmläufer 16 s, Plasma 18 s, Koloss 36 s, Battlesphäre 44 s). Energie, Forschung, Ausbau, Rufe und Verbund-Einspielzeit bleiben unverändert.

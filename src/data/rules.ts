@@ -329,7 +329,8 @@ export const RULES: Rules = {
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,
   // Täuschung und Konter Zeit zum Greifen haben. Vorher 21 (Technoclan) bzw. 34 (Myriaden) Verbände pro Minute.
   unitCap: 150,
-  productionTime: 5,
+  // 25.10. abends (Nutzer): 4 statt 5 – alle Fabriken 20 % schneller, das Spiel soll flotter werden.
+  productionTime: 4,
   unitSpeed: 1,
   // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
   sellRefund: 0.7,
