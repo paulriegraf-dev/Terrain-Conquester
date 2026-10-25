@@ -1047,6 +1047,10 @@ export class Game {
       case 'codex':
         this.openCodex();
         break;
+      case 'basics':
+        this.codex.tab = 'basics';
+        this.openCodex();
+        break;
       case 'codex-close':
         this.closeCodex();
         break;

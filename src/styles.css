@@ -936,7 +936,7 @@ body.start-mode .sp-fields { gap: 7px; }
 .tut-face { min-width: 84px; }
 .tut-row .tut-skip { padding: 2px 8px; font-size: 0.72rem; }
 
-/* Vorschlag 2: Hologramm – durchscheinend, Streifen, Flackern */
+/* Funkfenster im Hologramm-Stil (Wahl des Nutzers): durchscheinend, Streifen, Flackern */
 .tut-s-holo .tut-frame {
   background: linear-gradient(180deg, rgba(40, 200, 255, 0.10), rgba(40, 200, 255, 0.04));
   border: 1px solid rgba(110, 230, 255, 0.75); border-radius: 2px;
@@ -949,39 +949,3 @@ body.start-mode .sp-fields { gap: 7px; }
 .tut-s-holo .tut-name { color: #9be9ff; }
 @keyframes tut-flicker { 0%, 100% { opacity: 0.9; } 47% { opacity: 0.55; } 48% { opacity: 0.92; } 82% { opacity: 0.7; } 83% { opacity: 0.9; } }
 
-/* Vorschlag 3: Kinoleiste – über die ganze Spielfeldbreite, großes Gesicht links */
-.tut-s-kino .tut-box { left: 14px; transform: none; width: calc(100vw - 344px); bottom: 282px; }
-.tut-s-kino .tut-box.tut-pop { animation: tut-slide 0.3s ease-out; }
-@keyframes tut-slide { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-.tut-s-kino .tut-frame { border-radius: 0; border-width: 2px 0; background: rgba(4, 8, 7, 0.92); }
-.tut-s-kino .tut-portrait[data-face="pixel"] { width: 96px; height: 96px; }
-.tut-s-kino .tut-text { font-size: 1.08rem; }
-
-/* Vorschlag 4: Ecke – klein oben links im Spielfeld, stört am wenigsten */
-.tut-s-ecke .tut-box { left: 24px; top: 144px; bottom: auto; transform: none; width: 380px; }
-.tut-s-ecke .tut-box.tut-pop { animation: tut-slide 0.3s ease-out; }
-.tut-s-ecke .tut-frame { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 6px; }
-.tut-s-ecke .tut-face { min-width: 0; min-height: 56px; }
-.tut-s-ecke .tut-portrait, .tut-s-ecke .tut-portrait[data-face="image"] { width: 48px; height: 48px; }
-.tut-s-ecke .tut-text { font-size: 0.86rem; min-height: 0; }
-.tut-s-ecke .tut-hint { margin-left: 0; }
-
-/* Vorschlag 5: Terminal – Bernstein auf Schwarz, Schreibmaschinen-Cursor */
-.tut-s-terminal .tut-frame { background: #070604; border: 2px solid #b8862e; border-radius: 2px; box-shadow: 0 0 16px rgba(232, 176, 74, 0.3); }
-.tut-s-terminal .tut-face { border-color: #b8862e; background: #120d05; }
-.tut-s-terminal .tut-portrait { filter: grayscale(1) sepia(1) saturate(2.2) brightness(1.05) contrast(1.1); }
-.tut-s-terminal .tut-name { color: #e8b04a; font-family: var(--font-data); }
-.tut-s-terminal .tut-text { color: #ffcf7a; font-family: var(--font-data); font-size: 0.9rem; }
-.tut-s-terminal .tut-text::after { content: '▌'; animation: tut-cursor 0.9s steps(1) infinite; margin-left: 2px; }
-@keyframes tut-cursor { 50% { opacity: 0; } }
-.tut-s-terminal .tut-next { background: #e8b04a; border-color: #e8b04a; }
-.tut-s-terminal .tut-hint { border-color: #e8b04a; color: #ffdca0; box-shadow: none; }
-
-/* Vorschlag 6: Großes Porträt – das Gesicht steht groß links über dem Fenster (Visual-Novel) */
-.tut-s-roman .tut-box { width: min(700px, calc(100vw - 32px)); }
-.tut-s-roman .tut-frame { grid-template-columns: 170px minmax(0, 1fr); padding-left: 0; overflow: visible; }
-.tut-s-roman .tut-face { border: 0; background: transparent; overflow: visible; min-height: 0; }
-.tut-s-roman .tut-face::after { display: none; }
-.tut-s-roman .tut-portrait, .tut-s-roman .tut-portrait[data-face="image"] { width: 192px; height: 192px; position: absolute; left: -14px; bottom: -8px; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.6)); }
-.tut-s-roman .tut-portrait[data-face="pixel"] { width: 168px; height: 168px; }
-.tut-s-roman .tut-name { display: inline-block; width: fit-content; margin: -20px 0 6px; padding: 2px 12px; background: var(--tut); color: #08130f; border-radius: 3px; }

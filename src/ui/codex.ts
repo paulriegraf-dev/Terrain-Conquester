@@ -7,6 +7,8 @@ import type { FactionId } from '../data/factions';
 import { MOVE_PROFILES, MOVE_PROFILE_IDS } from '../data/movement';
 import type { MoveProfileId } from '../data/movement';
 import { RULES } from '../data/rules';
+import { BUILDINGS } from '../data/buildings';
+import { MARKET } from '../data/market';
 import { TERRAIN_LIST } from '../data/terrain';
 import type { TerrainId } from '../data/terrain';
 import { UNITS } from '../data/units';
@@ -25,7 +27,7 @@ import type { RoleTarget } from './weaponRole';
  * Übersicht (Wunsch des Nutzers, 24.10.): Einheiten, Konter und Gelände auf einen Blick – im Startbildschirm und im
  * Menü (F10). Alles wird aus den Spieldaten berechnet, damit die Tabellen nach jeder Abstimmung stimmen.
  */
-export type CodexTab = 'units' | 'counters' | 'terrain' | 'traits';
+export type CodexTab = 'basics' | 'units' | 'counters' | 'terrain' | 'traits';
 
 export interface CodexState {
   tab: CodexTab;
@@ -345,6 +347,72 @@ function terrainTab(): string {
     ${stationsSection()}`;
 }
 
+/**
+ * Grundlagen (25.10. abends, Wunsch des Nutzers): die Mechaniken aus dem Tutorial zum Nachlesen – genauer, vor allem die
+ * Wirtschaft. Alle Zahlen kommen aus den Regeln, damit der Text nach jeder Abstimmung stimmt.
+ */
+function basicsTab(): string {
+  const r = RULES;
+  const ph = r.phases;
+  const pct = (v: number): string => `${Math.round(v * 100)} %`;
+  const sec = (v: number): string => `${num(v, 0)} s`;
+  const b = BUILDINGS;
+  const section = (title: string, items: string[]): string =>
+    `<h3 class="cx-h3">${title}</h3><ul class="cx-rules">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+  const m = MARKET;
+  return `<p class="cx-lede">Was das Tutorial zeigt – und was dahintersteckt. Für einen geführten Einstieg: <b>Tutorial</b> im Startbildschirm.</p>
+  ${section('Ziel und Phasen', [
+    'Wer das gegnerische HQ zerstört, gewinnt. Du steuerst keine einzelnen Einheiten: Fabriken bauen von selbst, du bestimmst <b>was</b> (Einheit), <b>wo</b> (Lane) und <b>wie</b> (Haltung).',
+    ...ph.map((p) => `<b>${escapeHtml(p.name)}</b> ab ${Math.floor(p.at / 60)}:${String(p.at % 60).padStart(2, '0')}: Energie ×${num(p.energyMult, 1)}, HQs nehmen ${pct(p.hqDamageMult)} Schaden${p.hqDamageGrowth ? `, danach jede Minute +${pct(p.hqDamageGrowth)}` : ''}.`),
+  ])}
+  ${section('Wirtschaft: Energie', [
+    `Grundeinkommen <b>${num(r.energyPerSecond, 1)} Energie/s</b>, dazu <b>Gebietseinkommen</b>: wer die halbe Karte hält, bekommt +${num(r.front.territoryIncome, 1)}/s (anteilig, auch mehr). Beides mal dem Faktor der Phase.`,
+    `Höchstens <b>${r.maxEnergy} Energie</b> auf Vorrat – was darüber hinausgeht, verfällt. Gib sie aus.`,
+    `Fabriken kosten: Kaserne/Myr-Brut ${b.barracks.buildCost}, Hangar/Werkstatt ${b.workshop.buildCost}, Schwerwerk/Schmelze ${b.foundry.buildCost}; Terra-Former-Fabriken ${b.meadowhall.buildCost} (Steinbruch ${b.quarry.buildCost}). Weiter vorn als ${r.buildDistance.freeRadius} Kacheln vom HQ +${pct(r.buildDistance.surchargePerTile)} je Kachel.`,
+    `Höchstens ${r.building.maxBuildings} Gebäude. Verkaufen erstattet ${pct(r.sellRefund)} von Bau und Stufen.`,
+    `<b>Beute:</b> Eine zerstörte gegnerische Fabrik bringt ${pct(r.front.buildingBounty)} ihres Preises.`,
+    'Energie geht außerdem in Stufen, Forschung, HQ-Zweige, Späher, Gelände, Erdwälle, Täuschung, Eilaufträge und Scheinbestellungen.',
+  ])}
+  ${section('Wirtschaft: Markt der Bauteile', [
+    'Jede lebende Einheit bindet ein Bauteil: <b>Schusswaffen</b>, <b>Radteile</b> oder <b>Panzerplatten</b> – bei beiden Spielern zusammen. Stirbt sie, wird es wieder frei.',
+    `Je mehr gebunden ist, desto höher der Preis (frei: Schusswaffen ${m.freeUnits.arms}, Radteile ${m.freeUnits.wheels}, Panzerplatten ${m.freeUnits.plates}; je ${m.unitsPerStep.arms} / ${m.unitsPerStep.wheels} / ${m.unitsPerStep.plates} weitere +100 %).`,
+    `Ein hoher Preis <b>bremst die Fabriken</b>, die dieses Teil brauchen (höchstens auf 1/${m.maxPrice} Tempo, nie ein Stopp), und verteuert neue Fabriken (${pct(m.buildCostShare)} des Anstiegs).`,
+    `Die Anzeige zeigt die Preise ${m.displayDelay} s verzögert – und verrät, was auf dem Feld steht.`,
+    `<b>Scheinbestellung</b> (${m.orderCost} Energie): treibt einen Preis ${m.orderDuration} s lang um +${pct(m.orderSteps)} eines Schritts – so bremst du die Fabriken des Gegners. ${pct(m.orderRefund)} kommen nach ${m.orderLock} s zurück; höchstens ${m.maxOrders} gleichzeitig.`,
+  ])}
+  ${section('Gebiet und Einfluss', [
+    `Einheiten und Gebäude bauen Einfluss auf; wer allein ist, übernimmt Kacheln nach und nach. Das HQ hält ${r.influence.hqRadius} Kacheln von Anfang an.`,
+    'In der Kartenmitte liegt das <b>Niemandsland</b>: dort baut niemand Einfluss auf.',
+    `<b>Heimvorteil:</b> Einheiten im eigenen Gebiet heilen ${pct(r.front.regenPerSecond)} ihrer Leben je Sekunde${r.homeDamageTaken < 1 ? ` und nehmen nur ${pct(r.homeDamageTaken)} Schaden` : ''} (ab ${Math.floor(r.homeLate.at / 60)}:00 nur noch ${pct(r.homeLate.factor)} davon).`,
+    `<b>Belagerungsdruck:</b> Wer mehr Gebiet hält, trifft HQ und Gebäude des Gegners härter (×(1 + ${num(r.front.siegeFactor, 1)} × Vorsprung)).`,
+  ])}
+  ${section('Fabriken und Produktion', [
+    'Eine Fabrik baut ununterbrochen ihre gewählte Einheit und schickt sie über ihre Lane. Der erste Verband kommt in halber Zeit.',
+    `<b>Stufen</b> schalten weitere Einheiten frei. <b>Umrüsten</b> auf eine andere Einheit dauert ${sec(r.retoolSeconds)}; <b>Einspielen</b>: nach ${r.settle.map((s) => `${s.seconds} s +${pct(s.speed - 1)}`).join(', ')} Tempo bei derselben Einheit.`,
+    `Neue Marschbefehle greifen nach ${sec(r.routeChangeSeconds)} (sofort gegen ${r.routeRushCost} Energie). Fabriken auf einem <b>Außenposten</b> bauen ×${num(r.building.outpostSpeed, 2)} so schnell, sind aber nicht befestigt.`,
+    `Einheitenlimit ${r.unitCap}. Gebäude in der Basis-Bauzone sind befestigt (${pct(r.baseBuildingDamageTaken)} Schaden).`,
+  ])}
+  ${section('Fronten: vier Haltungen je Lane', [
+    '<b>Verteidigen</b>: Truppen bleiben an der Basis und fangen Eindringlinge ab. <b>Halten</b>: an der eigenen Grenze, gestaffelt nach Reichweite.',
+    '<b>Sichern</b>: zur Station der Lane, im Halbkreis darum (ohne Station wie Halten). <b>Front</b>: bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff.',
+    `Eine neue Haltung greift nach ${sec(r.front.stanceChangeSeconds)}.`,
+  ])}
+  ${section('Gelände', [
+    'In der <b>Vorbereitung</b> formst du Flächen deiner Hälfte, ohne dass der Gegner es sieht. Danach jederzeit gegen Energie – im eigenen Kartendrittel immer, sonst im eigenen Gebiet, im Niemandsland und kurz vor der Grenze.',
+    'Wald gibt Deckung (Rüstung +1), Matsch und Schnee bremsen, Geröll bremst Räder. Jede Truppenart bewegt sich anders – siehe Tab Gelände.',
+    '<b>Erdwall</b> sperrt einen Weg für eine Weile; Schwere und Artillerie brechen ihn. <b>Schluchten</b> gibt es über den HQ-Zweig Gelände; Schweber gleiten darüber und bekommen danach einen Flankenbonus.',
+  ])}
+  ${section('Aufklärung und Täuschung', [
+    `Den Gegner verbirgt der Nebel. Ein <b>Späher</b> (${r.scout.cost} Energie, alle ${r.scout.cooldownSeconds} s) meldet nach ${r.scout.delaySeconds} s Stärke und Panzerung je Lane, Fabriken und Verbünde.`,
+    'Fabriken lassen sich <b>tarnen</b>: Der Gegner sieht dann eine Weile eine andere Fabrik und Lane.',
+  ])}
+  ${section('Forschung, HQ und Held', [
+    `Forschung (bis ${r.researchSlots} gleichzeitig) verbessert Waffen und Panzerung einzelner Einheiten. Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
+    'Jede Fraktion hat einen Helden, der über das HQ kommt und nach seinem Tod zurückkehrt.',
+  ])}
+  ${section('Stationen', ['Oben und unten je eine Station mit einem Vorteil nur für ihre Lane – Tabelle und Pool je Karte im Tab Gelände.'])}`;
+}
+
 /** Stationen (25.10. abends): je Karte oben und unten eine, Wirkung nur auf ihrer Lane. */
 function stationsSection(): string {
   const role = { offense: 'offensiv', defense: 'defensiv', utility: 'Info/Logistik' } as const;
@@ -365,6 +433,7 @@ function factionChips(state: CodexState, which: 'faction' | 'enemy', label: stri
 }
 
 export function renderCodex(state: CodexState): string {
+  if (state.tab === 'basics') return basicsTab();
   return state.tab === 'units' ? unitsTab(state) : state.tab === 'counters' ? countersTab(state) : state.tab === 'traits' ? traitsTab(state) : terrainTab();
 }
 

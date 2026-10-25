@@ -4,7 +4,6 @@ import type { Entity } from '../sim/entity';
 import type { ViewState } from './view';
 import type { Session } from './session';
 import { Portrait } from './portrait';
-import { FACES } from './faces';
 import { checkBuild } from '../sim/placement';
 import { BUILDINGS } from '../data/buildings';
 
@@ -43,37 +42,8 @@ interface Ctx {
   memo: Record<string, number | string>;
 }
 
-/** Wer spricht: die Gesichter aus der Datei des Nutzers und die eigene Pixelfigur (zum Vergleich). */
-const SPEAKERS: readonly { id: string; name: string; label: string }[] = [
-  ...FACES.map((f) => ({ id: f.id, name: f.name, label: f.name })),
-  { id: 'pixel', name: 'Kora', label: 'Pixel (Claude)' },
-];
-
-/** Sechs Vorschläge für das Funkfenster. */
-const STYLES: readonly { id: string; label: string }[] = [
-  { id: 'funk', label: 'Funk' },
-  { id: 'holo', label: 'Hologramm' },
-  { id: 'kino', label: 'Kinoleiste' },
-  { id: 'ecke', label: 'Ecke' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'roman', label: 'Großes Porträt' },
-];
-
-function load(key: string, fallback: string): string {
-  try {
-    return localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function save(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    /* privat/gesperrt: dann eben nicht merken */
-  }
-}
+/** Sprecher (Nutzer, 25.10. abends): Sonde 7 aus „Face_for_Tutorial“, Fenster im Hologramm-Stil. */
+const SPEAKER = { face: 'sonde', name: 'Sonde 7' } as const;
 const TYPE_SPEED = 55; // Zeichen je Sekunde
 
 function own(c: Ctx, kind: 'building' | 'unit'): Entity[] {
@@ -241,7 +211,7 @@ function steps(doc: Document): Step[] {
       done: (c) => (['top', 'mid', 'bottom'] as Route[]).some((r) => c.world.players[0].stance[r] === 'push' || c.world.players[0].pendingStance[r]?.stance === 'push'),
     },
     {
-      text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du im Befehlsraster, alle Werte in der Übersicht (F1). Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
+      text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du im Befehlsraster, alles zum Nachlesen – Wirtschaft, Markt, Gebiet – in der Übersicht (F1) unter Grundlagen. Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
     },
   ];
 }
@@ -262,43 +232,11 @@ export class Tutorial {
   private last = 0;
   private memo: Record<string, number | string> = {};
   private finished = false;
-  private faceId = 'kora';
-  private styleId = 'funk';
-
-  private speaker(): { id: string; name: string; label: string } {
-    return SPEAKERS.find((s) => s.id === this.faceId) ?? SPEAKERS[0]!;
-  }
-
-  private applyLook(): void {
-    const sp = this.speaker();
-    this.portrait.setFace(sp.id);
-    for (const s of STYLES) this.root.classList.toggle(`tut-s-${s.id}`, s.id === this.styleId);
-    const st = STYLES.find((s) => s.id === this.styleId) ?? STYLES[0]!;
-    this.root.querySelector('.tut-name')!.textContent = `${sp.name} · Leitstelle`;
-    this.root.querySelector('[data-tut="face"]')!.textContent = `Gesicht: ${sp.label}`;
-    this.root.querySelector('[data-tut="style"]')!.textContent = `Stil: ${st.label}`;
-    this.textEl.dataset.n = '';
-  }
-
-  private cycleFace(): void {
-    const i = SPEAKERS.findIndex((s) => s.id === this.faceId);
-    this.faceId = SPEAKERS[(i + 1) % SPEAKERS.length]!.id;
-    save('tc-tut-face', this.faceId);
-    this.applyLook();
-  }
-
-  private cycleStyle(): void {
-    const i = STYLES.findIndex((s) => s.id === this.styleId);
-    this.styleId = STYLES[(i + 1) % STYLES.length]!.id;
-    save('tc-tut-style', this.styleId);
-    this.applyLook();
-  }
-
   constructor(private readonly host: TutorialHost) {
     const doc = host.doc;
     this.list = steps(doc);
     this.root = doc.createElement('div');
-    this.root.className = 'tut';
+    this.root.className = 'tut tut-s-holo';
     this.root.innerHTML = `
       <div class="tut-ring" hidden></div>
       <div class="tut-arrow" hidden>▼</div>
@@ -311,9 +249,7 @@ export class Tutorial {
             <p class="tut-text"></p>
             <div class="tut-row">
               <span class="tut-progress"></span>
-              <button type="button" class="tut-skip" data-tut="face" title="Gesicht wechseln"></button>
-              <button type="button" class="tut-skip" data-tut="style" title="Fenster-Stil wechseln"></button>
-              <button type="button" class="tut-skip" data-tut="skip">Beenden</button>
+              <button type="button" class="tut-skip" data-tut="skip">Tutorial beenden</button>
               <button type="button" class="tut-next" data-tut="next">Weiter ▸</button>
             </div>
           </div>
@@ -332,13 +268,10 @@ export class Tutorial {
       const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tut]');
       if (t?.dataset.tut === 'skip') this.end();
       else if (t?.dataset.tut === 'next') this.advance();
-      else if (t?.dataset.tut === 'face') this.cycleFace();
-      else if (t?.dataset.tut === 'style') this.cycleStyle();
       else if ((ev.target as HTMLElement).closest('.tut-frame')) this.shown = Infinity; // Text sofort ganz zeigen
     });
-    this.faceId = load('tc-tut-face', 'kora');
-    this.styleId = load('tc-tut-style', 'funk');
-    this.applyLook();
+    this.portrait.setFace(SPEAKER.face);
+    this.root.querySelector('.tut-name')!.textContent = `${SPEAKER.name} · Leitstelle`;
     this.host.session().aiHold = true;
     this.advance();
   }
@@ -373,7 +306,7 @@ export class Tutorial {
     this.last = now;
     const step = this.list[this.index]!;
     const c = this.ctx();
-    const full = step.text.replace('{name}', this.speaker().name);
+    const full = step.text.replace('{name}', SPEAKER.name);
     this.shown = Math.min(full.length, this.shown + dt * TYPE_SPEED);
     const n = Math.floor(this.shown);
     if (this.textEl.dataset.n !== String(n) || this.textEl.dataset.i !== String(this.index)) {
