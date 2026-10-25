@@ -137,3 +137,39 @@ describe('Technoclan-Verbund (25.10.)', () => {
     assert.ok(q.tech!.mods.slowHit, 'neue Einheit bekommt Sperrfeuer');
   });
 });
+
+describe('Elite-Arten (25.10. abends)', () => {
+  it('dominierender Baustein: Gleichstand → eigene Grundart, sonst der häufigste', async () => {
+    const { dominantProtocol } = await import('../src/sim/systems/verbund');
+    assert.equal(dominantProtocol(['area', 'antiHeavy', 'mark', 'range']), 'area');
+    assert.equal(dominantProtocol(['area', 'antiHeavy', 'antiHeavy', 'range']), 'antiHeavy');
+    assert.equal(dominantProtocol(['area', 'area', 'antiHeavy', 'antiHeavy']), 'area');
+  });
+  it('Hybrid: Plasmawerfer mit dominanter Panzerung trifft Leichte wie eine Kanone', async () => {
+    const { becomeElite, refreshTech } = await import('../src/sim/systems/verbund');
+    const world = new World({ map: openMap, seed: 1, rules: smallBases });
+    const p = unit(world, 0, 'plasma', 6.5, 7.5);
+    p.net!.protocols.push('plating', 'plating', 'mark');
+    becomeElite(world, p);
+    refreshTech(world, p);
+    assert.equal(p.tech!.eliteFx!.kind, 'hybrid');
+    assert.equal(p.weapon!.def.anti?.light, 3);
+    assert.equal(p.weapon!.def.anti?.infantry, 4, 'eigene Waffenart bleibt');
+  });
+  it('reinrassig: Scharfschütze bekommt Ansitz; ist Ansitz schon sein Verbund, ×1,5', async () => {
+    const { becomeElite, refreshTech } = await import('../src/sim/systems/verbund');
+    const world = new World({ map: openMap, seed: 1, rules: smallBases });
+    const s = unit(world, 0, 'sniper', 6.5, 7.5);
+    s.net!.protocols.push('antiHeavy', 'area', 'mark');
+    becomeElite(world, s);
+    refreshTech(world, s);
+    assert.equal(s.tech!.eliteFx!.kind, 'pure');
+    const plain = s.tech!.mods.still!.damage;
+    const s2 = unit(world, 0, 'sniper', 8.5, 7.5);
+    s2.verbundPrint = 'sniper+sniper';
+    s2.net!.protocols.push('antiHeavy', 'area', 'mark');
+    becomeElite(world, s2);
+    refreshTech(world, s2);
+    assert.ok(Math.abs(s2.tech!.mods.still!.damage - 1 - (plain - 1) * 1.5) < 1e-9);
+  });
+});

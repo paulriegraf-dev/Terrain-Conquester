@@ -319,9 +319,18 @@ export class Renderer {
         ctx.fill();
         ctx.strokeStyle = `rgba(255,214,120,${0.6 + 0.3 * pulse})`;
         ctx.lineWidth = Math.max(1.5, t * 0.1);
+        // Hybrid: gestrichelter Ring; reinrassig: doppelter Ring.
+        const hybrid = e.tech?.eliteFx?.kind === 'hybrid';
+        if (hybrid) ctx.setLineDash([t * 0.25, t * 0.15]);
         ctx.beginPath();
         ctx.arc(x, y, r * 1.9, 0, Math.PI * 2);
         ctx.stroke();
+        if (hybrid) ctx.setLineDash([]);
+        else if (e.tech?.eliteFx) {
+          ctx.beginPath();
+          ctx.arc(x, y, r * 2.25, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
       const inherited = e.elite ? e.net.protocols : e.net.protocols.slice(1);
       if (inherited.length > 0) {

@@ -169,7 +169,17 @@ export interface Entity {
     /** Zusammengefasste Wirkung aus Verbund, Elite und gestapelter Panzerung. */
     mods: TechMods;
     /** Elite-Wirkungen, die im Kampf greifen (Kopfschuss, volle Fläche, Markierung, Entdecken, Heilung). */
-    eliteFx: { headshot: number; splashFull: boolean; mark: boolean; detect: boolean; heal: number } | null;
+    eliteFx: {
+      headshot: number;
+      splashFull: boolean;
+      mark: boolean;
+      detect: boolean;
+      heal: number;
+      /** Hybrid (fremder Baustein dominiert) oder reinrassig (eigener dominiert). */
+      kind: 'pure' | 'hybrid';
+      /** Dominierender Baustein. */
+      dominant: ProtocolId;
+    } | null;
     base: { maxHp: number; toughness: number; vision: number; speed: number };
     sig: string;
     still: number;

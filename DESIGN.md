@@ -1805,3 +1805,10 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - Top-Schadenseinheit je Partie: Technoclan Scharfschützen 47 %, Koloss 16 %; Myr Sphäre 49 %, Katapult 20 %; Terra-Former Steppenjäger 47 %, Frontbrecher 36 %.
 - Gegen Myr gehen 25 % des Technoclan-Schadens in Erdwälle.
 - Befund: Technoclan ist nach Patch 1 klar zu schwach. Keine Änderung ohne Absprache.
+
+### Nachtrag 25.10. abends: Elite-Arten (Hybrid und reinrassig)
+
+- Der häufigste Baustein einer Elite bestimmt ihre Art. Bei Gleichstand zählt die eigene Grundart; ist die nicht dabei, der zuletzt aufgenommene.
+- **Reinrassig** (eigener Baustein dominiert, doppelter Ring): bekommt die Spezialisierung der eigenen Art dazu (Scharfschütze Ansitz, Plasma Glutteppich, Hover Rudeljagd, Batterie Salvenfeuer, Gunner Panzerkeil, Koloss Stahlwand). Ist das schon ihr Verbund, wirkt er ×1,5.
+- **Hybrid** (fremder Baustein dominiert, gestrichelter Ring): bekommt die Waffenart dieses Bausteins dazu und nimmt je Panzerungsklasse das bessere „anti“ (Panzerjagd und Durchschlag: Durchschlag, Fläche: Splitter, Weitsicht: Belagerung inkl. Gebäudebonus, Panzerung: Kanone). Zielmarkierung gibt stattdessen Treffen +1. Gunner und Scharfschütze liefern bewusst beide „Durchschlag“.
+- Ziel: Typendurchbrechung und Individualisierung über Eliten. Der Scharfschütze soll nicht das Wundermittel sein; die Grundwerte bleiben vorerst, wie sie sind.

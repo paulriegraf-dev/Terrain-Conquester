@@ -1,6 +1,7 @@
 import { VERBUND, VERBUND_UNITS, verbundKey } from '../../data/verbund';
 import type { TechMods, VerbundUnit } from '../../data/verbund';
-import type { ProtocolId, UnitId } from '../../data/units';
+import { UNITS } from '../../data/units';
+import type { ProtocolId, UnitId, WeaponDef } from '../../data/units';
 import type { Entity } from '../entity';
 import { ROUTES } from '../types';
 import type { PlayerId, Route } from '../types';
@@ -103,6 +104,61 @@ export function becomeElite(world: World, e: Entity): void {
 
 const DUP = [0, 1, 1.5, 1.75] as const;
 
+/** Welche Einheit liefert welchen Baustein (für die Waffenart der Hybrid-Elite). */
+const PROTOCOL_UNIT: Partial<Record<ProtocolId, UnitId>> = {
+  antiHeavy: 'sniper',
+  area: 'plasma',
+  mark: 'hoverscout',
+  range: 'battery',
+  pierce: 'gunner',
+  plating: 'colossus',
+};
+
+/**
+ * Dominierender Baustein einer Elite: der häufigste. Gleichstand: die eigene Grundart, wenn sie dabei ist,
+ * sonst der zuletzt aufgenommene.
+ */
+export function dominantProtocol(protocols: readonly ProtocolId[]): ProtocolId | null {
+  if (protocols.length === 0) return null;
+  let max = 0;
+  for (const p of protocols) max = Math.max(max, count(protocols, p));
+  const own = protocols[0]!;
+  if (count(protocols, own) === max) return own;
+  for (let i = protocols.length - 1; i >= 0; i--) if (count(protocols, protocols[i]!) === max) return protocols[i]!;
+  return own;
+}
+
+/** Wirkung eines Verbunds mit Faktor f (Zuschläge ×f, Faktoren (x−1)·f+1). */
+function scaled(m: TechMods | undefined, f: number): TechMods | undefined {
+  if (!m) return m;
+  const add = (v?: number): number | undefined => (v === undefined ? v : v * f);
+  const mul = (v?: number): number | undefined => (v === undefined ? v : 1 + (v - 1) * f);
+  return {
+    ...m,
+    range: add(m.range),
+    hit: add(m.hit),
+    ap: add(m.ap),
+    splash: add(m.splash),
+    toughness: add(m.toughness),
+    vision: add(m.vision),
+    hp: mul(m.hp),
+    speed: mul(m.speed),
+    damageTaken: m.damageTaken === undefined ? undefined : 1 - (1 - m.damageTaken) * f,
+    structure: mul(m.structure),
+    wallBreak: mul(m.wallBreak),
+    still: m.still ? { ...m.still, damage: 1 + (m.still.damage - 1) * f } : undefined,
+  };
+}
+
+/** Waffenart dazunehmen: je Panzerungsklasse gilt das bessere „anti“, gegen Gebäude der höhere Bonus. */
+function addWeaponType(w: WeaponDef, from: WeaponDef | undefined): WeaponDef {
+  if (!from) return w;
+  const anti = { ...(w.anti ?? {}) };
+  for (const [k, v] of Object.entries(from.anti ?? {}) as [keyof typeof anti, number][]) anti[k] = anti[k] === undefined ? v : Math.min(anti[k]!, v);
+  const structureDamage = Math.max(w.structureDamage ?? 1, from.structureDamage ?? 1);
+  return { ...w, anti, ...(structureDamage > 1 ? { structureDamage } : {}) };
+}
+
 function count(protocols: readonly ProtocolId[], p: ProtocolId): number {
   let n = 0;
   for (const q of protocols) if (q === p) n++;
@@ -163,11 +219,20 @@ export function refreshTech(world: World, e: Entity): void {
     if (v) e.verbundPrint = v;
   }
   const key = e.elite?.print ?? e.verbundPrint ?? '';
-  if (key) merge(mods, VERBUND[key]?.mods[e.defId as VerbundUnit]);
+  // Elite-Art: reinrassig (eigener Baustein dominiert) bekommt die eigene Spezialisierung dazu – ist die schon
+  // ihr Verbund, wirkt er ×1,5. Hybrid (fremder dominiert) bekommt dessen Waffenart dazu (Zielmarkierung: Treffen +1).
+  const dominant = e.elite ? dominantProtocol(protocols) : null;
+  const pure = !!dominant && dominant === protocols[0];
+  const own = e.defId as VerbundUnit;
+  const spec = pure && (VERBUND_UNITS as readonly string[]).includes(own) ? verbundKey(own, own) : '';
+  if (key) merge(mods, spec === key ? scaled(VERBUND[key]?.mods[own], 1.5) : VERBUND[key]?.mods[own]);
+  if (spec && spec !== key) merge(mods, VERBUND[spec]?.mods[own]);
+  const hybridFrom = dominant && !pure && dominant !== 'mark' ? PROTOCOL_UNIT[dominant] : undefined;
+  if (dominant && !pure && dominant === 'mark') merge(mods, { hit: 1 });
   // Elite
   let fx: NonNullable<typeof t.eliteFx> | null = null;
   if (e.elite) {
-    fx = { headshot: 0, splashFull: false, mark: false, detect: false, heal: 0 };
+    fx = { headshot: 0, splashFull: false, mark: false, detect: false, heal: 0, kind: pure ? 'pure' : 'hybrid', dominant: dominant ?? protocols[0]! };
     mods.hp = (mods.hp ?? 1) * world.rules.network.eliteHp;
     const n = (p: ProtocolId): number => count(protocols, p);
     const b = (p: ProtocolId): number => DUP[Math.min(3, n(p))]!;
@@ -204,6 +269,7 @@ export function refreshTech(world: World, e: Entity): void {
   if (sig !== t.sig && e.weapon) {
     t.sig = sig;
     let w = withProtocols(e.weapon.baseDef, protocols);
+    if (hybridFrom) w = addWeaponType(w, UNITS[hybridFrom]?.weapon);
     if (fx?.splashFull) w = { ...w, splash: Math.max(w.splash ?? 0, 1.5 + 0.25 * (count(protocols, 'area') - 1)) };
     if (mods.range) w = { ...w, range: w.range + mods.range };
     if (mods.hit) w = { ...w, skill: Math.max(2, w.skill - mods.hit) };

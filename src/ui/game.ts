@@ -1993,7 +1993,7 @@ export class Game {
         const enemyFaction = world.players[otherPlayer(unit.owner)].faction.id;
         // Technoclan (25.10.): Bausteine, Elite, Verbund
         const net = unit.net
-          ? (unit.elite ? ` · ELITE (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '') +
+          ? (unit.elite ? ` · ELITE ${unit.tech?.eliteFx?.kind === 'hybrid' ? `Hybrid (${PROTOCOLS[unit.tech.eliteFx.dominant].name})` : 'reinrassig'} (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '') +
             (unit.tech?.key ? ` · Verbund ${VERBUND[unit.tech.key]?.name ?? ''}${unit.elite?.print ? ' (Elite-Prägung)' : ' (seit Geburt)'}` : '')
           : '';
         this.hud.setStatus(
