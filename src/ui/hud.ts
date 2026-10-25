@@ -815,7 +815,7 @@ function factoryVerbundLine(world: World, e: Entity): string {
     const d = VERBUND[st.pending!.key]!;
     return `<p class="vb-line muted" data-lane="${e.producer.route}">Verbund ${escapeHtml(d.name)} in ${Math.max(0, Math.ceil((st.pending!.at - world.tick) / world.tps))} s</p>`;
   }
-  return `<p class="muted">Kein Verbund – auf dieser Lane bilden die zwei Fabriken mit der höchsten Stufe den Verbund.</p>`;
+  return `<p class="muted" title="Auf jeder Lane bilden die zwei Fabriken mit der höchsten Stufe einen Verbund">Verbund: –</p>`;
 }
 
 /** Terra-Former: aktive Lane-Synergie (2 gleiche Lanes + Färbung durch die dritte). */
