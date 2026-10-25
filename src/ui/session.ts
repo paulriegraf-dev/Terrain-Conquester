@@ -32,6 +32,8 @@ export class Session {
   private pending: Command[] = [];
   /** Vorbereitungsphase: Die Runde steht, bis der Spieler „Bereit“ drückt. */
   prepActive = false;
+  /** Tutorial: Die KI wartet, bis sie freigegeben wird. */
+  aiHold = false;
 
   constructor(
     readonly mode: Mode,
@@ -200,7 +202,7 @@ export class Session {
     }
     const commands: PlayerCommand[] = this.pending.map((cmd) => ({ player: this.human, cmd }));
     this.pending = [];
-    for (const ai of this.ais) for (const cmd of ai.think(this.world)) commands.push({ player: ai.player, cmd });
+    if (!this.aiHold) for (const ai of this.ais) for (const cmd of ai.think(this.world)) commands.push({ player: ai.player, cmd });
     this.world.step(commands);
   }
 }

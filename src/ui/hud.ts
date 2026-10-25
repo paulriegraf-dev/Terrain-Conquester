@@ -507,7 +507,7 @@ export class Hud {
         if (b.spacer) {
           return `<div class="cmd info" data-tip="${escapeHtml(b.tip)}"><span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.label)}</span></div>`;
         }
-        return `<button type="button" class="cmd${b.danger ? ' danger' : ''}${short ? ' short' : ''}${b.pending ? ' pending' : ''}" data-action="${b.action}"${data} data-tip="${escapeHtml(b.tip)}" aria-pressed="${!!b.pressed}" aria-label="${escapeHtml(b.label)} (${keyLabel})" ${b.disabled ? 'disabled' : ''}>
+        return `<button type="button" data-cmd="${escapeHtml(b.id)}" class="cmd${b.danger ? ' danger' : ''}${short ? ' short' : ''}${b.pending ? ' pending' : ''}" data-action="${b.action}"${data} data-tip="${escapeHtml(b.tip)}" aria-pressed="${!!b.pressed}" aria-label="${escapeHtml(b.label)} (${keyLabel})" ${b.disabled ? 'disabled' : ''}>
           <span class="key">${keyLabel}</span>${b.cost !== undefined ? `<span class="cost">${b.cost}</span>` : ''}
           <span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.pending ?? b.label)}</span></button>`;
       })

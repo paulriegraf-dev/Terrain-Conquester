@@ -54,6 +54,7 @@ import { gameVersion } from '../net/version';
 import { defaultLobbySettings, renderLobby } from './lobby';
 import type { LobbyView } from './lobby';
 import { TitleFx } from './titleFx';
+import { Tutorial } from './tutorial';
 import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
 import type { SavedMatch, Snapshot } from './replays';
 import type { StationMode } from '../data/stations';
@@ -105,6 +106,8 @@ export class Game {
   private readonly music: Music;
   /** Titelbild sichtbar (nur beim ersten Öffnen). */
   private titleOpen = true;
+  /** Laufendes Tutorial (oder null). */
+  private tutorial: Tutorial | null = null;
   /** Übersicht (Einheiten, Konter, Gelände) offen – über Titelbild und Menü. */
   private codexOpen = false;
   private codex: CodexState = { tab: 'units', faction: 'technoclan', enemy: 'myriaden' };
@@ -207,6 +210,7 @@ export class Game {
   // ------------------------------------------------------------------ Partien
 
   private startDemo(): void {
+    this.endTutorial();
     this.music.play('menu');
     this.mp = null;
     this.doc.body.classList.add('start-mode');
@@ -222,6 +226,7 @@ export class Game {
 
   /** `factions` = [deine Fraktion, Fraktion der KI]; `side` = deine Seite (0 links, 1 rechts). */
   private startMatch(mapId: string, level: AiLevel, factions: [FactionId, FactionId], overtime: OvertimeVariant = 'off', side: PlayerId = 0, stations: StationMode = 'random'): void {
+    this.endTutorial();
     const id = mapId === 'random' ? pick(MAPS).id : mapId;
     this.menuOpen = false;
     this.doc.body.classList.remove('start-mode');
@@ -237,7 +242,27 @@ export class Game {
     if (this.view.prep) this.view.swap = { terrain: 'forest' };
   }
 
+  /** Tutorial (25.10. abends): echte Runde Technoclan gegen Myriaden auf Felsenpass, die KI wartet; die Leitstelle führt. */
+  private startTutorial(): void {
+    this.closeTitle();
+    this.startMatch('felsenpass', 'easy', ['technoclan', 'myriaden'], 'off', 0, 'main');
+    this.hud.clearLog();
+    this.tutorial = new Tutorial({
+      doc: this.doc,
+      session: () => this.session,
+      view: () => this.view,
+      clientOf: (x, y) => this.renderer.clientOf(x, y, this.session.world),
+      tilePx: () => this.renderer.tileOnScreen(),
+    });
+  }
+
+  private endTutorial(): void {
+    this.tutorial?.end();
+    this.tutorial = null;
+  }
+
   private startReplay(): void {
+    this.endTutorial();
     if (!this.lastMatch) return;
     this.replayOf = this.lastMatch;
     const m = this.lastMatch;
@@ -370,6 +395,7 @@ export class Game {
     if (this.renderer.needsLayout(world)) this.resize();
     this.renderer.draw(world, alpha, this.view);
     this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused || sharedPause, sellArmed: this.hudSellArmed, online: this.session.lockstep ? { host: !!this.mp?.host } : null }, now);
+    if (this.tutorial && !this.menuOpen) this.tutorial.update(now);
     this.updateStatusLine(world);
     this.updateNetUi(now);
     this.updateCounterBoard();
@@ -950,6 +976,9 @@ export class Game {
         break;
       case 'game-menu':
         this.toggleMenu();
+        break;
+      case 'tutorial':
+        this.startTutorial();
         break;
       case 'title-play':
         this.closeTitle();

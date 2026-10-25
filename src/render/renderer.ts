@@ -100,6 +100,18 @@ export class Renderer {
     return world.grid.inBounds(x, y) ? { x, y } : null;
   }
 
+  /** Umkehrung von pointAt: Bildschirm-Koordinaten eines Kachelpunkts (Tutorial-Pfeile). */
+  clientOf(x: number, y: number, world: World): { x: number; y: number } {
+    const r = this.canvas.getBoundingClientRect();
+    return { x: r.left + ((x - this.viewX0) / this.viewCols) * r.width, y: r.top + (y / world.map.height) * r.height };
+  }
+
+  /** Größe einer Kachel auf dem Bildschirm (Pixel). */
+  tileOnScreen(): number {
+    const r = this.canvas.getBoundingClientRect();
+    return r.width / this.viewCols;
+  }
+
   /** Position in Kachel-Einheiten (für Einheiten unter dem Mauszeiger). */
   pointAt(clientX: number, clientY: number, world: World): Vec2 {
     const r = this.canvas.getBoundingClientRect();
