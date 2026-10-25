@@ -7,6 +7,7 @@ import { World } from '../sim/world';
 import type { FactionId } from '../data/factions';
 import { overtimeRules } from '../data/rules';
 import type { OvertimeVariant } from '../data/rules';
+import type { StationMode } from '../data/stations';
 import type { Mode } from './view';
 import type { PlayerId } from '../sim/types';
 import { otherPlayer } from '../sim/types';
@@ -45,9 +46,11 @@ export class Session {
     readonly human: PlayerId = 0,
     /** Multiplayer: Lockstep zum Gegner (dann kein KI-Gegner). */
     readonly lockstep: Lockstep | null = null,
+    /** Stationen (25.10. abends): Zufall aus dem Pool der Karte, Hauptpaarung, bestimmte oder aus. */
+    readonly stations: StationMode = 'main',
   ) {
     const map = getMap(mapId);
-    const rules = overtimeRules(overtime);
+    const rules = { ...overtimeRules(overtime), stations };
     if (mode === 'replay') {
       this.replay = new ReplayRunner(map, seed, log ?? [], factions, rules);
       this.world = this.replay.world;
@@ -156,7 +159,7 @@ export class Session {
   /** Beide bereit: Welt neu aufbauen – mit den Platzierungen beider, links zuerst. */
   private maybeBeginOnline(): void {
     if (!this.prepActive || !this.myPrepDone || !this.theirPrep) return;
-    const world = new World({ map: getMap(this.mapId), seed: this.seed, factions: this.factions, rules: overtimeRules(this.overtime) });
+    const world = new World({ map: getMap(this.mapId), seed: this.seed, factions: this.factions, rules: { ...overtimeRules(this.overtime), stations: this.stations } });
     const me = this.myPrep.map((cmd) => ({ player: this.human, cmd }));
     const them = this.theirPrep.map((cmd) => ({ player: otherPlayer(this.human), cmd }));
     world.prepare(this.human === 0 ? [...me, ...them] : [...them, ...me]);

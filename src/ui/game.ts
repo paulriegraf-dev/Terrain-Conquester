@@ -30,7 +30,8 @@ import { aliveModels } from '../sim/systems/combat';
 import { checkPrep, inOwnHalf } from '../sim/systems/prep';
 import { checkEmergency } from '../sim/systems/emergency';
 import { counterLine } from '../sim/counters';
-import { SITE_NAMES } from '../sim/systems/sites';
+import { SITE_NAMES, siteActiveText } from '../sim/systems/sites';
+import { STATIONS } from '../data/stations';
 import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
 import { PALETTE } from '../render/palette';
@@ -55,6 +56,7 @@ import type { LobbyView } from './lobby';
 import { TitleFx } from './titleFx';
 import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
 import type { SavedMatch, Snapshot } from './replays';
+import type { StationMode } from '../data/stations';
 
 interface FinishedMatch {
   mapId: string;
@@ -62,6 +64,7 @@ interface FinishedMatch {
   level: AiLevel;
   factions: [FactionId, FactionId];
   overtime: OvertimeVariant;
+  stations: StationMode;
   /** Deine Seite (0 = links, 1 = rechts). */
   human: PlayerId;
   log: TimedCommand[];
@@ -207,7 +210,7 @@ export class Game {
     this.music.play('menu');
     this.mp = null;
     this.doc.body.classList.add('start-mode');
-    this.session = new Session('demo', pick(MAPS).id, randomSeed(), 'normal');
+    this.session = new Session('demo', pick(MAPS).id, randomSeed(), 'normal', undefined, undefined, 'off', 0, null, 'random');
     // Etwas vorspulen, damit beim Öffnen schon etwas los ist.
     for (let i = 0; i < 100 * this.session.world.tps && !this.session.world.result; i++) this.session.step();
     this.resetView('demo');
@@ -218,13 +221,13 @@ export class Game {
   }
 
   /** `factions` = [deine Fraktion, Fraktion der KI]; `side` = deine Seite (0 links, 1 rechts). */
-  private startMatch(mapId: string, level: AiLevel, factions: [FactionId, FactionId], overtime: OvertimeVariant = 'off', side: PlayerId = 0): void {
+  private startMatch(mapId: string, level: AiLevel, factions: [FactionId, FactionId], overtime: OvertimeVariant = 'off', side: PlayerId = 0, stations: StationMode = 'random'): void {
     const id = mapId === 'random' ? pick(MAPS).id : mapId;
     this.menuOpen = false;
     this.doc.body.classList.remove('start-mode');
     this.music.play('game');
     const bySide: [FactionId, FactionId] = side === 0 ? factions : [factions[1], factions[0]];
-    this.session = new Session('play', id, randomSeed(), level, bySide, undefined, overtime, side);
+    this.session = new Session('play', id, randomSeed(), level, bySide, undefined, overtime, side, null, stations);
     this.resetView('play');
     this.hud.hideOverlays();
     this.hud.clearLog();
@@ -240,7 +243,7 @@ export class Game {
     const m = this.lastMatch;
     this.doc.body.classList.remove('start-mode');
     this.music.play('game');
-    this.session = new Session('replay', m.mapId, m.seed, m.level, m.factions, m.log, m.overtime, m.human);
+    this.session = new Session('replay', m.mapId, m.seed, m.level, m.factions, m.log, m.overtime, m.human, null, m.stations);
     this.resetView('replay');
     this.speed = 2;
     this.hud.hideOverlays();
@@ -592,6 +595,7 @@ export class Game {
         level: this.session.level,
         factions: this.session.factions,
         overtime: this.session.overtime,
+        stations: this.session.stations,
         human: this.session.human,
         log: [...world.log],
         hash: hashWorld(world),
@@ -752,6 +756,16 @@ export class Game {
     }
     if (this.lobbyOpen) return;
     const handled = ((): boolean => {
+      // Tasten des aktuellen Befehlsrasters gehen vor (Fronten: Q–R und A–F liegen auf Ansichtstasten).
+      if (key !== 'escape' && key !== ' ') {
+        const world = this.session.world;
+        const canAct = this.session.mode === 'play' && !world.result;
+        const button = commandsFor({ world, view: this.view, canAct, sellArmed: this.hudSellArmed }).buttons.find((b) => b.key === key && !b.disabled);
+        if (button) {
+          this.onAction(button.action, { ...button.data });
+          return true;
+        }
+      }
       switch (key) {
         case ' ':
           if (this.session.lockstep) this.toggleOnlinePause();
@@ -891,7 +905,7 @@ export class Game {
       this.view.swap = null;
       const me = this.session.human;
       const f = this.session.factions;
-      this.hud.showStart(MAPS, { mapId: this.session.mapId, level: this.session.level, factions: [f[me], f[otherPlayer(me)]], overtime: this.session.overtime, side: me });
+      this.hud.showStart(MAPS, { mapId: this.session.mapId, level: this.session.level, factions: [f[me], f[otherPlayer(me)]], overtime: this.session.overtime, side: me, stations: this.session.stations });
     } else if (!this.hud.startOpen) {
       this.hud.showStart(MAPS);
     }
@@ -926,7 +940,7 @@ export class Game {
       case 'start': {
         this.saveAbandoned();
         const opts = this.hud.startOptions();
-        this.startMatch(opts.mapId, opts.level, opts.factions, opts.overtime, opts.side);
+        this.startMatch(opts.mapId, opts.level, opts.factions, opts.overtime, opts.side, opts.stations);
         break;
       }
       case 'new-round':
@@ -1763,6 +1777,7 @@ export class Game {
       seed: s.seed,
       factions: [s.factions[0], s.factions[1]],
       overtime: s.overtime,
+      stations: s.stations,
       human: s.human,
       level: s.lockstep ? undefined : s.level,
       result: { winner, reason, seconds: Math.round(world.seconds) },
@@ -1900,6 +1915,7 @@ export class Game {
       level: this.session.level,
       factions: this.session.factions,
       overtime: this.session.overtime,
+      stations: this.session.stations,
       human: this.session.human,
       log: [...world.log],
       hash: hashWorld(world),
@@ -2007,10 +2023,7 @@ export class Game {
       const def = world.map.sites[site]!;
       const st = world.siteStates[site]!;
       const owner = st.owner === null ? 'neutral' : human === null ? (st.owner === 0 ? 'links' : 'rechts') : st.owner === human ? 'deins' : 'gegnerisch';
-      const effect = def.kind === 'sensor'
-        ? `Sicht ${world.rules.sites.sensorVision} Kacheln rund um den Ort`
-        : `Marschbefehle greifen nach ${world.rules.sites.junctionRouteSeconds} statt ${world.rules.routeChangeSeconds} s`;
-      this.hud.setStatus(`${SITE_NAMES[def.kind]} (${owner}${st.fortified ? ', befestigt' : ''}): ${effect}. Wer allein im Kreis steht, neutralisiert erst und nimmt dann ein (${world.rules.sites.captureSeconds} s); umkämpft passiert nichts; ohne Truppen bleibt alles, wie es ist.`);
+      this.hud.setStatus(`${SITE_NAMES[def.kind]} (${ROUTE_NAMES[def.route]}, ${owner}${st.fortified ? ', befestigt' : ''}, ${siteActiveText(world, site)}): ${STATIONS[def.kind].text}. Wirkt nur für den Besitzer und ruht, solange Gegner näher als ${world.rules.sites.contestRadius} Kacheln sind. Einnehmen: allein im Kreis stehen – erst neutralisieren, dann ${world.rules.sites.captureSeconds} s.`);
       return;
     }
     const terrain = world.grid.terrainAt(h.x, h.y);

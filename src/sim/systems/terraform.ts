@@ -1,3 +1,4 @@
+import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
 import { UNITS } from '../../data/units';
@@ -155,6 +156,8 @@ export function camouflageRange(world: World, e: Entity): number | null {
   if (camo === null || camo === undefined) return null;
   // Technoclan-Elite mit Weitsicht (25.10.): entdeckt Getarnte in ihrer Sicht.
   for (const d of world.detectors[e.owner === 0 ? 1 : 0]) if ((d.x - e.pos.x) ** 2 + (d.y - e.pos.y) ** 2 <= d.r * d.r) return null;
+  // Sensorstation (Station): entdeckt Getarnte in ihrem Abschnitt.
+  if (sensorCovers(world, e.owner === 0 ? 1 : 0, e.pos.x, e.pos.y)) return null;
   return camo;
 }
 

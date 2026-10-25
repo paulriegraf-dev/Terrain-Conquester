@@ -1,3 +1,4 @@
+import { siteOfRoute } from './sites';
 import type { Entity, EntityKind } from '../entity';
 import { closestPointInRect, dist, distToRect } from '../math';
 import type { PlayerId, Vec2 } from '../types';
@@ -193,7 +194,9 @@ export function updateTargeting(world: World): void {
     // Artillerie sucht Bauwerke weiter (sie rückt bis auf volle Reichweite an sie heran).
     const structureRange = siege && canChase ? range + SIEGE_ADVANCE : searchRange;
     // Halten und Verteidigen: nicht übers Niemandsland nachsetzen (nur Front-Truppen jagen weiter).
-    const holding = !!e.mover && unitOrder(world, e) !== 'push';
+    const order = e.mover ? unitOrder(world, e) : 'push';
+    const holding = !!e.mover && order !== 'push';
+    const secureSite = order === 'secure' && e.mover ? siteOfRoute(world, e.mover.route) : null;
     // Schützen mit Rechteck (das HQ) messen ihre Reichweite ab dem Rand, nicht ab der Mitte.
     const halfW = e.rect ? e.rect.w / 2 : 0;
     const halfH = e.rect ? e.rect.h / 2 : 0;
@@ -214,6 +217,8 @@ export function updateTargeting(world: World): void {
       if (d > (t.kind === 'unit' ? searchRange : structureRange) + slack) return false;
       if (t.kind === 'wall') return d <= range + slack; // Wälle nur, was in Reichweite liegt – niemand jagt ihnen nach
       if (d <= range || !holding) return true;
+      // Sichern: Gegner an der Station der Lane (bis contestRadius + 2) dürfen gestellt werden.
+      if (secureSite && (t.pos.x - secureSite.pos.x) ** 2 + (t.pos.y - secureSite.pos.y) ** 2 <= (world.rules.sites.contestRadius + 2) ** 2) return true;
       // Haltende Truppen verfolgen nur Gegner im eigenen oder umkämpften Gebiet – kein Nachsetzen übers Niemandsland.
       // Haltende Artillerie rückt an Bauwerke heran, solange sie dafür im eigenen Gebiet bleibt.
       if (siege && t.kind !== 'unit') return siegeSpotOk(world, e, t, range);

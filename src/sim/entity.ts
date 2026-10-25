@@ -115,6 +115,11 @@ export interface Entity {
   onGorge?: boolean;
   /** Flankenangriff: bis zu diesem Tick mehr Schaden (nach dem Überqueren einer gegnerischen Schlucht). */
   flankUntil?: number;
+  /** Zuletzt gekämpft (geschossen oder getroffen) – Schildgenerator: Schild nur außerhalb des Kampfes. */
+  combatTick?: number;
+  /** Schild des Schildgenerators (fängt Schaden zuerst ab) und wann er zuletzt aufgefüllt wurde. */
+  stationShield?: number;
+  shieldAt?: number;
   owner: PlayerId;
   kind: EntityKind;
   /** Schlüssel in den Daten (z. B. 'trooper', 'barracks', 'hq'). */

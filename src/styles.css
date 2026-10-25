@@ -867,3 +867,6 @@ body.start-mode .sp-fields { gap: 7px; }
 .tip-text { min-height: 0; }
 .console-body { gap: 3px; line-height: 1.3; }
 .console > div { padding-block: 8px; }
+/* 25.10. abends: Fronten mit vier Haltungen – fünf etwas schmalere Spalten, damit nichts scrollt */
+.command-grid.cols-5 { grid-template-columns: repeat(5, 63px); }
+.command-grid.cols-5 .cmd .lbl { font-size: 0.66rem; max-width: 60px; }

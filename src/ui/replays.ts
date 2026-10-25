@@ -27,6 +27,8 @@ export interface SavedMatch {
   seed: number;
   factions: [string, string];
   overtime: string;
+  /** Stationen (fehlt bei älteren Aufnahmen = Hauptpaarung). */
+  stations?: string;
   /** Deine Seite (0 = links). */
   human: PlayerId;
   /** KI-Stufe (gegen die KI). */

@@ -37,7 +37,7 @@ export type Command =
   /** HQ-Zweig eine Stufe ausbauen (Aufklärung, Markt, Gelände – siehe data/hq.ts). */
   | { type: 'hqUpgrade'; path: HqPathId }
   /** Haltung einer Route: halten (an der Gebietsgrenze) oder vorstoßen (bis zum gegnerischen HQ). Greift verzögert. */
-  | { type: 'setStance'; route: Route; stance: 'defend' | 'hold' | 'push' }
+  | { type: 'setStance'; route: Route; stance: 'defend' | 'hold' | 'secure' | 'push' }
   | { type: 'castWall'; x: number; y: number; vertical: boolean }
   /** Scheinbestellung am Markt: treibt den Preis eines Bauteils für eine Weile hoch. */
   | { type: 'order'; part: PartId }

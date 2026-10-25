@@ -11,6 +11,7 @@ import { buildingUpgradeLevel } from './factory';
 import type { UnitId } from '../../data/units';
 import { synergyProduction } from './synergy';
 import { verbundOf } from './verbund';
+import { stationActive } from './sites';
 import type { BuildingId } from '../../data/buildings';
 import type { PartId } from '../../data/market';
 
@@ -48,7 +49,8 @@ export function settleFactor(world: World, e: Entity): number {
 
 /** Tempo genau dieser Fabrik: Markt, Phase, Synergie, Notfall – und Einspielen. */
 export function factorySpeed(world: World, e: Entity): number {
-  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1);
+  const workshop = stationActive(world, e.owner, e.producer!.route, 'workshop') ? world.rules.sites.workshop : 1; // Werkhalle (Station)
+  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop;
 }
 
 /**

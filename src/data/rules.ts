@@ -1,3 +1,4 @@
+import type { StationMode } from './stations';
 /**
  * Allgemeine Spielregeln: Energie, Limits, Rundenphasen.
  *
@@ -241,7 +242,19 @@ export interface Rules {
    * Nach `fortifySeconds` ungestörtem Besitz ist er befestigt. Ohne Anwesenheit bleibt alles, wie es ist.
    * Sensorstation: Sicht `sensorVision` um den Ort. Verkehrsknoten: Marschbefehle dauern `junctionRouteSeconds`.
    */
-  sites: { radius: number; captureSeconds: number; neutralizeSeconds: number; fortifySeconds: number; sensorVision: number; junctionRouteSeconds: number };
+  sites: {
+    radius: number; captureSeconds: number; neutralizeSeconds: number; fortifySeconds: number; sensorVision: number; junctionRouteSeconds: number;
+    /** Stationen (25.10. abends): Gegner so nah (Kacheln) → Bonus ruht. */
+    contestRadius: number;
+    workshop: number; windvale: number; speedCap: number; hospital: number; siegeTower: number;
+    shield: { delay: number; idle: number; every: number; share: number };
+    flak: { radius: number; cooldown: number; hoverDamage: number; hoverWounds: number; groundDamage: number };
+    barrier: { radius: number; slow: number; floor: number };
+    /** Sensorstation: aufgedeckter Abschnitt (halbe Breite, halbe Höhe in Kacheln). */
+    sensorBand: { halfW: number; halfH: number };
+  };
+  /** Stationen je Karte: Zufall aus dem Pool, Hauptpaarung, bestimmte Paarung (pairN) oder aus. */
+  stations: StationMode;
   /**
    * Terra-Former (Umbau 23.10.): Terraformer formen möglichst viele Kacheln im Umkreis `workRadius` um sich herum
    * (je Kachel `formSeconds`), rücken langsam vor (Schritt `advanceStep`, beim Halten höchstens `frontOffset` Kacheln
@@ -402,7 +415,16 @@ export const RULES: Rules = {
   // Aufstieg (ascendAt) ist abgelöst: Wer `eliteAt` Bausteine trägt, wird Elite (+25 % Leben, Elite-Wirkungen).
   network: { joinRadius: 4, breakRadius: 8, maxMembers: 6, maxWithNode: 8, ascendAt: 99, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3, maxTypes: 4, eliteAt: 4, eliteHp: 1.25 },
   verbund: { switchSeconds: 20 },
-  sites: { radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8 },
+  sites: {
+    radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8,
+    contestRadius: 6, workshop: 1.1, windvale: 1.15, speedCap: 1.35, hospital: 0.02, siegeTower: 1.5,
+    shield: { delay: 60, idle: 5, every: 20, share: 0.15 },
+    flak: { radius: 5, cooldown: 1.5, hoverDamage: 20, hoverWounds: 2, groundDamage: 6 },
+    barrier: { radius: 6, slow: 0.75, floor: 0.5 },
+    sensorBand: { halfW: 12, halfH: 6 },
+  },
+  // Simulationen und Tests: Hauptpaarung; im Startmenü Standard „Zufall“.
+  stations: 'main',
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {

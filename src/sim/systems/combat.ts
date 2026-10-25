@@ -1,5 +1,6 @@
 import { UNITS } from '../../data/units';
 import { flankFactor } from './flank';
+import { stationActive } from './sites';
 import { energyCap } from './economy';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import type { UnitDef, UnitId } from '../../data/units';
@@ -187,6 +188,7 @@ export function updateCombat(world: World): void {
     // Netz-Aufstieg (Technoclan): kurz schnelleres Feuer.
     const rate = (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
     w.ready = rate !== 1 ? Math.max(1, Math.round(w.cooldownTicks / rate)) : w.cooldownTicks;
+    e.combatTick = world.tick;
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer
     world.emit({
       type: 'shot',
@@ -215,8 +217,16 @@ export function applyHits(world: World, hits: Hit[]): void {
   for (const h of hits) {
     const t = h.target;
     if (!t.alive) continue;
+    t.combatTick = world.tick;
     for (let k = 0; k < h.wounds && t.alive; k++) {
-      const dealt = Math.min(h.damage, currentModelWounds(t));
+      let dealt = Math.min(h.damage, currentModelWounds(t));
+      // Schild des Schildgenerators fängt zuerst ab.
+      if (t.stationShield) {
+        const absorbed = Math.min(t.stationShield, dealt);
+        t.stationShield -= absorbed;
+        dealt -= absorbed;
+        if (dealt <= 0) continue;
+      }
       // Statistik nach der Runde: Schaden je eigener Einheitenart und je getroffener Art.
       const st = world.players[h.attacker].stats;
       const src = h.src ?? '?';
@@ -367,6 +377,8 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
     damage *= w.def.structureDamage ?? 1;
     // Belagerungsdruck: Wer mehr Gebiet hält, trifft HQ und Gebäude härter.
     damage *= siegeMultiplier(world, t.owner);
+    // Belagerungsturm (Station): Einheiten seiner Lane ab der Eskalation härter gegen Bauwerke.
+    if (e.mover && world.phaseIndex >= 1 && stationActive(world, e.owner, e.mover.route, 'siegeTower')) damage *= world.rules.sites.siegeTower;
   }
   if (t.kind === 'hq') damage *= world.hqDamageMult;
   // Schild-Aura (Frostwächter in der Nähe des Ziels)

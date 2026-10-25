@@ -16,6 +16,8 @@ import { buildingCount, checkBuild, slotLimit, slotsUsed } from '../sim/placemen
 import type { BuildCheck } from '../sim/placement';
 import { checkSwapArea, checkWall, swapCostAt } from '../sim/systems/abilities';
 import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
+import { STATIONS, pairLabel, stationPool } from '../data/stations';
+import type { StationMode } from '../data/stations';
 import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
 import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/production';
@@ -144,6 +146,8 @@ export class Hud {
       enemyFactionSelect: q<HTMLSelectElement>('opt-enemy-faction'),
       factionDesc: q('faction-desc'),
       overtimeSelect: q<HTMLSelectElement>('opt-overtime'),
+      stationsSelect: q<HTMLSelectElement>('opt-stations'),
+      stationsDesc: q('stations-desc'),
       overtimeDesc: q('overtime-desc'),
       startEyebrow: q('start-eyebrow'),
       startTitle: q('start-title'),
@@ -513,6 +517,7 @@ export class Hud {
     this.gridSig = sig;
     this.el.gridTitle.textContent = set.title;
     this.el.grid.innerHTML = html;
+    this.el.grid.classList.toggle('cols-5', set.columns === 5);
   }
 
   // ------------------------------------------------------------------ Konsole: Hinweiszeile
@@ -552,7 +557,7 @@ export class Hud {
         warn = !check.ok;
       } else text = 'Kacheln anklicken oder darüberziehen. Esc beendet das Werkzeug.';
     } else if (canAct && view.menu === 'front') {
-      text = 'Fronten: je Route Verteidigen (Basis), Halten (Grenze) oder Front (Angriff). Neue Einheiten und alle diesseits der Mitte folgen – wer im Angriff die Mitte überquert hat, kämpft weiter.';
+      text = 'Fronten: je Route Verteidigen (Basis), Halten (Grenze), Sichern (Station der Lane) oder Front (Angriff). Tasten wie die Tastatur: 1–4 oben, Q–R Mitte, A–F unten. Neue Einheiten und alle diesseits der Mitte folgen – wer im Angriff die Mitte überquert hat, kämpft weiter.';
     } else if (canAct && view.menu === 'disguise') {
       text = `Täuschung: Typ und Route wählen, dann ↵ (${DISGUISE.cost} Energie, ${DISGUISE.duration} s).`;
     } else if (canAct) {
@@ -600,7 +605,7 @@ export class Hud {
    */
   showStart(
     maps: readonly { id: string; name: string; description: string }[],
-    ingame?: { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId },
+    ingame?: { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode },
     /** Menü während einer Multiplayer-Runde: Das Spiel läuft weiter, nur Aufgeben, Übersicht, Musik. */
     online = false,
   ): void {
@@ -634,8 +639,10 @@ export class Hud {
       const describe = (): void => {
         const m = maps.find((x) => x.id === this.el.mapSelect.value);
         this.el.mapDesc.textContent = m ? m.description : 'Jede Runde eine der Karten – gespiegelt, also für beide Seiten gleich.';
+        this.fillStations();
       };
       this.el.mapSelect.addEventListener('change', describe);
+      this.el.stationsSelect.addEventListener('change', () => this.describeStations());
       describe();
     }
     if (ingame) {
@@ -646,6 +653,8 @@ export class Hud {
       this.el.factionSelect.dispatchEvent(new Event('change'));
       const radio = this.doc.querySelector<HTMLInputElement>(`input[name="opt-level"][value="${ingame.level}"]`);
       if (radio) radio.checked = true;
+      this.el.stationsSelect.value = ingame.stations;
+      this.describeStations();
       this.el.overtimeSelect.value = ingame.overtime;
       this.el.overtimeSelect.dispatchEvent(new Event('change'));
       const sideRadio = this.doc.querySelector<HTMLInputElement>(`input[name="opt-side"][value="${ingame.side}"]`);
@@ -674,7 +683,7 @@ export class Hud {
     return !this.el.startOverlay.hidden;
   }
 
-  startOptions(): { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId } {
+  startOptions(): { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode } {
     const level = this.doc.querySelector<HTMLInputElement>('input[name="opt-level"]:checked')?.value;
     const faction = (sel: HTMLSelectElement): FactionId =>
       FACTION_IDS.includes(sel.value as FactionId) ? (sel.value as FactionId) : 'technoclan';
@@ -684,7 +693,36 @@ export class Hud {
       factions: [faction(this.el.factionSelect), faction(this.el.enemyFactionSelect)],
       overtime: OVERTIME_VARIANT_IDS.includes(this.el.overtimeSelect.value as OvertimeVariant) ? (this.el.overtimeSelect.value as OvertimeVariant) : 'off',
       side: this.doc.querySelector<HTMLInputElement>('input[name="opt-side"]:checked')?.value === '1' ? 1 : 0,
+      stations: (this.el.stationsSelect.value || 'random') as StationMode,
     };
+  }
+
+  /** Stationen-Auswahl je Karte: Zufall, Hauptpaarung, jede Paarung des Pools, aus. */
+  private fillStations(): void {
+    const sel = this.el.stationsSelect;
+    const before = sel.value;
+    const mapId = this.el.mapSelect.value;
+    const pool = mapId === 'random' ? [] : stationPool(mapId);
+    sel.innerHTML =
+      `<option value="random">Zufall aus dem Pool der Karte</option>` +
+      `<option value="main">Hauptpaarung${pool[0] ? `: ${escapeHtml(pairLabel(pool[0]))}` : ''}</option>` +
+      pool.slice(1).map((p, i) => `<option value="pair${i + 1}">${escapeHtml(pairLabel(p))}</option>`).join('') +
+      `<option value="off">Aus (keine Stationen)</option>`;
+    sel.value = [...sel.options].some((o) => o.value === before) ? before : 'random';
+    this.describeStations();
+  }
+
+  private describeStations(): void {
+    const v = this.el.stationsSelect.value;
+    const mapId = this.el.mapSelect.value;
+    const pool = mapId === 'random' ? [] : stationPool(mapId);
+    const pair = v === 'main' ? pool[0] : v.startsWith('pair') ? pool[Number(v.slice(4))] : undefined;
+    this.el.stationsDesc.textContent =
+      v === 'off'
+        ? 'Keine Stationen: oben und unten nur die normale Front.'
+        : pair
+          ? `Oben: ${STATIONS[pair.top].name} – ${STATIONS[pair.top].text}. Unten: ${STATIONS[pair.bottom].name} – ${STATIONS[pair.bottom].text}.`
+          : 'Je Lane oben und unten eine Station aus dem Pool der Karte. Sie wirkt nur auf ihre Lane und ruht, solange Gegner nah sind. Haltung „Sichern“ schickt die Truppen hin.';
   }
 
   hideOverlays(): void {

@@ -17,10 +17,15 @@ export function updateVision(world: World): void {
     const bonus = e.kind === 'unit' ? 0 : structureVisionBonus(world, e.owner); // Feldstecher (HQ-Zweig Aufklärung)
     world.players[e.owner].vision.reveal(Math.floor(e.pos.x), Math.floor(e.pos.y), e.vision + bonus);
   }
-  // Sensorstation: Sicht rund um den Ort für den Besitzer.
+  // Sensorstation (wirksam): Sicht über den Lane-Abschnitt in der Mitte (Kreise entlang der Lane).
+  const band = world.rules.sites.sensorBand;
   world.map.sites.forEach((s, i) => {
-    const owner = world.siteStates[i]!.owner;
-    if (s.kind === 'sensor' && owner !== null) world.players[owner].vision.reveal(Math.floor(s.pos.x), Math.floor(s.pos.y), world.rules.sites.sensorVision);
+    const st = world.siteStates[i]!;
+    if (s.kind !== 'sensor' || st.owner === null || !st.active) return;
+    const v = world.players[st.owner].vision;
+    for (let dx = -band.halfW + band.halfH; dx <= band.halfW - band.halfH + 1e-9; dx += band.halfH) {
+      v.reveal(Math.floor(s.pos.x + dx), Math.floor(s.pos.y), band.halfH);
+    }
   });
   // Das eigene Gebiet ist immer aufgedeckt – bis zur Grenze, auch hinter Wald und Fels.
   for (let i = 0; i < world.influence.length; i++) {

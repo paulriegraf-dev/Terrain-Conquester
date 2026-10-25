@@ -1,3 +1,4 @@
+import type { StationKind } from '../data/stations';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import type { Rules } from '../data/rules';
 import type { CellRect, PlayerId, Route, Vec2 } from './types';
@@ -52,8 +53,8 @@ export interface MapDef {
   reserve?: number;
 }
 
-/** Strategischer Ort: Sensorstation (Sicht auf ihre Route) oder Verkehrsknoten (schnellere Marschbefehle). */
-export type SiteKind = 'sensor' | 'junction';
+/** Strategischer Ort = Station (siehe data/stations.ts). */
+export type SiteKind = StationKind;
 
 export interface SiteDef {
   id: number;

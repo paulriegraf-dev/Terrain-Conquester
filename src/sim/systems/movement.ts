@@ -11,6 +11,7 @@ import { SpatialGrid } from '../spatial';
 import { controllerAt } from './influence';
 import { dist, rectCenter } from '../math';
 import type { Stance } from '../world';
+import { barrierSlow, siteOfRoute, stationActive } from './sites';
 import { assignSlots, cellX, updateDeployment } from './formation';
 import { waveLeader } from './hero';
 import type { Slot } from './formation';
@@ -61,7 +62,16 @@ export function updateMovement(world: World): void {
     const lead = escortLeader(world, e);
     const base = lead && !(target && target.alive) ? escortSpeed(world, e, lead) : m.speed;
     const rush = rushFactor(world, e); // Myr-Drohnen: Nachschub nahe der Basis schneller, Ansturm
-    const speed = base * aura * rage * ground * rush * (grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1);
+    // Stationen (25.10. abends): Windtal beschleunigt die eigene Lane, alle Tempo-Boni zusammen höchstens speedCap;
+    // das Sperrwerk bremst Gegner, mit Gelände und Feldern aber nie unter barrier.floor.
+    const sites = world.rules.sites;
+    const wind = stationActive(world, e.owner, m.route, 'windvale') ? sites.windvale : 1;
+    const ref = e.tech ? e.tech.base.speed : m.speed;
+    const boost = Math.min(sites.speedCap, ((base / ref) || 1) * aura * rage * rush * wind * Math.max(1, ground));
+    const slow = Math.min(1, ground) * (grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1);
+    const barrier = barrierSlow(world, e);
+    const slowed = barrier < 1 ? Math.max(slow * barrier, Math.min(slow, sites.barrier.floor)) : slow;
+    const speed = ref * boost * slowed;
 
     let dir: Vec2 = { x: 0, y: 0 };
     let chasing = false;
@@ -186,9 +196,22 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
   const cx = cellX(world, e.owner, e.pos.x);
   const cy = Math.floor(e.pos.y);
   const here = world.grid.index(cx, cy);
-  const order = unitOrder(world, e);
+  let order = unitOrder(world, e);
+  const site = order === 'secure' ? siteOfRoute(world, m.route) : null;
+  if (order === 'secure' && !site) order = 'hold'; // keine Station auf dieser Lane: wie Halten
   let next: number;
-  if (order === 'defend') {
+  if (order === 'secure' && site) {
+    // Sichern: zur Station der Lane und dort im Halbkreis stehen (Platz aus der Formation). Gegner nahe der Station werden
+    // gestellt; weiter jagt niemand.
+    const reach = world.rules.sites.contestRadius + 2;
+    const foe = nearestNear(world, e, near, site.pos, reach);
+    if (foe) return normalize(foe.prev.x - e.pos.x, foe.prev.y - e.pos.y);
+    if (slot && (dist(e.pos, slot.target) <= SLOT_STEER_RANGE || dist(e.pos, site.pos) <= reach) && lineClear(world, e.pos, slot.target, profile, e.owner)) {
+      return steer(e, slot.target);
+    }
+    if (dist(e.pos, site.pos) <= 1.5) return { x: 0, y: 0 };
+    next = world.fields.get(waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
+  } else if (order === 'defend') {
     // Verteidigen: in der Basis bleiben (Ring um das eigene HQ in Richtung der Route)
     // und Eindringlingen im ganzen eigenen Gebiet entgegeneilen.
     const hq = rectCenter(world.map.hq[e.owner]);
@@ -342,6 +365,22 @@ function nearestIntruder(world: World, e: Entity, near: SpatialGrid, radius: num
     if (base && dist(o.prev, base.center) > base.r) return;
     best = o;
     bestD = d2;
+  });
+  return best;
+}
+
+/** Nächster sichtbarer Gegner, der höchstens `r` Kacheln von `center` entfernt ist (Sichern: Gegner an der Station). */
+function nearestNear(world: World, e: Entity, near: SpatialGrid, center: Vec2, r: number): Entity | null {
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  near.forEachNear(center.x, center.y, r, (o) => {
+    if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) return;
+    if ((o.prev.x - center.x) ** 2 + (o.prev.y - center.y) ** 2 > r * r || !world.isVisibleTo(e.owner, o)) return;
+    const d2 = (o.prev.x - e.pos.x) ** 2 + (o.prev.y - e.pos.y) ** 2;
+    if (d2 < bestD || (d2 === bestD && best && o.id < best.id)) {
+      best = o;
+      bestD = d2;
+    }
   });
   return best;
 }

@@ -19,6 +19,8 @@ import type { MapDef, PadDef, ParsedMap } from './map';
 import { inBaseZone } from './placement';
 import { rectCenter } from './math';
 import { Rng } from './rng';
+import { STATION_POOLS } from '../data/stations';
+import type { StationMode } from '../data/stations';
 import { removeWall, updateSwaps, updateWalls } from './systems/abilities';
 import { applyCommand } from './systems/applyCommand';
 import { updateCombat } from './systems/combat';
@@ -50,6 +52,41 @@ import { updateVision } from './systems/visibility';
 import type { CellRect, PlayerId, Route, Vec2 } from './types';
 import { PLAYERS, ROUTES } from './types';
 import { Vision } from './vision';
+
+/**
+ * Stationen dieser Partie wählen (25.10. abends): Karten mit eigenen `sites` behalten sie, sonst aus dem Pool der Karte –
+ * Hauptpaarung, bestimmte Paarung oder gewichteter Zufall (dann wechselt oben/unten zufällig). Eigener Zufallsstrom aus
+ * dem Seed, damit der Haupt-Zufall der Partie unverändert bleibt.
+ */
+export function withStations(def: MapDef, mode: StationMode, seed: number): MapDef {
+  if (mode === 'off') return { ...def, sites: [] };
+  if (def.sites) return def;
+  const pool = STATION_POOLS[def.id];
+  if (!pool || pool.length === 0) return def;
+  let pair = pool[0]!;
+  let flip = false;
+  if (mode.startsWith('pair')) pair = pool[Math.min(pool.length - 1, Math.max(0, Number(mode.slice(4)) || 0))]!;
+  else if (mode === 'random') {
+    const rng = new Rng((seed ^ 0x5a17e5) >>> 0);
+    const total = pool.reduce((s, p) => s + p.weight, 0);
+    let roll = rng.next() * total;
+    for (const p of pool) {
+      roll -= p.weight;
+      if (roll < 0) {
+        pair = p;
+        break;
+      }
+    }
+    flip = rng.next() < 0.5;
+  }
+  return {
+    ...def,
+    sites: [
+      { kind: flip ? pair.bottom : pair.top, route: 'top' },
+      { kind: flip ? pair.top : pair.bottom, route: 'bottom' },
+    ],
+  };
+}
 
 export interface MatchConfig {
   map: MapDef;
@@ -128,6 +165,8 @@ export interface PlayerStats {
   blocks: number;
   elites: number;
   verbundSeconds: Record<string, number>;
+  /** Flakstation: abgeschossene Flugobjekte. */
+  flakKills?: number;
 }
 
 /**
@@ -137,9 +176,10 @@ export interface PlayerStats {
  * - push (Front): Truppen stoßen bis zum gegnerischen HQ vor. Wer dabei die Kartenmitte überquert,
  *   bleibt im Angriff – ein späterer Befehl holt ihn nicht mehr zurück.
  */
-export type Stance = 'defend' | 'hold' | 'push';
-export const STANCES: readonly Stance[] = ['defend', 'hold', 'push'];
-export const STANCE_NAMES: Readonly<Record<Stance, string>> = { defend: 'Verteidigen', hold: 'Halten', push: 'Front' };
+export type Stance = 'defend' | 'hold' | 'secure' | 'push';
+/** 25.10. abends: „Sichern“ als vierte Haltung (Station der Lane halten). */
+export const STANCES: readonly Stance[] = ['defend', 'hold', 'secure', 'push'];
+export const STANCE_NAMES: Readonly<Record<Stance, string>> = { defend: 'Verteidigen', hold: 'Halten', secure: 'Sichern', push: 'Front' };
 
 export interface PlayerState {
   id: PlayerId;
@@ -336,7 +376,7 @@ export class World {
   constructor(config: MatchConfig) {
     // Reihenfolge: Grundregeln, dann Kartenregeln, dann Überschreibungen (Tests, Balance-Varianten).
     this.rules = { ...RULES, ...config.map.rules, ...config.rules };
-    this.map = parseMap(config.map);
+    this.map = parseMap(withStations(config.map, this.rules.stations, config.seed >>> 0));
     this.grid = new Grid(this.map);
     this.seed = config.seed >>> 0;
     this.rng = new Rng(this.seed);

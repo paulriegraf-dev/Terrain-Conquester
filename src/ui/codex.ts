@@ -1,3 +1,5 @@
+import { STATIONS, STATION_KINDS, pairLabel, stationPool } from '../data/stations';
+import { MAPS } from '../data/maps';
 import { ARMOR_NAMES } from '../data/combat';
 import { unitIcon } from '../render/unitIcon';
 import { FACTIONS, FACTION_IDS, buildingIds } from '../data/factions';
@@ -339,7 +341,22 @@ function terrainTab(): string {
       <tbody>${rows}</tbody>
     </table></div>
     <h3 class="cx-h3">Wer bewegt sich wie</h3>
-    <ul class="cx-movers">${movers}</ul>`;
+    <ul class="cx-movers">${movers}</ul>
+    ${stationsSection()}`;
+}
+
+/** Stationen (25.10. abends): je Karte oben und unten eine, Wirkung nur auf ihrer Lane. */
+function stationsSection(): string {
+  const role = { offense: 'offensiv', defense: 'defensiv', utility: 'Info/Logistik' } as const;
+  const rows = STATION_KINDS.map((k) => {
+    const s = STATIONS[k];
+    return `<tr><th scope="row"><span class="cx-letter">${s.letter}</span> ${escapeHtml(s.name)}</th><td>${role[s.role]}</td><td class="cx-note">${escapeHtml(s.text)}</td></tr>`;
+  }).join('');
+  const pools = MAPS.map((m) => `<li><b>${escapeHtml(m.name)}:</b> ${stationPool(m.id).map((p, i) => `${escapeHtml(pairLabel(p))}${i === 0 ? ' (Haupt)' : ''}`).join(' · ')}</li>`).join('');
+  return `<h3 class="cx-h3">Stationen</h3>
+    <p class="cx-lede">Auf jeder Karte steht oben und unten eine Station auf dem Wegpunkt der Lane. Einnehmen: allein im Kreis stehen (${RULES.sites.captureSeconds} s). Sie wirkt nur für den Besitzer und nur auf ihrer Lane, und sie <b>ruht, solange Gegner näher als ${RULES.sites.contestRadius} Kacheln</b> sind (Flak und Sperrwerk wehren sich gerade dann). Die Haltung <b>Sichern</b> schickt die Truppen einer Lane zu ihrer Station.</p>
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Station</th><th>Art</th><th>Wirkung</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <ul class="cx-rules">${pools}</ul>`;
 }
 
 function factionChips(state: CodexState, which: 'faction' | 'enemy', label: string): string {

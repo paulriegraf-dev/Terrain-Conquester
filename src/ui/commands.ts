@@ -53,6 +53,8 @@ export interface CommandButton {
 export interface CommandSet {
   title: string;
   buttons: CommandButton[];
+  /** Spalten des Rasters (Standard 4). */
+  columns?: number;
 }
 
 export interface CommandContext {
@@ -180,15 +182,16 @@ function mainCommands(ctx: CommandContext): CommandSet {
   return { title: 'Befehle', buttons };
 }
 
-const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', push: '»' };
+const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secure: '◎', push: '»' };
 const STANCE_TIP: Record<Stance, string> = {
   defend: 'Truppen bleiben in der Basis und fangen Eindringlinge im eigenen Gebiet ab',
   hold: 'Truppen stehen an der eigenen Grenze und eilen Eindringlingen in der Nähe entgegen',
+  secure: 'Truppen ziehen zur Station dieser Lane und halten sie im Halbkreis, gestaffelt nach Reichweite (ohne Station wie Halten)',
   push: 'Truppen ziehen über die Mitte bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff',
 };
 
 /**
- * Fronten: pro Route eine Zeile mit Verteidigen / Halten / Front.
+ * Fronten: pro Route eine Zeile mit Verteidigen / Halten / Sichern / Front (Tasten wie die Tastaturreihen: 1–4, Q–R, A–F).
  * Ein Befehl gilt für neue Einheiten und alle, die noch diesseits der Mitte stehen –
  * wer im Angriff schon über die Mitte gezogen ist, kämpft weiter.
  */
@@ -211,12 +214,12 @@ function frontCommands(ctx: CommandContext): CommandSet {
     STANCES.forEach((s, col) => {
       const isPending = pend?.stance === s;
       const current = stance === s;
-      const n = row * 3 + col + 1;
+      const n = ['1234', 'qwer', 'asdf'][row]![col]!;
       buttons.push({
         id: `stance-${r}-${s}`,
         glyph: `${ROUTE_GLYPH[r]}${STANCE_GLYPH[s]}`,
         label: STANCE_NAMES[s],
-        key: String(n),
+        key: n,
         disabled: !canAct,
         pressed: current,
         pending: isPending ? `in ${secs(pend!.tick)}s` : undefined,
@@ -238,7 +241,7 @@ function frontCommands(ctx: CommandContext): CommandSet {
       });
     }
   });
-  return { title: 'Fronten', buttons };
+  return { title: 'Fronten', buttons, columns: 5 };
 }
 
 /** Vorbereitungsphase: Bodenart wählen (1–5) und „Bereit“. */

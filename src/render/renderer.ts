@@ -1,3 +1,4 @@
+import { STATIONS } from '../data/stations';
 import { buildingIds } from '../data/factions';
 import { MOVE_PROFILES } from '../data/movement';
 import { checkPrep, inOwnHalf } from '../sim/systems/prep';
@@ -138,6 +139,7 @@ export class Renderer {
       if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
     }
     this.drawNetBadges(world, alpha, visibleTo);
+    this.drawShields(world, alpha, visibleTo);
     this.drawFlights(world, alpha, view);
     this.drawSwaps(world, view);
     this.drawEffects(world, view);
@@ -152,7 +154,7 @@ export class Renderer {
   }
 
   /**
-   * Strategische Orte: Kreis mit Kennbuchstabe (S = Sensorstation, V = Verkehrsknoten),
+   * Stationen: Kreis mit Kennbuchstabe (siehe data/stations.ts) und Name,
    * Ring in der Farbe des Besitzers, Bogen = Fortschritt, doppelter Ring = befestigt.
    * Für beide Seiten sichtbar (wie die Außenposten).
    */
@@ -194,8 +196,25 @@ export class Renderer {
       ctx.font = `${Math.max(10, Math.round(t * 0.9))}px ${PIXEL}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(s.kind === 'sensor' ? 'S' : 'V', x, y);
+      ctx.fillText(STATIONS[s.kind].letter, x, y);
       ctx.textBaseline = 'alphabetic';
+      // Wirkungskreis (umkämpft ab contestRadius): fein gestrichelt, kräftiger solange die Station wirkt.
+      ctx.strokeStyle = st.owner === null ? 'rgba(220,220,210,0.18)' : withAlpha(PALETTE.player[st.owner], st.active ? 0.35 : 0.15);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([t * 0.15, t * 0.35]);
+      ctx.beginPath();
+      ctx.arc(x, y, world.rules.sites.contestRadius * t, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Flak: Reichweite; Sperrwerk: Bremszone (beide wirken auch umkämpft).
+      if (st.owner !== null && (s.kind === 'flak' || s.kind === 'barrier')) {
+        const rr = (s.kind === 'flak' ? world.rules.sites.flak.radius : world.rules.sites.barrier.radius) * t;
+        ctx.fillStyle = withAlpha(PALETTE.player[st.owner], 0.06);
+        ctx.beginPath();
+        ctx.arc(x, y, rr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
     });
   }
 
@@ -299,6 +318,23 @@ export class Renderer {
    * Abzeichen der Netz-Mitglieder: farbige Punkte über dem Verband = geerbte Protokolle (je Protokoll
    * eine Farbe), Eck-Klammern = aufgerüsteter Verband, pulsierender Ring = Aufstieg.
    */
+  /** Schild des Schildgenerators: heller Ring, dünner je weniger übrig ist. */
+  private drawShields(world: World, alpha: number, visibleTo: (e: Entity) => boolean): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    for (const e of world.entities) {
+      if (!e.alive || !e.stationShield || e.stationShield < 0.5 || !visibleTo(e)) continue;
+      const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
+      const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
+      const share = Math.min(1, e.stationShield / (e.maxHp * world.rules.sites.shield.share));
+      ctx.strokeStyle = `rgba(150,225,255,${0.35 + 0.45 * share})`;
+      ctx.lineWidth = Math.max(1, t * 0.12 * share);
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(3, e.radius * t * 1.45), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   private drawNetBadges(world: World, alpha: number, visibleTo: (e: Entity) => boolean): void {
     const ctx = this.ctx;
     const t = this.tile;
@@ -623,12 +659,13 @@ export class Renderer {
         const stance = pl.stance[r];
         const push = stance === 'push';
         const side = p === 0 ? -1 : 1;
-        const mx = x + side * t * 1.6;
-        ctx.fillStyle = withAlpha(PALETTE.player[p], push ? 0.95 : stance === 'hold' ? 0.7 : 0.5);
+        const hasSite = world.map.sites.some((s) => s.route === r);
+        const mx = x + side * t * (hasSite ? world.rules.sites.radius + 0.9 : 1.6);
+        ctx.fillStyle = withAlpha(PALETTE.player[p], push ? 0.95 : stance === 'hold' || stance === 'secure' ? 0.7 : 0.5);
         ctx.font = `${Math.round(t * (push ? 0.9 : 0.7))}px ${PIXEL}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(push ? (p === 0 ? '»' : '«') : stance === 'hold' ? '▮' : '⌂', mx, y + 1);
+        ctx.fillText(push ? (p === 0 ? '»' : '«') : stance === 'hold' ? '▮' : stance === 'secure' ? '◎' : '⌂', mx, y + 1);
         if (pl.pendingStance[r]) {
           ctx.strokeStyle = 'rgba(255,138,76,0.9)';
           ctx.setLineDash([3, 2]);

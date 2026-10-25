@@ -907,11 +907,22 @@ export class SimpleAi {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
       const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);
       const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
-      if (me.stance[r] === 'hold' && mine[r] >= minUnits && (aging || mine[r] >= ratio * enemy)) {
+      const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
+      if (holding && mine[r] >= minUnits && (aging || mine[r] >= ratio * enemy)) {
         return { type: 'setStance', route: r, stance: 'push' };
       }
+      // Stationen (25.10. abends): eine Lane mit Station sichern, wenn sie nicht schon wirkt und man dort nicht unterlegen ist;
+      // wird man deutlich unterlegen, zurück aufs Halten.
+      const site = world.map.sites.findIndex((s) => s.route === r);
+      if (site >= 0 && !late) {
+        const st = world.siteStates[site]!;
+        const mineActive = st.owner === this.player && st.active;
+        const secureMin = Math.max(3, 6 * armyScale(world));
+        if (me.stance[r] === 'hold' && !mineActive && mine[r] >= secureMin && mine[r] >= 0.9 * enemy) return { type: 'setStance', route: r, stance: 'secure' };
+        if (me.stance[r] === 'secure' && mine[r] < 0.6 * enemy && mine[r] < secureMin) return { type: 'setStance', route: r, stance: 'hold' };
+      }
       // Entscheidungsphase: Wer lange genug gesammelt hat, schlägt mit dem los, was da ist.
-      if (waves && me.stance[r] === 'hold' && mine[r] >= 2 && world.tick - this.holdSince[r] >= AI_TUNING.lateGatherSeconds * world.tps) {
+      if (waves && holding && mine[r] >= 2 && world.tick - this.holdSince[r] >= AI_TUNING.lateGatherSeconds * world.tps) {
         return { type: 'setStance', route: r, stance: 'push' };
       }
       // Nach einer Welle wieder sammeln (die Welle selbst kämpft gebunden weiter). In der

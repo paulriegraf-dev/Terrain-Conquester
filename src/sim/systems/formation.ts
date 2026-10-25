@@ -10,6 +10,7 @@ import type { PlayerId, Route, Vec2 } from '../types';
 import { PLAYERS, ROUTES } from '../types';
 import type { Stance, World } from '../world';
 import { controllerAt } from './influence';
+import { siteOfRoute } from './sites';
 
 /**
  * Formationen – sie folgen der Haltung, es gibt nichts einzeln zu steuern:
@@ -45,11 +46,13 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
   const rules = world.rules.formation;
   for (const p of PLAYERS) {
     for (const r of ROUTES) {
-      const groups: Record<'hold' | 'defend', [Entity[], Entity[]]> = { hold: [[], []], defend: [[], []] };
+      const groups: Record<'hold' | 'defend' | 'secure', [Entity[], Entity[]]> = { hold: [[], []], defend: [[], []], secure: [[], []] };
+      const site = siteOfRoute(world, r);
       for (const e of world.entities) {
         if (!e.alive || e.kind !== 'unit' || e.owner !== p || !e.mover || e.mover.route !== r) continue;
-        const o = order(e);
+        let o = order(e);
         if (o === 'push') continue;
+        if (o === 'secure' && !site) o = 'hold'; // keine Station auf dieser Lane: wie Halten
         const row = (e.weapon?.def.range ?? 0) >= rules.backRowRange ? 1 : 0;
         groups[o][row].push(e);
       }
@@ -63,9 +66,49 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
         placeRow(world, p, stance, anchor, front, slots, true);
         placeRow(world, p, stance, anchor, back, slots, front.length > 0);
       }
+      if (site) {
+        const [front, back] = groups.secure;
+        placeArc(world, p, site.pos, front, slots, false);
+        placeArc(world, p, site.pos, back, slots, front.length > 0);
+      }
     }
   }
   return slots;
+}
+
+/**
+ * Sichern (25.10. abends): Halbkreis um die Station, offen zum Gegner hin gewölbt. Vorn (Bogen um 3 Kacheln) stehen kurze
+ * Reichweiten und Schwere, Fernkämpfer um ihre Reichweite weiter innen bzw. hinter der Station. Ohne Winkelfunktionen:
+ * Richtung = normiert(vorwärts + seitlich × Bogenlänge / Radius).
+ */
+function placeArc(world: World, p: PlayerId, site: Vec2, units: Entity[], out: Map<number, Slot>, stagger: boolean): void {
+  if (units.length === 0) return;
+  const rules = world.rules.formation;
+  units.sort((a, b) => a.id - b.id);
+  const fwd = { x: p === 0 ? 1 : -1, y: 0 };
+  const side = { x: 0, y: 1 }; // gespiegelt fair: seitlich ist für beide Seiten dieselbe Richtung (wie in placeRow)
+  const center = { x: site.x - fwd.x, y: site.y };
+  const outer = 3;
+  units.forEach((e, k) => {
+    const row = Math.floor(k / rules.slotsPerRow);
+    const i = k % rules.slotsPerRow;
+    const lateral = (i % 2 === 1 ? 1 : -1) * Math.ceil(i / 2) * rules.spacing;
+    const range = e.weapon?.def.range ?? 0;
+    const byRange = stagger ? Math.min(rules.maxDepth, Math.max(0, range - rules.rangeOffset)) : 0;
+    const radius = Math.max(0.8, outer + row * rules.rowDepth - byRange);
+    const profile = MOVE_PROFILES[e.mover!.profile];
+    let target: Vec2 = { x: center.x, y: center.y };
+    for (let rho = radius; rho >= 0.5; rho -= 0.5) {
+      const d = normalized(fwd.x + (side.x * lateral) / rho, fwd.y + (side.y * lateral) / rho);
+      const x = center.x + d.x * rho;
+      const y = center.y + d.y * rho;
+      if (world.grid.isPassable(cellX(world, p, x), Math.floor(y), profile)) {
+        target = { x, y };
+        break;
+      }
+    }
+    out.set(e.id, { target, anchor: { x: site.x, y: site.y } });
+  });
 }
 
 /** Plätze einer Reihe vergeben: Mitte zuerst, dann abwechselnd rechts und links. */

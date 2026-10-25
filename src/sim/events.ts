@@ -1,3 +1,4 @@
+import type { StationKind } from '../data/stations';
 import type { ProtocolId, UnitId } from '../data/units';
 import type { PartId } from '../data/market';
 import type { HqPathId } from '../data/hq';
@@ -30,12 +31,12 @@ export type SimEventData =
   | { type: 'flank'; owner: PlayerId; name: string; pos: Vec2 }
   | { type: 'factory'; owner: PlayerId; entityId: number; kind: 'retool' | 'level' | 'research' | 'convert' | 'merge'; name: string }
   | { type: 'bounty'; owner: PlayerId; amount: number; name: string }
-  | { type: 'stance'; owner: PlayerId; route: Route; stance: 'defend' | 'hold' | 'push' }
+  | { type: 'stance'; owner: PlayerId; route: Route; stance: 'defend' | 'hold' | 'secure' | 'push' }
   | { type: 'swap'; owner: PlayerId; index: number; terrain: string }
   /** Notfallverlegung: Ein Bauabschnitt zieht in den Rückraum, Gegner dort sind betäubt. */
   | { type: 'emergency'; owner: PlayerId; moved: number; stunned: number; pos: Vec2 }
   /** Strategischer Ort: eingenommen, neutralisiert (owner = bisheriger Besitzer) oder befestigt. */
-  | { type: 'site'; kind: 'sensor' | 'junction'; owner: PlayerId | null; what: 'captured' | 'neutral' | 'fortified'; pos: Vec2 }
+  | { type: 'site'; kind: StationKind; owner: PlayerId | null; what: 'captured' | 'neutral' | 'fortified'; pos: Vec2 }
   /** Terra-Former: Ein Terraformer hat eine Spezialeinheit gerufen. */
   | { type: 'summon'; owner: PlayerId; name: string; pos: Vec2 }
   /** Myriaden: Gelege geschlüpft, Wurf gestartet, Wurf gelandet. */

@@ -15,13 +15,8 @@ export const RESERVE_COLUMNS = 10;
  * z. B. ein größeres Basisgebiet auf großen Karten. Alle bekommen hier ihren Rückraum.
  */
 /** Strategische Orte (mittlere Zeitebene), sofern eine Karte keine eigenen festlegt: oben Sensorstation, unten Verkehrsknoten. */
-export const DEFAULT_SITES: MapDef['sites'] = [
-  { kind: 'sensor', route: 'top' },
-  { kind: 'junction', route: 'bottom' },
-];
-
 export const MAPS: readonly MapDef[] = [felsenpass, schluchttal, felsenpassGross, schluchttalGross, steilkueste, schluchtenland].map(
-  (m) => ({ ...m, reserve: RESERVE_COLUMNS, sites: m.sites ?? DEFAULT_SITES }),
+  (m) => ({ ...m, reserve: RESERVE_COLUMNS }),
 );
 
 export function getMap(id: string): MapDef {
