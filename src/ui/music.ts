@@ -1,6 +1,15 @@
 import ingameTrack from '../../assets/music/ingame.mp3';
 // 25.10. abends: eigenes Orchesterstück fürs Startmenü (d-Moll, Streicher, Horn, Chor, Harfe, Pauken; erzeugt).
 import menuTrack from '../../assets/music/leitstelle.mp3';
+// Zweites Stück (Wunsch des Nutzers, Orientierung: eisige Fantasy-Menümusik): Wind, tiefer Chor, Tremolo, Glocken.
+import frostTrack from '../../assets/music/frostwacht.mp3';
+
+/** Startmusik zur Wahl (Optionen); 'custom' = eigene Datei aus diesem Browser. */
+export const MENU_TRACKS = [
+  { id: 'leitstelle', name: 'Leitstelle', url: menuTrack },
+  { id: 'frostwacht', name: 'Frostwacht', url: frostTrack },
+] as const;
+const KEY_MENU = 'tc-menu-track';
 
 /**
  * Musik: eine Spur fürs Spiel (eingebettet) und eine fürs Startmenü.
@@ -25,6 +34,9 @@ export class Music {
   private menuName: string | null = null;
   private unlocked = false;
   enabled = true;
+  /** Gewählte Startmusik: eine aus MENU_TRACKS oder 'custom'. */
+  menuChoice = 'leitstelle';
+  private sfx: AudioContext | null = null;
   /** Lautstärke 0–1 (Regler; gilt nur auf diesem Rechner – im Multiplayer hat jeder seine eigene). */
   volume = 0.7;
 
@@ -35,6 +47,7 @@ export class Music {
       this.enabled = localStorage.getItem(KEY_ENABLED) !== '0';
       const v = Number(localStorage.getItem(KEY_VOLUME));
       if (localStorage.getItem(KEY_VOLUME) !== null && Number.isFinite(v)) this.volume = Math.max(0, Math.min(1, v));
+      this.menuChoice = localStorage.getItem(KEY_MENU) ?? 'leitstelle';
     } catch {
       /* ohne Speicher: Musik an */
     }
@@ -79,11 +92,91 @@ export class Music {
     this.apply();
   }
 
+  /** Name der laufenden Startmusik. */
+  get menuTrackName(): string {
+    if (this.menuChoice === 'custom' && this.menuName) return this.menuName;
+    return (MENU_TRACKS.find((t) => t.id === this.menuChoice) ?? MENU_TRACKS[0]).name;
+  }
+
+  /** Nächste Startmusik (eigene Datei nur, wenn eine gewählt wurde). */
+  cycleMenuTrack(): void {
+    const ids: string[] = MENU_TRACKS.map((t) => t.id);
+    if (this.menuUrl) ids.push('custom');
+    const i = ids.indexOf(this.menuChoice);
+    this.menuChoice = ids[(i + 1) % ids.length]!;
+    try {
+      localStorage.setItem(KEY_MENU, this.menuChoice);
+    } catch {
+      /* egal */
+    }
+    if (this.current === 'menu') this.reload();
+  }
+
+  /**
+   * Klick (Menü-Knöpfe): kurzer, schwerer „Klonk“ – Anschlag aus gefiltertem Rauschen, tiefer Schlag und ein
+   * metallischer Nachklang. Im Browser erzeugt, keine Datei. Folgt Musik an/aus und Lautstärke.
+   */
+  click(): void {
+    if (!this.enabled || this.volume <= 0) return;
+    try {
+      const ctx = (this.sfx ??= new AudioContext());
+      if (ctx.state === 'suspended') void ctx.resume();
+      const t = ctx.currentTime;
+      const out = ctx.createGain();
+      out.gain.value = 0.55 * this.volume;
+      out.connect(ctx.destination);
+      // Anschlag
+      const len = Math.floor(ctx.sampleRate * 0.03);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.004));
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2400;
+      bp.Q.value = 0.9;
+      noise.connect(bp).connect(out);
+      noise.start(t);
+      // tiefer Schlag
+      const thud = ctx.createOscillator();
+      const tg = ctx.createGain();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(150, t);
+      thud.frequency.exponentialRampToValueAtTime(62, t + 0.07);
+      tg.gain.setValueAtTime(0.9, t);
+      tg.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      thud.connect(tg).connect(out);
+      thud.start(t);
+      thud.stop(t + 0.13);
+      // metallischer Nachklang
+      for (const [f, a, dec] of [[640, 0.16, 0.16], [1170, 0.1, 0.12], [1830, 0.06, 0.09]] as const) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'triangle';
+        o.frequency.value = f;
+        g.gain.setValueAtTime(a, t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0005, t + dec);
+        o.connect(g).connect(out);
+        o.start(t);
+        o.stop(t + dec + 0.02);
+      }
+    } catch {
+      /* kein Web-Audio */
+    }
+  }
+
   /** Eigene Startmenü-Musik vom Rechner wählen – bleibt nur in diesem Browser. */
   async setMenuTrack(file: File): Promise<void> {
     if (this.menuUrl) URL.revokeObjectURL(this.menuUrl);
     this.menuUrl = URL.createObjectURL(file);
     this.menuName = file.name;
+    this.menuChoice = 'custom';
+    try {
+      localStorage.setItem(KEY_MENU, 'custom');
+    } catch {
+      /* egal */
+    }
     if (this.current === 'menu') this.reload();
     try {
       const db = await openDb();
@@ -116,7 +209,10 @@ export class Music {
   }
 
   private srcFor(track: Track): string {
-    if (track === 'menu') return this.menuUrl ?? menuTrack;
+    if (track === 'menu') {
+      if (this.menuChoice === 'custom' && this.menuUrl) return this.menuUrl;
+      return (MENU_TRACKS.find((t) => t.id === this.menuChoice) ?? MENU_TRACKS[0]).url;
+    }
     return ingameTrack;
   }
 

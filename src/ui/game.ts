@@ -152,6 +152,11 @@ export class Game {
     this.renderer = new Renderer(canvas);
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
+    // Klick-Geräusch für Knöpfe (Menü und Befehle)
+    doc.addEventListener('pointerdown', (ev) => {
+      const b = (ev.target as HTMLElement | null)?.closest?.('button, .tp-btn, .seg-radio, .chip');
+      if (b && !(b as HTMLButtonElement).disabled) this.music.click();
+    }, true);
     const fx = doc.getElementById('title-fx') as HTMLCanvasElement | null;
     this.titleFx = fx ? new TitleFx(fx) : null;
     const hero = doc.getElementById('title-hero') as HTMLCanvasElement | null;
@@ -926,9 +931,11 @@ export class Game {
       b.textContent = this.music.enabled ? '♪ Musik an' : '♪ Musik aus';
       b.setAttribute('aria-pressed', String(this.music.enabled));
     }
+    const mt = this.doc.getElementById('btn-menu-track');
+    if (mt) mt.textContent = `Startmusik: ${this.music.menuTrackName}`;
     const note = this.doc.getElementById('music-note');
     const name = this.music.customMenuName;
-    if (note && name) note.textContent = `Startmusik: ${name} (nur in diesem Browser gespeichert). Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).`;
+    if (note && name) note.textContent = `Eigene Startmusik: ${name} (nur in diesem Browser gespeichert). Dazu „Leitstelle“ und „Frostwacht“ (eigene Stücke). Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).`;
   }
 
   /** Übersicht öffnen: eigene Fraktion vorgewählt, als Gegner die Fraktion der KI. */
@@ -1020,6 +1027,10 @@ export class Game {
         break;
       case 'tutorial':
         this.startTutorial();
+        break;
+      case 'menu-track':
+        this.music.cycleMenuTrack();
+        this.syncMusicButtons();
         break;
       case 'tp-page':
         this.titlePage(data.page ?? 'main');
