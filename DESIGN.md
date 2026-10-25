@@ -1766,6 +1766,7 @@ Stand davor auf GitHub: Branch `claude/stand-vor-balance-patch-1` (zum Zurückro
 - **Statistik:** Lebensdauer gefallener Einheiten je Art (`lifetime`), für die nächsten Läufe.
 
 **Nachtrag 25.10. mittags (nach der Stichprobe u15):** Steppenjäger gegen Schwere 7,1 → 5,0 über einen neuen Waffenwert `vs` (Schadensfaktor je Panzerung, hier Schwer ×0,7 – gegen Leicht und Infanterie unverändert). Hainhüter 380 → 323 Leben (−15 %), weil er fast nie fiel.
+Railgun-Scharfschützen: Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie lebten hinter der Front 131–193 s und machten ein Drittel des Technoclan-Schadens.
 
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 

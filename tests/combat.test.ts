@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { RULES } from '../src/data/rules';
 import { UNITS } from '../src/data/units';
 import { World } from '../src/sim/world';
 import { aliveModels, updateCombat } from '../src/sim/systems/combat';
@@ -30,12 +31,12 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
   it('die Kette rechnet wie im Tabletop: Treffen × Verwunden × nicht abgewehrt', () => {
     const w = UNITS.sniper.weapon!;
     const d = { armor: 'heavy' as const, toughness: UNITS.colossus.toughness, save: UNITS.colossus.save, evasion: 0, big: false, cover: 0 };
-    // Treffen 2+ (5/6); Stärke 5 gegen Widerstand 9 → 5+, aber Anti-Panzer 2+ (5/6);
+    // Treffen 3+ (4/6, seit 25.10.); Stärke 5 gegen Widerstand 9 → 5+, aber Anti-Panzer 2+ (5/6);
     // Rüstung 3+ mit Durchschlag 3 → erst ab 6 abgewehrt (5/6 kommen durch)
-    assert.equal(hitChance(w, d), 5 / 6);
+    assert.equal(hitChance(w, d), 4 / 6);
     assert.equal(woundChance(w, d), 5 / 6);
     assert.equal(unsavedChance(w, d), 5 / 6);
-    assert.equal(woundsPerShot(w, d), (5 / 6) * (5 / 6) * (5 / 6));
+    assert.equal(woundsPerShot(w, d), (4 / 6) * (5 / 6) * (5 / 6));
     assert.equal(woundRoll(8, 4), 2);
     assert.equal(woundRoll(5, 4), 3);
     assert.equal(woundRoll(4, 4), 4);
@@ -83,10 +84,11 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
   });
 
   it('Schaden wird gleichzeitig verteilt – kein Vorteil durch Reihenfolge', () => {
-    const world = new World({ map: openMap, seed: 1 });
+    // 25.10.: ohne Heilung im eigenen Gebiet – mit Treffen 3+ heilen sich die Scharfschützen sonst schneller, als sie Schaden nehmen.
+    const world = new World({ map: openMap, seed: 1, rules: { front: { ...RULES.front, regenPerSecond: 0 } } });
     const a = world.addUnit(0, UNITS.sniper, { x: 8.6, y: 8.5 }, 'bottom');
     const b = world.addUnit(1, UNITS.sniper, { x: 11.4, y: 8.5 }, 'bottom');
-    for (let i = 0; i < 800 && a.alive && b.alive; i++) {
+    for (let i = 0; i < 2000 && a.alive && b.alive; i++) {
       world.step();
       assert.equal(a.hp, b.hp);
     }

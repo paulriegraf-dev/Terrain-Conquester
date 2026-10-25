@@ -341,8 +341,9 @@ const RAW: Record<UnitId, UnitInput> = {
   // ---------------------------------------------------------------- Technoclan
   sniper: {
     id: 'sniper', protocol: 'antiHeavy', name: 'Railgun-Scharfschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
-    speed: 1.3, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 5,
-    weapon: { shots: 1, cooldown: 1.6, range: 5, skill: 2, strength: 5, ap: 3, damage: 16, type: 'pierce', anti: { heavy: 2 } },
+    // 25.10. (Nutzer): Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie überlebten hinter der Front zu lange
+    speed: 1.3, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 6,
+    weapon: { shots: 1, cooldown: 1.6, range: 4.5, skill: 3, strength: 5, ap: 3, damage: 16, type: 'pierce', anti: { heavy: 2 } },
     shape: 'circle', letter: 'R', role: 'Anti-Panzer auf Distanz, wenig Leben',
   },
   plasma: {
