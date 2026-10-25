@@ -1767,6 +1767,7 @@ Stand davor auf GitHub: Branch `claude/stand-vor-balance-patch-1` (zum Zurückro
 
 **Nachtrag 25.10. mittags (nach der Stichprobe u15):** Steppenjäger gegen Schwere 7,1 → 5,0 über einen neuen Waffenwert `vs` (Schadensfaktor je Panzerung, hier Schwer ×0,7 – gegen Leicht und Infanterie unverändert). Hainhüter 380 → 323 Leben (−15 %), weil er fast nie fiel.
 Railgun-Scharfschützen: Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie lebten hinter der Front 131–193 s und machten ein Drittel des Technoclan-Schadens.
+Myr-Drohnen: 9 statt 8 Leben je Modell (72 gesamt) – Splitterwaffen mit 8 Schaden je Wunde (Lawinenrufer, Schlammwerfer) brauchen jetzt 2 Wunden je Modell; Abklingzeit 0,6 → 0,4 bei Schaden 2,3 → 1,55 (gleicher Schaden/s, 50 % schnellere Zersetzung).
 
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 

@@ -401,12 +401,14 @@ const RAW: Record<UnitId, UnitInput> = {
   // Masse und Opfer: billige Myrs, die sich gegenseitig stärken, als Munition dienen
   // und sich opfern. Schwach gegen Flächenschaden, wenig Aufklärung und Beweglichkeit.
   drone: {
-    id: 'drone', name: 'Myr-Drohnen', armor: 'infantry', hp: 64, models: 8, toughness: 3, save: 5,
+    id: 'drone', name: 'Myr-Drohnen', armor: 'infantry', hp: 72, models: 8, toughness: 3, save: 5,
     speed: 1.7, move: 'foot', part: 'arms', binds: { arms: 0.35 }, supply: 0.5, radius: 0.25, vision: 5, spawnInterval: 2.3,
-    weapon: { shots: 1, cooldown: 0.6, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 2.3, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 0.4, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 1.55, type: 'rifle' },
     swarm: { perNeighbor: 0.06, max: 0.6, radius: 2.5 },
     corrode: { shotsPerLevel: 40, max: 2, seconds: 4 },
-    // 25.10.: Speerspitze – Reichweite 2,5, schnell nahe der eigenen Basis, Ansturm ab 3 Verbänden
+    // 25.10.: Speerspitze – Reichweite 2,5, schnell nahe der eigenen Basis, Ansturm ab 3 Verbänden. Nachmittags: 9 statt 8
+    // Leben je Modell (Splitter mit 8 Schaden brauchen jetzt 2 Wunden) und mehr, kleinere Treffer (gleicher Schaden/s,
+    // 50 % schnellere Zersetzung).
     rush: { homeBonus: 0.5, falloff: 14, squads: 3, radius: 3, bonus: 0.3, seconds: 4, cooldown: 8 },
     // Lebensuhr (22.10.): 40 s volles Leben, danach sinkt der Höchstwert gleichmäßig, bis der Verband mit 120 s
     // verfällt; ab 90 s (75 % der Lebenszeit) Todeswut: +50 % Feuerrate, +30 % Tempo. Der Hund lässt Drohnen in
