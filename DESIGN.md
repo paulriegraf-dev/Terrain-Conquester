@@ -1825,3 +1825,14 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - **Stationen je Lane:** oben und unten je eine Station (je Karte verschieden), Wirkung nur auf ihrer Lane. Sobald Gegner bis auf eine bestimmte Kachelzahl herangerückt sind (umkämpft), ruht der Bonus.
 - Kandidaten (Nutzer): Werkhalle (Bautempo), Sensorstation, Lazarett, Windtal (Lauftempo), Schildgenerator (alle paar Sekunden Schild), Flakstation (Turm).
 - Das MOBA-Element (neutrale Lager in der Mitte) und der Versorgungsabwurf sind vorerst gestrichen.
+- **Stationen, Stand 25.10. 19 Uhr (Nutzer):**
+  - Werkhalle: Fabriken der Lane +10 % Bautempo; kommt nur mit einer starken Gegen-Station auf eine Karte.
+  - Sensorstation: viel Sicht auf der Lane, entdeckt Getarnte.
+  - Lazarett: eigene Einheiten auf der Lane heilen 2 %/s, auch außerhalb des eigenen Gebiets.
+  - Windtal: +15 % Lauftempo auf der Lane, mit allgemeiner Obergrenze für das Gesamttempo (Schnee usw. kontern).
+  - Schildgenerator: erst nach einer Wartezeit, Schild nur für Einheiten außerhalb des Kampfes.
+  - Flakstation: Turm mit leichtem Schaden, vor allem gegen Schwebende (Hover-Einheiten) und Flugobjekte.
+  - Sperrwerk: Gegner nahe der Station langsamer; darf nicht zu sehr mit Feldern und Gelände stapeln.
+  - Belagerungsturm: Belagerungsdruck auf gegnerische Gebäude der Lane ×1,5.
+  - Verkehrsknoten: bleibt (Marschbefehle schneller).
+  - Paarung je Karte möglichst offensiv gegen defensiv, sonst nach erwartetem Einfluss abgleichen.
