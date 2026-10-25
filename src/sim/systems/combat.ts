@@ -165,6 +165,8 @@ export function updateCombat(world: World): void {
       const to = t.kind === 'unit' ? t.defId : t.kind;
       st.damageBy[src] = (st.damageBy[src] ?? 0) + dealt;
       st.damageTo[to] = (st.damageTo[to] ?? 0) + dealt;
+      const split = `${src}>${t.kind === 'unit' ? 'unit' : t.kind}`;
+      st.damageSplit[split] = (st.damageSplit[split] ?? 0) + dealt;
       t.hp -= dealt;
       if (t.kind === 'hq') world.players[h.attacker].stats.hqDamageDealt += dealt;
       if (t.hp <= 1e-6) {

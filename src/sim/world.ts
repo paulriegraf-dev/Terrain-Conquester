@@ -98,6 +98,8 @@ export interface PlayerStats {
   /** Schaden je eigener Einheitenart (auch 'hq', Gebäude) und je getroffener Art (Einheit oder 'building'/'hq'/'wall'). */
   damageBy: Record<string, number>;
   damageTo: Record<string, number>;
+  /** Schaden je eigener Einheitenart und Zielart (`art>einheit|building|wall|hq`) – nur Statistik (Auswertung der Läufe). */
+  damageSplit: Record<string, number>;
 }
 
 /**
@@ -821,6 +823,7 @@ export class World {
         lost: emptyUnitCounts(),
         damageBy: {},
         damageTo: {},
+        damageSplit: {},
         kills: 0,
         buildingsBuilt: 0,
         buildingsLost: 0,
