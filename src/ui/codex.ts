@@ -91,7 +91,8 @@ function level(rel: number): 0 | 1 | 2 | 3 {
 }
 const LEVEL_TEXT = ['schwach', 'mäßig', 'gut', 'stark'] as const;
 
-function ratingCell(u: UnitDef, armor: ArmorClass): string {
+function ratingCell(raw: UnitDef, armor: ArmorClass): string {
+  const u = shown(raw);
   const w = u.weapon;
   if (!w) return '<td class="cx-r" data-l="none">–</td>';
   const ref = referenceDefense(armor);
@@ -113,7 +114,7 @@ function threats(f: FactionId, armor: ArmorClass): string {
   for (const other of FACTION_IDS) {
     if (other === f) continue;
     const names = factionEntries(other)
-      .map((e) => UNITS[e.unit])
+      .map((e) => shown(UNITS[e.unit]))
       .filter((u) => u.weapon && level(relativeEffect(u.weapon, ref.defense, ref.wounds)) >= 2)
       .map((u) => ({ name: u.name, dps: dps(u, u.weapon!, ref.defense, ref.wounds) }))
       .sort((a, b) => b.dps - a.dps)
@@ -134,6 +135,15 @@ const STRENGTH_TEXT = ['schwach', 'mäßig', 'gut', 'stark'] as const;
 const COUNTER_TEXT = ['langsam (über 32 s)', 'mäßig (bis 32 s)', 'schnell (bis 16 s)', 'sehr schnell (bis 8 s)'] as const;
 
 /** Kleiner Balken unter einer Zahl: Anteil am Höchstwert aller Einheiten (zum schnellen Vergleichen). */
+/**
+ * Was die Übersicht rechnet (25.10.): Der Sprengetopp kämpft erst mit seinen Sprengladungen – die zeigen wir statt der
+ * Kamikaze-Explosion (die kommt danach nur noch mit 40 %).
+ */
+function shown(u: UnitDef): UnitDef {
+  if (!u.charges || !u.weapon) return u;
+  return { ...u, kamikaze: false, weapon: { ...u.weapon, damage: u.charges.damage, cooldown: u.charges.cooldown, range: u.charges.range, splash: u.charges.radius } };
+}
+
 function bar(value: number, max: number): string {
   return `<span class="cx-bar"><i style="width:${Math.max(4, Math.min(100, Math.round((value / Math.max(1e-9, max)) * 100)))}%"></i></span>`;
 }
@@ -163,9 +173,10 @@ function triangle(f: FactionId): string {
 function roleChart(): string {
   const order = ['Durchschlag', 'Sprengkopf', 'Zersetzung', 'Kanone', 'Splitter', 'Belagerung', 'Gewehr'];
   const byRole = new Map<string, { target: RoleTarget; units: UnitDef[] }>();
-  for (const u of Object.values(UNITS)) {
-    if (!u.weapon) continue;
-    const r = weaponRole(u);
+  for (const raw of Object.values(UNITS)) {
+    if (!raw.weapon) continue;
+    const u = shown(raw);
+    const r = weaponRole(raw);
     const g = byRole.get(r.label) ?? { target: r.target, units: [] };
     g.units.push(u);
     byRole.set(r.label, g);
@@ -201,7 +212,7 @@ function unitsTab(state: CodexState): string {
   const rows = factionEntries(f).map(({ unit, source }) => {
     const u = UNITS[unit];
     const models = u.models ?? 1;
-    const range = u.weapon ? `${num(u.weapon.range, 1)}${bar(u.weapon.range, maxRange)}` : u.support ? 'Aura' : '–';
+    const range = u.weapon ? `${num(shown(u).weapon!.range, 1)}${bar(shown(u).weapon!.range, maxRange)}` : u.support ? 'Aura' : '–';
     return `<tr>
       <th scope="row" title="${escapeHtml(u.role)}"><span class="cx-glyph" data-f="${f}">${escapeHtml(u.letter)}</span>${escapeHtml(u.name)}<span class="cx-role">${escapeHtml(u.role)}</span></th>
       <td class="cx-src">${escapeHtml(source)}</td>
@@ -224,7 +235,8 @@ function unitsTab(state: CodexState): string {
 }
 
 /** Stufe 0–3 eines Konters (Angreifer gegen Ziel): wie schnell ein voller Verband den anderen ausschaltet. */
-function counterLevel(a: UnitDef, target: UnitDef): 0 | 1 | 2 | 3 {
+function counterLevel(raw: UnitDef, target: UnitDef): 0 | 1 | 2 | 3 {
+  const a = shown(raw);
   const w = a.weapon!;
   const { d, wounds } = defenseOfUnit(target);
   if (a.kamikaze) {
@@ -269,7 +281,7 @@ function countersTab(state: CodexState): string {
   return `${roleChart()}
     <h3 class="cx-h3">Einheit gegen Einheit</h3>
     ${factionChips(state, 'faction', 'Angreifer')}${factionChips(state, 'enemy', 'Ziel')}
-    <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps: eine Explosion nimmt <span class="cx-key" data-l="3">die Hälfte und mehr</span> <span class="cx-key" data-l="2">ein Viertel</span> <span class="cx-key" data-l="1">ein Zehntel</span> <span class="cx-key" data-l="0">weniger</span> seiner Leben. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Werfer zählen hier mit ihren Steinen. Die Tafel gibt es auch auf dem Spielfeld (Taste H).</p>
+    <p class="cx-lede">Wie schnell ein voller Verband (Zeile) einen gegnerischen Verband (Spalte) allein ausschaltet – <span class="cx-key" data-l="3">bis 8 s</span> <span class="cx-key" data-l="2">bis 16 s</span> <span class="cx-key" data-l="1">bis 32 s</span> <span class="cx-key" data-l="0">länger</span>. Sprengetopps zählen mit ihren Sprengladungen (danach Kamikaze mit 40 %), Kanonen mit ihren Steinen ohne Stein-Modus. Richtwert ohne Upgrades, Schwarm-Bonus, Fläche, Deckung und Heimvorteil; Die Tafel gibt es auch auf dem Spielfeld (Taste H).</p>
     <div class="cx-scroll">${counterMatrix(state.faction, state.enemy)}</div>`;
 }
 
