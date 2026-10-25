@@ -8,7 +8,7 @@ import type { TerrainId } from './terrain';
  * eigene Wege: Deshalb nehmen nicht alle Einheiten denselben kürzesten Weg.
  *
  * Fraktionen können später eigene Profile mitbringen, z. B. Schweber, die über
- * Schluchten gleiten (siehe `hover` – noch von keiner Einheit benutzt).
+ * Schluchten gleiten (siehe `hover`: Hover Scout, Frostbringer, Lawinenrufer, seit 25.10. abends auch der Steppenjäger).
  */
 
 export type MoveProfileId = 'foot' | 'wheels' | 'tracks' | 'hover';

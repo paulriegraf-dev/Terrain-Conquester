@@ -507,7 +507,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 160, toughness: 5, save: 4,
-    speed: 2.0, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
+    speed: 2.0, move: 'hover', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
     weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
     shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',

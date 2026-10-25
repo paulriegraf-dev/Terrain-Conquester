@@ -1836,3 +1836,7 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
   - Belagerungsturm: Belagerungsdruck auf gegnerische Gebäude der Lane ×1,5.
   - Verkehrsknoten: bleibt (Marschbefehle schneller).
   - Paarung je Karte möglichst offensiv gegen defensiv, sonst nach erwartetem Einfluss abgleichen.
+- **Stationen je Karte (Nutzer, Mittelweg):** Jede Karte hat einen kleinen Pool aus 2–3 geprüften Paarungen (eine oben, eine unten). Die Hauptpaarung kommt in etwa der Hälfte der Partien, die anderen seltener; oben/unten wechselt zufällig (beide Lanes müssen für beide Seiten gleich weit sein). Sichtbar ab Spielbeginn, im Startmenü wählbar (zufällig / Hauptpaarung / bestimmte); Simulationen mit der Hauptpaarung.
+- Sensorstation: Sicht auf der ganzen Lane und Enttarnung, kein Reichweiten-Bonus.
+- Flakstation trifft Schwebende und die Flugobjekte der Myr (geworfene Drohnen und Verspotter, Sprengladungen).
+- **Umgesetzt:** Der Steppenjäger ist jetzt ein Schweber (vorher Räder): gleitet über Schluchten (Flankenangriff ×1,3 nach gegnerischer Schlucht), Matsch und Schnee bremsen nicht, Wald 0,7, Geröll 0,9.
