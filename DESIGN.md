@@ -1817,3 +1817,11 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - `productionTime` 5 → 4: Alle Fabriken aller Fraktionen bauen 20 % schneller (Drohnen 9,2 s, Halmläufer 16 s, Plasma 18 s, Koloss 36 s, Battlesphäre 44 s). Energie, Forschung, Ausbau, Rufe und Verbund-Einspielzeit bleiben unverändert.
 - Heimvorteil (Versuch): keine Schadensminderung mehr im eigenen Gebiet (`homeDamageTaken` 0,75 → 1), die Heilung (2 %/s) bleibt. Ziel: weniger Turtle-Spiel.
 - Technoclan einzeln (Nutzer): Scharfschützen 22 s (vorher 18 s nach dem Tempo-Schritt), Plasmawerfer 16 s.
+
+## Besprochen 25.10. abends: Haltung „Sichern“ und Lane-Stationen (noch nicht umgesetzt)
+
+**Festgehalten (Nutzer):**
+- **Vierte Haltung „Sichern“:** Verteidigen → Halten → Sichern → Front (höchstens 4 Befehlsketten). Die Lane-Armee zieht zum strategischen Ort oder Außenposten ihrer Lane und stellt sich im Halbkreis darum auf, offen zum Gegner, gestaffelt nach Reichweite (vorne kurze Reichweite und Schwere, hinten Fernkampf und Artillerie). Ohne Ort auf der Lane wie „Halten“.
+- **Stationen je Lane:** oben und unten je eine Station (je Karte verschieden), Wirkung nur auf ihrer Lane. Sobald Gegner bis auf eine bestimmte Kachelzahl herangerückt sind (umkämpft), ruht der Bonus.
+- Kandidaten (Nutzer): Werkhalle (Bautempo), Sensorstation, Lazarett, Windtal (Lauftempo), Schildgenerator (alle paar Sekunden Schild), Flakstation (Turm).
+- Das MOBA-Element (neutrale Lager in der Mitte) und der Versorgungsabwurf sind vorerst gestrichen.
