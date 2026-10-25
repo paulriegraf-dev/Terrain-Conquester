@@ -1849,3 +1849,11 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - KI: stellt eine Lane mit Station auf Sichern, wenn die Station nicht schon für sie wirkt und sie dort nicht unterlegen ist; zurück auf Halten, wenn deutlich unterlegen; von Sichern aus stößt sie wie vom Halten vor.
 - F1 → Gelände: Tabelle der Stationen und Pool je Karte. Karte: Kennbuchstabe im Kreis, gestrichelter Wirkungskreis (6 Kacheln), Flak/Sperrwerk mit Zone, Schilde als heller Ring um die Einheit.
 - Eine Probepartie (Felsenpass, Technoclan gegen Myr): 10 Besitzwechsel an beiden Stationen, beide KIs nutzen Sichern. Noch kein Testlauf mit vielen Partien.
+
+### Nachtrag 25.10. abends (Nutzer): Nerfs, Steinbruch, Formen im eigenen Drittel
+- **Steppenjäger:** Leben 160 → 145, Schaden 16 → 14 je Schuss (zusammen etwa −20 % Wirkung).
+- **Hainhüter:** Leben 323 → 290 (−10 %), verwurzelt erst nach 10 statt 8 s Beschuss.
+- **Steinbruch** (Terra-Former): Steinwächter und Brecher brauchen 20 % länger (Grundwert 5 → 6, also 24 statt 20 s). Damit kommen auch weniger Brecher und damit weniger Frontbrecher.
+- **Gelände formen im eigenen Kartendrittel immer erlaubt** – unabhängig von Sicht und Einflussgebiet (sonst wie bisher: eigenes Gebiet, Niemandsland, 3 Kacheln vor die Grenze, sichtbar).
+- **Replay-Fehler behoben:** Replays wendeten die Vorbereitungs-Flächen im ersten Schritt nach Spielern sortiert an statt in der Reihenfolge der Partie – überlappten Flächen, lief das Replay auseinander (Felsenpass-Partie des Nutzers). Jetzt wie in der Partie (`ReplayRunner` → `world.prepare`).
+- Spielstil-Analyse zweier Partien: `auswertung/2026-10-25-spielstil-zwei-partien.md`.

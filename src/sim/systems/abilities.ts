@@ -26,7 +26,9 @@ import type { World } from '../world';
  */
 export function shapingBlocked(world: World, p: PlayerId, x: number, y: number): string | null {
   const grid = world.grid;
-  if (!world.players[p].vision.isVisible(x, y)) return 'Nur in sichtbarem Gebiet möglich';
+  // 25.10. abends (Nutzer): Im eigenen Kartendrittel darf man immer formen – unabhängig von Sicht und Gebiet.
+  if (inOwnThird(world, p, x)) return null;
+  if (!world.players[p].vision.isVisible(x, y)) return 'Nur in sichtbarem Gebiet möglich (oder im eigenen Kartendrittel)';
   const i = grid.index(x, y);
   const owner = controllerAt(world, i);
   if (owner === p) return null;
@@ -37,7 +39,14 @@ export function shapingBlocked(world: World, p: PlayerId, x: number, y: number):
   }
   if (world.rules.shapeNoMansLand && world.map.buildZone[i] === BUILD_ZONE.neutral) return null; // Niemandsland: überall
   if (nearCell(world, x, y, SHAPING_REACH, (j) => controllerAt(world, j) === p)) return null;
-  return `Nur im eigenen Gebiet, im Niemandsland und bis ${SHAPING_REACH} Kacheln vor die Grenze`;
+  return `Nur im eigenen Kartendrittel, im eigenen Gebiet, im Niemandsland und bis ${SHAPING_REACH} Kacheln vor die Grenze`;
+}
+
+/** Liegt Spalte x im eigenen Drittel der spielbaren Karte (ohne Rückraum)? */
+export function inOwnThird(world: World, p: PlayerId, x: number): boolean {
+  const r = world.map.reserve;
+  const third = (world.map.width - 2 * r) / 3;
+  return p === 0 ? x >= r && x < r + third : x >= world.map.width - r - third && x < world.map.width - r;
 }
 
 function nearCell(world: World, x: number, y: number, r: number, test: (i: number) => boolean): boolean {

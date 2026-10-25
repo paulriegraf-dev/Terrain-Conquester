@@ -506,9 +506,9 @@ const RAW: Record<UnitId, UnitInput> = {
   },
 
   specialMeadow: {
-    id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 160, toughness: 5, save: 4,
+    id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 145, toughness: 5, save: 4,
     speed: 2.0, move: 'hover', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
-    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
+    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 14, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
     shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',
   },
@@ -529,12 +529,12 @@ const RAW: Record<UnitId, UnitInput> = {
   },
 
   specialForest: {
-    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 323, toughness: 8, save: 3,
+    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 290, toughness: 8, save: 3,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
     weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 8, ap: 1, damage: 15, type: 'rifle' },
     ground: 'forest', shapeshift: true,
-    root: { after: 8, gap: 3, seconds: 4, hitBonus: 1, immune: 10 },
-    shape: 'square', letter: 'H', role: 'Langsamer Tank – verwurzelt Schwere nach 8 s Beschuss (alle treffen sie dann besser); Gestaltwandler: auf jedem Boden der Bonus des Wächters dieser Art',
+    root: { after: 10, gap: 3, seconds: 4, hitBonus: 1, immune: 10 },
+    shape: 'square', letter: 'H', role: 'Langsamer Tank – verwurzelt Schwere nach 10 s Beschuss (alle treffen sie dann besser); Gestaltwandler: auf jedem Boden der Bonus des Wächters dieser Art',
   },
 
   wardMud: {
@@ -588,7 +588,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardRubble: {
     id: 'wardRubble', name: 'Steinwächter', armor: 'heavy', hp: 240, models: 2, toughness: 6, save: 3,
-    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 5,
+    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 6,
     weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 } },
     ground: 'rubble', groundBonus: { save: 1 },
     shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf Geröll Rüstung +1',
@@ -596,7 +596,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerRubble: {
     id: 'formerRubble', name: 'Brecher', armor: 'light', hp: 140, toughness: 5, save: 5,
-    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 5,
+    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 6,
     ground: 'rubble', former: { special: 'specialRubble' },
     shape: 'cross', letter: 'ǵ', role: 'Terraformer: bricht die Umgebung zu Geröll, ruft auf 4 Kacheln einen Frontbrecher',
   },

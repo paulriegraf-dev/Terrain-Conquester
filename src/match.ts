@@ -51,16 +51,22 @@ export function aiSeed(matchSeed: number, player: PlayerId): number {
 /** Spielt eine Partie nur aus Seed + Befehlsliste nach. */
 export class ReplayRunner {
   readonly world: World;
+  private readonly log: readonly TimedCommand[];
   private cursor = 0;
 
   constructor(
     map: MapDef,
     seed: number,
-    private readonly log: readonly TimedCommand[],
+    log: readonly TimedCommand[],
     factions?: [FactionId, FactionId],
     rules?: Partial<Rules>,
   ) {
     this.world = new World({ map, seed, factions, rules });
+    // Wie in der Partie (Session): Vorbereitungs-Flächen vor dem ersten Tick in Log-Reihenfolge anwenden – im ersten
+    // Schritt würden sie nach Spielern sortiert, und überlappende Flächen gingen anders aus (Replay lief auseinander).
+    const prep = log.filter((c) => c.tick === 0 && c.cmd.type === 'prepTerrain');
+    this.world.prepare(prep.map((c) => ({ player: c.player, cmd: c.cmd })));
+    this.log = log.filter((c) => !(c.tick === 0 && c.cmd.type === 'prepTerrain'));
   }
 
   step(): void {
