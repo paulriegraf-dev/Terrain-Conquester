@@ -10,7 +10,10 @@ import { buildingIds } from '../data/factions';
 import type { BuildingId } from '../data/buildings';
 import { VERBUND, VERBUND_UNITS, verbundKey } from '../data/verbund';
 import type { VerbundUnit } from '../data/verbund';
-import { UNITS } from '../data/units';
+import { UNITS, lineUnit } from '../data/units';
+import { LEARNED } from './learned';
+import { OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memory';
+import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
 import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
@@ -145,13 +148,16 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  *   und Gelände). Gefunden am 23.10.: Technoclan und Myriaden forschten schon nach 15–40 s und bauten ihre
  *   zweite bzw. dritte Fabrik erst nach 1,5–2 Minuten – die Terra-Former (billige Fabriken) hatten nach
  *   2 Minuten 5 Gebäude, die anderen 2–3.
+ * - `learned` (26.10.): Vorliebe je Paarung aus gemerkten Partien (src/ai/learned.ts, sonst das erste Spiel des Nutzers) –
+ *   multipliziert die Bewertung von Linien und Einheiten. `liveAdapt`: schwache Anpassung im laufenden Spiel nach
+ *   dem Schaden je gebauter Einheit.
  * - `tfPrep`: Terra-Former legen sich in der Vorbereitung auf zwei Eröffnungs-Linien fest und formen deren
  *   Boden auf jeder Route vor die eigene Grenze – dort rufen die ersten Terraformer nach kurzem Ritual.
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -196,6 +202,11 @@ export class SimpleAi {
   /** Für den Aufbau zurückgelegte Energie (siehe AI_TUNING) – Nebenmittel nur vom Rest. */
   private saving = 0;
   private lastReport = -1;
+  /** Gemerkte Vorliebe (Paarung) – wird beim ersten Denken geladen oder von außen gesetzt (Lernläufe). */
+  learnedBias: Bias | null = null;
+  /** Anpassung nur in dieser Partie (Schaden je gebauter Einheit). */
+  private liveBias: Bias = {};
+  private lastLive = 0;
   private lastOrder = -1e9;
   private lastDisguise = -1e9;
 
@@ -292,6 +303,8 @@ export class SimpleAi {
     // Beide KIs denken im selben Tick (keine Seite hat einen Zeitvorsprung).
     if (world.result || world.tick % this.interval !== 0) return [];
     this.observe(world);
+    this.loadBias(world);
+    this.adaptLive(world);
     this.saving = this.buildSavings(world);
     const commands: Command[] = [];
     // Notfallverlegung, sobald sie bereit ist: der bedrängte Bauabschnitt zieht in den Rückraum.
@@ -324,6 +337,34 @@ export class SimpleAi {
       if (disguise) commands.push(disguise);
     }
     return commands;
+  }
+
+  // ------------------------------------------------------------ Lernen (26.10.)
+
+  private loadBias(world: World): void {
+    if (this.learnedBias || !AI_TUNING.learned) return;
+    const own = world.players[this.player].faction.id;
+    const enemy = world.players[1 - this.player].faction.id;
+    this.learnedBias = LEARNED[matchupKey(own, enemy)] ?? OPENING_PRIOR[own] ?? {};
+  }
+
+  /** Vorliebe für eine Einheit: gemerkt (Paarung) × live (diese Partie). */
+  private biasOf(unit: UnitId): number {
+    const line = lineUnit(unit);
+    return (this.learnedBias?.[line] ?? 1) * (this.liveBias[line] ?? 1);
+  }
+
+  /** Vorliebe für eine Fabrik-Linie: Mittel über ihre Einheiten. */
+  private lineBias(tiers: readonly UnitId[]): number {
+    return tiers.reduce((a, u) => a + this.biasOf(u), 0) / Math.max(1, tiers.length);
+  }
+
+  /** Alle 60 s nach 4 min: Linien mit überdurchschnittlichem Schaden je gebauter Einheit etwas bevorzugen. */
+  private adaptLive(world: World): void {
+    if (!AI_TUNING.liveAdapt || this.level !== 'normal' || world.seconds < 240 || world.tick - this.lastLive < 60 * world.tps) return;
+    this.lastLive = world.tick;
+    const rel = relativeEfficiency(lineStats(world.players[this.player].stats), 3);
+    for (const [line, { rel: r }] of rel) this.liveBias[line] = Math.max(0.75, Math.min(1.35, 1 + 0.35 * (r - 1)));
   }
 
   // ------------------------------------------------------------ Wahrnehmung
@@ -490,6 +531,7 @@ export class SimpleAi {
       // Linie bewerten: Strategie-Gewicht × wie gut ihre Start-Einheit kontert, was man gesehen hat.
       const counter = this.level === 'normal' ? this.counterScore(faction.buildings[id]!.tiers[0]!, world) : 1;
       let score = (((this.strategy.mix[id] ?? 2) * counter) / (owned[id] + 1)) * (0.85 + this.rng.next() * 0.3);
+      score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
       // Myriaden: Wer Munition verschießt, braucht eine eigene Drohnen-Linie – und eine zweite,
       // die zu Sprengetopps und Hunden aufsteigen kann.
@@ -572,7 +614,7 @@ export class SimpleAi {
       let score = this.counterScore(u, world) * (1 + 0.25 * (tier - 1));
       if (def.swarm && def.swarm.perNeighbor > 0) score *= 1.25; // Masse-Bonus
       if (ammoUnits.has(u) && making((x) => x === u) <= 1) score *= 1.6;
-      return score;
+      return score * this.biasOf(u);
     };
 
     // 1. Umrüsten, wenn eine freigeschaltete Einheit klar besser passt.

@@ -50,6 +50,8 @@ export class Vision {
 
   /** Deckt alles auf, was von Kachel (cx, cy) im Radius sichtbar ist. */
   reveal(cx: number, cy: number, radius: number): void {
+    // Gebrochene Radien (HQ-Gebiet wächst in halben Kacheln, + Feldstecher) hängten die Sichtlinien-Tabelle auf (26.10.).
+    radius = Math.round(radius);
     const grid = this.grid;
     for (const entry of losTable(radius)) {
       const tx = cx + entry.dx;
