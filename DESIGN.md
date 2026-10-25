@@ -1815,3 +1815,5 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 
 ### Nachtrag 25.10. abends: Produktionstempo
 - `productionTime` 5 → 4: Alle Fabriken aller Fraktionen bauen 20 % schneller (Drohnen 9,2 s, Halmläufer 16 s, Plasma 18 s, Koloss 36 s, Battlesphäre 44 s). Energie, Forschung, Ausbau, Rufe und Verbund-Einspielzeit bleiben unverändert.
+- Heimvorteil (Versuch): keine Schadensminderung mehr im eigenen Gebiet (`homeDamageTaken` 0,75 → 1), die Heilung (2 %/s) bleibt. Ziel: weniger Turtle-Spiel.
+- Technoclan einzeln (Nutzer): Scharfschützen 22 s (vorher 18 s nach dem Tempo-Schritt), Plasmawerfer 16 s.

@@ -392,7 +392,8 @@ export const RULES: Rules = {
     deployRadius: 10,
     deploySpacing: 1.4,
   },
-  homeDamageTaken: 0.75,
+  // 25.10. abends (Nutzer, Versuch): keine Schadensminderung mehr im eigenen Gebiet (vorher 0,75) – gegen Turtle-Spiel; Heilung bleibt.
+  homeDamageTaken: 1,
   // Ab der Entscheidung (11:00) nur noch halber Heimvorteil (22.10., getestet: unverändert / halb / aus).
   homeLate: { at: 660, factor: 0.5 },
   // 24.10.: 25 statt 20 Energie (mit dem HQ-Zweig Aufklärung 15)

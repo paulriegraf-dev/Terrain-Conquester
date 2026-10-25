@@ -342,13 +342,13 @@ const RAW: Record<UnitId, UnitInput> = {
   sniper: {
     id: 'sniper', protocol: 'antiHeavy', name: 'Railgun-Scharfschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     // 25.10. (Nutzer): Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie überlebten hinter der Front zu lange
-    speed: 1.3, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 6,
+    speed: 1.3, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 22 / 3,
     weapon: { shots: 1, cooldown: 1.6, range: 4.5, skill: 3, strength: 5, ap: 3, damage: 16, type: 'pierce', anti: { heavy: 2 } },
     shape: 'circle', letter: 'R', role: 'Anti-Panzer auf Distanz, wenig Leben',
   },
   plasma: {
     id: 'plasma', protocol: 'area', name: 'Plasmawerfer', armor: 'light', hp: 120, toughness: 5, save: 4,
-    speed: 1.4, move: 'wheels', part: 'arms', radius: 0.4, vision: 6, spawnInterval: 6,
+    speed: 1.4, move: 'wheels', part: 'arms', radius: 0.4, vision: 6, spawnInterval: 16 / 3,
     weapon: { shots: 8, cooldown: 1.0, range: 3.5, skill: 3, strength: 3, ap: 1, damage: 6.3, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
     shape: 'triangle', letter: 'P', role: 'Flächenschaden, kontert Infanterie und Masse',
   },
