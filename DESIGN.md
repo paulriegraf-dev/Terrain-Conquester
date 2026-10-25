@@ -1700,6 +1700,34 @@ Beobachtung aus echten Partien: Sobald der Gegner Schwere baut (Terra-Former sch
 - Spezialfähigkeiten (Verhalten statt Werte) – später punktuell.
 - (Beantwortet: Wellen entstehen über die Haltungen und den Commander; Gelände darf man dauerhaft verändern – Schlucht graben, jetzt mit Obergrenze.)
 
+### Nachtläufe u12 und u13 (25.10., 360 Partien, 6 Karten, je Paarung und Karte 12)
+
+Rohauswertung je Einheit und Karte: `auswertung/`. Gerechnet mit dem Stand nach Koloss 12 s, Mudlings, Myr-Paket gegen Schwere, Superbrut, Schluchtpreisen und Flanke.
+
+**u12 – aktueller Stand (216 Partien):**
+
+| Paarung | Siege | mediane Dauer |
+|---|---|---|
+| Myriaden – Technoclan | 52 : 16 | 24,3 min |
+| Myriaden – Terra-Former | 10 : 62 | 13,7 min |
+| Technoclan – Terra-Former | 22 : 50 | 19,2 min |
+
+Je Karte (Myr:TC · Myr:TF · TC:TF): Felsenpass 11:1 · 3:9 · 2:10; Felsenpass groß 12:0 · 1:11 · 2:10; Schluchtenland 10:0 · 0:12 · 4:8; Schluchttal 6:5 · 3:9 · 4:8; Schluchttal groß 7:4 · 1:11 · 3:9; Steilküste 6:6 · 2:10 · 7:5.
+
+- **Terra-Former sind zu stark** (86 % gegen Myr, 69 % gegen Technoclan), auf jeder Karte. Technoclan ist nur auf der Steilküste konkurrenzfähig, Myriaden schlagen Technoclan auf offenen Karten klar und halten auf Schluchttal und Steilküste mit.
+- **Das Myr-Paket gegen Schwere hilft gegen Terra-Former nicht:** früherer Zwischenstand (u9, unvollständig) 77 % TF, jetzt 86 %. Terra-Former bauen kaum Schwere als Masse; ihre Schwerwerke (Hainhüter, Lawinenrufer) tanken zwar, treffen aber kaum.
+- **Schaden je Einheit gegen Myr (TF):** Steppenjäger 28 %, Frontbrecher 27 %, danach Borkenschützen und Steinwächter je 9 %. Frontbrecher bringt 648 Schaden je gebauter Einheit, Steppenjäger 380. Eingesteckt haben Hainhüter 16 %, Lawinenrufer 14 %, Steppenjäger 10 %, Schlammschleuder 10 %, Frontbrecher 9 %.
+- **Schaden je Einheit gegen Technoclan (TF):** Steppenjäger 27 %, Frontbrecher 21 %. Eingesteckt: Hainhüter 17 %, Lawinenrufer 12 %, Erdwall 11 %.
+- **Myr gegen TC:** Myr-Seite Sphäre 31 %, Sprengetopp 21 %, Katapult 19 %, Drohnen 14 %; getankt haben Verspotter 25 %, Sphäre 18 %, Drohnen 18 %, Erdwall 17 %. TC-Seite Scharfschützen 30 %, Batterie 24 %, Koloss 20 %, Hover Scout 10 %; Hover Scout und Plasmawerfer tanken am meisten gegen TF (21 % und 14 %).
+- **Schaden je gebauter Einheit (TF-Gegner, Technoclan):** Koloss 1467, Batterie 895, Technogunner 780, Scharfschützen 551 – Plasmawerfer nur 189, Hover Scout 136.
+
+**u13 – Technoclan mit Schwer-Spam (144 Partien):** Myriaden – Technoclan 71 : 1, Technoclan – Terra-Former 1 : 71, auf allen Karten. Schwer-Spam ist keine tragfähige Taktik, die schweren Einheiten sind also nicht der Ausreißer: Technogunner machen 47 % des Schadens, Koloss 20 %, aber der Gegner sägt sie mit Katapult (35 %), Sprengetopp (32 %) und Sphäre (23 %) bzw. mit Steppenjäger und Frontbrecher ab. Der Erdwall nimmt 36 % des Schadens auf.
+
+**Folgerungen, noch nichts geändert:**
+1. Zuerst die Terra-Former bremsen (zu stark gegen beide), Kandidaten: Steppenjäger- und Frontbrecher-Schaden, Tankwirkung von Hainhüter und Lawinenrufer.
+2. Technoclan braucht Hilfe oder die Terra-Former eine Bremse, bevor man Technoclan gegen Myriaden anfasst.
+3. Das KI-Verhalten (einfache KI) beeinflusst die Zahlen: Strategien und Gelände werden noch nicht klug gespielt (siehe Wunsch unten).
+
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 
 - **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.
