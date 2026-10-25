@@ -151,7 +151,11 @@ export function groundSaveBonus(world: World, e: Entity): number {
 /** Tarnung: Der Gegner sieht e nur aus so vielen Kacheln (null = normal sichtbar). */
 export function camouflageRange(world: World, e: Entity): number | null {
   if (!e.tf) return null;
-  return e.tf.gb?.camouflage ?? synergyCamouflage(world, e);
+  const camo = e.tf.gb?.camouflage ?? synergyCamouflage(world, e);
+  if (camo === null || camo === undefined) return null;
+  // Technoclan-Elite mit Weitsicht (25.10.): entdeckt Getarnte in ihrer Sicht.
+  for (const d of world.detectors[e.owner === 0 ? 1 : 0]) if ((d.x - e.pos.x) ** 2 + (d.y - e.pos.y) ** 2 <= d.r * d.r) return null;
+  return camo;
 }
 
 // ------------------------------------------------------------------ Terraformer

@@ -41,6 +41,8 @@ export type SimEventData =
   /** Myriaden: Gelege geschlüpft, Wurf gestartet, Wurf gelandet. */
   | { type: 'hatch'; owner: PlayerId; count: number; pos: Vec2 }
   | { type: 'rooted'; owner: PlayerId; pos: Vec2 }
+  | { type: 'verbund'; owner: PlayerId; route: Route; key: string }
+  | { type: 'elite'; owner: PlayerId; unit: UnitId; pos: Vec2 }
   | { type: 'burrowBreak'; owner: PlayerId; pos: Vec2; count: number }
   | { type: 'mudHit'; owner: PlayerId; pos: Vec2 }
   | { type: 'launch'; owner: PlayerId; unit: UnitId; from: Vec2; to: Vec2; land: number }

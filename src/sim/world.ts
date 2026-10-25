@@ -26,6 +26,7 @@ import { updateLifespans } from './systems/lifespan';
 import { updateEmergency } from './systems/emergency';
 import { updateScout } from './systems/scout';
 import { onNetworkDeath, updateNetworks } from './systems/network';
+import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
 import { NO_SYNERGY } from './systems/synergy';
@@ -77,6 +78,12 @@ export interface Flight {
   charge?: { target: number; damage: number; radius: number; weapon: WeaponDef };
 }
 
+/** Technoclan-Verbund einer Lane. */
+export interface VerbundState {
+  active: { key: string; factories: [number, number] } | null;
+  pending: { key: string; factories: [number, number]; at: number } | null;
+}
+
 /** Eingegrabene Drohnen (Myr-Kanone, Sammelangriff): schlüpfen gemeinsam bei `breakAt`. */
 export interface Burrow {
   owner: PlayerId;
@@ -117,6 +124,10 @@ export interface PlayerStats {
   damageSplit: Record<string, number>;
   /** Lebensdauer gefallener Einheiten je Art: [Summe Sekunden, Anzahl] – nur Statistik. */
   lifetime: Record<string, [number, number]>;
+  /** Technoclan (25.10.): aufgefangene Bausteine, Eliten, Sekunden je aktivem Verbund – nur Statistik. */
+  blocks: number;
+  elites: number;
+  verbundSeconds: Record<string, number>;
 }
 
 /**
@@ -297,6 +308,18 @@ export class World {
   flights: Flight[] = [];
   /** Eingegrabene Drohnen-Einschläge der Myr-Kanone (Sammelangriff, 25.10.). */
   burrows: Burrow[] = [];
+  /**
+   * Technoclan-Verbund (25.10.) je Spieler und Lane: aktiver Verbund (Schlüssel, die zwei Fabriken) und ein wartender
+   * (gilt ab `at`, Einspielzeit). null = keiner.
+   */
+  verbund: [Record<Route, VerbundState>, Record<Route, VerbundState>] = [
+    { top: { active: null, pending: null }, mid: { active: null, pending: null }, bottom: { active: null, pending: null } },
+    { top: { active: null, pending: null }, mid: { active: null, pending: null }, bottom: { active: null, pending: null } },
+  ];
+  /** Bodenfelder mit Schaden (Brandfeld der Batterie im Verbund). */
+  groundFields: { owner: PlayerId; pos: Vec2; radius: number; dps: number; until: number; src: string }[] = [];
+  /** Elite-Späher je Spieler (Weitsicht als Elite): entdecken Getarnte in ihrer Sicht. Jede Sekunde neu. */
+  detectors: [{ x: number; y: number; r: number }[], { x: number; y: number; r: number }[]] = [[], []];
   /** Terra-Former: laufende Verschmelzungen des Landformers (dort zählt jeder Boden als eigener). */
   merges: { owner: PlayerId; x: number; y: number; r: number; until: number }[] = [];
   /** Spuren im Schnee: letzter Tick, in dem eine Einheit der Seite dort war (−1 = nie). */
@@ -396,6 +419,7 @@ export class World {
     if (this.tick % this.rules.visionEvery === 0) updateVision(this);
     updateProduction(this);
     updateNetworks(this);
+    updateVerbund(this);
     updateTerraform(this);
     updateMyr(this);
     updateTargeting(this);
@@ -855,6 +879,9 @@ export class World {
         damageTo: {},
         damageSplit: {},
         lifetime: {},
+        blocks: 0,
+        elites: 0,
+        verbundSeconds: {},
         kills: 0,
         buildingsBuilt: 0,
         buildingsLost: 0,

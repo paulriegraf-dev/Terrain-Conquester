@@ -13,7 +13,7 @@ import { defenseOf, hitChance, woundsPerShot } from './hitmath';
 import { commandBonus } from './hero';
 import { aimPoint, rangeTo } from './targeting';
 import { frenzyOf } from './lifespan';
-import { ambushFactor, dugInFactor, onHit } from './terraform';
+import { ambushFactor, dugInFactor, onHit, slowDown } from './terraform';
 import { tryLaunch } from './myr';
 import { synergyApBonus, synergyDamageFactor } from './synergy';
 
@@ -81,6 +81,18 @@ export function updateCombat(world: World): void {
     if (e.tf) damage *= ambushFactor(world, e) * synergyDamageFactor(world, e); // Hinterhalt, Blühende Wiese
     if (e.weaken && world.tick < e.weaken.until) damage *= e.weaken.damage; // geschwächt (Schlammschleuder)
     damage *= flankFactor(world, e); // Flankenangriff nach dem Überqueren einer gegnerischen Schlucht
+    // Technoclan-Verbund/Elite (25.10.): Ansitz (still gestanden) und Kopfschuss (erster Treffer auf ein neues Ziel).
+    const tech = e.tech;
+    let techHit = 0;
+    if (tech) {
+      const still = tech.mods.still;
+      if (still && world.tick - tech.still >= still.seconds * world.tps) {
+        techHit = still.hit;
+        damage *= still.damage;
+      }
+      if (tech.eliteFx && tech.eliteFx.headshot > 0 && tech.lastTarget !== t.id) damage *= 1 + tech.eliteFx.headshot;
+      tech.lastTarget = t.id;
+    }
 
     // Myriaden: Masse als Stärke, Munition wörtlich, Kamikaze.
     const def = e.kind === 'unit' ? UNITS[e.defId as UnitId] : undefined;
@@ -104,7 +116,7 @@ export function updateCombat(world: World): void {
     }
 
     const shots = aliveModels(e) * w.def.shots;
-    const bonus = commandBonus(world, e);
+    const bonus = commandBonus(world, e) + techHit;
     const blast = rock ? undefined : w.def.blast; // Felsen: kein Explosiv-Bonus gegen Masse
     const apBonus = swarmAp + (e.tf ? synergyApBonus(world, e) : 0);
     const wdef = apBonus > 0 ? { ...w.def, ap: w.def.ap + apBonus } : w.def;
@@ -127,6 +139,22 @@ export function updateCombat(world: World): void {
       c.level = Math.max(c.level, Math.min(rubble ? sm.max : sm.maxPlain, Math.floor(c.shots / sm.shotsPerLevel)));
       c.until = world.tick + Math.round(sm.seconds * world.tps);
       t.corrosion = c;
+    }
+    // Technoclan-Verbund/Elite (25.10.): Panzerriss, Sperrfeuer, Brandfeld, Zielmarkierung für alle.
+    if (tech) {
+      const m = tech.mods;
+      if (m.crack && t.kind === 'unit' && t.armor === 'heavy') {
+        const c = t.corrosion && world.tick < t.corrosion.until ? t.corrosion : { shots: 0, level: 0, until: 0 };
+        c.level = Math.max(c.level, m.crack.level);
+        c.until = Math.max(c.until, world.tick + Math.round(m.crack.seconds * world.tps));
+        t.corrosion = c;
+      }
+      if (m.slowHit && t.kind === 'unit') slowDown(world, t, world.tick + Math.round(m.slowHit.seconds * world.tps), m.slowHit.factor);
+      if (m.burnField) {
+        const at = aimPoint(e, t);
+        world.groundFields.push({ owner: e.owner, pos: { x: at.x, y: at.y }, radius: m.burnField.radius, dps: m.burnField.dps, until: world.tick + Math.round(m.burnField.seconds * world.tps), src: e.defId });
+      }
+      if (tech.eliteFx?.mark && t.kind === 'unit') t.mark = { owner: e.owner, until: world.tick + 2 * world.tps };
     }
     // Hainhüter (25.10.): anhaltender Beschuss verwurzelt Schwere.
     if (def?.root && t.kind === 'unit' && t.armor === 'heavy') addRoot(world, t, def.root, w.cooldownTicks / world.tps);
@@ -326,6 +354,15 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
   const w = e.weapon!;
   let damage = w.def.damage;
   if (t.kind === 'unit' && w.def.vs) damage *= w.def.vs[t.armor] ?? 1; // Schadensfaktor gegen diese Panzerung
+  // Technoclan (25.10.): Wallbrecher, Gebäudeschaden des Schützen; erlittener Schaden des Ziels (Panzerung, Schutz).
+  if (e.tech) {
+    if (t.kind === 'wall' && e.tech.mods.wallBreak) damage *= e.tech.mods.wallBreak;
+    if ((t.kind === 'building' || t.kind === 'hq') && e.tech.mods.structure) damage *= e.tech.mods.structure;
+  }
+  if (t.tech) {
+    if (t.tech.mods.damageTaken) damage *= t.tech.mods.damageTaken;
+    if (t.tech.guardOn && t.tech.mods.guard) damage *= t.tech.mods.guard.damageTaken;
+  }
   if (t.kind !== 'unit') {
     damage *= w.def.structureDamage ?? 1;
     // Belagerungsdruck: Wer mehr Gebiet hält, trifft HQ und Gebäude härter.
@@ -452,7 +489,7 @@ function splashHits(world: World, shooter: Entity, target: Entity, shots: number
     if (dist(o.pos, center) - o.radius > w.def.splash!) continue;
     const damage = damagePerWound(world, shooter, o);
     if (damage <= 0) continue;
-    const n = (shots + blastShots(blast, o)) * factor * 0.5;
+    const n = (shots + blastShots(blast, o)) * factor * (shooter.tech?.eliteFx?.splashFull ? 1 : 0.5); // Elite-Fläche: alle Schüsse
     collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o, shooter), bonus), damage, shooter.owner, hits, shooter.defId);
   }
 }

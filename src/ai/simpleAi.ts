@@ -8,6 +8,8 @@ import { checkScout } from '../sim/systems/scout';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings';
 import { buildingIds } from '../data/factions';
 import type { BuildingId } from '../data/buildings';
+import { VERBUND, VERBUND_UNITS, verbundKey } from '../data/verbund';
+import type { VerbundUnit } from '../data/verbund';
 import { UNITS } from '../data/units';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
@@ -216,6 +218,15 @@ export class SimpleAi {
 
   get profile(): ProfileDef {
     return AI_PROFILES[this.profileId];
+  }
+
+  /** Technoclan-Verbund: die Einheit der stärksten anderen Fabrik auf derselben Lane (Gleichstand: die ältere). */
+  private verbundPartner(world: World, f: Entity): UnitId | null {
+    const r = f.producer!.route;
+    const others = this.ownBuildings(world)
+      .filter((b) => b !== f && b.producer && b.producer.route === r && (VERBUND_UNITS as readonly string[]).includes(b.producer.unit))
+      .sort((a, b) => b.producer!.level - a.producer!.level || a.id - b.id);
+    return others[0]?.producer!.unit ?? null;
   }
 
   /**
@@ -569,10 +580,14 @@ export class SimpleAi {
       const pr = f.producer!;
       if (world.tick - (this.lastRetool.get(f.id) ?? -1e9) < 90 * world.tps) continue;
       const options = unlockedUnits(world, f);
+      // Technoclan-Verbund (25.10.): Einheiten, die mit der Partner-Fabrik der Lane einen Verbund bilden, sind mehr wert –
+      // Spezialisierung (gleiche Einheit) etwas mehr als eine Kombination.
+      const partner = me.faction.network ? this.verbundPartner(world, f) : null;
+      const vb = (u: UnitId): number => (!partner ? 1 : u === partner ? 1.3 : VERBUND[verbundKey(u as VerbundUnit, partner as VerbundUnit)] ? 1.2 : 1);
       let best = pr.unit;
-      let bestScore = scoreOf(pr.unit, options.indexOf(pr.unit) + 1);
+      let bestScore = scoreOf(pr.unit, options.indexOf(pr.unit) + 1) * vb(pr.unit);
       options.forEach((u, k) => {
-        const sc = scoreOf(u, k + 1);
+        const sc = scoreOf(u, k + 1) * vb(u);
         if (sc > bestScore * 1.25) {
           best = u;
           bestScore = sc;

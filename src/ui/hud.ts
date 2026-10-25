@@ -24,6 +24,7 @@ import { checkResearch, ownsBuilding, researchableUnits, researching, visibleBui
 import { clutchSize } from '../sim/systems/myr';
 import { synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
+import { VERBUND } from '../data/verbund';
 import { siegeMultiplier } from '../sim/systems/front';
 import type { PlayerId } from '../sim/types';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
@@ -353,7 +354,9 @@ export class Hud {
       ? ROUTES.map((r) => {
           const x = report.routes[r];
           const armor = (x.armor ? ` · meist ${ARMOR_NAMES[x.armor]}` : '') + (x.unit ? ` · ${UNITS[x.unit].name}` : '');
-          return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}</span></li>`;
+          // Technoclan-Verbund und Eliten des Gegners (25.10.)
+          const vb = (x.verbund ? ` · Verbund ${VERBUND[x.verbund]?.name ?? ''}` : '') + (x.elites ? ` · ${x.elites} Elite${x.elites > 1 ? 'n' : ''}` : '');
+          return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}${vb}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
     const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;

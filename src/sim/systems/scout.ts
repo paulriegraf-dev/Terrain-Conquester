@@ -18,6 +18,9 @@ export interface ScoutRoute {
   armor: ScoutArmor | null;
   /** Häufigste Einheit (nur mit „Typenanalyse“, HQ-Zweig Aufklärung; sonst null). */
   unit: UnitId | null;
+  /** Technoclan-Verbund des Gegners auf dieser Route (Schlüssel) und seine Eliten dort (25.10.). */
+  verbund?: string | null;
+  elites?: number;
 }
 
 export interface ScoutReport {
@@ -102,7 +105,9 @@ export function snapshot(world: World, p: PlayerId): ScoutReport {
       let best = 0;
       for (const [id, n] of [...a.units].sort((x, y) => (x[0] < y[0] ? -1 : 1))) if (n > best + 1e-9) { best = n; unit = id; }
     }
-    routes[r] = { strength: a.strength, level, armor, unit };
+    const enemy: PlayerId = p === 0 ? 1 : 0;
+    const elites = world.entities.filter((e) => e.alive && e.owner === enemy && e.elite && (e.mover?.route ?? zoneAt(world.map.height, e.pos.y)) === r).length;
+    routes[r] = { strength: a.strength, level, armor, unit, verbund: world.verbund[enemy][r].active?.key ?? null, elites };
   }
   return { tick: world.tick, routes };
 }

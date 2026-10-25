@@ -49,3 +49,6 @@ export const PROFILE_COLOR: Record<MoveProfileId, string> = {
 export function hpColor(share: number): string {
   return share > 0.6 ? PALETTE.hpGood : share > 0.3 ? PALETTE.hpWarn : PALETTE.hpBad;
 }
+
+/** Lane-Farben (Technoclan-Verbund, 25.10.): oben, Mitte, unten. */
+export const LANE_COLOR: Readonly<Record<'top' | 'mid' | 'bottom', string>> = { top: '#6fd3ff', mid: '#ffc857', bottom: '#d08cff' };

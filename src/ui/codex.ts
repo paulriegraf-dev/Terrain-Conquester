@@ -13,6 +13,9 @@ import { referenceDefense, relativeEffect, woundsPerShot } from '../sim/systems/
 import type { Defense } from '../sim/systems/hitmath';
 import type { ArmorClass } from '../sim/types';
 import { escapeHtml, num } from './format';
+import { BLOCKS, VERBUND, VERBUND_UNITS, verbundKey } from '../data/verbund';
+import type { ProtocolId } from '../data/units';
+import { SYNERGY_GROUNDS, SYNERGY_NAMES } from '../sim/systems/synergy';
 import { roleBadge, weaponRole } from './weaponRole';
 import type { RoleTarget } from './weaponRole';
 
@@ -20,7 +23,7 @@ import type { RoleTarget } from './weaponRole';
  * Übersicht (Wunsch des Nutzers, 24.10.): Einheiten, Konter und Gelände auf einen Blick – im Startbildschirm und im
  * Menü (F10). Alles wird aus den Spieldaten berechnet, damit die Tabellen nach jeder Abstimmung stimmen.
  */
-export type CodexTab = 'units' | 'counters' | 'terrain';
+export type CodexTab = 'units' | 'counters' | 'terrain' | 'traits';
 
 export interface CodexState {
   tab: CodexTab;
@@ -345,5 +348,113 @@ function factionChips(state: CodexState, which: 'faction' | 'enemy', label: stri
 }
 
 export function renderCodex(state: CodexState): string {
-  return state.tab === 'units' ? unitsTab(state) : state.tab === 'counters' ? countersTab(state) : terrainTab();
+  return state.tab === 'units' ? unitsTab(state) : state.tab === 'counters' ? countersTab(state) : state.tab === 'traits' ? traitsTab(state) : terrainTab();
+}
+
+// ------------------------------------------------------------------ Eigenheiten (25.10.)
+
+/**
+ * Eigenheiten der Fraktionen: Technoclan-Netzwerk und Verbund, Terra-Former-Lane-Synergien, Myriaden-Besonderheiten.
+ * Die Tabellen kommen aus den Spieldaten (data/verbund.ts, Synergie-Namen), die Texte der Synergien aus dem Entwurf.
+ */
+function traitsTab(state: CodexState): string {
+  const f = state.faction;
+  const body = f === 'technoclan' ? technoTraits() : f === 'terraformer' ? terraTraits() : myrTraits();
+  return `${factionChips(state, 'faction', 'Fraktion')}${body}`;
+}
+
+function technoTraits(): string {
+  const n = RULES.network;
+  const head = VERBUND_UNITS.map((u) => `<th>${escapeHtml(UNITS[u].name)}</th>`).join('');
+  const rows = VERBUND_UNITS.map((a, i) => {
+    const cells = VERBUND_UNITS.map((b, j) => {
+      if (j < i) return '<td class="cx-vb cx-vb-empty"></td>';
+      const d = VERBUND[verbundKey(a, b)]!;
+      return `<td class="cx-vb${d.special ? ' cx-vb-special' : ''}" title="${escapeHtml(`${d.name}: ${d.text}`)}"><b>${escapeHtml(d.name)}</b><span>${escapeHtml(d.text)}</span></td>`;
+    }).join('');
+    return `<tr><th scope="row">${escapeHtml(UNITS[a].name)}</th>${cells}</tr>`;
+  }).join('');
+  const blocks = (Object.keys(BLOCKS) as ProtocolId[]).filter((p) => p !== 'node').map((p) => {
+    const b = BLOCKS[p];
+    const owner = Object.values(UNITS).find((u) => u.protocol === p);
+    return `<tr><th scope="row">${escapeHtml(b.name)}<span class="cx-role">${escapeHtml(owner?.name ?? '')}</span></th><td>${escapeHtml(b.copies[0])}</td><td>${escapeHtml(b.copies[1])}</td><td>${escapeHtml(b.copies[2])}</td><td>${escapeHtml(b.elite)}</td></tr>`;
+  }).join('');
+  return `<h3 class="cx-h3">Netzwerk</h3>
+    <ul class="cx-rules">
+      <li>Verbände auf derselben Lane verbinden sich, wenn sie höchstens ${num(n.joinRadius)} Kacheln auseinander stehen – auch gleiche Arten, höchstens ${n.maxTypes} Arten je Netz, ${n.maxMembers} Mitglieder (mit Commander ${n.maxWithNode}). Wer sich weiter als ${num(n.breakRadius)} Kacheln entfernt, fällt heraus; Verstärkung rückt nach.</li>
+      <li>Stirbt ein Mitglied, droppt es den <b>Baustein seines Typs</b>; das nächste lebende Mitglied fängt ihn auf. Ohne Netz geht er verloren. Gleiche Bausteine stapeln mit abnehmender Wirkung.</li>
+      <li>Ab <b>${n.eliteAt} Bausteinen</b> (eigener plus aufgefangene) wird der Verband <b>Elite</b>: +${Math.round((n.eliteHp - 1) * 100)} % Leben, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach +75 %), und er behält den Verbund, in dem er aufgestiegen ist (Prägung). Danach nimmt er nichts mehr auf; fällt er, droppt er seinen Grundbaustein.</li>
+    </ul>
+    <h3 class="cx-h3">Bausteine</h3>
+    <div class="cx-scroll"><table class="cx-table cx-blocks"><thead><tr><th>Baustein</th><th>1. Kopie</th><th>2. Kopie</th><th>3. Kopie</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>
+    <h3 class="cx-h3">Verbund je Lane</h3>
+    <p class="cx-lede">Die zwei Fabriken mit der höchsten Stufe auf einer Lane (Gleichstand: die ältere) bilden einen Verbund aus den Einheiten, die sie gerade bauen. Zweimal dieselbe Art = <b>Spezialisierung</b> (hervorgehoben, stärker), zwei verschiedene = <b>Kombination</b>. Er gilt nach ${RULES.verbund.switchSeconds} s Einspielzeit für alle Einheiten dieser beiden Fabriken auf der Lane; die Fabriken pochen in der Farbe ihrer Lane. Der Gegner sieht ihn im Spähbericht.</p>
+    <div class="cx-scroll"><table class="cx-table cx-vbtable"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/** Texte der Terra-Former-Synergien (Entwurf 23.10., DESIGN.md). */
+const SYNERGY_TEXT: Readonly<Record<string, string>> = {
+  forest: 'bei Gedränge springt der Hainhüter auf eine günstige Stelle einer anderen Lane',
+  snow: 'die Bremse im Schneesturm wächst, je länger ein Gegner darin steht (bis 60 %)',
+  mud: 'Schlammmonster-Gelege füllen sich doppelt so schnell, längere Leine',
+  rubble: 'Geröllhagel: Schaden über Zeit auf eigenem Geröll',
+  meadow: 'Wächter +10 % Schaden und Tempo, Produktion +15 %',
+  'forest+snow': 'Hainhüter auch auf Schnee getarnt, Frostwellen halten im Wald länger',
+  'forest+mud': 'Wurzeln halten Gegner in Wald und Matsch kurz fest',
+  'forest+rubble': 'Hainhüter +1 Rüstung, sein Sprung schlägt mit Flächenschaden ein',
+  'forest+meadow': 'auch Wiesen-Jäger nutzen das Wurzelnetz',
+  'snow+forest': 'der Sturm reicht auch in den eigenen Wald',
+  'snow+mud': 'Gegner mit voller Sturm-Bremse erstarren im Matsch kurz',
+  'snow+rubble': 'Geröllhagel fällt auch auf Schneefelder',
+  'snow+meadow': 'eigene Einheiten im Sturm +15 % Tempo statt gebremst',
+  'mud+forest': 'Schlammmonster im Wald getarnt',
+  'mud+snow': 'Treffer der Schlammmonster bremsen',
+  'mud+rubble': 'Treffer der Schlammschleuder machen Schaden über Zeit',
+  'mud+meadow': 'Schlammmonster heilen eigene Einheiten auf Wiese und Matsch',
+  'rubble+forest': 'Hagel auch im eigenen Wald, Wächter dort +1 Rüstung',
+  'rubble+snow': 'der Hagel bremst die Getroffenen',
+  'rubble+mud': 'Gegner im Hagel kommen im Matsch kaum voran',
+  'rubble+meadow': 'Wiesen-Jäger +1 Durchschlag',
+  'meadow+forest': 'der Wiesen-Bonus gilt auch für Gerufene im Wald',
+  'meadow+snow': 'Wiesen-Einheiten auf Schnee ungebremst und schneller',
+  'meadow+mud': 'auch die Schlammmonster-Gelege füllen sich schneller',
+  'meadow+rubble': 'Frontbrecher erhalten den Tempo-Bonus der Wiese',
+};
+
+function terraTraits(): string {
+  const grounds = SYNERGY_GROUNDS;
+  const tname = (g: string): string => TERRAIN_LIST.find((t) => t.id === g)?.name ?? g;
+  const head = grounds.map((g) => `<th>+ ${escapeHtml(tname(g))}</th>`).join('');
+  const rows = grounds.map((a) => {
+    const cells = grounds.map((b) => {
+      if (a === b) return `<td class="cx-vb cx-vb-special" title="Alle drei Lanes gleich: Grundwirkung ×${num(RULES.synergy.triple, 1)}"><b>verstärkt</b><span>alle drei Lanes ${escapeHtml(tname(a))}</span></td>`;
+      const k = `${a}+${b}`;
+      return `<td class="cx-vb" title="${escapeHtml(`${SYNERGY_NAMES[k] ?? ''}: ${SYNERGY_TEXT[k] ?? ''}`)}"><b>${escapeHtml(SYNERGY_NAMES[k] ?? '')}</b><span>${escapeHtml(SYNERGY_TEXT[k] ?? '')}</span></td>`;
+    }).join('');
+    return `<tr><th scope="row">2× ${escapeHtml(tname(a))}<span class="cx-role"><b>${escapeHtml(SYNERGY_NAMES[a] ?? '')}</b>: ${escapeHtml(SYNERGY_TEXT[a] ?? '')}</span></th>${cells}</tr>`;
+  }).join('');
+  return `<h3 class="cx-h3">Lane-Synergien</h3>
+    <p class="cx-lede">Eine Lane zählt als Boden X, wenn dort mindestens ${RULES.synergy.laneMin} eigene geformte Kacheln X liegen. <b>Zwei Lanes mit X</b> geben die Grundwirkung (Zeile), die <b>dritte Lane</b> färbt sie (Spalte). Alle drei gleich: Grundwirkung verstärkt. Bodenboni der Einheiten gelten auf jedem Boden ihrer Art, egal wer ihn geformt hat.</p>
+    <div class="cx-scroll"><table class="cx-table cx-vbtable"><thead><tr><th>Doppel</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function myrTraits(): string {
+  const d = UNITS.drone;
+  const k = UNITS.myrcannon;
+  const items: [string, string][] = [
+    ['Schwarm', `Myrs werden stärker, je mehr Myrs in der Nähe sind: Drohnen +${Math.round(d.swarm!.perNeighbor * 100)} % je Nachbar bis +${Math.round(d.swarm!.max * 100)} %, ab ${Math.round(RULES.swarmAp * 100)} % davon Durchschlag +1.`],
+    ['Zersetzung', `Drohnen-Schüsse auf Schwere senken deren Rüstung: je ${d.corrode!.shotsPerLevel} Schüsse eine Stufe, höchstens ${d.corrode!.max}, ${d.corrode!.seconds} s lang.`],
+    ['Myr-Kanone: zwei Modi', `Stehen rundum mindestens ${Math.round(k.stoneMode!.enter * 100)} % Schwere, wirft sie Steine statt Drohnen, ${k.stoneMode!.rate}-mal so oft, mit Zersetzung – voll nur mit Geröll in der Nähe (bis Stufe ${k.stoneMode!.max}), ohne Geröll schwach (bis Stufe ${k.stoneMode!.maxPlain}).`],
+    ['Sammelangriff', `Geworfene Drohnen graben sich ein (unverwundbar) und brechen nach ${num(k.launch!.burrow!.seconds, 1)} s gemeinsam aus; weitere Einschläge in der Nähe frischen auf, beim ${k.launch!.burrow!.refreshes + 1}. bricht alles aus. Der Gegner sieht ein pochendes Signal.`],
+    ['Geröll', 'In der Vorbereitung wählbar. Katapulte werfen von dort Felsen, die Kanone zersetzt mit Steinen voll.'],
+    ['Lebensuhr', `Drohnen altern: ${d.lifespan!.fresh} s frisch, nach ${d.lifespan!.seconds} s verfallen; ab ${Math.round(d.lifespan!.frenzy!.at * 100)} % Todeswut (schneller schießen und laufen). Der Hund bremst das Altern.`],
+    ['Sturmlauf', `Drohnen sind nahe der eigenen Basis bis +${Math.round(d.rush!.homeBonus * 100)} % schneller; greifen ${d.rush!.squads} Verbände zugleich an, Ansturm +${Math.round(d.rush!.bonus * 100)} % Tempo für ${d.rush!.seconds} s.`],
+    ['Sprengladungen', `Sprengetopps werfen erst ${UNITS.bomber.charges!.count} Ladungen auf Schwere, dann Kamikaze mit ${Math.round(UNITS.bomber.charges!.kamikazeFactor * 100)} % der Explosion.`],
+    ['Verspotter', `Vom Katapult geworfen: Einschlag, dann ein Schadensfeld (${UNITS.taunter.field!.dps}/s) – zieht das Feuer auf sich.`],
+    ['Gelege und Superbrut', 'Die Brut sammelt Verbände und lässt sie gemeinsam schlüpfen; zwei Bruten der Stufe III verschmelzen zur Superbrut.'],
+    ['Materie geht nicht verloren', 'Battlesphären zerfallen in Drohnen, der Schwarmgeist macht gefallene Gegner zu Drohnen.'],
+  ];
+  return `<h3 class="cx-h3">Besonderheiten der Myriaden</h3>
+    <p class="cx-lede">Platzhalter für eine spätere Myriaden-Mechanik wie Verbund oder Synergien – bis dahin die Eigenheiten im Überblick.</p>
+    <ul class="cx-rules">${items.map(([a, b]) => `<li><b>${escapeHtml(a)}:</b> ${escapeHtml(b)}</li>`).join('')}</ul>`;
 }

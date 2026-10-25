@@ -802,3 +802,20 @@ body.start-mode .sp-fields { gap: 7px; }
 .cx-mini .cx-headarmor[data-a="light"] { border-bottom-color: #9cccf2 !important; }
 .cx-mini .cx-headarmor[data-a="heavy"] { border-bottom-color: #f0b57e !important; }
 .cx-h3 { font-size: 0.95rem; margin: 14px 0 4px; color: #e8ecd8; }
+
+/* Eigenheiten (25.10.): Verbund-, Synergie- und Baustein-Tabellen */
+.cx-rules { margin: 4px 0 10px; padding-left: 18px; display: grid; gap: 4px; font-size: 0.85rem; max-width: 900px; }
+.cx-vbtable { width: auto; }
+.cx-vbtable td.cx-vb { min-width: 120px; max-width: 170px; vertical-align: top; font-size: 0.72rem; padding: 5px 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); }
+.cx-vbtable td.cx-vb b { display: block; font-size: 0.8rem; color: #e8ecd8; margin-bottom: 2px; }
+.cx-vbtable td.cx-vb span { color: var(--muted, #9aa4a0); }
+.cx-vbtable td.cx-vb-special { background: rgba(255, 200, 87, 0.1); border-color: rgba(255, 200, 87, 0.35); }
+.cx-vbtable td.cx-vb-empty { background: transparent; border: 0; }
+.cx-vbtable thead th.cx-vert span { writing-mode: horizontal-tb; }
+.cx-blocks td { font-size: 0.78rem; vertical-align: top; }
+
+/* 25.10.: „Ansicht“ unten links im Kommando-Feld – die rechte Leiste passt ohne Scrollen */
+.view-docked { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 6px; }
+.view-docked .panel-title { font-size: 0.72rem; margin: 0; }
+.view-docked .seg-row, .view-docked .layers { flex-wrap: wrap; }
+.view-docked .flow-pick { font-size: 0.75rem; }

@@ -92,6 +92,13 @@ export function defenseOf(world: World, t: Entity, from?: Entity): Defense {
   let evasion = t.evasion;
   // Verwurzelt (Hainhüter, 25.10.): alle treffen besser.
   if (t.root && world.tick < t.root.until) evasion -= t.root.hitBonus;
+  // Zielmarkierung einer Technoclan-Elite (25.10.): ihre Seite trifft besser.
+  if (from && t.mark && t.mark.owner === from.owner && world.tick < t.mark.until) evasion -= 1;
+  // Präzision (Verbund Scharfschützen + Hover): keine Deckung, kein Ausweichen.
+  if (from?.tech?.mods.precision) {
+    evasion = Math.min(evasion, 0);
+    return { armor: t.armor, toughness: t.toughness, save, evasion, big: !unit, cover: 0 };
+  }
   const dodge = unit && from ? UNITS[t.defId as UnitId]?.dodge : undefined;
   if (dodge) {
     const d = dist(t.pos, from!.pos);

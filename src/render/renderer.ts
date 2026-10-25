@@ -19,7 +19,7 @@ import type { World } from '../sim/world';
 import { buildPreview, predictPath } from '../ui/view';
 import { BUILD_ZONE, zoneAt } from '../sim/map';
 import type { ViewState } from '../ui/view';
-import { PALETTE, PROTOCOL_COLOR, PROFILE_COLOR, hpColor } from './palette';
+import { LANE_COLOR, PALETTE, PROTOCOL_COLOR, PROFILE_COLOR, hpColor } from './palette';
 
 /**
  * Debug-Darstellung auf einem Canvas: Formen statt Grafiken.
@@ -131,6 +131,7 @@ export class Renderer {
       if (e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
     }
     this.drawNetworks(world, alpha, visibleTo);
+    this.drawVerbund(world, visibleTo);
     for (const e of world.entities) {
       if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
     }
@@ -253,6 +254,46 @@ export class Renderer {
   }
 
   /**
+   * Technoclan-Verbund (25.10.): Die zwei Fabriken eines Verbunds pochen in der Farbe ihrer Lane, eine gestrichelte
+   * Linie zeigt zur Lane. Wartet ein Verbund noch (Einspielzeit), ist der Rahmen schwach und ohne Linie.
+   */
+  private drawVerbund(world: World, visibleTo: (e: Entity) => boolean): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    for (const p of [0, 1] as PlayerId[]) {
+      for (const r of ROUTES) {
+        const st = world.verbund[p][r];
+        const show = st.active ?? (st.pending ? { key: st.pending.key, factories: st.pending.factories } : null);
+        if (!show) continue;
+        const live = !!st.active;
+        const color = LANE_COLOR[r];
+        const pulse = live ? 0.55 + 0.4 * Math.sin(world.tick * 0.12) : 0.35;
+        for (const id of show.factories) {
+          const b = world.get(id);
+          if (!b || !b.alive || !b.rect || !visibleTo(b)) continue;
+          const rx = b.rect.x * t;
+          const ry = b.rect.y * t;
+          ctx.strokeStyle = withAlpha(color, pulse);
+          ctx.lineWidth = Math.max(2, t * 0.14);
+          ctx.strokeRect(rx - 2, ry - 2, b.rect.w * t + 4, b.rect.h * t + 4);
+          if (!live) continue;
+          const cx = (b.rect.x + b.rect.w / 2) * t;
+          const cy = (b.rect.y + b.rect.h / 2) * t;
+          const tx = cx + (p === 0 ? 1 : -1) * 4 * t;
+          const ty = world.map.waypoints[r].y * t;
+          ctx.setLineDash([t * 0.3, t * 0.25]);
+          ctx.lineWidth = Math.max(1, t * 0.07);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
+  }
+
+  /**
    * Abzeichen der Netz-Mitglieder: farbige Punkte über dem Verband = geerbte Protokolle (je Protokoll
    * eine Farbe), Eck-Klammern = aufgerüsteter Verband, pulsierender Ring = Aufstieg.
    */
@@ -264,7 +305,23 @@ export class Renderer {
       const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
       const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
       const r = Math.max(2.5, e.radius * t);
-      const inherited = e.net.protocols.slice(1);
+      // Elite (25.10.): goldenes Leuchten und alle vier Bausteine über ihr (auch das eigene).
+      if (e.elite) {
+        const pulse = 0.55 + 0.35 * Math.sin((world.tick + alpha) * 0.15);
+        const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 2.6);
+        g.addColorStop(0, `rgba(255,214,120,${0.45 * pulse})`);
+        g.addColorStop(1, 'rgba(255,214,120,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,214,120,${0.6 + 0.3 * pulse})`;
+        ctx.lineWidth = Math.max(1.5, t * 0.1);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.9, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const inherited = e.elite ? e.net.protocols : e.net.protocols.slice(1);
       if (inherited.length > 0) {
         // Eck-Klammern
         const b = r * 1.75;

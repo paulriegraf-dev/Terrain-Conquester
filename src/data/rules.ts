@@ -232,7 +232,9 @@ export interface Rules {
    * `joinRadius` (bis `maxMembers`, mit Commander als Knoten `maxWithNode`) und lösen sich ab `breakRadius`.
    * Ab `ascendAt` Protokollen steigt ein Verband auf: `ascendSeconds` lang feuert er um `ascendFireRate` schneller.
    */
-  network: { joinRadius: number; breakRadius: number; maxMembers: number; maxWithNode: number; ascendAt: number; ascendSeconds: number; ascendFireRate: number; repairPerSecond: number };
+  network: { joinRadius: number; breakRadius: number; maxMembers: number; maxWithNode: number; ascendAt: number; ascendSeconds: number; ascendFireRate: number; repairPerSecond: number; maxTypes: number; eliteAt: number; eliteHp: number };
+  /** Technoclan-Verbund (25.10.): Einspielzeit eines neuen oder geänderten Verbunds. */
+  verbund: { switchSeconds: number };
   /**
    * Strategische Orte: Wer allein im Radius steht, neutralisiert erst den Besitz des Gegners
    * (`neutralizeSeconds`, befestigt doppelt so lange) und nimmt den Ort dann ein (`captureSeconds`).
@@ -394,7 +396,10 @@ export const RULES: Rules = {
   homeLate: { at: 660, factor: 0.5 },
   // 24.10.: 25 statt 20 Energie (mit dem HQ-Zweig Aufklärung 15)
   scout: { cost: 25, cooldownSeconds: 20, delaySeconds: 10, some: 3, many: 6 },
-  network: { joinRadius: 4, breakRadius: 8, maxMembers: 4, maxWithNode: 7, ascendAt: 3, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3 },
+  // 25.10. (Nutzer): auch gleiche Typen verbinden sich (höchstens 4 Arten, 6 Mitglieder, mit Commander 8). Der kurze
+  // Aufstieg (ascendAt) ist abgelöst: Wer `eliteAt` Bausteine trägt, wird Elite (+25 % Leben, Elite-Wirkungen).
+  network: { joinRadius: 4, breakRadius: 8, maxMembers: 6, maxWithNode: 8, ascendAt: 99, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3, maxTypes: 4, eliteAt: 4, eliteHp: 1.25 },
+  verbund: { switchSeconds: 20 },
   sites: { radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8 },
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel

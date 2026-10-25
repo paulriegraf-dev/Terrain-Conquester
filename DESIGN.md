@@ -1769,6 +1769,19 @@ Stand davor auf GitHub: Branch `claude/stand-vor-balance-patch-1` (zum Zurückro
 Railgun-Scharfschützen: Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie lebten hinter der Front 131–193 s und machten ein Drittel des Technoclan-Schadens.
 Myr-Drohnen: 9 statt 8 Leben je Modell (72 gesamt) – Splitterwaffen mit 8 Schaden je Wunde (Lawinenrufer, Schlammwerfer) brauchen jetzt 2 Wunden je Modell; Abklingzeit 0,6 → 0,4 bei Schaden 2,3 → 1,55 (gleicher Schaden/s, 50 % schnellere Zersetzung).
 
+### Technoclan-Verbund, Bausteine und Eliten (25.10. abends, umgesetzt)
+
+Ausgearbeitet mit dem Nutzer im Claude-Dokument „Technoclan-Verbund: Kombinationen“; Daten in `src/data/verbund.ts`, Ablauf in `src/sim/systems/verbund.ts`.
+
+- **Verbund je Lane:** Die zwei Fabriken mit der höchsten Stufe auf einer Lane (Gleichstand: die ältere) bilden einen Verbund aus den Einheiten, die sie gerade bauen. 6 Spezialisierungen (gleich + gleich, etwa 1,5-mal so stark) und 15 Kombinationen (neue Eigenschaft). Gilt nach 20 s Einspielzeit für alle Einheiten dieser beiden Fabriken auf der Lane; endet sofort, wenn eine Fabrik wegfällt, die Lane oder die Einheit wechselt. Keine Wirkung für eine einzelne Fabrik. Die Fabriken pochen in der Farbe ihrer Lane (oben blau, Mitte gelb, unten violett) mit einer Linie zur Lane; der Gegner sieht das und findet Verbund und Eliten im Spähbericht.
+- **Netz:** Beitritt flexibel wie bisher (4 Kacheln, gleiche Lane, bleibt bis 8 Kacheln). Neu: auch gleiche Arten, höchstens 4 Arten, 6 Mitglieder (mit Commander 8).
+- **Bausteine:** Wer stirbt, droppt nur den Baustein seines Typs; das nächste lebende Mitglied fängt ihn auf (keine Elite). Ohne Netz geht er verloren. Gleiche Bausteine stapeln mit abnehmender Wirkung (Tabelle in der Übersicht, Reiter Eigenheiten).
+- **Elite** ab 4 Bausteinen: +25 % Leben, jeder Baustein in seiner Elite-Fassung (Kopfschuss, volle Fläche, Markierung für alle, Weitsicht mit Entdecken, Panzerriss, Panzerung −20 %, Heilung der Nachbarn; doppelt +50 %, dreifach +75 %), Verbund-Prägung (behält den Verbund, in dem sie aufstieg). Nimmt danach nichts mehr auf; fällt sie, droppt sie ihren Grundbaustein. Ersetzt den kurzen Aufstieg. Keine Obergrenze, kein Fokus der Gegner (erst beobachten). Anzeige: goldenes Leuchten und alle vier Baustein-Punkte.
+- **KI:** Beim Umrüsten zählen Einheiten, die mit der Partner-Fabrik der Lane einen Verbund bilden, mehr (Spezialisierung ×1,3, Kombination ×1,2).
+- **Übersicht (F1), neuer Reiter „Eigenheiten“:** Technoclan (Netz-Regeln, Bausteine, 6×6-Verbundtabelle), Terra-Former (Lane-Synergien 5×5), Myriaden (Besonderheiten als Platzhalter).
+- **HUD:** „Ansicht“ (Tempo, Ebenen) sitzt jetzt unten links im Kommando-Feld; die rechte Leiste passt ohne Scrollen.
+- **Statistik:** aufgefangene Bausteine, Eliten, Sekunden je Verbund.
+
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 
 - **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.

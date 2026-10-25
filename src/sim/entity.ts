@@ -1,6 +1,7 @@
 import type { MoveProfileId } from '../data/movement';
 import type { BuildingId } from '../data/buildings';
 import type { GroundBonus, ProtocolId, UnitId, WeaponDef } from '../data/units';
+import type { TechMods } from '../data/verbund';
 import type { ArmorClass, CellRect, PlayerId, Route, Vec2 } from './types';
 
 /**
@@ -155,6 +156,27 @@ export interface Entity {
   dot?: { until: number; dps: number; owner: PlayerId };
   /** Schneesturm (Terra-Former-Synergie): so viele Sekunden steht die Einheit schon im Sturm. */
   storm?: number;
+  /**
+   * Technoclan (25.10.): Elite (ab 4 Bausteinen) mit ihrer Verbund-Prägung; berechnete Verbund-/Elite-Wirkungen
+   * (`mods`, jede Sekunde neu), Grundwerte vor allen Aufschlägen, Ansitz (still seit Tick), Kopfschuss (letztes Ziel).
+   */
+  elite?: { print: string | null; since: number };
+  tech?: {
+    /** Verbund, dessen Wirkung gerade gilt ('' = keiner). */
+    key: string;
+    /** Zusammengefasste Wirkung aus Verbund, Elite und gestapelter Panzerung. */
+    mods: TechMods;
+    /** Elite-Wirkungen, die im Kampf greifen (Kopfschuss, volle Fläche, Markierung, Entdecken, Heilung). */
+    eliteFx: { headshot: number; splashFull: boolean; mark: boolean; detect: boolean; heal: number } | null;
+    base: { maxHp: number; toughness: number; vision: number; speed: number };
+    sig: string;
+    still: number;
+    lastPos: Vec2;
+    lastTarget: number;
+    guardOn: boolean;
+  };
+  /** Zielmarkierung einer gegnerischen Elite: wer zu `owner` gehört, trifft dieses Ziel bis `until` um 1 besser. */
+  mark?: { owner: PlayerId; until: number };
   /** Myr-Kanone (25.10.): Stein-Modus aktiv (viele Schwere rundum). */
   stoneMode?: boolean;
   /** Myr-Drohnen (25.10.): Tempo-Faktor nahe der eigenen Basis (alle 10 Ticks neu), Ansturm bis/nächster ab (Ticks). */

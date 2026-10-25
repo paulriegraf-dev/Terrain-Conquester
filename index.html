@@ -39,6 +39,7 @@
         <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="units" aria-selected="true">Einheiten</button>
         <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="counters" aria-selected="false">Konter</button>
         <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="terrain" aria-selected="false">Gelände</button>
+        <button type="button" class="btn codex-tab" role="tab" data-action="codex-tab" data-tab="traits" aria-selected="false">Eigenheiten</button>
       </div>
       <button type="button" class="btn codex-close" data-action="codex-close">Schließen <kbd>Esc</kbd></button>
     </div>
@@ -192,6 +193,32 @@
         <div class="console-info">
           <h2 class="console-title" id="info-title">Kommando</h2>
           <div class="console-body" id="info-body"></div>
+          <section class="view-panel view-docked">
+            <h2 class="panel-title">Ansicht <span class="panel-meta status-right" id="status-right"></span></h2>
+            <div class="seg-row" id="speed-group" role="group" aria-label="Tempo">
+              <button type="button" class="seg-btn" data-action="speed" data-speed="0" aria-pressed="false" title="Pause (Leertaste)">Pause</button>
+              <button type="button" class="seg-btn" data-action="speed" data-speed="1" aria-pressed="true">1×</button>
+              <button type="button" class="seg-btn" data-action="speed" data-speed="2" aria-pressed="false">2×</button>
+              <button type="button" class="seg-btn" data-action="speed" data-speed="4" aria-pressed="false">4×</button>
+            </div>
+            <div class="layers" role="group" aria-label="Debug-Ebenen">
+              <button type="button" class="chip" id="layer-influence" data-action="layer" data-layer="influence" aria-pressed="true">Einfluss <kbd>E</kbd></button>
+              <button type="button" class="chip" id="layer-fog" data-action="layer" data-layer="fog" aria-pressed="false">Nebel <kbd>N</kbd></button>
+              <button type="button" class="chip" id="layer-grid" data-action="layer" data-layer="grid" aria-pressed="false">Raster <kbd>G</kbd></button>
+              <button type="button" class="chip" id="layer-vision" data-action="layer" data-layer="vision" aria-pressed="false">Sicht <kbd>V</kbd></button>
+              <button type="button" class="chip" id="layer-counters" data-action="layer" data-layer="counters" aria-pressed="false" title="Konter-Tafel auf dem Spielfeld ein- oder ausblenden">Konter <kbd>H</kbd></button>
+            </div>
+            <label class="flow-pick">
+              <span>Flussfeld <kbd>F</kbd></span>
+              <select id="flow-select">
+                <option value="off">aus</option>
+                <option value="foot">Trupp · zu Fuß</option>
+                <option value="wheels">Flitzer · Räder</option>
+                <option value="tracks">Koloss · Ketten</option>
+                <option value="hover">Schweber · Beispiel</option>
+              </select>
+            </label>
+          </section>
         </div>
         <div class="console-tip" aria-live="polite">
           <p class="tip-text" id="tip-text"></p>
@@ -241,32 +268,6 @@
         <ol class="log" id="log-list"></ol>
       </section>
 
-      <section class="panel view-panel">
-        <h2 class="panel-title">Ansicht <span class="panel-meta status-right" id="status-right"></span></h2>
-        <div class="seg-row" id="speed-group" role="group" aria-label="Tempo">
-          <button type="button" class="seg-btn" data-action="speed" data-speed="0" aria-pressed="false" title="Pause (Leertaste)">Pause</button>
-          <button type="button" class="seg-btn" data-action="speed" data-speed="1" aria-pressed="true">1×</button>
-          <button type="button" class="seg-btn" data-action="speed" data-speed="2" aria-pressed="false">2×</button>
-          <button type="button" class="seg-btn" data-action="speed" data-speed="4" aria-pressed="false">4×</button>
-        </div>
-        <div class="layers" role="group" aria-label="Debug-Ebenen">
-          <button type="button" class="chip" id="layer-influence" data-action="layer" data-layer="influence" aria-pressed="true">Einfluss <kbd>E</kbd></button>
-          <button type="button" class="chip" id="layer-fog" data-action="layer" data-layer="fog" aria-pressed="false">Nebel <kbd>N</kbd></button>
-          <button type="button" class="chip" id="layer-grid" data-action="layer" data-layer="grid" aria-pressed="false">Raster <kbd>G</kbd></button>
-          <button type="button" class="chip" id="layer-vision" data-action="layer" data-layer="vision" aria-pressed="false">Sicht <kbd>V</kbd></button>
-          <button type="button" class="chip" id="layer-counters" data-action="layer" data-layer="counters" aria-pressed="false" title="Konter-Tafel auf dem Spielfeld ein- oder ausblenden">Konter <kbd>H</kbd></button>
-        </div>
-        <label class="flow-pick">
-          <span>Flussfeld <kbd>F</kbd></span>
-          <select id="flow-select">
-            <option value="off">aus</option>
-            <option value="foot">Trupp · zu Fuß</option>
-            <option value="wheels">Flitzer · Räder</option>
-            <option value="tracks">Koloss · Ketten</option>
-            <option value="hover">Schweber · Beispiel</option>
-          </select>
-        </label>
-      </section>
     </aside>
   </main>
 </div>
