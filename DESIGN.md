@@ -1699,3 +1699,9 @@ Beobachtung aus echten Partien: Sobald der Gegner Schwere baut (Terra-Former sch
 - Gebäude-Limit pro Karte (große Karten 7) oder Außenposten als Zusatzplätze – weiter offen.
 - Spezialfähigkeiten (Verhalten statt Werte) – später punktuell.
 - (Beantwortet: Wellen entstehen über die Haltungen und den Commander; Gelände darf man dauerhaft verändern – Schlucht graben, jetzt mit Obergrenze.)
+
+### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
+
+- **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.
+- **Gewinn-Taktiken merken und darauf aufbauen:** Realistisch als Selbstspiel mit Parameter-Suche, nicht als Lernen im laufenden Spiel: Strategie-Profile (Bauauftrag, Zeitpunkte, Geländevorlieben, Einheitenmix) werden in Simulationen und aus den gespeicherten Partien (`partien/`) nach Siegquote bewertet, die besten Parameter landen als Datendatei im Spiel. Ein lernender Spieler im Browser ohne Server ist dafür nicht nötig.
+- **Reihenfolge:** erst die Nachtläufe (u12, u13) und die Schadensauswertung je Einheit und Karte, dann Gelände-Messwerte in die Simulation aufnehmen (wo wird gekämpft, auf welchem Boden), dann die KI-Regeln.
