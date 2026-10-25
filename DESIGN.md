@@ -1781,6 +1781,7 @@ Ausgearbeitet mit dem Nutzer im Claude-Dokument „Technoclan-Verbund: Kombinati
 - **Übersicht (F1), neuer Reiter „Eigenheiten“:** Technoclan (Netz-Regeln, Bausteine, 6×6-Verbundtabelle), Terra-Former (Lane-Synergien 5×5), Myriaden (Besonderheiten als Platzhalter).
 - **HUD:** „Ansicht“ (Tempo, Ebenen) sitzt jetzt unten links im Kommando-Feld; die rechte Leiste passt ohne Scrollen.
 - **Zoom (25.10. abends):** Mausrad über dem Feld, Tasten + / − / 0 oder die Knöpfe unter „Ansicht“ (60 bis 300 %); hineingezoomt verschiebt man mit der mittleren Maustaste oder dem Bildlauf. Die Konsole unten hat jetzt eine feste Höhe – vorher wurde das Feld kleiner („zoomte heraus“), sobald dort Text dazukam.
+- **Nachtrag:** Das Spielfeld scrollt in einem eigenen Bereich, Menü und andere Fenster bleiben darüber und scrollen selbst (vorher wurde beim Zoomen das Menü abgeschnitten). „Ansicht“ sitzt in der mittleren Spalte unter dem Hinweistext, die Befehlsknöpfe sind größer. Der Verbund-Name auf der Karte ist wieder weg (Linie und Puls bleiben); Verbund je Lane steht im Kommando-Feld und im Fabrik-Feld.
 - **Statistik:** aufgefangene Bausteine, Eliten, Sekunden je Verbund.
 
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)

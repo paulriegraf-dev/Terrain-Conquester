@@ -85,7 +85,7 @@
   <main class="layout">
     <section class="stage" aria-label="Spielfeld">
       <div class="board-frame" id="board-frame">
-        <canvas id="board"></canvas>
+        <div class="board-scroll" id="board-scroll"><canvas id="board"></canvas></div>
         <span class="mode-banner" id="mode-banner" hidden></span>
         <p class="flash" id="flash" role="status" hidden></p>
 
@@ -193,6 +193,10 @@
         <div class="console-info">
           <h2 class="console-title" id="info-title">Kommando</h2>
           <div class="console-body" id="info-body"></div>
+        </div>
+        <div class="console-tip" aria-live="polite">
+          <p class="tip-text" id="tip-text"></p>
+          <p class="tip-hover" id="status-left"></p>
           <section class="view-panel view-docked">
             <h2 class="panel-title">Ansicht <span class="panel-meta status-right" id="status-right"></span></h2>
             <div class="seg-row" id="speed-group" role="group" aria-label="Tempo">
@@ -224,10 +228,6 @@
               </select>
             </label>
           </section>
-        </div>
-        <div class="console-tip" aria-live="polite">
-          <p class="tip-text" id="tip-text"></p>
-          <p class="tip-hover" id="status-left"></p>
         </div>
         <div class="console-grid-wrap">
           <p class="console-title" id="grid-title">Kommando</p>

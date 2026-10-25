@@ -821,8 +821,9 @@ body.start-mode .sp-fields { gap: 7px; }
 .view-docked .flow-pick { font-size: 0.75rem; }
 
 /* Zoom (25.10.): hineingezoomt scrollt das Feld; mittlere Maustaste verschiebt. */
-.board-frame.zoomed { display: block; overflow: auto; place-items: initial; }
-.board-frame.zoomed #board { margin: 0 auto; max-width: none; }
+.board-scroll { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; }
+.board-scroll.zoomed { display: block; overflow: auto; }
+.board-scroll.zoomed #board { margin: 0 auto; max-width: none; }
 .zoom-row .seg-btn { min-width: 2.2em; }
 /* Feste Höhe der Konsole: das Spielfeld zoomt nicht mehr von selbst, wenn unten Text dazukommt. */
 @media (min-width: 1101px) and (min-height: 641px) {
@@ -837,3 +838,22 @@ body.start-mode .sp-fields { gap: 7px; }
 .vb-line[data-lane="top"] .vb-lane { background: #6fd3ff; }
 .vb-line[data-lane="mid"] .vb-lane { background: #ffc857; }
 .vb-line[data-lane="bottom"] .vb-lane { background: #d08cff; }
+@media (max-width: 1100px), (max-height: 640px) {
+  .board-scroll { position: relative; inset: auto; }
+}
+/* 25.10. abends: Befehle größer, Ansicht in der Mitte unter dem Hinweistext */
+.command-grid { grid-template-columns: repeat(4, 92px); grid-auto-rows: 66px; gap: 6px; }
+.cmd .glyph { font-size: 1.4rem; }
+.cmd .lbl { font-size: 0.78rem; max-width: 86px; }
+.cmd .key, .cmd .cost { font-size: 0.7rem; }
+.console-tip .view-docked { margin-top: auto; }
+.console-tip { display: flex !important; flex-direction: column; }
+/* Overlays (Menü, Pause, Ende): sicher zentriert und selbst scrollbar – auch wenn das Feld gezoomt ist */
+.overlay { place-items: start center; }
+.overlay > .card { margin-block: auto; }
+@media (min-width: 1101px) and (min-height: 641px) {
+  .console { height: 262px; }
+}
+.view-docked .layers .chip { padding: 2px 8px; font-size: 0.75rem; }
+.view-docked .seg-btn { padding: 3px 9px; }
+.view-docked .flow-pick { display: none; } /* Flussfeld weiter mit Taste F */

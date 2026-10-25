@@ -19,7 +19,6 @@ import type { World } from '../sim/world';
 import { buildPreview, predictPath } from '../ui/view';
 import { BUILD_ZONE, zoneAt } from '../sim/map';
 import type { ViewState } from '../ui/view';
-import { VERBUND } from '../data/verbund';
 import { LANE_COLOR, PALETTE, PROTOCOL_COLOR, PROFILE_COLOR, hpColor } from './palette';
 
 /**
@@ -271,7 +270,6 @@ export class Renderer {
         const live = !!st.active;
         const color = LANE_COLOR[r];
         const pulse = live ? 0.55 + 0.4 * Math.sin(world.tick * 0.12) : 0.35;
-        let labelAt: { x: number; y: number } | null = null;
         for (const id of show.factories) {
           const b = world.get(id);
           if (!b || !b.alive || !b.rect || !visibleTo(b)) continue;
@@ -292,20 +290,6 @@ export class Renderer {
           ctx.lineTo(tx, ty);
           ctx.stroke();
           ctx.setLineDash([]);
-          labelAt = { x: tx, y: ty };
-        }
-        // Name des Verbunds am Ende der Linie (einmal je Lane)
-        if (live && labelAt && t >= 10) {
-          const name = VERBUND[show.key]?.name ?? '';
-          ctx.font = `${Math.max(9, Math.round(t * 0.5))}px ${PIXEL}`;
-          ctx.textAlign = p === 0 ? 'left' : 'right';
-          ctx.textBaseline = 'middle';
-          const w = ctx.measureText(name).width;
-          const bx = p === 0 ? labelAt.x + 3 : labelAt.x - 3 - w;
-          ctx.fillStyle = 'rgba(8,12,10,0.75)';
-          ctx.fillRect(bx - 3, labelAt.y - t * 0.35, w + 6, t * 0.7);
-          ctx.fillStyle = color;
-          ctx.fillText(name, p === 0 ? labelAt.x + 3 : labelAt.x - 3, labelAt.y);
         }
       }
     }

@@ -155,22 +155,22 @@ export class Game {
     this.bindLobbyInputs();
     this.bindCounterBoardDrag();
     new ResizeObserver(() => this.resize()).observe(frameEl);
-    frameEl.addEventListener('wheel', (ev) => {
+    this.scrollEl.addEventListener('wheel', (ev) => {
       if (this.doc.body.classList.contains('start-mode')) return;
       ev.preventDefault();
       this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15), { x: ev.clientX, y: ev.clientY });
     }, { passive: false });
     // Verschieben beim Hineinzoomen: mittlere Maustaste ziehen (oder die Bildlaufleisten).
     let drag: { x: number; y: number; sl: number; st: number } | null = null;
-    frameEl.addEventListener('pointerdown', (ev) => {
+    this.scrollEl.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 1 || this.zoom <= 1) return;
       ev.preventDefault();
-      drag = { x: ev.clientX, y: ev.clientY, sl: frameEl.scrollLeft, st: frameEl.scrollTop };
+      drag = { x: ev.clientX, y: ev.clientY, sl: this.scrollEl.scrollLeft, st: this.scrollEl.scrollTop };
     });
     window.addEventListener('pointermove', (ev) => {
       if (!drag) return;
-      frameEl.scrollLeft = drag.sl - (ev.clientX - drag.x);
-      frameEl.scrollTop = drag.st - (ev.clientY - drag.y);
+      this.scrollEl.scrollLeft = drag.sl - (ev.clientX - drag.x);
+      this.scrollEl.scrollTop = drag.st - (ev.clientY - drag.y);
     });
     window.addEventListener('pointerup', () => (drag = null));
     // Netz: Laufzeit messen – und weiterrechnen, wenn der Tab im Hintergrund liegt (dort ruht requestAnimationFrame).
@@ -277,17 +277,20 @@ export class Game {
     // Großer Bildschirm: Spielfeld füllt den freien Platz. Kleiner: nur nach Breite (Seite scrollt).
     const stacked = !this.doc.body.classList.contains('start-mode') && window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
     this.renderer.resize(this.frameEl.clientWidth, stacked ? Infinity : this.frameEl.clientHeight, this.session.world, this.zoom);
-    this.frameEl.classList.toggle('zoomed', this.zoom > 1);
+    this.scrollEl.classList.toggle('zoomed', this.zoom > 1);
     const z = this.doc.getElementById('zoom-level');
     if (z) z.textContent = `${Math.round(this.zoom * 100)} %`;
   }
 
   /** Zoom (25.10., Wunsch des Nutzers): Mausrad über dem Feld, Tasten + / − / 0, Knöpfe unter „Ansicht“. */
   private zoom = 1;
+  private get scrollEl(): HTMLElement {
+    return (this.doc.getElementById('board-scroll') as HTMLElement | null) ?? this.frameEl;
+  }
   private setZoom(next: number, at?: { x: number; y: number }): void {
     const z = Math.max(0.6, Math.min(3, Math.round(next * 100) / 100));
     if (z === this.zoom) return;
-    const f = this.frameEl;
+    const f = this.scrollEl;
     const canvas = this.doc.getElementById('board') as HTMLCanvasElement | null;
     // Punkt unter dem Mauszeiger (bzw. der Mitte) merken – er soll nach dem Zoomen an derselben Stelle bleiben.
     const r = canvas?.getBoundingClientRect();
