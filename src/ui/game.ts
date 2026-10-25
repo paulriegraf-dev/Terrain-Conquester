@@ -54,6 +54,8 @@ import { gameVersion } from '../net/version';
 import { defaultLobbySettings, renderLobby } from './lobby';
 import type { LobbyView } from './lobby';
 import { TitleFx } from './titleFx';
+import { TitleHero } from './titleHero';
+import type { TitleVariant } from './titleHero';
 import { Tutorial } from './tutorial';
 import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
 import type { SavedMatch, Snapshot } from './replays';
@@ -133,6 +135,7 @@ export class Game {
   /** Wiedereinstieg: Stücke des Stands. */
   private rjParts: string[] = [];
   private readonly titleFx: TitleFx | null;
+  private readonly titleHero: TitleHero | null;
   /** Gespeicherte Partien: Lagebilder der laufenden Runde und die zuletzt gespeicherte Partie. */
   private snapshots: Snapshot[] = [];
   private nextSnapshot = 0;
@@ -151,6 +154,15 @@ export class Game {
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
     const fx = doc.getElementById('title-fx') as HTMLCanvasElement | null;
     this.titleFx = fx ? new TitleFx(fx) : null;
+    const hero = doc.getElementById('title-hero') as HTMLCanvasElement | null;
+    this.titleHero = hero ? new TitleHero(hero) : null;
+    let variant = 'a';
+    try {
+      variant = localStorage.getItem('tc-title-variant') ?? 'a';
+    } catch {
+      /* ohne Speicher: Entwurf A */
+    }
+    this.setTitleVariant(variant);
     try {
       const cb = JSON.parse(localStorage.getItem('tc-counter-board') ?? 'null') as { on?: boolean; flip?: boolean } | null;
       if (cb) this.counterBoard = { on: !!cb.on, flip: !!cb.flip, x: (cb as { x?: number }).x, y: (cb as { y?: number }).y };
@@ -201,6 +213,7 @@ export class Game {
       else this.joinRoom(code);
     } else {
       this.titleFx?.start();
+      this.titleHero?.start();
     }
     // Kleiner Diagnose-Zugang (Multiplayer-Tests, Fehlersuche): Tick und Fingerabdruck der Welt.
     (window as unknown as { __tc?: unknown }).__tc = { tick: () => this.session.world.tick, hash: () => hashWorld(this.session.world), mode: () => this.session.mode, online: () => !!this.session.lockstep, delay: () => this.session.lockstep?.delay ?? null };
@@ -764,8 +777,10 @@ export class Game {
     if (this.titleOpen) {
       if (key === 'enter' || key === ' ') {
         ev.preventDefault();
-        this.closeTitle();
-      }
+        // Enter: Einzelspieler öffnen, dort „Gegen die KI“
+        if (this.titlePageId === 'main') this.titlePage('single');
+        else if (this.titlePageId === 'single') this.closeTitle();
+      } else if (key === 'escape') this.titlePage('main');
       return;
     }
     if (key === 'f10') {
@@ -862,12 +877,36 @@ export class Game {
     setTimeout(() => this.syncMusicButtons(), 400);
   }
 
+  private titlePageId = 'main';
+
+  /** Startbildschirm: Seite im Menü-Rahmen (Hauptmenü, Einzelspieler, Optionen, Mitwirkende). */
+  private titlePage(page: string): void {
+    this.titlePageId = page;
+    for (const el of this.doc.querySelectorAll<HTMLElement>('.tp-page')) el.hidden = el.dataset.page !== page;
+    this.doc.querySelector<HTMLElement>(`.tp-page[data-page="${page}"] .tp-btn`)?.focus({ preventScroll: true });
+  }
+
+  /** Entwurf des Startbilds (A–D) – zum Vergleichen, merkt sich der Browser. */
+  private setTitleVariant(v: string): void {
+    const variant = (['a', 'b', 'c', 'd'].includes(v) ? v : 'a') as TitleVariant;
+    const el = this.doc.getElementById('title-screen');
+    if (el) for (const x of ['a', 'b', 'c', 'd']) el.classList.toggle(`ts-${x}`, x === variant);
+    for (const b of this.doc.querySelectorAll<HTMLElement>('[data-action="title-variant"]')) b.setAttribute('aria-pressed', String(b.dataset.variant === variant));
+    this.titleHero?.setVariant(variant);
+    try {
+      localStorage.setItem('tc-title-variant', variant);
+    } catch {
+      /* egal */
+    }
+  }
+
   private closeTitle(): void {
     if (!this.titleOpen) return;
     this.titleOpen = false;
     const el = this.doc.getElementById('title-screen');
     if (el) el.hidden = true;
     this.titleFx?.stop();
+    this.titleHero?.stop();
   }
 
   /** Zurück zum Startbildschirm (Wahl: gegen die KI oder Multiplayer). */
@@ -877,6 +916,8 @@ export class Game {
     const el = this.doc.getElementById('title-screen');
     if (el) el.hidden = false;
     this.titleFx?.start();
+    this.titleHero?.start();
+    this.titlePage('main');
   }
 
   private syncMusicButtons(): void {
@@ -979,6 +1020,12 @@ export class Game {
         break;
       case 'tutorial':
         this.startTutorial();
+        break;
+      case 'tp-page':
+        this.titlePage(data.page ?? 'main');
+        break;
+      case 'title-variant':
+        this.setTitleVariant(data.variant ?? 'a');
         break;
       case 'title-play':
         this.closeTitle();

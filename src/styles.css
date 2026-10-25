@@ -949,3 +949,107 @@ body.start-mode .sp-fields { gap: 7px; }
 .tut-s-holo .tut-name { color: #9be9ff; }
 @keyframes tut-flicker { 0%, 100% { opacity: 0.9; } 47% { opacity: 0.55; } 48% { opacity: 0.92; } 82% { opacity: 0.7; } 83% { opacity: 0.9; } }
 
+/* ------------------------------------------------------------------ Startbild (25.10. abends): Menü-Rahmen mit Ketten */
+.title-screen { display: block; padding: 0; overflow: hidden; }
+.title-hero { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; z-index: 1; }
+.title-fx { z-index: 0; }
+.title-logo { position: absolute; left: clamp(16px, 4vw, 56px); top: clamp(16px, 5vh, 48px); z-index: 2; max-width: 46vw; }
+.title-logo .title-name { justify-content: flex-start; font-size: clamp(2rem, 5.4vw, 4.4rem); }
+.title-logo .title-lede { margin-top: 10px; font-size: var(--step-0); color: #d9e3dc; text-shadow: 0 1px 0 #000; }
+
+/* Rahmen */
+.tp { position: absolute; z-index: 3; right: clamp(16px, 4vw, 64px); top: 0; width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: stretch; }
+.tp-chains { position: relative; height: clamp(40px, 9vh, 90px); }
+.tp-chains i {
+  position: absolute; top: 0; bottom: -6px; width: 12px;
+  background:
+    radial-gradient(ellipse 5px 8px at 50% 50%, transparent 55%, #6d7680 58%, #2a2f35 80%, transparent 84%) 0 0 / 12px 16px repeat-y;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.7));
+}
+.tp-chains i:first-child { left: 22%; }
+.tp-chains i:last-child { right: 22%; }
+.tp-board {
+  position: relative; padding: 22px 24px 20px;
+  background:
+    radial-gradient(circle at 10px 10px, #9aa3ab 0 2px, #2a2f35 3px, transparent 4px),
+    radial-gradient(circle at calc(100% - 10px) 10px, #9aa3ab 0 2px, #2a2f35 3px, transparent 4px),
+    radial-gradient(circle at 10px calc(100% - 10px), #9aa3ab 0 2px, #2a2f35 3px, transparent 4px),
+    radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), #9aa3ab 0 2px, #2a2f35 3px, transparent 4px),
+    linear-gradient(180deg, #2c3138, #181c21 60%, #121519);
+  border: 3px solid #0a0c0e; border-radius: 6px;
+  box-shadow: inset 0 0 0 2px #4b535c, inset 0 0 0 5px #15181c, inset 0 2px 18px rgba(255, 255, 255, 0.06), 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.tp-board::before { /* Kerben links wie Haken am Rahmen */
+  content: ''; position: absolute; left: -12px; top: 26px; bottom: 26px; width: 12px;
+  background: linear-gradient(90deg, transparent 0 3px, #3b424a 3px 9px, transparent 9px) 0 0 / 12px 62px repeat-y;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+.tp-logo { display: none; }
+.tp-page { display: grid; gap: 12px; }
+.tp-page[hidden] { display: none; }
+.tp-btn {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; cursor: pointer;
+  font-family: var(--font-display); font-size: 0.92rem; letter-spacing: 0.04em; color: #f1e6c8;
+  background: linear-gradient(180deg, #1f3a63, #132544 55%, #0d1a31);
+  border: 2px solid #0a0f1a; border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #3d5f92, inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 0 #000;
+  text-shadow: 0 1px 0 #000;
+}
+.tp-btn:hover, .tp-btn:focus-visible { color: #fff; background: linear-gradient(180deg, #2a4d82, #1a3360 55%, #12244a); box-shadow: inset 0 0 0 1px #e8b04a, inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 12px rgba(232, 176, 74, 0.35); outline: none; }
+.tp-btn:active { transform: translateY(1px); }
+.tp-btn:disabled { opacity: 0.45; cursor: default; }
+.tp-btn kbd { font-family: var(--font-data); font-size: 0.66rem; color: #a9b7cc; border: 1px solid #3d5f92; border-radius: 3px; padding: 0 4px; }
+.tp-back { background: linear-gradient(180deg, #2b2f36, #1a1d22); box-shadow: inset 0 0 0 1px #4b535c, 0 2px 0 #000; }
+.tp-vol { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: #d9e3dc; font-size: 0.86rem; padding: 4px 2px; }
+.tp-credits { margin: 0; color: #d9e3dc; font-size: 0.9rem; line-height: 1.5; }
+.tp-foot { margin-top: clamp(16px, 6vh, 60px); padding: 14px 24px; }
+.ts-switch { position: absolute; left: 14px; bottom: 12px; z-index: 4; display: flex; gap: 4px; align-items: center; font-family: var(--font-data); font-size: 0.72rem; color: var(--muted); background: rgba(0, 0, 0, 0.45); padding: 4px 6px; border-radius: 4px; }
+.ts-switch button { font: inherit; color: var(--text); background: var(--raise); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; cursor: pointer; }
+.ts-switch button[aria-pressed="true"] { background: var(--brass); color: #120d05; border-color: var(--brass); }
+
+/* Entwurf B: Tafel links (mit Schriftzug), Brakk groß rechts, Nacht */
+.title-screen.ts-b { background: radial-gradient(ellipse at 70% 30%, #23305a 0%, #0c1328 45%, #05070f 100%); }
+.ts-b .title-fx { display: none; }
+.ts-b .title-logo { display: none; }
+.ts-b .tp { right: auto; left: clamp(16px, 4vw, 64px); width: min(360px, calc(100vw - 32px)); }
+.ts-b .tp-board::before { left: auto; right: -12px; transform: scaleX(-1); }
+.ts-b .tp-logo { display: grid; justify-items: center; margin: 0 0 18px; font-family: var(--font-display); color: var(--brass); font-size: 1.7rem; line-height: 1; text-shadow: 0 3px 0 #6b4a12, 0 0 18px rgba(232, 176, 74, 0.3); }
+.ts-b .tp-board { background: linear-gradient(180deg, #3a2a1c, #241910 60%, #1a120b); box-shadow: inset 0 0 0 2px #6b4f33, inset 0 0 0 5px #1a120b, 0 10px 30px rgba(0, 0, 0, 0.6); }
+
+/* Entwurf C: Dämmerung mit Bergen, Koloss auf dem Grat */
+.title-screen.ts-c {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(20, 16, 30, 0.6) 100%),
+    radial-gradient(ellipse at 30% 75%, rgba(255, 190, 120, 0.35), transparent 45%),
+    linear-gradient(180deg, #4a4566 0%, #8a7a99 45%, #c8a98f 70%, #4d4157 100%);
+}
+.ts-c .title-fx { opacity: 0.55; }
+.ts-c::before { /* Bergkette */
+  content: ''; position: absolute; left: 0; right: 0; bottom: 18%; height: 34%; z-index: 0;
+  background: #3a3350; clip-path: polygon(0 100%, 0 60%, 12% 35%, 22% 55%, 34% 18%, 46% 50%, 58% 28%, 70% 60%, 82% 30%, 92% 52%, 100% 40%, 100% 100%);
+  opacity: 0.85;
+}
+
+/* Entwurf D: Tag, Himmel und Wolken, Trupp in Formation */
+.title-screen.ts-d {
+  background:
+    radial-gradient(ellipse 18% 6% at 20% 22%, rgba(255, 255, 255, 0.85), transparent 70%),
+    radial-gradient(ellipse 24% 7% at 55% 14%, rgba(255, 255, 255, 0.75), transparent 70%),
+    radial-gradient(ellipse 14% 5% at 38% 34%, rgba(255, 255, 255, 0.6), transparent 70%),
+    linear-gradient(180deg, #5d9fe0 0%, #9cc8f0 50%, #d8ecff 75%, #6f8f5a 75.5%, #4c6b3c 100%);
+}
+.ts-d .title-name { text-shadow: 0 4px 0 #6b4a12, 0 0 2px #000, 0 6px 14px rgba(0, 0, 0, 0.45); }
+.ts-d .title-lede, .ts-d .title-kicker { color: #0f1a24; text-shadow: none; }
+.ts-d .title-fx { opacity: 0.8; }
+
+@media (max-width: 820px) {
+  .title-logo { max-width: none; right: 16px; }
+  .tp, .ts-b .tp { left: 16px; right: 16px; width: auto; top: auto; bottom: 48px; }
+  .tp-chains { display: none; }
+}
+.tp-foot { display: grid; }
+.tp-chains i {
+  width: 16px;
+  background: radial-gradient(ellipse 6px 10px at 50% 50%, transparent 50%, #8a939c 53%, #4a5159 70%, #1d2126 82%, transparent 86%) 0 0 / 16px 20px repeat-y;
+}
