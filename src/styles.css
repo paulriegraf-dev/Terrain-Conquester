@@ -829,3 +829,11 @@ body.start-mode .sp-fields { gap: 7px; }
   .console { height: 250px; }
   .console > div { overflow-y: auto; }
 }
+
+/* Technoclan-Verbund im Kommando-Feld (25.10.) */
+.vb-head { margin-top: 4px !important; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); }
+.vb-line { font-size: 0.8rem; line-height: 1.35; }
+.vb-lane { display: inline-block; min-width: 3.6em; padding: 0 4px; border-radius: 3px; font-size: 0.72rem; color: #0b0f0d; }
+.vb-line[data-lane="top"] .vb-lane { background: #6fd3ff; }
+.vb-line[data-lane="mid"] .vb-lane { background: #ffc857; }
+.vb-line[data-lane="bottom"] .vb-lane { background: #d08cff; }

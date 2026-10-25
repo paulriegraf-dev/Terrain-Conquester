@@ -474,7 +474,8 @@ export class Hud {
         `<div class="cooldown"><i style="width:${(1 - wallLeft / (WALL.cooldown * world.tps)) * 100}%"></i></div>` +
         (busy ? `<p>Gelände: ${busy} von ${SWAP.maxParallel} Flächen im Umbau</p>` : '') +
         (p.research.length ? `<p class="muted">Erforscht: ${p.research.length}</p>` : '') +
-        synergyLine(world, me);
+        synergyLine(world, me) +
+        verbundLines(world, me);
     } else {
       html = `<p class="muted">${session.mode === 'replay' ? 'Replay: Nebel aus, du siehst beide Seiten.' : 'Vorschau läuft – starte eine eigene Runde.'} Klicke auf Gebäude, um ihre Wege zu sehen.</p>`;
     }
@@ -775,9 +776,46 @@ function buildingInfo(e: Entity, world: World): string {
     <div class="progress${job ? ' job' : ''}"><i style="width:${Math.min(100, bar * 100)}%"></i></div>
     <p class="${(pr.blockedBy !== 'none' && !pr.paused) || job ? 'warn' : ''}">${escapeHtml(status)}</p>
     ${route}
+    ${factoryVerbundLine(world, e)}
     <p class="muted">${where}</p>
     ${price > 1.01 ? `<p class="warn">Markt: ${PARTS[unit.part].name} ${MARKET_LEVELS[marketLevel(price)]} – ${Math.round((1 - 1 / price) * 100)} % langsamer</p>` : ''}
     ${disguised}`;
+}
+
+/** Technoclan (25.10.): Verbund je Lane – aktiv mit Wirkung, wartend mit Restzeit, oder keiner. Dazu Eliten. */
+function verbundLines(world: World, me: PlayerId): string {
+  if (!world.players[me].faction.network) return '';
+  const rows = ROUTES.map((r) => {
+    const st = world.verbund[me][r];
+    const elites = world.entities.filter((e) => e.alive && e.owner === me && e.elite && e.mover?.route === r).length;
+    const el = elites ? ` · ${elites} Elite${elites > 1 ? 'n' : ''}` : '';
+    if (st.active) {
+      const d = VERBUND[st.active.key]!;
+      return `<p class="vb-line" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> <strong>${escapeHtml(d.name)}</strong>${d.special ? ' (Spezialisierung)' : ''} – ${escapeHtml(d.text)}${el}</p>`;
+    }
+    if (st.pending) {
+      const d = VERBUND[st.pending.key]!;
+      return `<p class="vb-line muted" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> ${escapeHtml(d.name)} in ${Math.max(0, Math.ceil((st.pending.at - world.tick) / world.tps))} s${el}</p>`;
+    }
+    return `<p class="vb-line muted" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> –${el}</p>`;
+  }).join('');
+  return `<p class="vb-head" title="Je Lane bilden die zwei Fabriken mit der höchsten Stufe einen Verbund (Übersicht F1 → Eigenheiten)">Verbund je Lane</p>${rows}`;
+}
+
+/** Technoclan: Verbund einer Fabrik (im Fabrik-Feld). */
+function factoryVerbundLine(world: World, e: Entity): string {
+  if (!world.players[e.owner].faction.network || !e.producer) return '';
+  const st = world.verbund[e.owner][e.producer.route];
+  const inIt = (x: { factories: [number, number] } | null): boolean => !!x && x.factories.includes(e.id);
+  if (inIt(st.active)) {
+    const d = VERBUND[st.active!.key]!;
+    return `<p class="vb-line" data-lane="${e.producer.route}">Verbund <strong>${escapeHtml(d.name)}</strong> – ${escapeHtml(d.text)}</p>`;
+  }
+  if (inIt(st.pending)) {
+    const d = VERBUND[st.pending!.key]!;
+    return `<p class="vb-line muted" data-lane="${e.producer.route}">Verbund ${escapeHtml(d.name)} in ${Math.max(0, Math.ceil((st.pending!.at - world.tick) / world.tps))} s</p>`;
+  }
+  return `<p class="muted">Kein Verbund – auf dieser Lane bilden die zwei Fabriken mit der höchsten Stufe den Verbund.</p>`;
 }
 
 /** Terra-Former: aktive Lane-Synergie (2 gleiche Lanes + Färbung durch die dritte). */
