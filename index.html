@@ -24,9 +24,9 @@
     <div class="tp-board">
       <div class="tp-logo" aria-hidden="true"><span>Terrain</span><span>Conquester</span></div>
       <div class="tp-page" data-page="main">
-        <button type="button" class="tp-btn" data-action="tp-page" data-page="single">Einzelspieler <kbd>↵</kbd></button>
+        <button type="button" class="tp-btn" data-action="tp-page" data-page="single">Einzelspieler</button>
         <button type="button" class="tp-btn" data-action="mp-open">Mehrspieler</button>
-        <button type="button" class="tp-btn" data-action="codex" title="Grundlagen, Einheiten, Konter und Gelände">Übersicht <kbd>F1</kbd></button>
+        <button type="button" class="tp-btn" data-action="codex" title="Grundlagen, Einheiten, Konter und Gelände (F1)">Übersicht</button>
         <button type="button" class="tp-btn" data-action="tp-page" data-page="options">Optionen</button>
       </div>
       <div class="tp-page" data-page="single" hidden>
@@ -40,24 +40,17 @@
         <label class="tp-vol" title="Lautstärke der Musik (nur bei dir)">Lautstärke <input type="range" min="0" max="100" step="5" data-volume aria-label="Lautstärke der Musik"></label>
         <label class="tp-btn title-file">Startmusik wählen…<input type="file" accept="audio/*" id="music-file" hidden></label>
         <button type="button" class="tp-btn" id="btn-export-matches" data-action="export-matches" title="Alle hier gespeicherten Partien (gegen die KI und Multiplayer) als eine Datei – z. B. für den Ordner „Terrain Conquester“" disabled>Gespeicherte Partien (0) herunterladen</button>
+        <p class="title-note" id="music-note">Startmusik: „Leitstelle“ (eigenes Stück für Terrain-Conquester) – eine eigene Datei bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
+        <p class="tp-credits">Pixel-Figuren und Funkgesichter: Paul (PixelLab/Aseprite).</p>
         <button type="button" class="tp-btn tp-back" data-action="tp-page" data-page="main">Zurück <kbd>Esc</kbd></button>
       </div>
-      <div class="tp-page" data-page="credits" hidden>
-        <p class="tp-credits">Pixel-Figuren und Funkgesichter: Paul (PixelLab/Aseprite).<br>Prototyp: Paul &amp; Claude.</p>
-        <p class="title-note" id="music-note">Startmusik bleibt nur in deinem Browser. Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).</p>
-        <button type="button" class="tp-btn tp-back" data-action="tp-page" data-page="main">Zurück <kbd>Esc</kbd></button>
-      </div>
-    </div>
-    <div class="tp-board tp-foot">
-      <button type="button" class="tp-btn" data-action="tp-page" data-page="credits">Mitwirkende</button>
     </div>
   </nav>
   <div class="ts-switch" role="group" aria-label="Entwurf des Startmenüs">
     <span>Entwurf</span>
     <button type="button" data-action="title-variant" data-variant="a" title="Kettenrahmen rechts, Gefecht links">A</button>
     <button type="button" data-action="title-variant" data-variant="b" title="Tafel links, Brakk groß rechts (Nacht)">B</button>
-    <button type="button" data-action="title-variant" data-variant="c" title="Kettenrahmen rechts, Koloss auf dem Grat (Dämmerung)">C</button>
-    <button type="button" data-action="title-variant" data-variant="d" title="Kettenrahmen rechts, Trupp in Formation (Tag)">D</button>
+    <button type="button" data-action="title-variant" data-variant="d" title="Kettenrahmen rechts, Trupp in Formation (Tag)">C</button>
   </div>
 </div>
 <div class="codex" id="codex" role="dialog" aria-modal="true" aria-labelledby="codex-title" hidden>

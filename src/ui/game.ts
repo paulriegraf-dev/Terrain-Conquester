@@ -888,9 +888,9 @@ export class Game {
 
   /** Entwurf des Startbilds (A–D) – zum Vergleichen, merkt sich der Browser. */
   private setTitleVariant(v: string): void {
-    const variant = (['a', 'b', 'c', 'd'].includes(v) ? v : 'a') as TitleVariant;
+    const variant = (['a', 'b', 'd'].includes(v) ? v : 'a') as TitleVariant;
     const el = this.doc.getElementById('title-screen');
-    if (el) for (const x of ['a', 'b', 'c', 'd']) el.classList.toggle(`ts-${x}`, x === variant);
+    if (el) for (const x of ['a', 'b', 'd']) el.classList.toggle(`ts-${x}`, x === variant);
     for (const b of this.doc.querySelectorAll<HTMLElement>('[data-action="title-variant"]')) b.setAttribute('aria-pressed', String(b.dataset.variant === variant));
     this.titleHero?.setVariant(variant);
     try {
@@ -1061,8 +1061,12 @@ export class Game {
         this.joinRoom(this.lobby.joinCode);
         break;
       case 'mp-leave':
+        // Zurück aus dem Mehrspieler-Raum: zum Startbildschirm (nicht in die Einstellungen gegen die KI).
         this.leaveRoom();
-        this.closeLobby();
+        this.lobbyOpen = false;
+        this.doc.getElementById('mp-overlay')!.hidden = true;
+        if (this.session.mode === 'demo') this.hud.showStart(MAPS); // liegt hinter dem Titel bereit
+        this.showTitle();
         break;
       case 'mp-copy':
         void navigator.clipboard?.writeText(this.lobby.link).then(() => {

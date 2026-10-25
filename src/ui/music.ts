@@ -1,4 +1,6 @@
 import ingameTrack from '../../assets/music/ingame.mp3';
+// 25.10. abends: eigenes Orchesterstück fürs Startmenü (d-Moll, Streicher, Horn, Chor, Harfe, Pauken; erzeugt).
+import menuTrack from '../../assets/music/leitstelle.mp3';
 
 /**
  * Musik: eine Spur fürs Spiel (eingebettet) und eine fürs Startmenü.
@@ -114,7 +116,8 @@ export class Music {
   }
 
   private srcFor(track: Track): string {
-    return track === 'menu' && this.menuUrl ? this.menuUrl : ingameTrack;
+    if (track === 'menu') return this.menuUrl ?? menuTrack;
+    return ingameTrack;
   }
 
   private reload(): void {
@@ -129,7 +132,7 @@ export class Music {
     }
     const src = this.srcFor(this.current);
     // Ohne eigene Startmusik läuft im Menü die Spiel-Musik leiser.
-    const base = this.current === 'menu' && !this.menuUrl ? 0.36 : 0.64;
+    const base = 0.64;
     this.audio.volume = Math.max(0, Math.min(1, base * this.volume));
     if (this.audio.dataset.src !== src) {
       this.audio.dataset.src = src;

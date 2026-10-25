@@ -669,7 +669,7 @@ export class Hud {
     this.el.resumeButton.hidden = !ingame && !online;
     this.el.mainMenuButton.hidden = !ingame || online;
     this.el.resignButton.hidden = !online;
-    this.el.toTitleButton.hidden = !ingame && !online;
+    this.el.toTitleButton.hidden = false; // auch aus dem Startbildschirm heraus: zurück dorthin
     this.el.startFine.textContent = online
       ? 'Im Multiplayer hält das Menü das Spiel nicht an – pausieren kann nur der Host (Leertaste). Zurück zum Startbildschirm heißt aufgeben.'
       : ingame

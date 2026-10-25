@@ -8,11 +8,10 @@ import { FACES, FACE_SHEET } from './faces';
 
 /**
  * Startbild-Entwürfe (25.10. abends, inspiriert von klassischen RTS-Hauptmenüs): eine große Figur aus den Pixel-Grafiken
- * des Nutzers neben dem Menü-Rahmen. B: Brakk (Funkgesicht) als Büste bei Nacht mit fallendem Datenstaub; C: Koloss auf
- * einem Felsgrat in der Dämmerung; D: ein Trupp in Formation bei Tag. A zeigt nur das Gefecht (TitleFx).
+ * des Nutzers neben dem Menü-Rahmen. B: Brakk (Funkgesicht) als Büste bei Nacht mit fallendem Datenstaub; D: ein Trupp in Formation bei Tag. A zeigt nur das Gefecht (TitleFx).
  * Immer ganzzahlig vergrößert, damit die Pixel scharf bleiben.
  */
-export type TitleVariant = 'a' | 'b' | 'c' | 'd';
+export type TitleVariant = 'a' | 'b' | 'd';
 
 const SQUAD = { sniper, gunner, colossus, plasma, hoverscout, nanomedic } as const;
 type SquadId = keyof typeof SQUAD;
@@ -43,6 +42,53 @@ export class TitleHero {
     const img = new Image();
     img.src = url;
     this.imgs.set(id, img);
+  }
+
+  private readonly bounds = new Map<string, { foot: number; left: number; width: number }>();
+
+  /** Sichtbarer Bereich einer Figur (unterste Pixelreihe, linke Spalte, Breite) – einmal ausgemessen. */
+  private measure(id: string, img: HTMLImageElement): { foot: number; left: number; width: number } {
+    const hit = this.bounds.get(id);
+    if (hit) return hit;
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const x = c.getContext('2d')!;
+    x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, img.width, img.height).data;
+    let foot = img.height - 1;
+    let minX = img.width;
+    let maxX = 0;
+    let found = false;
+    for (let y = img.height - 1; y >= 0; y--) {
+      for (let k = 0; k < img.width; k++) {
+        if (d[(y * img.width + k) * 4 + 3]! > 40) {
+          if (!found) {
+            foot = y;
+            found = true;
+          }
+          if (y >= foot - 3) {
+            minX = Math.min(minX, k);
+            maxX = Math.max(maxX, k);
+          }
+        }
+      }
+    }
+    const b = { foot, left: minX, width: Math.max(1, maxX - minX + 1) };
+    this.bounds.set(id, b);
+    return b;
+  }
+
+  private footRow(id: string, img: HTMLImageElement): number {
+    return this.measure(id, img).foot;
+  }
+
+  private leftCol(id: string, img: HTMLImageElement): number {
+    return this.measure(id, img).left;
+  }
+
+  private widthCols(id: string, img: HTMLImageElement): number {
+    return this.measure(id, img).width;
   }
 
   setVariant(v: TitleVariant): void {
@@ -82,7 +128,6 @@ export class TitleHero {
     ctx.clearRect(0, 0, w, h);
     ctx.imageSmoothingEnabled = false;
     if (this.variant === 'b') this.drawBust(w, h, dt);
-    else if (this.variant === 'c') this.drawRidge(w, h);
     else if (this.variant === 'd') this.drawSquad(w, h);
   }
 
@@ -103,7 +148,7 @@ export class TitleHero {
     if (!img?.complete) return;
     const s = Math.max(2, Math.floor(Math.min((h * 0.86) / 96, (w * 0.5) / 96)));
     const breathe = Math.round(Math.sin(this.t * 1.4) * 1) * s;
-    const x = Math.round(w * 0.97 - 96 * s);
+    const x = Math.round(Math.max(w * 0.34, Math.min(w * 0.97 - 96 * s, w * 0.64 - 48 * s))); // leicht zur Mitte
     const y = Math.round(h - 96 * s + breathe + s * 2);
     // Rückenlicht
     const g = ctx.createRadialGradient(x + 48 * s, y + 40 * s, 10, x + 48 * s, y + 40 * s, 70 * s);
@@ -123,46 +168,6 @@ export class TitleHero {
     }
   }
 
-  /** C: Koloss auf einem Felsgrat links, Nebel davor. */
-  private drawRidge(w: number, h: number): void {
-    const ctx = this.ctx;
-    const img = this.imgs.get('colossus');
-    const s = Math.max(3, Math.floor((h * 0.42) / 32));
-    const baseY = Math.round(h * 0.86);
-    const cx = Math.round(w * 0.27);
-    // Grat (Pixel-Polygon in Stufen)
-    ctx.fillStyle = '#1b1626';
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    const step = s * 2;
-    for (let x = 0; x <= w * 0.62; x += step) {
-      const d = Math.max(0, Math.abs(x - cx) - 20 * s) / (w * 0.3);
-      const y = baseY + Math.round(((d * d * h * 0.18) / step)) * step;
-      ctx.lineTo(x, y);
-      ctx.lineTo(x + step, y);
-    }
-    ctx.lineTo(w * 0.62, h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#2b2440';
-    ctx.fillRect(cx - 18 * s, baseY, 36 * s, s);
-    if (img?.complete) {
-      const bob = Math.round(Math.sin(this.t * 1.1)) * s;
-      const g = ctx.createRadialGradient(cx, baseY - 16 * s, 4, cx, baseY - 16 * s, 34 * s);
-      g.addColorStop(0, 'rgba(255, 200, 120, 0.22)');
-      g.addColorStop(1, 'rgba(255, 200, 120, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, cx - 16 * s, baseY - 32 * s + 5 * s + bob, 32 * s, 32 * s);
-    }
-    // Bodennebel
-    const fog = ctx.createLinearGradient(0, h * 0.8, 0, h);
-    fog.addColorStop(0, 'rgba(200, 190, 230, 0)');
-    fog.addColorStop(1, 'rgba(200, 190, 230, 0.35)');
-    ctx.fillStyle = fog;
-    ctx.fillRect(0, h * 0.8, w, h * 0.2);
-  }
-
   /** D: Trupp in Formation links, leichtes Atmen im Takt versetzt. */
   private drawSquad(w: number, h: number): void {
     const ctx = this.ctx;
@@ -173,14 +178,25 @@ export class TitleHero {
     ctx.beginPath();
     ctx.ellipse(w * 0.3, baseY + s * 2, w * 0.3, s * 6, 0, 0, Math.PI * 2);
     ctx.fill();
-    order.forEach((id, i) => {
+    // Hinten stehen die Figuren höher und zuerst gezeichnet; die Füße (unterste sichtbare Pixelreihe) stehen auf dem Boden.
+    const placed = order.map((id, i) => ({ id, i, back: i % 2 === 0 }));
+    placed.sort((a, b) => Number(b.back) - Number(a.back));
+    for (const { id, i, back } of placed) {
       const img = this.imgs.get(id);
-      if (!img?.complete) return;
-      const row = i % 2;
-      const x = Math.round(w * 0.05 + i * 26 * s);
-      const bob = Math.round(Math.sin(this.t * 1.6 + i)) * s;
-      const y = baseY - img.height * s - row * 6 * s + bob;
-      ctx.drawImage(img, x, y, img.width * s, img.height * s);
-    });
+      if (!img?.complete) continue;
+      const foot = this.footRow(id, img);
+      const ground = baseY - (back ? 5 * s : 0);
+      const x = Math.round(w * 0.05 + i * 24 * s);
+      const hover = id === 'hoverscout';
+      const lift = hover ? Math.round(2 + Math.sin(this.t * 2.4) * 1.5) * s : 0;
+      // Schatten unter den Füßen
+      const left = this.leftCol(id, img);
+      const width = this.widthCols(id, img);
+      ctx.fillStyle = `rgba(20, 30, 15, ${hover ? 0.25 : 0.4})`;
+      ctx.beginPath();
+      ctx.ellipse(x + (left + width / 2) * s, ground, (width / 2 + 1) * s, 1.6 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.drawImage(img, x, ground - (foot + 1) * s - lift, img.width * s, img.height * s);
+    }
   }
 }

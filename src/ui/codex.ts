@@ -366,6 +366,7 @@ function basicsTab(): string {
     ...ph.map((p) => `<b>${escapeHtml(p.name)}</b> ab ${Math.floor(p.at / 60)}:${String(p.at % 60).padStart(2, '0')}: Energie ×${num(p.energyMult, 1)}, HQs nehmen ${pct(p.hqDamageMult)} Schaden${p.hqDamageGrowth ? `, danach jede Minute +${pct(p.hqDamageGrowth)}` : ''}.`),
   ])}
   ${section('Wirtschaft: Energie', [
+    '<b>Energie ist (vorerst) die einzige Ressource.</b> Es gibt nichts abzubauen und keine Arbeiter: Energie fließt von selbst, und alles, was du kaufst, bezahlst du damit. Einheiten kosten keine Energie – sie kommen laufend aus den Fabriken; wie schnell, regelt der Markt der Bauteile (siehe unten).',
     `Grundeinkommen <b>${num(r.energyPerSecond, 1)} Energie/s</b>, dazu <b>Gebietseinkommen</b>: wer die halbe Karte hält, bekommt +${num(r.front.territoryIncome, 1)}/s (anteilig, auch mehr). Beides mal dem Faktor der Phase.`,
     `Höchstens <b>${r.maxEnergy} Energie</b> auf Vorrat – was darüber hinausgeht, verfällt. Gib sie aus.`,
     `Fabriken kosten: Kaserne/Myr-Brut ${b.barracks.buildCost}, Hangar/Werkstatt ${b.workshop.buildCost}, Schwerwerk/Schmelze ${b.foundry.buildCost}; Terra-Former-Fabriken ${b.meadowhall.buildCost} (Steinbruch ${b.quarry.buildCost}). Weiter vorn als ${r.buildDistance.freeRadius} Kacheln vom HQ +${pct(r.buildDistance.surchargePerTile)} je Kachel.`,

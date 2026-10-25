@@ -136,7 +136,7 @@ function steps(doc: Document): Step[] {
       done: (c) => own(c, 'building').length > 0,
     },
     {
-      text: 'Fabriken produzieren von selbst – du musst nichts nachkaufen. Energie kommt aus deinem Gebiet; je mehr Land du hältst, desto mehr fließt. Warte kurz, gleich rückt dein erster Verband aus.',
+      text: 'Energie ist deine einzige Ressource: Du bezahlst damit Fabriken, Stufen, Forschung und Gelände – die Einheiten selbst kosten nichts, Fabriken bauen sie laufend. Energie fließt von selbst, mehr Land bringt mehr. Gleich rückt dein erster Verband aus.',
       target: () => ({ el: '#energy-value' }),
       done: (c) => own(c, 'unit').length > 0,
     },
@@ -187,6 +187,31 @@ function steps(doc: Document): Step[] {
         if (c.view.menu === 'front') c.view.menu = 'main';
       },
       done: (c) => own(c, 'building').length > 1,
+    },
+    {
+      text: 'Fabriken lassen sich aufstufen: Eine höhere Stufe schaltet stärkere Einheiten frei. Klick eine deiner Fabriken an und wähle „Stufe 2“, sobald die Energie reicht.',
+      hint: (c) => (selectedFactory(c) ? `Taste ${keyOf(doc, 'level') ?? 'S'} · Stufe 2` : 'Linksklick auf eine Fabrik'),
+      target: (c) => {
+        if (selectedFactory(c)) return { el: '[data-cmd="level"]' };
+        const b = own(c, 'building')[0];
+        return b ? { tile: { x: b.pos.x, y: b.pos.y }, r: 1.6 } : null;
+      },
+      onEnter: (c) => {
+        if (c.view.menu !== 'main') c.view.menu = 'main';
+      },
+      done: (c) => own(c, 'building').some((b) => (b.producer?.level ?? 1) >= 2 || b.producer?.job?.kind === 'level'),
+    },
+    {
+      text: 'Auch dein HQ lässt sich ausbauen – in drei Zweigen: Aufklärung, Markt und Gelände. Jede Stufe bringt einen dauerhaften Vorteil. Klick dein HQ an und kauf eine erste Stufe.',
+      hint: (c) => (c.view.selected?.kind === 'entity' && c.world.get(c.view.selected.id)?.kind === 'hq' ? 'Einen Zweig wählen' : 'Esc, dann Linksklick auf dein HQ'),
+      target: (c) => {
+        const s = c.view.selected;
+        if (s?.kind === 'entity' && c.world.get(s.id)?.kind === 'hq') return { el: '[data-cmd^="hq-"]' };
+        if (selectedFactory(c)) return null;
+        const hq = c.world.entities.find((e) => e.alive && e.kind === 'hq' && e.owner === 0);
+        return hq ? { tile: { x: hq.pos.x, y: hq.pos.y }, r: 2.4 } : null;
+      },
+      done: (c) => Object.values(c.world.players[0].hq).some((t) => t > 0),
     },
     {
       text: 'Was der Gegner baut, verbirgt der Nebel. Ein Späher verrät es dir – Fabriken, Lanes, Truppen. Schick einen los.',

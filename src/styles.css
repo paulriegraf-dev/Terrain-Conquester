@@ -1017,20 +1017,6 @@ body.start-mode .sp-fields { gap: 7px; }
 .ts-b .tp-logo { display: grid; justify-items: center; margin: 0 0 18px; font-family: var(--font-display); color: var(--brass); font-size: 1.7rem; line-height: 1; text-shadow: 0 3px 0 #6b4a12, 0 0 18px rgba(232, 176, 74, 0.3); }
 .ts-b .tp-board { background: linear-gradient(180deg, #3a2a1c, #241910 60%, #1a120b); box-shadow: inset 0 0 0 2px #6b4f33, inset 0 0 0 5px #1a120b, 0 10px 30px rgba(0, 0, 0, 0.6); }
 
-/* Entwurf C: Dämmerung mit Bergen, Koloss auf dem Grat */
-.title-screen.ts-c {
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(20, 16, 30, 0.6) 100%),
-    radial-gradient(ellipse at 30% 75%, rgba(255, 190, 120, 0.35), transparent 45%),
-    linear-gradient(180deg, #4a4566 0%, #8a7a99 45%, #c8a98f 70%, #4d4157 100%);
-}
-.ts-c .title-fx { opacity: 0.55; }
-.ts-c::before { /* Bergkette */
-  content: ''; position: absolute; left: 0; right: 0; bottom: 18%; height: 34%; z-index: 0;
-  background: #3a3350; clip-path: polygon(0 100%, 0 60%, 12% 35%, 22% 55%, 34% 18%, 46% 50%, 58% 28%, 70% 60%, 82% 30%, 92% 52%, 100% 40%, 100% 100%);
-  opacity: 0.85;
-}
-
 /* Entwurf D: Tag, Himmel und Wolken, Trupp in Formation */
 .title-screen.ts-d {
   background:
@@ -1053,3 +1039,11 @@ body.start-mode .sp-fields { gap: 7px; }
   width: 16px;
   background: radial-gradient(ellipse 6px 10px at 50% 50%, transparent 50%, #8a939c 53%, #4a5159 70%, #1d2126 82%, transparent 86%) 0 0 / 16px 20px repeat-y;
 }
+
+/* Menü (Pause, Einstellungen, Ende) im Spiel: über das ganze Fenster, auch vor der Befehlsleiste – nichts scrollen */
+@media (min-width: 1101px) {
+  body:not(.start-mode) .overlay { position: fixed; inset: 0; z-index: 45; }
+  body:not(.start-mode) .overlay > .card { width: min(560px, 100%); }
+}
+/* Tutorial-Ring: Rand nach innen, damit er genau auf dem Knopf sitzt */
+.tut-ring { box-sizing: border-box; }
