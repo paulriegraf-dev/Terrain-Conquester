@@ -1994,7 +1994,7 @@ export class Game {
         // Technoclan (25.10.): Bausteine, Elite, Verbund
         const net = unit.net
           ? (unit.elite ? ` · ELITE (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '') +
-            (unit.tech?.key ? ` · Verbund ${VERBUND[unit.tech.key]?.name ?? ''}${unit.elite?.print ? ' (Prägung)' : ''}` : '')
+            (unit.tech?.key ? ` · Verbund ${VERBUND[unit.tech.key]?.name ?? ''}${unit.elite?.print ? ' (Elite-Prägung)' : ' (seit Geburt)'}` : '')
           : '';
         this.hud.setStatus(
           `${unit.name} (${who}) · ${Math.ceil(unit.hp)}/${unit.maxHp}${squad}${net} · ${weaponRoleOf(unit.defId as UnitId).label} · Panzerung ${ARMOR_LABEL[unit.armor as 'infantry' | 'light' | 'heavy'] ?? unit.armor} · ${counterLine(unit.defId as UnitId, enemyFaction)} · Widerstand ${unit.toughness}, Rüstung ${save}${profile} · ${ROUTE_NAMES[m.route]} · ${MOVE_PROFILES[m.profile].name}`,

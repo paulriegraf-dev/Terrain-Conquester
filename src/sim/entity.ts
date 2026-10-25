@@ -161,6 +161,8 @@ export interface Entity {
    * (`mods`, jede Sekunde neu), Grundwerte vor allen Aufschlägen, Ansitz (still seit Tick), Kopfschuss (letztes Ziel).
    */
   elite?: { print: string | null; since: number };
+  /** Technoclan: der erste Verbund, den die Einheit erlebt (bei Geburt oder Start des Verbunds) – gilt bis zum Tod. */
+  verbundPrint?: string;
   tech?: {
     /** Verbund, dessen Wirkung gerade gilt ('' = keiner). */
     key: string;

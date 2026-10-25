@@ -126,8 +126,14 @@ describe('Technoclan-Verbund (25.10.)', () => {
     f2.producer!.unit = 'hoverscout';
     stepTimes(world, world.tps);
     assert.equal(active(), null, 'Einheit gewechselt: Verbund endet sofort');
+    assert.equal(p.verbundPrint, 'plasma+plasma', 'Prägung: die Einheit behält ihren Verbund');
+    assert.ok(Math.abs(p.weapon!.def.splash! - (base + 0.6)) < 1e-9, 'Glutteppich wirkt weiter');
     stepTimes(world, 21 * world.tps);
     assert.equal(active()?.key, 'plasma+hoverscout', 'Sperrfeuer nach der Einspielzeit');
-    assert.ok(p.tech!.mods.slowHit, 'Plasmawerfer bekommt Sperrfeuer');
+    assert.ok(!p.tech!.mods.slowHit, 'alte Einheit bleibt bei ihrer Prägung');
+    const q = unit(world, 0, 'plasma', 7.5, 7.5);
+    q.fromBuilding = f1.id;
+    stepTimes(world, world.tps);
+    assert.ok(q.tech!.mods.slowHit, 'neue Einheit bekommt Sperrfeuer');
   });
 });

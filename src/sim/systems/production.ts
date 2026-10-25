@@ -10,6 +10,7 @@ import { clutchSize, layEgg } from './myr';
 import { buildingUpgradeLevel } from './factory';
 import type { UnitId } from '../../data/units';
 import { synergyProduction } from './synergy';
+import { verbundOf } from './verbund';
 import type { BuildingId } from '../../data/buildings';
 import type { PartId } from '../../data/market';
 
@@ -127,7 +128,10 @@ function producePlayer(world: World, owner: PlayerId): void {
     } else {
       const pos = spawnPoint(world, building, pr.route, MOVE_PROFILES[def.move]);
       if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
-      world.addUnit(owner, def, pos, pr.route).fromBuilding = building.id;
+      const u = world.addUnit(owner, def, pos, pr.route);
+      u.fromBuilding = building.id;
+      const birth = verbundOf(world, u);
+      if (birth) u.verbundPrint = birth;
     }
     pr.progress -= pr.intervalTicks;
     pr.produced++;

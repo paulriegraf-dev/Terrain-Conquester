@@ -388,7 +388,7 @@ function technoTraits(): string {
     <h3 class="cx-h3">Bausteine</h3>
     <div class="cx-scroll"><table class="cx-table cx-blocks"><thead><tr><th>Baustein</th><th>1. Kopie</th><th>2. Kopie</th><th>3. Kopie</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>
     <h3 class="cx-h3">Verbund je Lane</h3>
-    <p class="cx-lede">Die zwei Fabriken mit der höchsten Stufe auf einer Lane (Gleichstand: die ältere) bilden einen Verbund aus den Einheiten, die sie gerade bauen. Zweimal dieselbe Art = <b>Spezialisierung</b> (hervorgehoben, stärker), zwei verschiedene = <b>Kombination</b>. Er gilt nach ${RULES.verbund.switchSeconds} s Einspielzeit für alle Einheiten dieser beiden Fabriken auf der Lane; die Fabriken pochen in der Farbe ihrer Lane. Der Gegner sieht ihn im Spähbericht.</p>
+    <p class="cx-lede">Die zwei Fabriken mit der höchsten Stufe auf einer Lane (Gleichstand: die ältere) bilden einen Verbund aus den Einheiten, die sie gerade bauen. Zweimal dieselbe Art = <b>Spezialisierung</b> (hervorgehoben, stärker), zwei verschiedene = <b>Kombination</b>. Er gilt nach ${RULES.verbund.switchSeconds} s Einspielzeit für alle Einheiten dieser beiden Fabriken auf der Lane. <b>Prägung:</b> Jede Einheit behält den ersten Verbund, den sie erlebt, bis zu ihrem Tod – auch wenn die Fabrik danach Lane oder Einheit wechselt. Die Fabriken pochen in der Farbe ihrer Lane. Der Gegner sieht ihn im Spähbericht.</p>
     <div class="cx-scroll"><table class="cx-table cx-vbtable"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

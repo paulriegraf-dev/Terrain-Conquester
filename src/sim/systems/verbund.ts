@@ -93,10 +93,10 @@ export function verbundOf(world: World, e: Entity): string | null {
   return VERBUND[st.active.key]?.mods[e.defId as VerbundUnit] ? st.active.key : null;
 }
 
-/** Aufstieg zur Elite: +25 % Leben (über refreshTech), Prägung = der Verbund, in dem sie gerade steht. */
+/** Aufstieg zur Elite: +25 % Leben (über refreshTech), Prägung = Geburts-Verbund, sonst der gerade aktive. */
 export function becomeElite(world: World, e: Entity): void {
   if (e.elite) return;
-  e.elite = { print: verbundOf(world, e), since: world.tick };
+  e.elite = { print: e.verbundPrint ?? verbundOf(world, e), since: world.tick };
   world.players[e.owner].stats.elites++;
   world.emit({ type: 'elite', owner: e.owner, unit: e.defId as UnitId, pos: { x: e.pos.x, y: e.pos.y } });
 }
@@ -158,7 +158,11 @@ export function refreshTech(world: World, e: Entity): void {
   const plating = count(protocols, 'plating');
   for (let c = protocols[0] === 'plating' ? 2 : 1; c <= Math.min(3, plating); c++) merge(mods, c === 1 ? { toughness: 1 } : { damageTaken: c === 2 ? 0.9 : 0.95 });
   // Verbund bzw. Prägung
-  const key = e.elite?.print ?? verbundOf(world, e) ?? '';
+  if (!e.verbundPrint) {
+    const v = verbundOf(world, e);
+    if (v) e.verbundPrint = v;
+  }
+  const key = e.elite?.print ?? e.verbundPrint ?? '';
   if (key) merge(mods, VERBUND[key]?.mods[e.defId as VerbundUnit]);
   // Elite
   let fx: NonNullable<typeof t.eliteFx> | null = null;
