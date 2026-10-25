@@ -4,7 +4,7 @@ import menuTrack from '../../assets/music/leitstelle.mp3';
 // Zweites Stück (Wunsch des Nutzers, Orientierung: eisige Fantasy-Menümusik): Wind, tiefer Chor, Tremolo, Glocken.
 import frostTrack from '../../assets/music/frostwacht.mp3';
 
-/** Startmusik zur Wahl (Optionen); 'custom' = eigene Datei aus diesem Browser. */
+/** Startmusik zur Wahl (Optionen). */
 export const MENU_TRACKS = [
   { id: 'leitstelle', name: 'Leitstelle', url: menuTrack },
   { id: 'frostwacht', name: 'Frostwacht', url: frostTrack },
@@ -14,27 +14,21 @@ const KEY_MENU = 'tc-menu-track';
 /**
  * Musik: eine Spur fürs Spiel (eingebettet) und eine fürs Startmenü.
  *
- * Die Startmenü-Musik kann man selbst wählen (Datei vom eigenen Rechner). Sie bleibt nur in
- * diesem Browser (IndexedDB) – sie wird nicht mit dem Spiel veröffentlicht. Ohne eigene Wahl
- * läuft im Startmenü leise die Spiel-Musik.
+ * Die Startmenü-Musik wählt man in den Optionen aus MENU_TRACKS (eine eigene Datei ist nicht mehr vorgesehen).
  *
  * Browser spielen Ton erst nach der ersten Eingabe ab – deshalb startet die Musik beim ersten Klick.
  */
 export type Track = 'menu' | 'game';
 
-const DB = 'terrain-conquester';
-const STORE = 'music';
 const KEY_ENABLED = 'tc-music-enabled';
 const KEY_VOLUME = 'tc-music-volume';
 
 export class Music {
   private readonly audio: HTMLAudioElement;
   private current: Track | null = null;
-  private menuUrl: string | null = null;
-  private menuName: string | null = null;
   private unlocked = false;
   enabled = true;
-  /** Gewählte Startmusik: eine aus MENU_TRACKS oder 'custom'. */
+  /** Gewählte Startmusik: eine aus MENU_TRACKS. */
   menuChoice = 'leitstelle';
   private sfx: AudioContext | null = null;
   /** Lautstärke 0–1 (Regler; gilt nur auf diesem Rechner – im Multiplayer hat jeder seine eigene). */
@@ -47,7 +41,9 @@ export class Music {
       this.enabled = localStorage.getItem(KEY_ENABLED) !== '0';
       const v = Number(localStorage.getItem(KEY_VOLUME));
       if (localStorage.getItem(KEY_VOLUME) !== null && Number.isFinite(v)) this.volume = Math.max(0, Math.min(1, v));
-      this.menuChoice = localStorage.getItem(KEY_MENU) ?? 'leitstelle';
+      const saved = localStorage.getItem(KEY_MENU);
+      // Früher gab es eine eigene Datei ('custom') – die fällt jetzt auf Leitstelle zurück.
+      if (saved && MENU_TRACKS.some((t) => t.id === saved)) this.menuChoice = saved;
     } catch {
       /* ohne Speicher: Musik an */
     }
@@ -58,12 +54,6 @@ export class Music {
     };
     doc.addEventListener('pointerdown', unlock, { once: false });
     doc.addEventListener('keydown', unlock, { once: false });
-    void this.loadStoredMenuTrack();
-  }
-
-  /** Name der gewählten Startmenü-Musik (oder null). */
-  get customMenuName(): string | null {
-    return this.menuName;
   }
 
   play(track: Track): void {
@@ -94,14 +84,12 @@ export class Music {
 
   /** Name der laufenden Startmusik. */
   get menuTrackName(): string {
-    if (this.menuChoice === 'custom' && this.menuName) return this.menuName;
     return (MENU_TRACKS.find((t) => t.id === this.menuChoice) ?? MENU_TRACKS[0]).name;
   }
 
-  /** Nächste Startmusik (eigene Datei nur, wenn eine gewählt wurde). */
+  /** Nächste Startmusik. */
   cycleMenuTrack(): void {
     const ids: string[] = MENU_TRACKS.map((t) => t.id);
-    if (this.menuUrl) ids.push('custom');
     const i = ids.indexOf(this.menuChoice);
     this.menuChoice = ids[(i + 1) % ids.length]!;
     try {
@@ -166,51 +154,8 @@ export class Music {
     }
   }
 
-  /** Eigene Startmenü-Musik vom Rechner wählen – bleibt nur in diesem Browser. */
-  async setMenuTrack(file: File): Promise<void> {
-    if (this.menuUrl) URL.revokeObjectURL(this.menuUrl);
-    this.menuUrl = URL.createObjectURL(file);
-    this.menuName = file.name;
-    this.menuChoice = 'custom';
-    try {
-      localStorage.setItem(KEY_MENU, 'custom');
-    } catch {
-      /* egal */
-    }
-    if (this.current === 'menu') this.reload();
-    try {
-      const db = await openDb();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).put({ name: file.name, blob: file }, 'menu');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch {
-      /* Speichern ging nicht – gilt dann nur bis zum Neuladen */
-    }
-  }
-
-  private async loadStoredMenuTrack(): Promise<void> {
-    try {
-      const db = await openDb();
-      const rec = await new Promise<{ name: string; blob: Blob } | undefined>((resolve, reject) => {
-        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get('menu');
-        req.onsuccess = () => resolve(req.result as { name: string; blob: Blob } | undefined);
-        req.onerror = () => reject(req.error);
-      });
-      if (!rec || this.menuUrl) return;
-      this.menuUrl = URL.createObjectURL(rec.blob);
-      this.menuName = rec.name;
-      if (this.current === 'menu') this.reload();
-    } catch {
-      /* kein IndexedDB (z. B. privates Fenster) */
-    }
-  }
-
   private srcFor(track: Track): string {
     if (track === 'menu') {
-      if (this.menuChoice === 'custom' && this.menuUrl) return this.menuUrl;
       return (MENU_TRACKS.find((t) => t.id === this.menuChoice) ?? MENU_TRACKS[0]).url;
     }
     return ingameTrack;
@@ -227,7 +172,6 @@ export class Music {
       return;
     }
     const src = this.srcFor(this.current);
-    // Ohne eigene Startmusik läuft im Menü die Spiel-Musik leiser.
     const base = 0.64;
     this.audio.volume = Math.max(0, Math.min(1, base * this.volume));
     if (this.audio.dataset.src !== src) {
@@ -240,13 +184,4 @@ export class Music {
       this.unlocked = false;
     });
   }
-}
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
 }

@@ -560,7 +560,6 @@ select {
 .title-lede { margin: 0; font-size: var(--step-1, 1.1rem); color: var(--text); max-width: 44ch; }
 .title-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .title-play { padding: 12px 34px; font-size: 1.25rem; }
-.title-file { cursor: pointer; }
 .title-note { margin: 0; font-size: 0.78rem; color: var(--muted); max-width: 56ch; }
 
 /* ---------------------------------------------------------------- Übersicht: Einheiten, Konter, Gelände (24.10.) */
@@ -956,6 +955,8 @@ body.start-mode .sp-fields { gap: 7px; }
 .title-logo { position: absolute; left: clamp(16px, 4vw, 56px); top: clamp(16px, 5vh, 48px); z-index: 2; max-width: 46vw; }
 .title-logo .title-name { justify-content: flex-start; font-size: clamp(2rem, 5.4vw, 4.4rem); }
 .title-logo .title-lede { margin-top: 10px; font-size: var(--step-0); color: #d9e3dc; text-shadow: 0 1px 0 #000; }
+/* Die Beschreibung steht nur noch im Startbild C (Trupp bei Tag). */
+.title-screen:not(.ts-d) .title-lede { display: none; }
 
 /* Rahmen */
 .tp { position: absolute; z-index: 3; right: clamp(16px, 4vw, 64px); top: 0; width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: stretch; }

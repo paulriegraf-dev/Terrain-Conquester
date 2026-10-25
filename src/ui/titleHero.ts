@@ -198,27 +198,43 @@ export class TitleHero {
     this.drawBrakk(Math.round(Math.max(75 * s, w * 0.3)), Math.round(h * 0.95), s, 'rgba(120, 90, 255, 0.3)');
   }
 
-  /** E: Frost – Brakk auf einer Eisklippe links, Schnee treibt schräg. */
+  /** E: Frost – Brakk auf einer Schneewehe links, Schnee treibt schräg. */
   private drawFrost(w: number, h: number, dt: number): void {
     const ctx = this.ctx;
     const s = this.brakkScale(h, 0.7);
     const cx = Math.round(w * 0.3);
     const ground = Math.round(h * 0.86);
-    // Eisklippe (Pixel-Stufen)
+    // Schneewehe in Pixel-Stufen: oben weiß, darunter zwei Schattentöne, die der Wölbung folgen (kein flacher Sockel).
     const step = 2 * s;
+    const top = (x: number): number => {
+      const d = Math.max(0, Math.abs(x - cx) - 46 * s) / (w * 0.22);
+      return ground + Math.round((d * d * h * 0.3) / step) * step;
+    };
+    const right = Math.min(w, cx + w * 0.4);
+    const layer = (color: string, sink: number): void => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      for (let x = 0; x <= right; x += step) {
+        ctx.lineTo(x, top(x) + sink);
+        ctx.lineTo(x + step, top(x) + sink);
+      }
+      ctx.lineTo(right, h);
+      ctx.fill();
+    };
+    layer('#e4eef6', 0);
+    layer('#c3d5e4', 5 * s);
+    layer('#9fb8cc', 16 * s);
+    this.drawBrakk(cx, ground + 2 * s, s, 'rgba(180, 220, 255, 0.35)', 'rgba(70, 100, 140, 0.25)');
+    // Brakk steht im Schnee: eine flache Schneelippe vor den Stiefeln, damit die Füße leicht einsinken.
     ctx.fillStyle = '#e4eef6';
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    for (let x = 0; x <= w * 0.58; x += step) {
-      const d = Math.max(0, Math.abs(x - cx) - 50 * s) / (w * 0.25);
-      ctx.lineTo(x, ground + Math.round((d * d * h * 0.25) / step) * step);
-      ctx.lineTo(x + step, ground + Math.round((d * d * h * 0.25) / step) * step);
+    for (let x = cx - 64 * s; x < cx + 64 * s; x += step) {
+      const k = Math.abs(x - cx) / (64 * s);
+      const lip = Math.round(((1 - k * k) * 3 * s) / s) * s;
+      if (lip > 0) ctx.fillRect(x, ground + 2 * s - lip, step, lip);
     }
-    ctx.lineTo(w * 0.58, h);
-    ctx.fill();
-    ctx.fillStyle = '#8eaac2';
-    ctx.fillRect(0, ground + 8 * s, w * 0.52, h);
-    this.drawBrakk(cx, ground + s, s, 'rgba(180, 220, 255, 0.35)', 'rgba(40, 60, 90, 0.35)');
+    ctx.fillStyle = '#c3d5e4';
+    ctx.fillRect(cx - 40 * s, ground + 2 * s, 80 * s, s);
     this.particles(w, h, dt, 'rgba(255, 255, 255, 0.85)', 160, [40, 110], -30);
   }
 

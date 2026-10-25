@@ -31,7 +31,7 @@ const URLS: Record<SpriteId, string> = {
   drone, bomb, hound, cannon, catapult, sphere, swarmmind,
 };
 /** Diese Figuren schauen im Bild nach links (werden für die linke Seite gespiegelt, für die rechte nicht). */
-const FACES_LEFT: ReadonlySet<SpriteId> = new Set(['hoverscout', 'cannon']);
+const FACES_LEFT: ReadonlySet<SpriteId> = new Set(['hoverscout', 'cannon', 'catapult']);
 /** Schweben (wippen auf und ab). */
 const HOVERS: ReadonlySet<SpriteId> = new Set(['hoverscout', 'swarmmind']);
 /** Heilen Verbündete in der Nähe, statt zu schießen. */

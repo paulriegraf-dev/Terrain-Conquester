@@ -870,16 +870,8 @@ export class Game {
   // ------------------------------------------------------------------ Titelbild und Musik
 
   private bindTitle(): void {
-    const input = this.doc.getElementById('music-file') as HTMLInputElement | null;
-    input?.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      void this.music.setMenuTrack(file).then(() => this.syncMusicButtons());
-    });
     this.syncMusicButtons();
     this.syncSavedCount();
-    // Gespeicherte Startmusik wird asynchron geladen – kurz danach den Hinweis aktualisieren.
-    setTimeout(() => this.syncMusicButtons(), 400);
   }
 
   private titlePageId = 'main';
@@ -933,9 +925,6 @@ export class Game {
     }
     const mt = this.doc.getElementById('btn-menu-track');
     if (mt) mt.textContent = `Startmusik: ${this.music.menuTrackName}`;
-    const note = this.doc.getElementById('music-note');
-    const name = this.music.customMenuName;
-    if (note && name) note.textContent = `Eigene Startmusik: ${name} (nur in diesem Browser gespeichert). Dazu „Leitstelle“ und „Frostwacht“ (eigene Stücke). Spielmusik: „8-bit music for game“ (freesound community, Pixabay-Lizenz).`;
   }
 
   /** Übersicht öffnen: eigene Fraktion vorgewählt, als Gegner die Fraktion der KI. */
