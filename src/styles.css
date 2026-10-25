@@ -819,3 +819,13 @@ body.start-mode .sp-fields { gap: 7px; }
 .view-docked .panel-title { font-size: 0.72rem; margin: 0; }
 .view-docked .seg-row, .view-docked .layers { flex-wrap: wrap; }
 .view-docked .flow-pick { font-size: 0.75rem; }
+
+/* Zoom (25.10.): hineingezoomt scrollt das Feld; mittlere Maustaste verschiebt. */
+.board-frame.zoomed { display: block; overflow: auto; place-items: initial; }
+.board-frame.zoomed #board { margin: 0 auto; max-width: none; }
+.zoom-row .seg-btn { min-width: 2.2em; }
+/* Feste Höhe der Konsole: das Spielfeld zoomt nicht mehr von selbst, wenn unten Text dazukommt. */
+@media (min-width: 1101px) and (min-height: 641px) {
+  .console { height: 250px; }
+  .console > div { overflow-y: auto; }
+}

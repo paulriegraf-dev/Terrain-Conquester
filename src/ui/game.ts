@@ -155,6 +155,24 @@ export class Game {
     this.bindLobbyInputs();
     this.bindCounterBoardDrag();
     new ResizeObserver(() => this.resize()).observe(frameEl);
+    frameEl.addEventListener('wheel', (ev) => {
+      if (this.doc.body.classList.contains('start-mode')) return;
+      ev.preventDefault();
+      this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15), { x: ev.clientX, y: ev.clientY });
+    }, { passive: false });
+    // Verschieben beim Hineinzoomen: mittlere Maustaste ziehen (oder die Bildlaufleisten).
+    let drag: { x: number; y: number; sl: number; st: number } | null = null;
+    frameEl.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 1 || this.zoom <= 1) return;
+      ev.preventDefault();
+      drag = { x: ev.clientX, y: ev.clientY, sl: frameEl.scrollLeft, st: frameEl.scrollTop };
+    });
+    window.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      frameEl.scrollLeft = drag.sl - (ev.clientX - drag.x);
+      frameEl.scrollTop = drag.st - (ev.clientY - drag.y);
+    });
+    window.addEventListener('pointerup', () => (drag = null));
     // Netz: Laufzeit messen – und weiterrechnen, wenn der Tab im Hintergrund liegt (dort ruht requestAnimationFrame).
     window.setInterval(() => this.netTick(performance.now()), 250);
     // Seite wird geschlossen oder neu geladen: Verbindung sauber trennen (der andere wartet dann auf die Rückkehr).
@@ -258,7 +276,33 @@ export class Game {
     if (!map) return;
     // Großer Bildschirm: Spielfeld füllt den freien Platz. Kleiner: nur nach Breite (Seite scrollt).
     const stacked = !this.doc.body.classList.contains('start-mode') && window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
-    this.renderer.resize(this.frameEl.clientWidth, stacked ? Infinity : this.frameEl.clientHeight, this.session.world);
+    this.renderer.resize(this.frameEl.clientWidth, stacked ? Infinity : this.frameEl.clientHeight, this.session.world, this.zoom);
+    this.frameEl.classList.toggle('zoomed', this.zoom > 1);
+    const z = this.doc.getElementById('zoom-level');
+    if (z) z.textContent = `${Math.round(this.zoom * 100)} %`;
+  }
+
+  /** Zoom (25.10., Wunsch des Nutzers): Mausrad über dem Feld, Tasten + / − / 0, Knöpfe unter „Ansicht“. */
+  private zoom = 1;
+  private setZoom(next: number, at?: { x: number; y: number }): void {
+    const z = Math.max(0.6, Math.min(3, Math.round(next * 100) / 100));
+    if (z === this.zoom) return;
+    const f = this.frameEl;
+    const canvas = this.doc.getElementById('board') as HTMLCanvasElement | null;
+    // Punkt unter dem Mauszeiger (bzw. der Mitte) merken – er soll nach dem Zoomen an derselben Stelle bleiben.
+    const r = canvas?.getBoundingClientRect();
+    const fr = f.getBoundingClientRect();
+    const px = at ? at.x : fr.left + fr.width / 2;
+    const py = at ? at.y : fr.top + fr.height / 2;
+    const rx = r ? (px - r.left) / r.width : 0.5;
+    const ry = r ? (py - r.top) / r.height : 0.5;
+    this.zoom = z;
+    this.resize();
+    if (canvas) {
+      const r2 = canvas.getBoundingClientRect();
+      f.scrollLeft += r2.left + rx * r2.width - px;
+      f.scrollTop += r2.top + ry * r2.height - py;
+    }
   }
 
   // ------------------------------------------------------------------ Schleife
@@ -726,6 +770,16 @@ export class Game {
         case 'h':
           this.onAction('layer', { layer: 'counters' });
           return true;
+        case '+':
+        case '=':
+          this.setZoom(this.zoom * 1.25);
+          return true;
+        case '-':
+          this.setZoom(this.zoom / 1.25);
+          return true;
+        case '0':
+          this.setZoom(1);
+          return true;
         case 'v':
           this.onAction('layer', { layer: 'vision' });
           return true;
@@ -1155,6 +1209,11 @@ export class Game {
         }
         break;
       }
+      case 'zoom':
+        if (data.zoom === 'in') this.setZoom(this.zoom * 1.25);
+        else if (data.zoom === 'out') this.setZoom(this.zoom / 1.25);
+        else this.setZoom(1);
+        break;
       case 'layer':
         if (data.layer === 'fog' && this.view.human !== null && !this.session.lockstep) this.view.fog = !this.view.fog;
         if (data.layer === 'grid') this.view.grid = !this.view.grid;

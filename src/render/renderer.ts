@@ -71,15 +71,17 @@ export class Renderer {
   }
 
   /** Passt die Kachelgröße an den verfügbaren Platz an (ganze Pixel, damit es scharf bleibt). */
-  resize(availableWidth: number, availableHeight: number, world: World): void {
+  resize(availableWidth: number, availableHeight: number, world: World, zoom = 1): void {
     const { x0, cols } = Renderer.visibleColumns(world);
     this.viewX0 = x0;
     this.viewCols = cols;
     const mapWidth = cols;
     const mapHeight = world.map.height;
     const fit = Math.min(availableWidth / mapWidth, availableHeight / mapHeight);
-    this.tile = Math.max(6, Math.min(32, Math.floor(fit)));
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Zoom (25.10.): 1 = passt genau; größer = hineingezoomt (das Feld scrollt), kleiner = herausgezoomt.
+    this.tile = Math.max(5, Math.min(zoom > 1 ? 72 : 32, Math.floor(Math.min(32, fit) * zoom)));
+    // Große Leinwand beim Hineinzoomen: ohne doppelte Pixeldichte, damit es flüssig bleibt.
+    this.dpr = Math.min(this.tile >= 40 ? 1 : 2, window.devicePixelRatio || 1);
     const w = this.tile * mapWidth;
     const h = this.tile * mapHeight;
     this.canvas.style.width = `${w}px`;
