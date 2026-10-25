@@ -1789,3 +1789,19 @@ Ausgearbeitet mit dem Nutzer im Claude-Dokument „Technoclan-Verbund: Kombinati
 - **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.
 - **Gewinn-Taktiken merken und darauf aufbauen:** Realistisch als Selbstspiel mit Parameter-Suche, nicht als Lernen im laufenden Spiel: Strategie-Profile (Bauauftrag, Zeitpunkte, Geländevorlieben, Einheitenmix) werden in Simulationen und aus den gespeicherten Partien (`partien/`) nach Siegquote bewertet, die besten Parameter landen als Datendatei im Spiel. Ein lernender Spieler im Browser ohne Server ist dafür nicht nötig.
 - **Reihenfolge:** erst die Nachtläufe (u12, u13) und die Schadensauswertung je Einheit und Karte, dann Gelände-Messwerte in die Simulation aufnehmen (wo wird gekämpft, auf welchem Boden), dann die KI-Regeln.
+
+## Nachtlauf u16: Verbund und Eliten (216 Partien, Stand inkl. Balance-Patch 1)
+
+Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
+
+| Paarung | u12 (vor Patch) | u16 |
+|---|---|---|
+| Myriaden – Technoclan | 52:16 | 68:3 |
+| Myriaden – Terra-Former | 10:62 | 24:48 |
+| Technoclan – Terra-Former | 22:50 | 16:56 |
+
+- Technoclan: im Schnitt 9,9 Eliten und 124 übertragene Bausteine je Partie (nie 0 Eliten, max. 30).
+- Häufigste Verbünde (Zeitanteil): Scharfschütze+Hover 17 %, Plasma+Plasma 17 %, Plasma+Koloss 16 %, Plasma+Hover 13 %, Scharfschütze+Scharfschütze 11 %.
+- Top-Schadenseinheit je Partie: Technoclan Scharfschützen 47 %, Koloss 16 %; Myr Sphäre 49 %, Katapult 20 %; Terra-Former Steppenjäger 47 %, Frontbrecher 36 %.
+- Gegen Myr gehen 25 % des Technoclan-Schadens in Erdwälle.
+- Befund: Technoclan ist nach Patch 1 klar zu schwach. Keine Änderung ohne Absprache.
