@@ -56,6 +56,8 @@ export interface WeaponDef {
   type: DamageType;
   /** Spezialisierung: Gegen diese Panzerung verwundet die Waffe mindestens ab dieser Augenzahl (z. B. Anti-Panzer 3+). */
   anti?: Partial<Record<ArmorClass, number>>;
+  /** Schadensfaktor gegen eine Panzerung (25.10., z. B. Steppenjäger gegen Schwere ×0,7) – wirkt auf den Schaden je Wunde. */
+  vs?: Partial<Record<ArmorClass, number>>;
   /** Schadensfaktor gegen Gebäude und HQ (Belagerung ×2; 0 = greift keine Gebäude an). */
   structureDamage?: number;
   /** Durchschuss (Upgrade): Jeder Schuss trifft mit diesem Anteil auch den nächsten Gegner dahinter. */
@@ -503,7 +505,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 160, toughness: 5, save: 4,
     speed: 2.0, move: 'wheels', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
-    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 } },
+    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 16, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
     shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',
   },
@@ -524,7 +526,7 @@ const RAW: Record<UnitId, UnitInput> = {
   },
 
   specialForest: {
-    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 380, toughness: 8, save: 3,
+    id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 323, toughness: 8, save: 3,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
     weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 8, ap: 1, damage: 15, type: 'rifle' },
     ground: 'forest', shapeshift: true,

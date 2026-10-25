@@ -77,7 +77,7 @@ export function woundsPerShot(w: WeaponDef, d: Defense, hitBonus = 0): number {
  */
 export function effectiveness(w: WeaponDef, d: Defense, modelWounds: number): number {
   const structure = d.big ? (w.structureDamage ?? 1) : 1;
-  return woundsPerShot(w, d) * Math.min(w.damage * structure, modelWounds);
+  return woundsPerShot(w, d) * Math.min(w.damage * structure * (w.vs?.[d.armor] ?? 1), modelWounds);
 }
 
 /** Verteidigungswerte eines Ziels – mit Deckung, wenn eine Einheit im Wald steht; `from` = Schütze (Ausweichen nach Abstand). */

@@ -81,7 +81,7 @@ function defenseOfUnit(u: UnitDef): { d: Defense; wounds: number } {
 /** Schaden je Sekunde eines vollen Verbands gegen ein Ziel (Richtwert: ohne Upgrades, Schwarm, Gelände, Fläche). */
 function dps(attacker: UnitDef, w: WeaponDef, d: Defense, modelWounds: number): number {
   const models = attacker.models ?? 1;
-  const perShot = woundsPerShot(w, d) * Math.min(w.damage * (d.big ? (w.structureDamage ?? 1) : 1), modelWounds);
+  const perShot = woundsPerShot(w, d) * Math.min(w.damage * (d.big ? (w.structureDamage ?? 1) : 1) * (w.vs?.[d.armor] ?? 1), modelWounds);
   return (models * w.shots * perShot) / Math.max(0.1, w.cooldown);
 }
 

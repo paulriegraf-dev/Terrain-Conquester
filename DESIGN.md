@@ -1765,6 +1765,8 @@ Stand davor auf GitHub: Branch `claude/stand-vor-balance-patch-1` (zum Zurückro
 - **Sichtbar:** geschwächt (brauner Schein), verwurzelt (grüne Ranken), zersetzt (grüne Punkte je Stufe), Sprengladungen über dem Sprengetopp, Schadensfeld des Verspotters.
 - **Statistik:** Lebensdauer gefallener Einheiten je Art (`lifetime`), für die nächsten Läufe.
 
+**Nachtrag 25.10. mittags (nach der Stichprobe u15):** Steppenjäger gegen Schwere 7,1 → 5,0 über einen neuen Waffenwert `vs` (Schadensfaktor je Panzerung, hier Schwer ×0,7 – gegen Leicht und Infanterie unverändert). Hainhüter 380 → 323 Leben (−15 %), weil er fast nie fiel.
+
 ### Offener Wunsch: KI nutzt Gelände klug und lernt Gewinn-Taktiken (25.10.)
 
 - **Gelände klug nutzen:** Die KI soll Boden und Deckung bewusst einsetzen (Wald-Deckung, eigener Boden mit Terra-Former-Bonus, Schluchten, Flanke). Umsetzbar als bewertete Ziel-Positionen und Regeln (zum Beispiel „Gefecht auf eigenem oder deckungsreichem Boden annehmen“, „Flanke nach gegnerischer Schlucht nutzen“), deren Gewichte in Simulationen gemessen werden.

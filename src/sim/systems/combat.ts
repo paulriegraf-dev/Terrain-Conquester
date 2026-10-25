@@ -325,6 +325,7 @@ export function currentModelWounds(e: Entity): number {
 function damagePerWound(world: World, e: Entity, t: Entity): number {
   const w = e.weapon!;
   let damage = w.def.damage;
+  if (t.kind === 'unit' && w.def.vs) damage *= w.def.vs[t.armor] ?? 1; // Schadensfaktor gegen diese Panzerung
   if (t.kind !== 'unit') {
     damage *= w.def.structureDamage ?? 1;
     // Belagerungsdruck: Wer mehr Gebiet hält, trifft HQ und Gebäude härter.
