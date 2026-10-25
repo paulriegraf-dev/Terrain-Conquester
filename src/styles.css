@@ -1050,8 +1050,7 @@ body.start-mode .sp-fields { gap: 7px; }
 /* Brakk-Entwürfe (25.10. abends, Ganzkörper des Nutzers) */
 .title-screen.ts-g { background: radial-gradient(ellipse at 66% 40%, #2a2f66 0%, #0c1328 45%, #05070f 100%); }
 .ts-g .title-fx, .ts-g .title-logo { display: none; }
-.ts-g .tp { right: auto; left: clamp(16px, 4vw, 64px); width: min(360px, calc(100vw - 32px)); }
-.ts-g .tp-board::before { left: auto; right: -12px; transform: scaleX(-1); }
+.ts-g .tp { width: min(360px, calc(100vw - 32px)); }
 .ts-g .tp-logo { display: grid; justify-items: center; margin: 0 0 18px; font-family: var(--font-display); color: var(--brass); font-size: 1.7rem; line-height: 1; text-shadow: 0 3px 0 #6b4a12, 0 0 18px rgba(232, 176, 74, 0.3); }
 .ts-g .tp-board { background: linear-gradient(180deg, #3a2a1c, #241910 60%, #1a120b); box-shadow: inset 0 0 0 2px #6b4f33, inset 0 0 0 5px #1a120b, 0 10px 30px rgba(0, 0, 0, 0.6); }
 .title-screen.ts-e {

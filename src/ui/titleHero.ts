@@ -194,7 +194,8 @@ export class TitleHero {
   private drawNight(w: number, h: number, dt: number): void {
     this.particles(w, h, dt, 'rgba(160, 220, 255, 0.55)', 90, [20, 70], 0);
     const s = this.brakkScale(h, 0.84);
-    this.drawBrakk(Math.round(Math.max(w * 0.55, Math.min(w * 0.68, w - 80 * s))), Math.round(h * 0.95), s, 'rgba(120, 90, 255, 0.3)');
+    // Brakk blickt nach rechts – er steht links, das Menü hängt rechts von ihm.
+    this.drawBrakk(Math.round(Math.max(75 * s, w * 0.3)), Math.round(h * 0.95), s, 'rgba(120, 90, 255, 0.3)');
   }
 
   /** E: Frost – Brakk auf einer Eisklippe links, Schnee treibt schräg. */
