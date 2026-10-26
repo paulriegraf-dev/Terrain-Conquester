@@ -400,7 +400,7 @@ export const RULES: Rules = {
     rush: { prices: [40, 60, 90] },
     surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 480 },
   },
-  mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: true },
+  mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: false },
   keystoneGate: { first: 660, every: 150, prices: [200, 260, 340, 420], step: 80, seconds: 20, center: true, centerHold: 60, centerSize: 5 },
   keystone: {
     enabled: true, only: 'all',

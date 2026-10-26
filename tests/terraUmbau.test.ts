@@ -102,7 +102,7 @@ describe('Verschlammung (26.10. spät)', () => {
     assert.equal(g.mud, undefined, 'weg');
   });
 
-  it('gegen Schwer langsam (Widerstand), aber wirksam', () => {
+  it('gegen Schwer genauso wie gegen alle anderen (ohne Rüstung und Widerstand)', () => {
     const { world, w, k, g } = setup();
     addMud(world, w, k, 6, 4);
     addMud(world, w, g, 6, 4);
@@ -110,7 +110,7 @@ describe('Verschlammung (26.10. spät)', () => {
     const g0 = g.hp;
     stepTimes(world, 2 * world.tps);
     assert.ok(k0 - k.hp > 0, 'Koloss nimmt Schaden');
-    assert.ok(g0 - g.hp > k0 - k.hp, 'Infanterie nimmt mehr');
+    assert.ok(Math.abs((g0 - g.hp) - (k0 - k.hp)) < 1e-6, 'alle Panzerungen gleich');
   });
 
   it('Verschlammte tragen das Bremsfeld-Tempo; Bauwerke werden nie verschlammt', () => {

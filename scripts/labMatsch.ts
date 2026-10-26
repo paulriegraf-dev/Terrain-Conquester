@@ -12,7 +12,7 @@ import type { PlayerId } from '../src/sim/types';
 interface Out { win: 'Schlamm' | 'Koloss' | 'offen'; secs: number; kolossHp: number; mudAlive: number; stacksAtDeath: number | null; peak: number }
 
 function fight(seed: number, mudOn: boolean, ground: boolean, tfSide: PlayerId): Out {
-  const rules = { ...RULES, mudStacks: { ...RULES.mudStacks, enabled: mudOn, toughness: process.env.TOUGH !== '0' }, front: { ...RULES.front, regenPerSecond: process.env.REGEN === '0' ? 0 : RULES.front.regenPerSecond } };
+  const rules = { ...RULES, mudStacks: { ...RULES.mudStacks, enabled: mudOn, toughness: process.env.TOUGH === '1' }, front: { ...RULES.front, regenPerSecond: process.env.REGEN === '0' ? 0 : RULES.front.regenPerSecond } };
   const factions = tfSide === 0 ? (['terraformer', 'technoclan'] as const) : (['technoclan', 'terraformer'] as const);
   const world = new World({ map: felsenpass, seed, rules, factions: [...factions] });
   const tc = (1 - tfSide) as PlayerId;

@@ -2049,3 +2049,7 @@ Matsch/Schnee hinein) bei Matsch-/Schnee-Synergie oder -Ausrüstung und Umweg �
 Gegenseite: Umweg 1,5–2,0 → mit Belagerung vorrücken (Näherung für „Belagerung an die Spitze“). Spiegeltest jetzt bis
 1:25 (Wald = Wiese bei den Wegkosten macht mehr exakte Gleichstände; die 2×2-Käufe der KI sind nicht spiegelbildlich
 ausgerichtet – offener Punkt).
+
+**Korrektur 26.10. spät (Nutzer):** Verschlammung wirkt gerade gegen Schwere über Zeit – Rüstung UND Widerstand zählen
+nicht, jede Stufe macht 1 Schaden/s auf jede Panzerung (`mudStacks.toughness` = false; der Verwunden-Wurf war eine
+Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
