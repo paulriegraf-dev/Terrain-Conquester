@@ -208,7 +208,7 @@ function initialStore(world: World, e: Entity): number {
   const b = e.fromBuilding !== undefined ? world.entities.find((x) => x.id === e.fromBuilding) : undefined;
   const level = b?.producer?.level ?? 1;
   const base = world.rules.terraform.storeByLevel;
-  let store = level <= 1 ? 0 : (base[Math.min(level, base.length) - 1] ?? 0);
+  let store = base[Math.min(Math.max(1, level), base.length) - 1] ?? 0;
   const line = lineUnit(e.defId as UnitId);
   for (const id of p.research) {
     const u = p.faction.upgrades.find((x) => x.id === id);
@@ -234,6 +234,8 @@ export function convertible(world: World, i: number, p: PlayerId, ground: number
   const g = world.grid;
   if (ownGroundTile(world, i, p, ground) || world.locked[i] || g.structure[i] !== 0) return false;
   if (g.terrain[i] === TERRAIN_INDEX.waste) return false;
+  // Erntehelfer (26.10. abends): nur neutraler und gegnerischer Boden – eigene Kacheln anderer Linien bleiben stehen.
+  if (world.rules.terraform.anyLineBlock && world.formed[i] === p + 1) return false;
   if (!TERRAIN_LIST[g.terrain[i]!]!.solid || g.terrain[i] === TERRAIN_INDEX.wall) return false;
   if (world.map.buildZone[i] === BUILD_ZONE.base) return false;
   if (cooling(world, i, p)) return false;
@@ -256,8 +258,15 @@ export function blockDims(world: World, _p: PlayerId, _former: UnitId): readonly
 
 /** Block für eine Beschwörung: alle Kacheln des Blocks sind eigene Kacheln seiner Art ohne Abklingzeit. */
 function readyBlock(world: World, r: CellRect, p: PlayerId, ground: number): boolean {
-  return blockCells(world, r).every((i) => ownGroundTile(world, i, p, ground) && !cooling(world, i, p) && !world.combatGround.has(i));
+  // Erntehelfer (26.10. abends): eigene Kacheln beliebiger Linie zählen; nie in der Basiszone (der Block darf an sie grenzen).
+  const any = world.rules.terraform.anyLineBlock;
+  return blockCells(world, r).every((i) =>
+    (any ? world.formed[i] === p + 1 && LINE_GROUNDS.has(world.grid.terrain[i]!) : ownGroundTile(world, i, p, ground)) &&
+    !cooling(world, i, p) && !world.combatGround.has(i) && world.map.buildZone[i] !== BUILD_ZONE.base);
 }
+
+/** Böden der fünf Linien (eigene Kacheln dieser Arten tragen einen Ruf). */
+const LINE_GROUNDS = new Set(['meadow', 'forest', 'mud', 'snow', 'rubble'].map((t) => TERRAIN_INDEX[t as TerrainId]));
 
 /** Richtung nach vorn (zum Gegner) für Spieler p: +1 oder −1 in x. */
 function forward(world: World, p: PlayerId): number {
@@ -442,6 +451,24 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
         world.grid.setTerrain(i, TERRAIN_INDEX.waste);
         world.players[p].vision.learn(i);
       }
+      const cells = blockCells(world, tf.block);
+      const st = world.players[p].stats;
+      st.rituals++;
+      if (tf.firstFree) st.sprintRituals++;
+      if (cells.some((i) => world.grid.terrain[i] !== ground)) st.otherLineBlocks++;
+      if (world.tick >= 300 * world.tps) {
+        if ((center.x - world.map.width / 2) * forward(world, p) > 0) st.ritualsAhead++;
+        else st.ritualsHome++;
+      }
+      if (tf.lastRitual !== undefined) st.ritualGaps.push((world.tick - tf.lastRitual) / world.tps);
+      tf.lastRitual = world.tick;
+      tf.work = 0;
+      tf.sprint = false;
+      tf.firstFree = false;
+      // Fester Schritt nach dem Ruf (schrittNachRuf) – Ödland wandert nach vorn.
+      const routeY = world.map.waypoints[m.route].y;
+      tf.stepTo = { x: e.pos.x + forward(world, p) * rules.stepAfterSummon, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 1) };
+      tf.stepUntil = world.tick + 10 * world.tps;
       const made = summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
       tf.store = (tf.store ?? 0) - 1;
       tf.summons = (tf.summons ?? 0) + 1;
@@ -463,8 +490,24 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   // Rufen nur, solange die Kraft reicht (rules.terraform.maxSummons) und seine eigene Pause (summonEvery) um ist –
   // sonst formt er nur weiter Boden (für Linien-Boni und Synergien).
-  if (tf.store === undefined) tf.store = initialStore(world, e);
+  if (tf.store === undefined) {
+    tf.store = initialStore(world, e);
+    // Sprint beim Spawn: Wer Speicher hat, darf sofort rufen (Arbeit = arbeitJeRuf) – einmal je Terraformer.
+    tf.sprint = rules.sprintOnSpawn && tf.store > 0;
+    tf.firstFree = tf.sprint;
+    tf.work = tf.sprint ? rules.workPerSummon : 0;
+    tf.spawnTick = world.tick;
+  }
   const canSummon = tf.store > 0 && (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
+  // Schritt nach dem Ruf: erst ankommen, dann weiter nach Prüfreihenfolge.
+  if (tf.stepTo) {
+    const d2 = (e.pos.x - tf.stepTo.x) ** 2 + (e.pos.y - tf.stepTo.y) ** 2;
+    if (d2 > 0.5 * 0.5 && world.tick < (tf.stepUntil ?? 0)) {
+      m.goal = tf.stepTo;
+      return;
+    }
+    tf.stepTo = null;
+  }
   // 2. Kachel in Arbeit (auch eine gegnerische Schlucht, die er zuschüttet)
   if (tf.workCell !== undefined && tf.workCell >= 0) {
     const i = tf.workCell;
@@ -474,6 +517,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     } else if (world.tick >= tf.workTick) {
       world.grid.setTerrain(i, ground);
       world.formed[i] = p + 1;
+      if (!filling) tf.work = (tf.work ?? 0) + 1; // Arbeit: selbst geformte Kacheln seit dem letzten Ruf
       world.combatGround.delete(i);
       if (filling) world.dug[i] = 0;
       world.players[p].vision.learn(i);
@@ -501,12 +545,13 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     }
     return;
   }
-  // Reihenfolge (24.10.): fertiger Block in der Nähe → Arbeit in der Nähe → vorbereiteter Block weiter voraus →
-  // vorrücken. So formt er das Gelände nahe der Basis, statt daran vorbeizulaufen.
-  // 26.10. (Wunsch des Nutzers): zuerst den Boden in der Umgebung umformen, erst danach fertige Blöcke – wer nur am Rand
-  // formt, bekommt seine Gerufenen später. Ein neuer Terraformer beginnt bei sich: nächste umformbare Kachel bis startRadius.
-  const cell = nextWorkCell(world, e, ground, rules.workRadius);
-  const block = canSummon && cell === null ? findReadyBlock(world, e, ground, true) : null;
+  // Erntehelfer (26.10. abends): Ruf möglich? (Speicher, Arbeit ≥ arbeitJeRuf, fertiger 2×2-Block im Umkreis 3) → Ritual.
+  // Sonst umformbare Kachel im Umkreis 2 → formen. Sonst Schritt vorwärts. Sprint: der erste Ruf eines frischen
+  // Terraformers darf auf einen fertigen Block bis 16 Kacheln voraus auf der Route (geformt oder gekauft).
+  // Die weite Suche (Route, 16 Kacheln) gilt nur kurz nach dem Spawn; die geschenkte Arbeit bleibt bis zum ersten Ruf.
+  if (tf.sprint && world.tick - (tf.spawnTick ?? 0) > rules.sprintWindow * world.tps) tf.sprint = false;
+  const ready = canSummon && (tf.work ?? 0) >= rules.workPerSummon;
+  const block = ready ? findReadyBlock(world, e, ground, !!tf.sprint) : null;
   if (block) {
     tf.block = block;
     tf.workTick = 0;
@@ -515,14 +560,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     return;
   }
   tf.done = 0;
-  if (cell === null && !tf.started) {
-    const first = nextWorkCell(world, e, ground, rules.startRadius);
-    if (first !== null) {
-      m.goal = { x: (first % world.grid.width) + 0.5, y: Math.floor(first / world.grid.width) + 0.5 };
-      tf.workCell = -1;
-      return;
-    }
-  }
+  const cell = nextWorkCell(world, e, ground, rules.workRadius);
   if (cell !== null) {
     tf.started = true;
     tf.workCell = cell;

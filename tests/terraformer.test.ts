@@ -17,7 +17,14 @@ const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoc
 function unit(world: World, owner: 0 | 1, id: UnitId, x: number, y: number, still = true): Entity {
   const u = world.addUnit(owner, UNITS[id], { x, y }, y < 3 ? 'top' : y < 6 ? 'mid' : 'bottom');
   if (still) u.mover!.speed = 0;
-  if (u.tf && UNITS[id].former) u.tf.store = 2; // Naturspeicher der Fabrikstufe II (siehe tests/naturspeicher.test.ts)
+  if (u.tf && UNITS[id].former) {
+    // Naturspeicher der Fabrikstufe II und Sprint beim Spawn (Erntehelfer, 26.10. abends): darf sofort rufen.
+    u.tf.store = 2;
+    u.tf.work = RULES.terraform.workPerSummon;
+    u.tf.sprint = true;
+    u.tf.firstFree = true;
+    u.tf.spawnTick = world.tick;
+  }
   return u;
 }
 
@@ -45,6 +52,7 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
     former.tf!.store = 5;
+    former.hp = former.maxHp = 1e6;
     const summoned = (): boolean => world.entities.some((e) => e.alive && e.defId === 'specialForest');
     while (!summoned() && world.tick < 40 * world.tps) world.step();
     const keeper = world.entities.find((e) => e.alive && e.defId === 'specialForest');
@@ -53,7 +61,8 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.ok(world.tick / world.tps <= 26, `gerufen nach ${(world.tick / world.tps).toFixed(1)} s`);
     stepTimes(world, 20 * world.tps);
     const formed = [...world.formed].map((v, i) => (v === 1 ? i : -1)).filter((i) => i >= 0);
-    assert.ok(formed.length >= 8, `er formt weiter die Umgebung (${formed.length} Kacheln)`);
+    const waste = [...world.wasteUntil].filter((v) => v > 0).length;
+    assert.ok(formed.length + waste >= 8, `er formt weiter die Umgebung (${formed.length} Kacheln, ${waste} Ödland)`);
     for (const i of formed) {
       assert.equal(world.grid.terrain[i], TERRAIN_INDEX.forest);
       assert.notEqual(world.map.buildZone[i], 1, 'nie in der Basis-Bauzone');
@@ -171,7 +180,8 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
         world.formed[world.grid.index(x, y)] = 1;
       }
     }
-    unit(world, 0, 'formerForest', 9.0, 8.0, false);
+    const f = unit(world, 0, 'formerForest', 9.0, 8.0, false);
+    f.hp = f.maxHp = 1e6; // kleine Testkarte: das gegnerische HQ ist nah
     const keepers = (): number => world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;
     while (keepers() < 2 && world.tick < 240 * world.tps) world.step();
     assert.equal(keepers(), 2);
@@ -179,19 +189,22 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.equal(waste, 8, 'zwei Beschwörungen, acht verschiedene Kacheln');
   });
 
-  it('er formt auch eigenen Boden anderer Linien um (ohne Abklingzeit)', () => {
+  it('Erntehelfer: eigene Kacheln anderer Linien formt er nicht um – sie tragen aber seinen Ruf', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
+    const mud: number[] = [];
     for (let x = 6; x <= 8; x++) {
       for (let y = 6; y <= 8; y++) {
         setTerrain(world, x, y, 'mud');
         world.formed[world.grid.index(x, y)] = 1;
+        mud.push(world.grid.index(x, y));
       }
     }
     const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
     former.mover!.speed = 0;
     stepTimes(world, 12 * world.tps);
-    const forest = [...world.formed.keys()].filter((i) => world.formed[i] === 1 && world.grid.terrain[i] === TERRAIN_INDEX.forest).length;
-    assert.ok(forest >= 4, `Matsch wurde zu Wald (${forest})`);
+    assert.equal(mud.filter((i) => world.grid.terrain[i] === TERRAIN_INDEX.forest).length, 0, 'kein Matsch wurde zu Wald');
+    assert.equal(world.entities.filter((e) => e.alive && e.defId === 'specialForest').length, 1, 'Ruf auf dem Matsch-Block: Hainhüter');
+    assert.equal(world.players[0].stats.otherLineBlocks, 1);
   });
 
   it('beim Halten rückt er höchstens kurz hinter die eigene Grenze vor', () => {

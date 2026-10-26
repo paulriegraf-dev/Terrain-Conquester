@@ -136,6 +136,7 @@ function producePlayer(world: World, owner: PlayerId): void {
       if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
       const u = world.addUnit(owner, def, pos, pr.route);
       u.fromBuilding = building.id;
+      if (def.former) world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
       const birth = verbundOf(world, u);
       if (birth) u.verbundPrint = birth;
     }

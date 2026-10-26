@@ -155,6 +155,18 @@ export interface PlayerStats {
   keystoneFires: Record<string, number>;
   keystoneAt: number[];
   combatTiles: number;
+  /** Terra-Former-Diagnose (26.10. abends): Gelände-Käufe für Terraformer mit Speicher; Terraformer je Fabrikstufe (Index 0 = Stufe I). */
+  storerBuys: number;
+  formersByLevel: number[];
+  /** Erntehelfer (26.10. abends): Rufe, davon Sprint-Rufe, auf Block anderer eigener Linie; Rufe ab Minute 5 vorn/hinten; Abstände; Terraformer mit Restspeicher gefallen; Basiskäufe. */
+  rituals: number;
+  sprintRituals: number;
+  otherLineBlocks: number;
+  ritualsAhead: number;
+  ritualsHome: number;
+  ritualGaps: number[];
+  formersWasted: number;
+  spawnBuys: number;
   gorges: number;
   refills: number;
   /** Verbände, die an ihrer Lebensuhr verfallen sind (Myriaden-Drohnen). */
@@ -809,6 +821,7 @@ export class World {
   private onUnitDeath(e: Entity, killer: PlayerId): void {
     const def = UNITS[e.defId as UnitId];
     keystoneDeath(this, e, killer); // Schlusssteine: Bluff, Nachzünder
+    if (def.former && (e.tf?.store ?? 0) >= 1) this.players[e.owner].stats.formersWasted++; // Terraformer mit Restspeicher gefallen
     if (def.deathSpawn) {
       // Zerfall: so viele Modelle, aufgeteilt auf Verbände (z. B. Battlesphäre → 16 Drohnen = 2 Verbände).
       const spawn = UNITS[def.deathSpawn.unit];
@@ -959,6 +972,16 @@ export class World {
         keystoneFires: {},
         keystoneAt: [],
         combatTiles: 0,
+        storerBuys: 0,
+        formersByLevel: [0, 0, 0],
+        rituals: 0,
+        sprintRituals: 0,
+        otherLineBlocks: 0,
+        ritualsAhead: 0,
+        ritualsHome: 0,
+        ritualGaps: [],
+        formersWasted: 0,
+        spawnBuys: 0,
         gorges: 0,
         refills: 0,
         expired: 0,

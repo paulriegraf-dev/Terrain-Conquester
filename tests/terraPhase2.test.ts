@@ -17,26 +17,27 @@ describe('Terra-Former Phase 2 (26.10.): Block, Zeit je Kachel, Boden zuerst', (
     assert.equal(RULES.terraform.startRadius, 6);
   });
 
-  it('erst der Boden in der Umgebung, dann der fertige Block – wer nur am Rand formt, bekommt Gerufene später', () => {
-    const timeToSummon = (surroundingOwned: boolean): number => {
+  it('Erntehelfer: ohne Sprint ruft er erst nach 4 selbst geformten Kacheln – mit Sprint sofort auf dem fertigen Block', () => {
+    const timeToSummon = (sprint: boolean): number => {
       const world = new World({ map: openMap, seed: 1, ...tf });
-      for (let x = 6; x <= 12; x++) {
-        for (let y = 5; y <= 11; y++) {
-          world.grid.setTerrain(world.grid.index(x, y), TERRAIN_INDEX.forest);
-          const inBlock = x >= 8 && x <= 9 && y >= 7 && y <= 8;
-          if (inBlock || surroundingOwned) world.formed[world.grid.index(x, y)] = 1;
-        }
+      for (let x = 8; x <= 9; x++) for (let y = 7; y <= 8; y++) {
+        world.grid.setTerrain(world.grid.index(x, y), TERRAIN_INDEX.forest);
+        world.formed[world.grid.index(x, y)] = 1;
       }
       const f = world.addUnit(0, UNITS.formerForest, { x: 9, y: 8 }, 'mid');
       f.mover!.speed = 0;
       f.tf!.store = 2;
+      f.tf!.work = sprint ? 4 : 0;
+      f.tf!.sprint = sprint;
+      f.tf!.firstFree = sprint;
+      f.tf!.spawnTick = 0;
       while (!world.entities.some((e) => e.alive && e.defId === 'specialForest') && world.tick < 90 * world.tps) world.step();
       return world.tick / world.tps;
     };
     const quick = timeToSummon(true);
     const late = timeToSummon(false);
-    assert.ok(quick <= 5.5, `Umfeld fertig: ${quick} s`);
-    assert.ok(late >= quick + 8, `Umfeld noch zu formen: ${late} s`);
+    assert.ok(quick <= 5.5, `Sprint: ${quick} s`);
+    assert.ok(late >= quick + 5, `ohne Sprint erst nach eigener Arbeit: ${late} s`);
   });
 
   it('ein neuer Terraformer beginnt bei sich: formt die nächste Kachel in der Umgebung', () => {

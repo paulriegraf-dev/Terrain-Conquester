@@ -64,6 +64,8 @@ describe('Umwidmen', () => {
     mine.fromBuilding = w.id;
     const other = world.addUnit(0, UNITS.formerMeadow, { x: 6.5, y: 8.5 }, 'mid');
     other.fromBuilding = 999;
+    mine.tf!.store = 0; // ohne Speicher: er formt nur (sonst ginge er beim Ruf im Wesen auf)
+    other.tf!.store = 0;
     world.step([cmd(0, { type: 'convertFactory', entityId: w.id, to: 'quarry' })]);
     stepTimes(world, 20 * world.tps + 1);
     assert.equal(w.defId, 'quarry');

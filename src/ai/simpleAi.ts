@@ -16,13 +16,14 @@ import { OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memo
 import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
-import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
+import { checkLevelUp, checkResearch, checkRushOrder, requirementMet, researching, unlockedUnits } from '../sim/systems/factory';
 import { checkEmergency } from '../sim/systems/emergency';
 import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
 import { dist, rectCenter } from '../sim/math';
 import { Rng } from '../sim/rng';
-import { checkSwapArea, checkWall, gorgeCells, swapArea } from '../sim/systems/abilities';
+import { checkSwapArea, checkWall, gorgeCells, swapArea, swapCostAt } from '../sim/systems/abilities';
+import { BUILD_ZONE } from '../sim/map';
 import { checkHqUpgrade, gorgeLimit } from '../sim/systems/hq';
 import type { HqPathId } from '../data/hq';
 import type { FactionId } from '../data/factions';
@@ -158,8 +159,8 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean; tfStrictBuys: boolean; targetResearch: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, targetResearch: true, tfSpawnBuy: true, tfSpawnBuyEvery: 20 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -178,6 +179,9 @@ export class SimpleAi {
   /** Wann die KI zuletzt Gelände geformt hat (Tick). */
   private lastShape = -1e9;
   private lastKeystone = -1e9;
+  private lastSpawnBuy = -1e9;
+  /** Weg zum Schlussstein (26.10. abends): Ziel-Art, ihre Höchstzahl und seit wann sie unter der Hälfte liegt. */
+  private target: { unit: UnitId; max: number; below: number } | null = null;
   private lastHq = -1e9;
   /** Terra-Former (AI_TUNING.tfPrep): Linien, deren Boden in der Vorbereitung geformt wurde – zuerst bauen. */
   private openingLines: BuildingId[] = [];
@@ -694,6 +698,9 @@ export class SimpleAi {
         if (c.ok && me.energy >= c.cost + keep) return { type: 'upgradeFactory', entityId: f.id };
       }
     }
+    const tr = this.targetResearch(world, factories, keep);
+    if (tr === 'wait') return null;
+    if (tr) return tr;
     const ks = this.pickKeystone(world, factories, keep);
     if (ks) return ks;
     const smart = AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden');
@@ -719,6 +726,67 @@ export class SimpleAi {
    * Schlussstein (26.10.): erst ab vier Fabriken; Ziel ist die Einheitenart mit den meisten lebenden Verbänden;
    * höchstens zwei je Partie, der zweite frühestens 3 Minuten nach dem ersten (AI_TUNING.keystones).
    */
+  /**
+   * Weg zum Schlussstein (26.10. abends, AI_TUNING.targetResearch): Ab vier Fabriken eine Ziel-Art (meiste lebende
+   * Verbände, Gerufene zählen, Terraformer nicht). Ihre Kette hat Vorrang: Waffen I → II → III → Panzerung I → II →
+   * Schlussstein – ein Forschungsplatz, der zweite bleibt frei. Reicht die Energie für den nächsten Schritt nicht,
+   * wird für andere Arten nichts ausgegeben ('wait'). Wechsel nur, wenn die Ziel-Art 90 s unter der Hälfte ihrer
+   * Höchstzahl liegt.
+   */
+  private targetResearch(world: World, factories: Entity[], keep: number): Command | 'wait' | null {
+    if (!AI_TUNING.targetResearch || !world.rules.keystone.enabled || factories.length < 4) return null;
+    const me = world.players[this.player];
+    const ksUnits = new Set(me.faction.upgrades.filter((u) => u.keystone).map((u) => u.unit));
+    if (ksUnits.size === 0) return null;
+    const count = new Map<UnitId, number>();
+    for (const e of world.entities) {
+      if (!e.alive || e.owner !== this.player || e.kind !== 'unit') continue;
+      const id = e.defId as UnitId;
+      if (!ksUnits.has(id)) continue;
+      count.set(id, (count.get(id) ?? 0) + 1);
+    }
+    const top = (): UnitId | null => {
+      let best: UnitId | null = null;
+      for (const [id, n] of count) if (!best || n > count.get(best)! || (n === count.get(best)! && id < best)) best = id;
+      return best;
+    };
+    if (!this.target) {
+      const t = top();
+      if (!t) return null;
+      this.target = { unit: t, max: count.get(t)!, below: -1 };
+    } else {
+      const n = count.get(this.target.unit) ?? 0;
+      this.target.max = Math.max(this.target.max, n);
+      if (n < this.target.max / 2) {
+        if (this.target.below < 0) this.target.below = world.tick;
+        if (world.tick - this.target.below >= 90 * world.tps) {
+          const t = top();
+          if (t && t !== this.target.unit) this.target = { unit: t, max: count.get(t)!, below: -1 };
+          else this.target.below = -1;
+        }
+      } else {
+        this.target.below = -1;
+      }
+    }
+    const unit = this.target.unit;
+    const line = lineUnit(unit);
+    const healer = !!UNITS[line].support;
+    const key = healer ? 'heal' : 'weapons';
+    const specialist = this.counterScore(line, world) >= 1.1;
+    const w3 = me.faction.upgrades.some((u) => u.id === `${line}-${key}-3a`) ? `${line}-${key}-3${specialist ? 'a' : 'b'}` : `${line}-${key}-3`;
+    const steps = [`${line}-${key}-1`, `${line}-${key}-2`, w3, `${line}-armor-1`, `${line}-armor-2`, `${unit}-keystone`];
+    const done = (id: string): boolean => me.research.includes(id) || (id === w3 && requirementMet(me.research, `${line}-${key}-3`));
+    if (steps.some((id) => researching(world, this.player, id))) return null; // ein Platz für die Ziel-Art, der zweite bleibt frei
+    const next = steps.find((id) => !done(id));
+    if (!next) return null;
+    if (next.endsWith('-keystone') && !this.keystoneAllowed(world, factories)) return null;
+    const c = checkResearch(world, this.player, next);
+    if (!c.ok) return /Energie/.test(c.reason) ? 'wait' : null;
+    if (me.energy < c.cost + keep) return 'wait';
+    if (next.endsWith('-keystone')) this.lastKeystone = world.tick;
+    return { type: 'research', upgrade: next };
+  }
+
   /** Darf die KI jetzt einen Schlussstein erforschen (Schalter, vier Fabriken, höchstens zwei, 3 min Abstand)? */
   private keystoneAllowed(world: World, factories: Entity[]): boolean {
     if (!AI_TUNING.keystones || !world.rules.keystone.enabled || factories.length < 4) return false;
@@ -790,7 +858,8 @@ export class SimpleAi {
         const c = checkResearch(world, f, u.id);
         if (!c.ok || me.energy < c.cost + reserve) continue;
         // Schlussstein (26.10.): Nutzen = eigene Verbände der Art × 2 / Kosten – konkurriert so mit Waffen und Panzerung.
-        const value = u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost;
+        const focus = this.target && lineUnit(this.target.unit) === lineUnit(u.unit) ? 2 : 1; // Ziel-Art ×2
+        const value = focus * (u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost);
         // Gleichstand spiegelbildlich auflösen (nicht nach Entity-Reihenfolge): Upgrade-ID, dann gespiegelte Lage.
         const mx = (e: Entity): number => (this.player === 0 ? e.pos.x : world.map.width - e.pos.x);
         const better = !best || value > best.value + 1e-9 ||
@@ -1120,6 +1189,8 @@ export class SimpleAi {
    * mit genug Energie auch eine Schlucht, die den Korridor verengt.
    */
   private decideTerrain(world: World): Command | null {
+    const spawnBuy = this.spawnBuy(world);
+    if (spawnBuy) return spawnBuy;
     const f = this.profile.terrain;
     if (f <= 0 || world.seconds < 90 || world.tick - this.lastShape < (20 / f) * world.tps) return null;
     if (this.spare(world) < (f >= 2 ? 60 : 110)) return null;
@@ -1136,12 +1207,15 @@ export class SimpleAi {
             const y = Math.floor(storer.pos.y) + dy;
             if (checkSwapArea(world, this.player, x, y, ground).ok) {
               this.lastShape = world.tick;
+              world.players[this.player].stats.storerBuys++;
               return { type: 'swapTerrain', x, y, terrain: ground };
             }
           }
         }
       }
     }
+    // Terra-Former (26.10. abends, Schalter): bis Minute 6 nur Käufe für Terraformer mit Speicher ohne Block – nichts vorsorglich.
+    if (AI_TUNING.tfStrictBuys && world.players[this.player].faction.id === 'terraformer' && world.seconds < 360) return null;
     // Lane-Synergie (26.10.): Fehlen der nächsten Synergie höchstens 8 Kacheln, kauft die KI dort Boden der passenden Art
     // im eigenen Gebiet der Lane (Schalter AI_TUNING.synergyBuys). Keine Umwidmungen dafür.
     if (AI_TUNING.synergyBuys && world.players[this.player].faction.id === 'terraformer' && this.spare(world) >= 80) {
@@ -1229,6 +1303,42 @@ export class SimpleAi {
       }
     }
     this.lastShape = world.tick - 10 * world.tps; // nichts gefunden: bald erneut versuchen
+    return null;
+  }
+
+  /**
+   * Basiskauf (Erntehelfer, 26.10. abends; AI_TUNING.tfSpawnBuy): Kommt ein Terraformer mit Speicher aus der Fabrik und
+   * liegt auf seiner Route bis 16 Kacheln kein fertiger Block, kauft die KI direkt neben der Basiszone auf dieser Route
+   * ein 2×2 Boden seiner Linie – höchstens einen je tfSpawnBuyEvery s, nur mit Energie über Puffer + Preis.
+   */
+  private spawnBuy(world: World): Command | null {
+    const me = world.players[this.player];
+    if (!AI_TUNING.tfSpawnBuy || me.faction.id !== 'terraformer' || world.tick - this.lastSpawnBuy < AI_TUNING.tfSpawnBuyEvery * world.tps) return null;
+    const fresh = world.entities.find((e) => e.owner === this.player && e.tf?.firstFree && world.tick - (e.tf.spawnTick ?? 0) <= 2 * world.tps && formerNeedsBlock(world, e));
+    if (!fresh) return null;
+    const ground = UNITS[fresh.defId as UnitId].ground!;
+    const g = world.grid;
+    const dir = this.player === 0 ? 1 : -1;
+    const wy = Math.floor(fresh.pos.y);
+    for (const dy of [0, -1, 1, -2, 2, -3, 3]) {
+      const y = wy + dy;
+      if (!g.inBounds(0, y)) continue;
+      // erste Kachel hinter der Basiszone in dieser Zeile (vom eigenen HQ aus Richtung Gegner)
+      let x = -1;
+      for (let k = 0; k < g.width; k++) {
+        const xx = this.player === 0 ? k : g.width - 1 - k;
+        if (world.map.buildZone[g.index(xx, y)] === BUILD_ZONE.base) x = xx + dir;
+      }
+      if (x < 0 || !g.inBounds(x, y)) continue;
+      const bx = dir > 0 ? x : x - 1; // 2×2 ab der linken oberen Kachel, an der Basiszone anliegend
+      const c = checkSwapArea(world, this.player, bx, y, ground);
+      if (!c.ok) continue;
+      const price = swapCostAt(world, this.player, bx, ground).cost;
+      if (this.spare(world) < price + 20) return null;
+      this.lastSpawnBuy = world.tick;
+      me.stats.spawnBuys++;
+      return { type: 'swapTerrain', x: bx, y, terrain: ground };
+    }
     return null;
   }
 

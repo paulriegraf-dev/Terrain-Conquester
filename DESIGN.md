@@ -1933,3 +1933,16 @@ Je Einheitenart der Terra-Former und Myriaden eine letzte Forschung, die eine **
 - **KI:** Schlussstein erst ab vier Fabriken, Ziel = Art mit den meisten lebenden Verbänden, höchstens zwei je Partie, der zweite frühestens nach 3 min (`AI_TUNING.keystones`). Myriaden mit smartResearch: Nutzen = Verbände × 2 / Kosten. Terra-Former mit Heimkehr: Wiese 4–6 Kacheln hinter der Front (`AI_TUNING.homeMeadow`).
 - **Anzeige:** vierter Knopf je Kette mit Symbol; Symbol über dem Verband (Rückzug: ↩); Spähbericht „forscht/hat Schlussstein: …“; Übersicht → Eigenheiten: Schlussstein-Liste.
 - **Offen:** Heimkehr-Suchradius 12 auf großen Karten; Doppelwurf-Ladezeit 60 s gegen 4 Ladungen / 18 s; Pflicht Panzerung II; Namen.
+
+## Terraformer-Rhythmus „Erntehelfer“ mit Sprint beim Spawn (26.10. abends)
+
+Ersetzt die Reihenfolge aus Phase 2 („erst Umgebung umformen, dann Block“). Naturspeicher, Ödland, Ruf-Bedingung 2×2, Stufenpreise und Schlusssteine unverändert.
+
+- **Umformen:** nur neutraler und gegnerischer Boden; eigene Kacheln anderer Linien bleiben stehen. Umkreis 2, 1,5 s je Kachel, nie in der Basiszone.
+- **Ruf:** Speicher ≥ 1, 2×2-Block eigener Kacheln **beliebiger** Linie ohne Ödland im Umkreis 3, und **Arbeit ≥ 4** (selbst geformte Kacheln seit dem letzten Ruf). Das Wesen folgt der Linie des Terraformers. Prüfreihenfolge: Ruf → Ritual (4 s); sonst Kachel formen; sonst vorwärts. Nach dem Ruf: Arbeit 0, fester Schritt 3 Kacheln nach vorn. Ritual nie in der Basiszone (der Block darf angrenzen).
+- **Sprint beim Spawn:** Ein neuer Terraformer mit Speicher startet mit Arbeit 4 (bis zu seinem ersten Ruf) und darf in den ersten 8 s (`sprintWindow`) auf einen fertigen Block bis 16 Kacheln voraus auf seiner Route laufen. Gekaufter Boden zählt als Block, nie als Arbeit.
+- **Speicher je Stufe jetzt 1 / 2 / 3** (Stufe I = 1, Schraube a). Der Fehler „Stufe I immer 0“ im Code ist behoben.
+- **Gelände-Kauf 2×2 statt 3×3**, Preis 7 statt 15 (15 × 4/9, aufgerundet) – ein Kauf ist genau ein Ruf. Die Vorbereitung bleibt 3×3. Die HQ-Erweiterung (Kauffläche verbreitern) ist noch nicht gebaut.
+- **KI-Basiskauf** (`AI_TUNING.tfSpawnBuy`, alle 20 s höchstens einer): Kommt ein Terraformer mit Speicher ohne Block auf seiner Route aus der Fabrik, kauft die KI direkt neben der Basiszone ein 2×2 seiner Linie (Energie ≥ Puffer + Preis). Übrige Käufe unverändert.
+- **Schrauben** (`rules.terraform`): workPerSummon 4, storeByLevel 1/2/3, stepAfterSummon 3, Blocksuche 3 / Route 16 (preparedRadius), wasteSeconds 150, formSeconds 1,5, workRadius 2, ritualSeconds 4, sprintOnSpawn, anyLineBlock; `AI_TUNING.tfSpawnBuy`/`tfSpawnBuyEvery`.
+- **Lern-KI-Signale (für die Lern-KI-Vordatei, Abschnitt Terra-Former):** „Terraformer verschwendet“ (≥ 30 % sterben mit Speicher ≥ 1 → Schritt nach Ruf −1, Basiskauf-Takt −5 s); „Rufe zu spät“ (erster Ruf nach Minute 3 im Median → Basiskauf-Takt −5 s, Energiepuffer −10 %); „Ödland vor der Zone“ (≥ 40 % des Ödlands in der eigenen Hälfte in ≥ 4 Lagebildern → Sprint nur jeder zweite Terraformer); „Nur Sprint“ (Sprint-Anteil > 70 % → Arbeit je Ruf −1, Grenze 3; Grenzboden-Käufe +1); „Rufe ohne Wirkung“ (Gerufene sterben im Median unter 20 s → Rufe erst mit Wächter-Verband in 6 Kacheln, Schalter rufMitVerband). Noch nicht in der Lern-KI verdrahtet.

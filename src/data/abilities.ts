@@ -94,8 +94,9 @@ export function swapCost(terrain: TerrainId, home?: { homeCost: number; homeSeco
 export const SWAP: SwapAbilityDef = {
   name: 'Gelände formen',
   key: 'T',
-  cost: 15,
-  brush: 3,
+  // 26.10. abends (Erntehelfer): 2×2 statt 3×3 – ein Kauf ist genau ein Ruf; Preis 15 × 4/9, aufgerundet.
+  cost: 7,
+  brush: 2,
   buildSeconds: 3,
   maxParallel: 4,
   targets: ['meadow', 'forest', 'mud', 'snow', 'gorge', 'rubble'],
@@ -105,7 +106,7 @@ export const SWAP: SwapAbilityDef = {
   // 24.10.: 2×4 statt 3×3 Kacheln, 80 statt 100 Energie; wie viele gleichzeitig, bestimmt der HQ-Zweig Gelände
   // (ohne ihn keine). Früher höchstens 3 – ohne Grenze grub die KI im späten Spiel Dutzende Schluchten.
   special: { gorge: { cost: 80, buildSeconds: 6 } },
-  hint: 'Formt eine 3×3-Fläche im eigenen Gebiet, im Niemandsland und bis 6 Kacheln vor die Grenze: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Geröll gegen Räder. Schlucht (2×4, mit dem HQ-Zweig Gelände) als Sperre – nur Schweber kommen drüber.',
+  hint: 'Formt eine 2×2-Fläche im eigenen Gebiet, im Niemandsland und bis 6 Kacheln vor die Grenze: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Geröll gegen Räder. Schlucht (2×4, mit dem HQ-Zweig Gelände) als Sperre – nur Schweber kommen drüber.',
 };
 
 /**

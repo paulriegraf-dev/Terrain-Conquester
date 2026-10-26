@@ -10,7 +10,16 @@ import { UNITS } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
 import { hqKey } from '../sim/keys';
-import { checkSwapArea, checkWall, shapeArea, swapArea, wallCoords } from '../sim/systems/abilities';
+import { checkSwapArea, checkWall, shapeArea, wallCoords } from '../sim/systems/abilities';
+import { PREP } from '../data/abilities';
+
+/** Vorbereitung: Fläche um (x, y) mit Seitenlänge PREP.brush (die Vorbereitung bleibt 3×3). */
+function prepArea(x: number, y: number): [number, number][] {
+  const r = Math.floor(PREP.brush / 2);
+  const out: [number, number][] = [];
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) out.push([x + dx, y + dy]);
+  return out;
+}
 import { controllerAt } from '../sim/systems/influence';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
 import { camouflageRange } from '../sim/systems/terraform';
@@ -1599,7 +1608,7 @@ export class Renderer {
       const area = view.prep
         ? checkPrep(world, view.human, hover.x, hover.y, view.swap.terrain)
         : checkSwapArea(world, view.human, hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true);
-      for (const [cx, cy] of view.prep ? swapArea(hover.x, hover.y) : shapeArea(hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true)) {
+      for (const [cx, cy] of view.prep ? prepArea(hover.x, hover.y) : shapeArea(hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true)) {
         if (!world.grid.inBounds(cx, cy)) continue;
         const ok = area.ok && area.cells.includes(world.grid.index(cx, cy));
         ctx.fillStyle = ok ? PALETTE.previewOk : PALETTE.previewBad;

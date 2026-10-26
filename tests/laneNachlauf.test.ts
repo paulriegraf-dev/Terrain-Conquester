@@ -51,6 +51,6 @@ describe('Lane-Synergien: Nachlauf und Zielhinweis (26.10.)', () => {
     assert.equal(hint.ground, 'forest');
     assert.equal(hint.triple, false);
     assert.deepEqual(hint.need, [{ lane: 'mid', missing: 5 }]);
-    assert.equal(hint.buys, 1);
+    assert.equal(hint.buys, 2); // 5 Kacheln, 2×2 je Kauf
   });
 });

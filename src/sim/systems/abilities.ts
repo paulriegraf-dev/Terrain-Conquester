@@ -261,9 +261,10 @@ export function checkSwap(world: World, p: PlayerId, x: number, y: number, terra
 
 /** Kacheln der Fläche um (x, y) – Seitenlänge SWAP.brush. */
 export function swapArea(x: number, y: number): [number, number][] {
-  const r = Math.floor(SWAP.brush / 2);
+  // Gerade Seitenlänge (2×2): (x, y) ist die linke obere Kachel; ungerade (3×3): die Mitte.
+  const r = Math.floor((SWAP.brush - 1) / 2);
   const out: [number, number][] = [];
-  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) out.push([x + dx, y + dy]);
+  for (let dy = 0; dy < SWAP.brush; dy++) for (let dx = 0; dx < SWAP.brush; dx++) out.push([x - r + dx, y - r + dy]);
   return out;
 }
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { RULES } from '../src/data/rules';
 import { BUILDINGS } from '../src/data/buildings';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
@@ -20,7 +21,7 @@ function formerFrom(world: World, level: number) {
 }
 
 describe('Naturspeicher (26.10.)', () => {
-  it('Speicher nach Fabrikstufe: I = 0, II = 2, III = 3; das Upgrade „Naturspeicher“ gibt +1', () => {
+  it('Speicher nach Fabrikstufe: I = 1, II = 2, III = 3; das Upgrade „Naturspeicher“ gibt +1', () => {
     const store = (level: number, upgrade = false): number => {
       const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
       if (upgrade) world.players[0].research.push('wardForest-store');
@@ -28,14 +29,14 @@ describe('Naturspeicher (26.10.)', () => {
       world.step();
       return f.tf!.store!;
     };
-    assert.equal(store(1), 0);
+    assert.equal(store(1), 1);
     assert.equal(store(2), 2);
     assert.equal(store(3), 3);
     assert.equal(store(2, true), 3);
   });
 
-  it('Stufe I: der Terraformer formt, ruft aber nie und bleibt bestehen', () => {
-    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+  it('Speicher 0 (Schalter): der Terraformer formt, ruft aber nie und bleibt bestehen', () => {
+    const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, terraform: { ...RULES.terraform, storeByLevel: [0, 2, 3] } }, ...tf });
     const f = formerFrom(world, 1);
     for (let k = 0; k < 120 * world.tps; k++) world.step();
     assert.ok(f.alive);
@@ -47,6 +48,7 @@ describe('Naturspeicher (26.10.)', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
     const f = formerFrom(world, 2);
     f.mover!.speed = 2;
+    f.hp = f.maxHp = 1e6; // kleine Testkarte: das gegnerische HQ ist nah
     const keepers = (): number => world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;
     while (keepers() < 1 && world.tick < 120 * world.tps) world.step();
     assert.equal(f.tf!.store, 1);

@@ -1337,7 +1337,7 @@ export class Game {
   private lastPainted: { x: number; y: number } | null = null;
 
   /**
-   * Gelände-Werkzeug: Jeder Klick formt eine Fläche (3×3). Beim Ziehen wird erst wieder
+   * Gelände-Werkzeug: Jeder Klick formt eine Fläche (2×2, SWAP.brush). Beim Ziehen wird erst wieder
    * gekauft, wenn der Pinsel ein Stück weiter ist – so entstehen Bahnen ohne Doppelkäufe.
    */
   private paint(cell: { x: number; y: number }, notify = false): void {

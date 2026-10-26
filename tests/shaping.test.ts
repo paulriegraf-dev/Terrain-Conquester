@@ -126,8 +126,8 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
     world.players[0].hq.terrain = 1;
     stepTimes(world, swapCost('gorge').buildSeconds * world.tps + 1);
     world.players[0].energy = 400;
-    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 9, terrain: 'meadow' })]);
-    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 11, terrain: 'meadow' })]);
+    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 8, terrain: 'meadow' })]); // 2×2 je Kauf (26.10. abends)
+    world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 10, terrain: 'meadow' })]);
     stepTimes(world, swapCost('meadow').buildSeconds * world.tps + 1);
     assert.equal(gorgeAreas(world, 0), 1);
     assert.equal(checkSwapArea(world, 0, 5, 13, 'gorge').ok, true);
