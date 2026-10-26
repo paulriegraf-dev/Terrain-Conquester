@@ -1,3 +1,4 @@
+import { KEYSTONE_OF } from '../data/keystones';
 import { DISGUISE, PREP, SHAPING_REACH, SWAP, WALL } from '../data/abilities';
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
 import { checkHqUpgrade } from '../sim/systems/hq';
@@ -518,7 +519,12 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const { world, canAct } = ctx;
   const pr = e.producer!;
   const player = world.players[e.owner];
-  const ups = visibleUpgrades(player.faction, pr.unit, player.research);
+  const mixDef = player.faction.buildings[e.defId as BuildingId]?.mix;
+  const ups = [
+    ...visibleUpgrades(player.faction, pr.unit, player.research),
+    // Beimischung (Hund an der Brut ab Stufe III): seine Ketten und sein Schlussstein (26.10.)
+    ...(mixDef && pr.level >= mixDef.level ? visibleUpgrades(player.faction, mixDef.unit, player.research) : []),
+  ];
   const buildingUps = visibleBuildingUpgrades(player.faction, e.defId as BuildingId, player.research);
   const buttons: CommandButton[] = ups.map((u, k) => {
     const done = player.research.includes(u.id);
@@ -527,14 +533,14 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
     const lab = player.labs.find((l) => l.upgrade === u.id);
     return {
       id: `research-${u.id}`,
-      glyph: done ? '✓' : '⚙',
-      label: u.name,
+      glyph: done ? '✓' : u.keystone ? (KEYSTONE_OF[u.unit]?.icon ?? '◆') : '⚙',
+      label: u.keystone ? `${u.name} (${UNITS[u.unit].name})` : u.name,
       key: String(k + 1),
       cost: done || !c.ok ? undefined : c.cost,
       disabled: !canAct || done || !c.ok,
       pressed: done,
       pending: lab ? `${Math.max(0, Math.ceil((lab.doneTick - world.tick) / world.tps))}s` : running ? 'läuft' : undefined,
-      tip: `${u.name}: ${u.description} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
+      tip: `${u.name}: ${u.keystone ? `${KEYSTONE_OF[u.unit]?.rule} Zügel: ${KEYSTONE_OF[u.unit]?.rein} Gilt` : `${u.description}`} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
       action: 'research',
       data: { upgrade: u.id },
     };

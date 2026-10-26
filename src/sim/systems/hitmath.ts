@@ -87,6 +87,8 @@ export function defenseOf(world: World, t: Entity, from?: Entity): Defense {
   const cover = unit && world.grid.terrain[cell] === TERRAIN_INDEX.forest ? 1 : 0;
   // Terra-Former: Rüstungsbonus auf Boden ihrer Art (Steinwächter auf Geröll)
   let save = t.tf ? Math.max(2, t.save - groundSaveBonus(world, t)) : t.save;
+  // Fels in der Brandung (Schlussstein Steinwächter): Deckung direkt hinter ihm.
+  if (unit && world.coverIds.has(t.id)) save = Math.max(2, save - world.rules.keystone.rockSave);
   // Zersetzung (Myr-Drohnen): Rüstung kurz schlechter.
   if (t.corrosion && world.tick < t.corrosion.until) save = Math.min(7, save + t.corrosion.level);
   let evasion = t.evasion;

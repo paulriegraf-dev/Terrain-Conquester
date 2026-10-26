@@ -158,8 +158,8 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -177,6 +177,7 @@ export class SimpleAi {
   private readonly lastRetool = new Map<number, number>();
   /** Wann die KI zuletzt Gelände geformt hat (Tick). */
   private lastShape = -1e9;
+  private lastKeystone = -1e9;
   private lastHq = -1e9;
   /** Terra-Former (AI_TUNING.tfPrep): Linien, deren Boden in der Vorbereitung geformt wurde – zuerst bauen. */
   private openingLines: BuildingId[] = [];
@@ -693,11 +694,13 @@ export class SimpleAi {
         if (c.ok && me.energy >= c.cost + keep) return { type: 'upgradeFactory', entityId: f.id };
       }
     }
+    const ks = this.pickKeystone(world, factories, keep);
+    if (ks) return ks;
     const smart = AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden');
     if (smart) return this.smartResearch(world, factories, keep);
     for (const f of this.rng.shuffled(factories)) {
       for (const u of me.faction.upgrades) {
-        if (u.unit !== f.producer!.unit || me.research.includes(u.id) || researching(world, this.player, u.id)) continue;
+        if (u.unit !== f.producer!.unit || u.keystone || me.research.includes(u.id) || researching(world, this.player, u.id)) continue;
         // Lebensdauer erst, wenn eigene Verbände tatsächlich verfallen – vorher kostet sie nur Tempo.
         if (u.effect.lifespan && me.stats.expired < 3) continue;
         // Gabelung auf Stufe III: Spezialist, wenn der Gegner hat, wogegen die Einheit gut ist – sonst Lücke schließen.
@@ -710,6 +713,43 @@ export class SimpleAi {
       }
     }
     return null;
+  }
+
+  /**
+   * Schlussstein (26.10.): erst ab vier Fabriken; Ziel ist die Einheitenart mit den meisten lebenden Verbänden;
+   * höchstens zwei je Partie, der zweite frühestens 3 Minuten nach dem ersten (AI_TUNING.keystones).
+   */
+  /** Darf die KI jetzt einen Schlussstein erforschen (Schalter, vier Fabriken, höchstens zwei, 3 min Abstand)? */
+  private keystoneAllowed(world: World, factories: Entity[]): boolean {
+    if (!AI_TUNING.keystones || !world.rules.keystone.enabled || factories.length < 4) return false;
+    const me = world.players[this.player];
+    const had = me.faction.upgrades.filter((u) => u.keystone && (me.research.includes(u.id) || researching(world, this.player, u.id))).length;
+    return had < 2 && world.tick - this.lastKeystone >= 180 * world.tps;
+  }
+
+  private pickKeystone(world: World, factories: Entity[], keep: number): Command | null {
+    if (!this.keystoneAllowed(world, factories)) return null;
+    const me = world.players[this.player];
+    // Myriaden mit smartResearch: der Schlussstein konkurriert dort im Nutzen mit Waffen und Panzerung.
+    if (AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden')) return null;
+    const all = me.faction.upgrades.filter((u) => u.keystone);
+    if (all.length === 0) return null;
+    const only = world.rules.keystone.only;
+    const alive = new Map<string, number>();
+    for (const e of world.entities) if (e.alive && e.owner === this.player && e.kind === 'unit') alive.set(e.defId, (alive.get(e.defId) ?? 0) + 1);
+    let best: { id: string; n: number } | null = null;
+    for (const u of all) {
+      const summoned = !!UNITS[u.unit].summoned;
+      if ((only === 'wards' && summoned) || (only === 'summons' && !summoned)) continue;
+      const n = alive.get(u.unit) ?? 0;
+      if (n <= 0) continue;
+      const c = checkResearch(world, this.player, u.id);
+      if (!c.ok || me.energy < c.cost + keep) continue;
+      if (!best || n > best.n || (n === best.n && u.id < best.id)) best = { id: u.id, n };
+    }
+    if (!best) return null;
+    this.lastKeystone = world.tick;
+    return { type: 'research', upgrade: best.id };
   }
 
   /**
@@ -738,15 +778,19 @@ export class SimpleAi {
     const me = world.players[this.player];
     let best: { f: Entity; id: string; value: number } | null = null;
     for (const f of factories) {
+      const mix = me.faction.buildings[f.defId as BuildingId]?.mix;
+      const mixUnit = mix && f.producer!.level >= mix.level ? mix.unit : null;
       for (const u of me.faction.upgrades) {
-        if (u.unit !== f.producer!.unit || me.research.includes(u.id) || researching(world, this.player, u.id)) continue;
+        if ((u.unit !== f.producer!.unit && u.unit !== mixUnit) || me.research.includes(u.id) || researching(world, this.player, u.id)) continue;
+        if (u.keystone && !this.keystoneAllowed(world, factories)) continue;
         if (u.fork) {
           const specialist = this.counterScore(u.unit, world) >= 1.1;
           if (u.id.endsWith(specialist ? 'b' : 'a')) continue;
         }
         const c = checkResearch(world, f, u.id);
         if (!c.ok || me.energy < c.cost + reserve) continue;
-        const value = (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost;
+        // Schlussstein (26.10.): Nutzen = eigene Verbände der Art × 2 / Kosten – konkurriert so mit Waffen und Panzerung.
+        const value = u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost;
         // Gleichstand spiegelbildlich auflösen (nicht nach Entity-Reihenfolge): Upgrade-ID, dann gespiegelte Lage.
         const mx = (e: Entity): number => (this.player === 0 ? e.pos.x : world.map.width - e.pos.x);
         const better = !best || value > best.value + 1e-9 ||
@@ -756,7 +800,15 @@ export class SimpleAi {
     }
     // Lohnt sich kaum (unter 1 % Mehrwirkung je 10 Energie und Verband): Energie lieber behalten.
     if (!best || best.value < 0.001) return null;
+    if (best.id.endsWith('-keystone')) this.lastKeystone = world.tick;
     return { type: 'research', entityId: best.f.id, upgrade: best.id };
+  }
+
+  /** Lebende eigene Verbände dieser Art. */
+  private aliveOf(world: World, unit: UnitId): number {
+    let n = 0;
+    for (const e of world.entities) if (e.alive && e.owner === this.player && e.defId === unit) n++;
+    return n;
   }
 
   /** Wie viele eigene Verbände dieser Art zählen (lebende + was die Fabriken noch bauen werden). */
@@ -1103,6 +1155,17 @@ export class SimpleAi {
         }
       }
     }
+    // Heimkehr (Schlussstein Steppenjäger): eigene Wiese 4–6 Kacheln hinter der Front vorbereiten (AI_TUNING.homeMeadow).
+    if (AI_TUNING.homeMeadow && world.players[this.player].research.includes('specialMeadow-keystone') && this.spare(world) >= 60) {
+      for (const lane of ROUTES) {
+        if (this.meadowBehind(world, lane) >= 4) continue;
+        const buy = this.synergyBuy(world, lane, 'meadow', [5, 4, 6]);
+        if (buy) {
+          this.lastShape = world.tick;
+          return buy;
+        }
+      }
+    }
     const pressure = [...ROUTES].sort((a, b) => this.seenByRoute[b] - this.seenByRoute[a]);
     const route = this.seenByRoute[pressure[0]!] > 0.5 ? pressure[0]! : this.rng.chance(0.3) ? this.rng.pick(ROUTES) : null;
     if (!route) return null;
@@ -1169,8 +1232,32 @@ export class SimpleAi {
     return null;
   }
 
+  /** Eigene Wiese im eigenen Gebiet dieser Lane, 3–8 Kacheln hinter der Grenze (für die Heimkehr). */
+  private meadowBehind(world: World, lane: Route): number {
+    const g = world.grid;
+    const dir = this.player === 0 ? 1 : -1;
+    const wy = Math.floor(world.map.waypoints[lane].y);
+    let edge = -1;
+    for (let k = 0; k < g.width; k++) {
+      const x = this.player === 0 ? k : g.width - 1 - k;
+      if (controllerAt(world, g.index(x, wy)) === this.player) edge = x;
+    }
+    if (edge < 0) return 99;
+    let n = 0;
+    for (let back = 3; back <= 8; back++) {
+      for (let dy = -4; dy <= 4; dy++) {
+        const x = edge - dir * back;
+        const y = wy + dy;
+        if (!g.inBounds(x, y)) continue;
+        const i = g.index(x, y);
+        if (world.formed[i] === this.player + 1 && g.terrain[i] === TERRAIN_INDEX.meadow) n++;
+      }
+    }
+    return n;
+  }
+
   /** Gelände-Kauf für eine Lane-Synergie: Boden `ground` im eigenen Gebiet dieser Lane, nahe der eigenen Grenze. */
-  private synergyBuy(world: World, lane: Route, ground: TerrainId): Command | null {
+  private synergyBuy(world: World, lane: Route, ground: TerrainId, backs: readonly number[] = [2, 3, 4, 1, 5, 6]): Command | null {
     const g = world.grid;
     const dir = this.player === 0 ? 1 : -1;
     const wy = Math.floor(world.map.waypoints[lane].y);
@@ -1181,7 +1268,7 @@ export class SimpleAi {
     }
     if (edge < 0) return null;
     const t = TERRAIN_INDEX[ground];
-    for (const back of [2, 3, 4, 1, 5, 6]) {
+    for (const back of backs) {
       for (const dy of [0, -2, 2, -1, 1, -3, 3]) {
         const x = edge - dir * back;
         const y = wy + dy;

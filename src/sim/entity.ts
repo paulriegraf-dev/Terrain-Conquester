@@ -194,6 +194,21 @@ export interface Entity {
   };
   /** Zielmarkierung einer gegnerischen Elite: wer zu `owner` gehört, trifft dieses Ziel bis `until` um 1 besser. */
   mark?: { owner: PlayerId; until: number };
+  /**
+   * Schlusssteine (26.10.): Zustand je Verband – Heimkehr (einmal je Leben, Rückzugsziel, Heilung), Wurzelgriff,
+   * Schlammbett, Weißer Tod (Wellen), Eispanzer (geschluckter Treffer), Schlammgrund (Sperre je Ziel).
+   */
+  ks?: {
+    homeUsed?: boolean; retreat?: Vec2 | null; retreatUntil?: number; healStart?: number; healFrom?: number;
+    nextGrip?: number; nextBed?: number; waves?: number; shieldUsed?: number; mudLockUntil?: number;
+    nextBluff?: number; pressureUntil?: number; nextPressure?: number; split?: boolean; half?: boolean;
+  };
+  /** Bluff (Schlussstein Katapult): von diesem Katapult geworfen. */
+  thrownBy?: number;
+  /** Letzter Tick mit Bewegung (Grasnarbe: Stillstand). */
+  movedTick?: number;
+  /** Weißer Tod: erstarrt auf eigenem Schnee des Gegners – nimmt bis `until` × factor Schaden. */
+  frail?: { until: number; factor: number };
   /** Terra-Former (26.10.): Kraft eines Gerufenen (1 = voll; sinkt, wenn sein Beschwörer schon viele lebende Gerufene hat) und wer ihn gerufen hat. Gilt ab dem Rufen. */
   power?: number;
   summoner?: number;
@@ -213,7 +228,7 @@ export interface Entity {
    * Terra-Former: auf eigenem Boden? Terraformer: aktueller 2×2-Block, fertige Kacheln, nächster
    * Arbeitsschritt (Tick), Stufe der Fabrik. Fähigkeiten: nächster Einsatz, letzter Schuss.
    */
-  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; store?: number; nextSummon?: number; workCell?: number; started?: boolean; home?: Vec2; gb?: GroundBonus | null };
+  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; store?: number; rangeAdd?: number; nextSummon?: number; workCell?: number; started?: boolean; home?: Vec2; gb?: GroundBonus | null };
   /**
    * Technoclan-Netzwerk: Netz-ID (0 = in keinem Netz), Protokolle (eigenes + geerbte) und
    * Aufstieg bis Tick.

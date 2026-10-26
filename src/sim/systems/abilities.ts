@@ -394,7 +394,8 @@ export function updateSwaps(world: World): void {
     }
     grid.setTerrain(s.index, s.target);
     world.dug[s.index] = s.target === GORGE ? s.owner + 1 : 0; // wer gegraben hat (für die Obergrenze)
-    world.formed[s.index] = s.target === GORGE ? 0 : s.owner + 1; // umgeformt von diesem Spieler (Terra-Former: eigener Boden)
+    world.formed[s.index] = s.target === GORGE ? 0 : s.owner + 1;
+    world.combatGround.delete(s.index); // umgeformt von diesem Spieler (Terra-Former: eigener Boden)
     world.players[s.owner].vision.learn(s.index); // den eigenen Umbau kennt man
     return false;
   });

@@ -158,6 +158,29 @@ export interface Rules {
   upgradePriceMax: number;
   /** Grund-Einkommen pro Sekunde. */
   energyPerSecond: number;
+  /**
+   * Schlusssteine (26.10.): Schalter und Schrauben. `enabled` aus = die KI erforscht keine (Kontrolle); `needArmor` =
+   * Panzerung II ist Pflicht. Je Schlussstein Zügel/Schrauben wie im Patch (Heimkehr, Wurzelgriff, …).
+   */
+  keystone: {
+    enabled: boolean; needArmor: boolean; only: 'all' | 'wards' | 'summons';
+    homeThreshold: number; homeHeal: number; homeRadius: number;
+    gripSeconds: number; gripCooldown: number;
+    bedEvery: number; bedNests: boolean;
+    frostBonus: number; frostEvery: number;
+    stairSeconds: number; wallFactor: number;
+    grassDistance: number; treeRange: number;
+    mudStun: number; mudEvery: number;
+    iceShield: number; iceHits: number;
+    rockSave: number; laneDelay: number;
+    /** Myriaden: Doppelwurf, Bluff, Letzter Flug, Nachzünder, Rudel, Hochdruck, Teilung. */
+    dwMax: number; dwRegen: number; dwMinDist: number; bluffCooldown: number;
+    flightRadius: number; flightDamage: number;
+    afterShare: number; afterRadius: number;
+    packSpeed: number; packClutch: number; packLinger: number;
+    pressureSeconds: number; pressureCooldown: number; pressureRate: number;
+    splitAt: number; splitHp: number;
+  };
   /** Terra-Former (26.10.): Lane-Farbe und aktive Synergie bleiben so viele Sekunden, nachdem ihre Bedingung weggefallen ist. */
   laneHysteresis: number;
   /**
@@ -341,6 +364,24 @@ export const RULES: Rules = {
   maxEnergy: 400,
   upgradePriceMax: 1.5,
   energyPerSecond: 3,
+  keystone: {
+    enabled: true, needArmor: true, only: 'all',
+    homeThreshold: 0.5, homeHeal: 5, homeRadius: 12,
+    gripSeconds: 2, gripCooldown: 20,
+    bedEvery: 8, bedNests: false,
+    frostBonus: 1.25, frostEvery: 2,
+    stairSeconds: 20, wallFactor: 2,
+    grassDistance: 4, treeRange: 1,
+    mudStun: 1, mudEvery: 6,
+    iceShield: 0.7, iceHits: 1,
+    rockSave: 1, laneDelay: 30,
+    dwMax: 2, dwRegen: 60, dwMinDist: 4, bluffCooldown: 30,
+    flightRadius: 1, flightDamage: 20,
+    afterShare: 0.5, afterRadius: 3,
+    packSpeed: 0.1, packClutch: 0.2, packLinger: 5,
+    pressureSeconds: 20, pressureCooldown: 45, pressureRate: 4,
+    splitAt: 0.5, splitHp: 0.4,
+  },
   laneHysteresis: 30,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,
   // Täuschung und Konter Zeit zum Greifen haben. Vorher 21 (Technoclan) bzw. 34 (Myriaden) Verbände pro Minute.

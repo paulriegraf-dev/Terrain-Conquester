@@ -2,6 +2,7 @@ import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
 import { UNITS, lineUnit } from '../../data/units';
+import { combatGroundOk, fireKeystone, hasKeystone, onOwn, rootGrip, setCombatGround, updateKeystones } from './keystone';
 import type { GroundBonus, UnitDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { BUILD_ZONE } from '../map';
@@ -40,6 +41,7 @@ export function updateTerraform(world: World): void {
   updateSynergy(world);
   updateGround(world);
   expireWaste(world);
+  updateKeystones(world);
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
@@ -54,6 +56,8 @@ export function updateTerraform(world: World): void {
   updateMudNests(world);
   synergyTick(world);
 }
+
+const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
 
 // ------------------------------------------------------------------ Eigener Boden
 
@@ -96,28 +100,45 @@ export function onOwnGround(world: World, e: Entity): boolean {
  * Tempo, Rüstung, Tarnung, Hinterhalt und Treffer lesen `tf.gb` an ihrer Stelle.
  */
 function updateGround(world: World): void {
+  const mudFields = new Map<Entity, number>();
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
     if (!def.groundBonus && !def.shapeshift) continue;
     const gb = activeBonus(world, e);
-    const prevRange = e.tf.gb?.range ?? 0;
+    const prevRange = e.tf.rangeAdd ?? 0;
     e.tf.gb = gb;
     e.tf.onGround = gb !== null;
-    const range = gb?.range ?? 0;
+    // Wipfelschuss (Schlussstein Borkenschützen): aus eigenem Wald +treeRange.
+    const tree = e.defId === 'wardForest' && hasKeystone(world, e.owner, 'wardForest') && onOwn(world, e, TERRAIN_INDEX.forest) ? world.rules.keystone.treeRange : 0;
+    const range = (gb?.range ?? 0) + tree;
+    e.tf.rangeAdd = range;
     if (range !== prevRange && e.weapon) e.weapon.def = range ? { ...e.weapon.baseDef, range: e.weapon.baseDef.range + range } : e.weapon.baseDef;
     if (!gb) continue;
     const aura = gb.slowAura ?? gb.pullAura;
     if (!aura) continue;
     const r2 = aura.radius * aura.radius;
+    // Schlammgrund (Schlussstein Schlammwerfer): Bremsfelder von eigenem Matsch zählen je Ziel.
+    const grip = gb.slowAura && e.defId === 'wardMud' && hasKeystone(world, e.owner, 'wardMud') && onOwn(world, e, TERRAIN_INDEX.mud);
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === e.owner || !o.mover) continue;
       const dx = o.pos.x - e.pos.x;
       const dy = o.pos.y - e.pos.y;
       if (dx * dx + dy * dy > r2) continue;
+      if (grip) mudFields.set(o, (mudFields.get(o) ?? 0) + 1);
       slowDown(world, o, world.tick + 2, aura.factor);
       if (gb.pullAura) o.pull = { x: e.pos.x, y: e.pos.y, until: world.tick + 2, speed: gb.pullAura.pull / world.tps };
     }
+  }
+  // Schlammgrund: zwei Bremsfelder auf demselben Ziel → kurz bewegungsunfähig (je Ziel alle mudEvery s).
+  const r = world.rules.keystone;
+  for (const [o, n] of mudFields) {
+    if (n < 2) continue;
+    const ks = (o.ks ??= {});
+    if (world.tick < (ks.mudLockUntil ?? 0)) continue;
+    o.stunnedUntil = Math.max(o.stunnedUntil ?? 0, world.tick + Math.round(r.mudStun * world.tps));
+    ks.mudLockUntil = world.tick + Math.round(r.mudEvery * world.tps);
+    fireKeystone(world, other(o.owner), 'wardMud');
   }
 }
 
@@ -177,6 +198,7 @@ function expireWaste(world: World): void {
     if (until === 0 || world.tick < until) continue;
     world.wasteUntil[i] = 0;
     if (world.grid.terrain[i] === TERRAIN_INDEX.waste) world.grid.setTerrain(i, world.map.terrain[i]!);
+    world.combatGround.delete(i);
   }
 }
 
@@ -234,7 +256,7 @@ export function blockDims(world: World, _p: PlayerId, _former: UnitId): readonly
 
 /** Block für eine Beschwörung: alle Kacheln des Blocks sind eigene Kacheln seiner Art ohne Abklingzeit. */
 function readyBlock(world: World, r: CellRect, p: PlayerId, ground: number): boolean {
-  return blockCells(world, r).every((i) => ownGroundTile(world, i, p, ground) && !cooling(world, i, p));
+  return blockCells(world, r).every((i) => ownGroundTile(world, i, p, ground) && !cooling(world, i, p) && !world.combatGround.has(i));
 }
 
 /** Richtung nach vorn (zum Gegner) für Spieler p: +1 oder −1 in x. */
@@ -452,6 +474,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     } else if (world.tick >= tf.workTick) {
       world.grid.setTerrain(i, ground);
       world.formed[i] = p + 1;
+      world.combatGround.delete(i);
       if (filling) world.dug[i] = 0;
       world.players[p].vision.learn(i);
       tf.workCell = -1;
@@ -595,7 +618,7 @@ function updateMudNests(world: World): void {
         for (let y = cy * NEST; y < Math.min(g.height, cy * NEST + NEST); y++) {
           for (let x = cx * NEST; x < Math.min(g.width, cx * NEST + NEST); x++) {
             const i = g.index(x, y);
-            if (world.formed[i] === p + 1 && g.terrain[i] === mud) n++;
+            if (world.formed[i] === p + 1 && g.terrain[i] === mud && (world.rules.keystone.bedNests || !world.combatGround.has(i))) n++;
           }
         }
         const key = cy * cols + cx;
@@ -677,6 +700,7 @@ function frostWave(world: World, e: Entity, f: { every: number; radius: number; 
   const snow = TERRAIN_INDEX.snow;
   const forest = TERRAIN_INDEX.forest;
   const rime = hasSynergy(world, e.owner, 'forest', 'snow');
+  const whiteDeath = e.defId === 'specialSnow' && hasKeystone(world, e.owner, 'specialSnow');
   let hit = 0;
   for (const o of world.entities) {
     if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
@@ -687,9 +711,21 @@ function frostWave(world: World, e: Entity, f: { every: number; radius: number; 
     const inForest = rime && t === forest;
     if (t !== snow && !inForest) continue;
     o.stunnedUntil = Math.max(o.stunnedUntil ?? 0, world.tick + Math.round(f.stun * (inForest ? 1.5 : 1) * world.tps));
+    // Weißer Tod: wer auf eigenem Schnee des Lawinenrufers erstarrt, nimmt mehr Schaden.
+    const oi = world.grid.index(Math.floor(o.pos.x), Math.floor(o.pos.y));
+    if (whiteDeath && t === snow && world.formed[oi] === e.owner + 1) o.frail = { until: o.stunnedUntil, factor: world.rules.keystone.frostBonus };
     hit++;
   }
   if (hit === 0) return; // Welle nur, wenn sie jemanden trifft – sonst bereit bleiben
+  if (whiteDeath) {
+    const ks = (e.ks ??= {});
+    ks.waves = (ks.waves ?? 0) + 1;
+    const i = world.grid.index(Math.floor(e.pos.x), Math.floor(e.pos.y));
+    if (ks.waves % world.rules.keystone.frostEvery === 0 && combatGroundOk(world, i, e.owner) && world.formed[i] !== e.owner + 1) {
+      setCombatGround(world, i, e.owner, snow);
+      fireKeystone(world, e.owner, 'specialSnow');
+    }
+  }
   tf.nextAbility = world.tick + Math.round(f.every * world.tps);
   world.emit({ type: 'frost', owner: e.owner, pos: { x: e.pos.x, y: e.pos.y }, radius: f.radius });
 }
@@ -749,6 +785,7 @@ function rootsJump(world: World, e: Entity, r: { every: number; chance: number; 
     }
   }
   world.emit({ type: 'roots', owner: e.owner, from, to: { x: e.pos.x, y: e.pos.y } });
+  rootGrip(world, e); // Wurzelgriff (Schlussstein Hainhüter)
 }
 
 /**
@@ -823,6 +860,30 @@ export function onHit(world: World, shooter: Entity, target: Entity): void {
     }
   }
   if (shooter.defId === 'mudling' && hasSynergy(world, shooter.owner, 'mud', 'snow')) slowDown(world, target, world.tick + Math.round(1.5 * world.tps), 0.7);
+  const ti = world.grid.index(Math.floor(target.pos.x), Math.floor(target.pos.y));
+  // Schlammbett (Schlussstein Schlammschleuder): Einschlag auf Wiese oder Geröll → eine Matschkachel (je Verband alle bedEvery s).
+  if (shooter.defId === 'specialMud' && hasKeystone(world, shooter.owner, 'specialMud')) {
+    const ks = (shooter.ks ??= {});
+    const t = world.grid.terrain[ti];
+    if (world.tick >= (ks.nextBed ?? 0) && (t === TERRAIN_INDEX.meadow || t === TERRAIN_INDEX.rubble) && combatGroundOk(world, ti, shooter.owner)) {
+      setCombatGround(world, ti, shooter.owner, TERRAIN_INDEX.mud);
+      ks.nextBed = world.tick + Math.round(world.rules.keystone.bedEvery * world.tps);
+      fireKeystone(world, shooter.owner, 'specialMud');
+    }
+  }
+  // Spalt (Schlussstein Frontbrecher): Aufschlag auf eigenem Geröll → Gerölltreppe für eigene Fußtruppen.
+  if (shooter.defId === 'specialRubble' && hasKeystone(world, shooter.owner, 'specialRubble') && world.formed[ti] === shooter.owner + 1 && world.grid.terrain[ti] === TERRAIN_INDEX.rubble) {
+    const until = world.tick + Math.round(world.rules.keystone.stairSeconds * world.tps);
+    const g = world.grid;
+    const tx = Math.floor(target.pos.x);
+    const ty = Math.floor(target.pos.y);
+    for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
+      if (!g.inBounds(x, y)) continue;
+      const i = g.index(x, y);
+      if (world.formed[i] === shooter.owner + 1 && g.terrain[i] === TERRAIN_INDEX.rubble) world.stairs.set(i, { owner: shooter.owner, until });
+    }
+    fireKeystone(world, shooter.owner, 'specialRubble');
+  }
 }
 
 /** Welcher Spieler hat diese Kachel geformt (null = keiner)? */

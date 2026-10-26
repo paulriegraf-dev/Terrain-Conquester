@@ -1,7 +1,7 @@
 import type { BuildingUpgradeDef, BuildingUpgradeKind, FactionDef, UpgradeDef } from '../../data/factions';
 import { BUILDINGS } from '../../data/buildings';
 import type { BuildingId } from '../../data/buildings';
-import { UNITS } from '../../data/units';
+import { UNITS, lineUnit } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import type { CommandResult } from '../commands';
 import type { Entity } from '../entity';
@@ -67,6 +67,9 @@ export function researchableUnits(world: World, p: PlayerId): UnitId[] {
   for (const e of world.entities) {
     if (!e.alive || e.owner !== p || !e.producer) continue;
     for (const u of unlockedUnits(world, e)) if (!out.includes(u)) out.push(u);
+    // Beimischung (Hund an der Brut ab Stufe III): auch ihre Ketten (und ihr Schlussstein) sind erforschbar.
+    const mix = world.players[p].faction.buildings[e.defId as BuildingId]?.mix;
+    if (mix && e.producer.level >= mix.level && !out.includes(mix.unit)) out.push(mix.unit);
   }
   return out;
 }
@@ -99,11 +102,15 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
   if (bu) return checkBuildingUpgrade(world, owner, bu);
   const u = p.faction.upgrades.find((x) => x.id === upgradeId);
   if (!u) return { ok: false, reason: 'Unbekanntes Upgrade' };
-  if (!researchableUnits(world, owner).includes(u.unit)) return { ok: false, reason: `Erst eine Fabrik, die ${UNITS[u.unit].name} bauen kann` };
+  if (!researchableUnits(world, owner).includes(lineUnit(u.unit))) return { ok: false, reason: `Erst eine Fabrik, die ${UNITS[u.unit].name} bauen kann` };
   if (p.research.includes(u.id)) return { ok: false, reason: 'Schon erforscht' };
-  if (u.requires && !p.research.includes(u.requires)) {
-    const prev = p.faction.upgrades.find((x) => x.id === u.requires);
-    return { ok: false, reason: `Erst ${prev?.name ?? 'die vorige Stufe'} erforschen` };
+  if (u.requires && !requirementMet(p.research, u.requires)) {
+    const prev = p.faction.upgrades.find((x) => x.id === u.requires || x.id === `${u.requires}a`);
+    return { ok: false, reason: `Erst ${prev?.name.replace(/:.*$/, '') ?? 'die vorige Stufe'} erforschen` };
+  }
+  if (u.keystone && world.rules.keystone.needArmor) {
+    const miss = (u.alsoRequires ?? []).find((r) => !p.research.includes(r));
+    if (miss) return { ok: false, reason: `Erst ${p.faction.upgrades.find((x) => x.id === miss)?.name ?? 'die Voraussetzung'} erforschen` };
   }
   if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon erforscht' };
   if (u.fork) {
@@ -172,6 +179,7 @@ export function updateResearch(world: World): void {
       if (p.research.includes(l.upgrade)) continue;
       p.research.push(l.upgrade);
       p.stats.research++;
+      if (l.upgrade.endsWith('-keystone')) p.stats.keystoneAt.push(world.tick / world.tps / 60);
       const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
       const bu = p.faction.buildingUpgrades.find((x) => x.id === l.upgrade);
       const name = u ? `${UNITS[u.unit].name}: ${u.name}` : bu ? `${p.faction.buildings[bu.building]?.name ?? bu.building}: ${bu.name}` : l.upgrade;
@@ -384,12 +392,18 @@ function pay(world: World, owner: PlayerId, cost: number): void {
  * Upgrades, die das Forschungsmenü für eine Einheit zeigt: je Kette die nächste offene Stufe
  * (oder die letzte, wenn alles erforscht ist), dazu die Einzel-Upgrades.
  */
+/** Voraussetzung erfüllt? Waffen III mit Gabelung zählt in jeder Richtung (…-3a / …-3b), z. B. für den Schlussstein. */
+export function requirementMet(research: readonly string[], req: string): boolean {
+  return research.includes(req) || research.includes(`${req}a`) || research.includes(`${req}b`);
+}
+
 export function visibleUpgrades(faction: FactionDef, unit: UnitId, research: readonly string[]): UpgradeDef[] {
-  const ups = faction.upgrades.filter((u) => u.unit === unit);
+  // Schlusssteine der Gerufenen erscheinen an der Linienfabrik (26.10.).
+  const ups = faction.upgrades.filter((u) => u.unit === unit || (u.keystone && lineUnit(u.unit) === unit));
   const out: UpgradeDef[] = [];
   for (const u of ups) {
     const next = ups.find((x) => x.requires === u.id);
-    if (u.requires && !research.includes(u.requires)) continue; // vorige Stufe fehlt noch
+    if (u.requires && !requirementMet(research, u.requires)) continue; // vorige Stufe fehlt noch
     if (research.includes(u.id) && next) continue; // erledigt, die nächste Stufe steht schon da
     // Gabelung: Ist eine Seite gewählt, verschwindet die andere.
     if (u.fork && !research.includes(u.id) && ups.some((x) => x.fork === u.fork && research.includes(x.id))) continue;

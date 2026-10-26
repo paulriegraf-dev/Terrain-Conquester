@@ -1,3 +1,4 @@
+import { hasKeystone, secondThrow, underPressure, updatePack } from './keystone';
 import type { BuildingId } from '../../data/buildings';
 import { MOVE_PROFILES } from '../../data/movement';
 import { UNITS } from '../../data/units';
@@ -36,6 +37,7 @@ export function updateMyr(world: World): void {
       if (def.expires !== undefined && world.tick - e.bornTick >= def.expires * tps) world.destroy(e, null);
     }
   }
+  updatePack(world); // Rudel (Schlussstein Hund)
   if (world.flights.length > 0) landFlights(world);
   if (world.burrows.length > 0) breakBurrows(world);
   if (world.tick % tps === 0) {
@@ -119,6 +121,18 @@ export function initLauncher(world: World, e: Entity, launch: LaunchDef): void {
 function regenerate(world: World, e: Entity): void {
   const l = e.launcher!;
   const def = UNITS[e.defId as UnitId].launch!;
+  // Doppelwurf (Schlussstein Katapult): zwei Verspotter, beide zusammen alle dwRegen s.
+  if (e.defId === 'catapult' && hasKeystone(world, e.owner, 'catapult')) {
+    const r = world.rules.keystone;
+    if (l.load >= r.dwMax) {
+      l.nextRegen = world.tick + Math.round(r.dwRegen * world.tps);
+      l.load = Math.min(l.load, r.dwMax);
+    } else if (world.tick >= l.nextRegen) {
+      l.load = r.dwMax;
+      l.nextRegen = world.tick + Math.round(r.dwRegen * world.tps);
+    }
+    return;
+  }
   if (l.load >= def.max) {
     l.nextRegen = world.tick + Math.round(def.regen * world.tps);
     return;
@@ -146,7 +160,9 @@ export function tryLaunch(world: World, e: Entity, t: Entity, consumed: Map<Enti
   if (!l || !launchTarget(def, t)) return false;
   const full = def.models ?? UNITS[def.unit].models;
   let models = full;
-  if (l.load > 0) {
+  if (underPressure(world, e)) {
+    // Hochdruck: die eingezogenen Drohnen reichen für die ganze Zeit – kein Vorrat nötig.
+  } else if (l.load > 0) {
     l.load--;
   } else if (def.take) {
     const squad = nearestSquad(world, e, def.unit, def.take.radius, consumed);
@@ -169,9 +185,11 @@ export function tryLaunch(world: World, e: Entity, t: Entity, consumed: Map<Enti
     route: e.mover?.route ?? 'mid',
     impact: def.impact,
     burrow: def.burrow,
+    thrower: e.id,
   };
   world.flights.push(flight);
   world.emit({ type: 'launch', owner: e.owner, unit: def.unit, from: flight.from, to: flight.to, land: flight.land });
+  secondThrow(world, e, t); // Doppelwurf (Schlussstein Katapult)
   return true;
 }
 
@@ -212,6 +230,7 @@ function landFlights(world: World): void {
       continue;
     }
     const u = world.addUnit(f.owner, def, pos, f.route);
+    if (f.thrower !== undefined) u.thrownBy = f.thrower;
     if (f.models < u.models) u.hp = Math.min(u.hp, f.models * u.modelWounds);
     u.mover!.committed = true; // gelandet in der gegnerischen Linie: kämpft dort weiter
     u.mover!.passedWaypoint = true;

@@ -135,8 +135,11 @@ export function laneCounts(world: World, p: PlayerId): number[][] {
   const g = world.grid;
   const out = ROUTES.map(() => SYNERGY_GROUNDS.map(() => 0));
   const idx = new Map(SYNERGY_GROUNDS.map((id, k) => [TERRAIN_INDEX[id], k]));
+  const young = world.tick - Math.round(world.rules.keystone.laneDelay * world.tps);
   for (let i = 0; i < world.formed.length; i++) {
     if (world.formed[i] !== p + 1) continue;
+    const born = world.combatGround.get(i);
+    if (born !== undefined && born > young) continue; // im Kampf geformt: zählt erst nach laneDelay
     const k = idx.get(g.terrain[i]!);
     if (k === undefined) continue;
     const lane = ROUTES.indexOf(laneOfRow(world, Math.floor(i / g.width)));

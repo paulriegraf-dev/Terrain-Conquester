@@ -17,6 +17,7 @@ import { frenzyOf } from './lifespan';
 import { ambushFactor, dugInFactor, onHit, slowDown } from './terraform';
 import { tryLaunch } from './myr';
 import { synergyApBonus, synergyDamageFactor } from './synergy';
+import { fireKeystone, hasKeystone, trySplit, tryPressure, underPressure } from './keystone';
 
 export interface Hit {
   target: Entity;
@@ -73,8 +74,10 @@ export function updateCombat(world: World): void {
     }
     // Werfer (Myr-Kanone, -Katapult) – die Kanone im Stein-Modus wirft keine Drohnen.
     const launch = udef?.launch;
+    tryPressure(world, e, consumed); // Hochdruck (Schlussstein Myr-Kanone)
+    const pressure = underPressure(world, e) ? world.rules.keystone.pressureRate : 1;
     if (launch && !e.stoneMode && rangeTo(e, t) <= launch.range && tryLaunch(world, e, t, consumed)) {
-      w.ready = Math.max(1, Math.round(launch.cooldown * world.tps));
+      w.ready = Math.max(1, Math.round((launch.cooldown * world.tps) / pressure));
       continue;
     }
     let damage = damagePerWound(world, e, t);
@@ -101,7 +104,7 @@ export function updateCombat(world: World): void {
     let factor = 1;
     let swarmAp = 0;
     if (def?.swarm && def.swarm.perNeighbor > 0) {
-      const sb = swarmBonus(world, e, def.swarm.perNeighbor, def.swarm.max, def.swarm.radius);
+      const sb = swarmBonus(world, e, def.swarm.perNeighbor, def.swarm.max, def.swarm.radius) * (e.ks?.half ? 0.5 : 1); // Teilung: Halbsphären halber Masse-Bonus
       factor *= 1 + sb;
       // Test-Schalter: Durchschlag im Schwarm – ab diesem Anteil des Höchstbonus +1 Durchschlag.
       if (world.rules.swarmAp > 0 && sb >= world.rules.swarmAp * def.swarm.max - 1e-9) swarmAp = 1;
@@ -187,7 +190,7 @@ export function updateCombat(world: World): void {
     // Todeswut (Lebensuhr): alte Verbände feuern schneller.
     const rage = e.lifespan ? frenzyOf(world, e) : null;
     // Netz-Aufstieg (Technoclan): kurz schnelleres Feuer.
-    const rate = (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
+    const rate = pressure * (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
     w.ready = rate !== 1 ? Math.max(1, Math.round(w.cooldownTicks / rate)) : w.cooldownTicks;
     e.combatTick = world.tick;
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer
@@ -219,6 +222,13 @@ export function applyHits(world: World, hits: Hit[]): void {
     const t = h.target;
     if (!t.alive) continue;
     t.combatTick = world.tick;
+    // Eispanzer: einmal je Leben schluckt der Frostwächter-Verband einen Treffer ganz.
+    if (t.defId === 'wardSnow' && hasKeystone(world, t.owner, 'wardSnow') && (t.ks?.shieldUsed ?? 0) < world.rules.keystone.iceHits) {
+      const ks = (t.ks ??= {});
+      ks.shieldUsed = (ks.shieldUsed ?? 0) + 1;
+      fireKeystone(world, t.owner, 'wardSnow');
+      continue;
+    }
     for (let k = 0; k < h.wounds && t.alive; k++) {
       let dealt = Math.min(h.damage, currentModelWounds(t));
       // Schild des Schildgenerators fängt zuerst ab.
@@ -238,6 +248,7 @@ export function applyHits(world: World, hits: Hit[]): void {
       st.damageSplit[split] = (st.damageSplit[split] ?? 0) + dealt;
       t.hp -= dealt;
       if (t.kind === 'hq') world.players[h.attacker].stats.hqDamageDealt += dealt;
+      if (t.hp > 1e-6) trySplit(world, t); // Teilung (Schlussstein Battlesphäre)
       if (t.hp <= 1e-6) {
         t.hp = 0;
         world.destroy(t, h.attacker);
@@ -382,6 +393,10 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
     if (e.mover && world.phaseIndex >= 1 && stationActive(world, e.owner, e.mover.route, 'siegeTower')) damage *= world.rules.sites.siegeTower;
   }
   if (t.kind === 'hq') damage *= world.hqDamageMult;
+  // Spalt (Schlussstein Frontbrecher): Erdwälle doppelt so schnell.
+  if (t.kind === 'wall' && e.defId === 'specialRubble' && hasKeystone(world, e.owner, 'specialRubble')) damage *= world.rules.keystone.wallFactor;
+  // Weißer Tod: auf eigenem Schnee des Lawinenrufers erstarrt.
+  if (t.frail && world.tick < t.frail.until) damage *= t.frail.factor;
   // Schild-Aura (Frostwächter in der Nähe des Ziels)
   const shield = shields.get(t.id);
   if (shield !== undefined) damage *= shield;
@@ -410,13 +425,16 @@ function shieldMap(world: World): Map<number, number> {
     if (!s.alive || s.kind !== 'unit') continue;
     const aura = UNITS[s.defId as UnitId].shieldAura;
     if (!aura) continue;
+    // Eispanzer (Schlussstein Frostwächter): auf Schnee wirkt der Schild doppelt.
+    const ice = s.defId === 'wardSnow' && hasKeystone(world, s.owner, 'wardSnow') && world.grid.terrain[world.grid.index(Math.floor(s.pos.x), Math.floor(s.pos.y))] === TERRAIN_INDEX.snow;
+    const factor = ice ? world.rules.keystone.iceShield : aura.factor;
     const r2 = aura.radius * aura.radius;
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner !== s.owner || o === s) continue;
       const dx = o.pos.x - s.pos.x;
       const dy = o.pos.y - s.pos.y;
       if (dx * dx + dy * dy > r2) continue;
-      out.set(o.id, Math.min(out.get(o.id) ?? 1, aura.factor));
+      out.set(o.id, Math.min(out.get(o.id) ?? 1, factor));
     }
   }
   return out;

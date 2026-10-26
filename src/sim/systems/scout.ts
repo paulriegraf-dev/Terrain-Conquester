@@ -27,6 +27,8 @@ export interface ScoutReport {
   /** Stand dieses Ticks (beim Losschicken). */
   tick: number;
   routes: Record<Route, ScoutRoute>;
+  /** Schlusssteine des Gegners (26.10.): erforscht oder in Forschung („forscht …“). */
+  keystones?: { unit: UnitId; running: boolean }[];
 }
 
 export const SCOUT_LEVELS = ['keine', 'wenige', 'einige', 'viele'] as const;
@@ -109,5 +111,9 @@ export function snapshot(world: World, p: PlayerId): ScoutReport {
     const elites = world.entities.filter((e) => e.alive && e.owner === enemy && e.elite && (e.mover?.route ?? zoneAt(world.map.height, e.pos.y)) === r).length;
     routes[r] = { strength: a.strength, level, armor, unit, verbund: world.verbund[enemy][r].active?.key ?? null, elites };
   }
-  return { tick: world.tick, routes };
+  const foe = world.players[p === 0 ? 1 : 0];
+  const keystones = foe.faction.upgrades
+    .filter((u) => u.keystone && (foe.research.includes(u.id) || foe.labs.some((l) => l.upgrade === u.id)))
+    .map((u) => ({ unit: u.unit, running: !foe.research.includes(u.id) }));
+  return { tick: world.tick, routes, keystones };
 }

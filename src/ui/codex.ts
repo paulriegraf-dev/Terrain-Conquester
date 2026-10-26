@@ -1,3 +1,4 @@
+import { KEYSTONE_OF } from '../data/keystones';
 import { STATIONS, STATION_KINDS, pairLabel, stationPool } from '../data/stations';
 import { MAPS } from '../data/maps';
 import { ARMOR_NAMES } from '../data/combat';
@@ -447,7 +448,20 @@ export function renderCodex(state: CodexState): string {
 function traitsTab(state: CodexState): string {
   const f = state.faction;
   const body = f === 'technoclan' ? technoTraits() : f === 'terraformer' ? terraTraits() : myrTraits();
-  return `${factionChips(state, 'faction', 'Fraktion')}${body}`;
+  return `${factionChips(state, 'faction', 'Fraktion')}${body}${keystoneList(f)}`;
+}
+
+/** Schlusssteine der Fraktion (26.10.) aus den Spielwerten. */
+function keystoneList(f: FactionId): string {
+  const ups = FACTIONS[f].upgrades.filter((u) => u.keystone);
+  if (ups.length === 0) return '';
+  const rows = ups.map((u) => {
+    const k = KEYSTONE_OF[u.unit]!;
+    return `<tr><th scope="row">${escapeHtml(k.icon)} ${escapeHtml(UNITS[u.unit].name)}<span class="cx-role">${escapeHtml(k.name)}</span></th><td>${escapeHtml(k.rule)}</td><td>${escapeHtml(k.rein)}</td></tr>`;
+  }).join('');
+  return `<h3 class="cx-h3">Schlusssteine</h3>
+    <p class="cx-lede">Letzte Forschung je Einheit: ändert eine Regel, keine Zahl. Voraussetzung Waffen III${RULES.keystone.needArmor ? ' und Panzerung II' : ''} der Linie, 200 Energie, 30 s. Gilt für alle Einheiten der Art, auch lebende.</p>
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit</th><th>Regel</th><th>Zügel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function technoTraits(): string {

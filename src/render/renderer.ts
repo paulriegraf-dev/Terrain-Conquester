@@ -1,3 +1,4 @@
+import { KEYSTONE_OF } from '../data/keystones';
 import { STATIONS } from '../data/stations';
 import { buildingIds } from '../data/factions';
 import { MOVE_PROFILES } from '../data/movement';
@@ -1078,6 +1079,14 @@ export class Renderer {
     const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
     const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
     const r = Math.max(2.5, e.radius * t);
+    // Schlussstein (26.10.): kleines Symbol über dem Verband.
+    const ks = KEYSTONE_OF[e.defId as UnitId];
+    if (ks && world.players[e.owner].research.includes(`${e.defId}-keystone`)) {
+      ctx.fillStyle = withAlpha(PALETTE.player[e.owner], 0.95);
+      ctx.font = `${Math.max(8, Math.round(t * 0.38))}px ${MONO}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(e.ks?.retreat ? '↩' : ks.icon, x, y - r * 1.9);
+    }
     if (e.stunnedUntil !== undefined && tick < e.stunnedUntil) {
       // Betäubt (Notfallverlegung): gelber Zickzack-Ring
       ctx.strokeStyle = 'rgba(240,210,90,0.9)';

@@ -364,12 +364,14 @@ export class Hud {
           return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}${vb}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
+    // Schlusssteine des Gegners (26.10.): erforscht oder in Forschung.
+    const ksRows = (report?.keystones ?? []).map((k) => `<li><span>${k.running ? 'forscht' : 'hat'}</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(UNITS[k.unit].name)}</span></li>`).join('');
     const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;
-    const sig = `${meta}|${rows}|${label}|${check.ok && canAct}`;
+    const sig = `${meta}|${rows}${ksRows}|${label}|${check.ok && canAct}`;
     if (sig === this.scoutSig) return;
     this.scoutSig = sig;
     this.el.scoutMeta.textContent = meta;
-    this.el.scoutList.innerHTML = rows;
+    this.el.scoutList.innerHTML = rows + ksRows;
     this.el.scoutBtn.textContent = label;
     this.el.scoutBtn.disabled = !canAct || !check.ok;
     this.el.scoutBtn.title = `Spähbericht (${scoutCost(world, me)} Energie, alle ${rules.cooldownSeconds} s): grobe Stärke des Gegners je Route – keine, wenige, einige, viele – und die vorherrschende Panzerung. Kommt nach ${scoutDelay(world, me)} s an (Stand beim Losschicken). Taste L.`;

@@ -1,3 +1,4 @@
+import { immovable, packSpeed } from './keystone';
 import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
 import { TERRAIN_LIST } from '../../data/terrain';
@@ -67,8 +68,13 @@ export function updateMovement(world: World): void {
     const sites = world.rules.sites;
     const wind = stationActive(world, e.owner, m.route, 'windvale') ? sites.windvale : 1;
     const ref = e.tech ? e.tech.base.speed : m.speed;
-    const boost = Math.min(sites.speedCap, ((base / ref) || 1) * aura * rage * rush * wind * Math.max(1, ground));
-    const slow = Math.min(1, ground) * (grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1);
+    const pack = packSpeed(world, e); // Rudel (Schlussstein Hund)
+    const boost = Math.min(sites.speedCap, ((base / ref) || 1) * aura * rage * rush * wind * pack * Math.max(1, ground));
+    const here = grid.index(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y));
+    // Gerölltreppe (Schlussstein Frontbrecher): eigene Fußtruppen laufen auf ihr wie auf Wiese.
+    const stair = m.profile === 'foot' ? world.stairs.get(here) : undefined;
+    const terrainSpeed = stair && stair.owner === e.owner && world.tick < stair.until ? 1 : grid.speedFor(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), profile) || 1;
+    const slow = Math.min(1, ground) * terrainSpeed;
     const barrier = barrierSlow(world, e);
     const slowed = barrier < 1 ? Math.max(slow * barrier, Math.min(slow, sites.barrier.floor)) : slow;
     const speed = ref * boost * slowed;
@@ -129,6 +135,11 @@ export function updateMovement(world: World): void {
       px += (dx / d) * push;
       py += (dy / d) * push;
     });
+    // Fels in der Brandung (Schlussstein Steinwächter): auf eigenem Geröll unverdrängbar.
+    if (immovable(world, e)) {
+      px = 0;
+      py = 0;
+    }
     const pushLen = Math.sqrt(px * px + py * py);
     if (pushLen > MAX_PUSH) {
       px = (px / pushLen) * MAX_PUSH;
@@ -148,6 +159,7 @@ export function updateMovement(world: World): void {
     if (dir.x !== 0 || dir.y !== 0) {
       if (moved > 1e-6) m.heading = { x: mx / moved, y: my / moved };
     }
+    if (moved > 0.01) e.movedTick = world.tick; // Grasnarbe: seit wann steht er still?
 
     // Beim Verfolgen festgefahren (z. B. Ziel hinter einer Schlucht)? Dann weiter marschieren.
     if (chasing && moved < speed * 0.3) {

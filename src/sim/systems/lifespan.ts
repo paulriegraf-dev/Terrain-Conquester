@@ -1,3 +1,4 @@
+import { lastFlight } from './keystone';
 import type { Entity } from '../entity';
 import type { World } from '../world';
 
@@ -24,6 +25,7 @@ export function updateLifespans(world: World): void {
     life.age += rate;
     const cap = lifeCap(world, e);
     if (cap <= 1e-6) {
+      lastFlight(world, e, Math.max(1, Math.ceil(e.hp / e.modelWounds - 1e-9))); // Letzter Flug (Schlussstein Drohnen)
       e.hp = 0;
       world.players[e.owner].stats.expired++;
       world.destroy(e, null);

@@ -32,6 +32,7 @@ import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
 import { NO_SYNERGY, newHold } from './systems/synergy';
+import { keystoneDeath } from './systems/keystone';
 import type { SynergyHold, SynergyState } from './systems/synergy';
 import { releaseClutch, updateMyr } from './systems/myr';
 import type { SiteState } from './systems/sites';
@@ -113,6 +114,8 @@ export interface Flight {
   burrow?: { seconds: number; refreshes: number; maxSeconds: number; radius: number };
   /** Sprengladung (Myr-Sprengetopp): kein Verband, sondern eine Explosion am Ziel. */
   charge?: { target: number; damage: number; radius: number; weapon: WeaponDef };
+  /** Bluff (Schlussstein Katapult): wer geworfen hat. */
+  thrower?: number;
 }
 
 /** Technoclan-Verbund einer Lane. */
@@ -148,6 +151,10 @@ export interface PlayerStats {
   shaped: number;
   /** Terra-Former-KI (26.10.): Gelände-Käufe, die der Synergie-Zielhinweis ausgelöst hat. */
   synergyBuys: number;
+  /** Schlusssteine (26.10.): Auslösungen je Schlussstein-Einheit, Minute der fertigen Forschung, im Kampf geformte Kacheln. */
+  keystoneFires: Record<string, number>;
+  keystoneAt: number[];
+  combatTiles: number;
   gorges: number;
   refills: number;
   /** Verbände, die an ihrer Lebensuhr verfallen sind (Myriaden-Drohnen). */
@@ -342,6 +349,14 @@ export class World {
    * weitere (Index p × Kacheln + Kachel; 0 = frei).
    */
   readonly tileCooldown: Uint32Array;
+  /** Schlusssteine (26.10.): im Kampf geformter Boden (Kachel → Tick) – zählt erst nach laneDelay für Lanes, nie für Rufe. */
+  readonly combatGround = new Map<number, number>();
+  /** Gerölltreppen (Spalt): Kachel → Besitzer und Ende. */
+  readonly stairs = new Map<number, { owner: PlayerId; until: number }>();
+  /** Rudel (Schlussstein Hund): je Spieler und Lane – bis zu diesem Tick heult das Rudel. */
+  pack: [Record<Route, number>, Record<Route, number>] = [{ top: 0, mid: 0, bottom: 0 }, { top: 0, mid: 0, bottom: 0 }];
+  /** Deckung hinter einem Steinwächter (Fels in der Brandung): Entity-IDs mit +1 Rüstung in diesem Tick. */
+  coverIds = new Set<number>();
   /** Terra-Former (26.10.): Ödland – bis zu diesem Tick bleibt die Kachel Ödland (0 = kein Ödland); danach der natürliche Boden. */
   readonly wasteUntil: Uint32Array;
   /** Terra-Former: Lane-Synergie je Spieler (alle 5 s neu bestimmt, siehe systems/synergy.ts). */
@@ -793,10 +808,12 @@ export class World {
    */
   private onUnitDeath(e: Entity, killer: PlayerId): void {
     const def = UNITS[e.defId as UnitId];
+    keystoneDeath(this, e, killer); // Schlusssteine: Bluff, Nachzünder
     if (def.deathSpawn) {
       // Zerfall: so viele Modelle, aufgeteilt auf Verbände (z. B. Battlesphäre → 16 Drohnen = 2 Verbände).
       const spawn = UNITS[def.deathSpawn.unit];
-      for (let left = def.deathSpawn.count, k = 0; left > 0; k++) {
+      // Teilung: Halbsphären zerfallen in halb so viele Drohnen.
+      for (let left = e.ks?.half ? Math.round(def.deathSpawn.count / 2) : def.deathSpawn.count, k = 0; left > 0; k++) {
         const n = Math.min(spawn.models, left);
         this.spawnNear(e.owner, spawn, e.pos, e.mover!, k, n);
         left -= n;
@@ -939,6 +956,9 @@ export class World {
         research: 0,
         shaped: 0,
         synergyBuys: 0,
+        keystoneFires: {},
+        keystoneAt: [],
+        combatTiles: 0,
         gorges: 0,
         refills: 0,
         expired: 0,

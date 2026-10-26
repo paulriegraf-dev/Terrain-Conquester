@@ -52,7 +52,9 @@ export function factorySpeed(world: World, e: Entity): number {
   const workshop = stationActive(world, e.owner, e.producer!.route, 'workshop') ? world.rules.sites.workshop : 1; // Werkhalle (Station)
   // Terra-Former „Erntezeit“ (Gebäude-Ausbau 'tempo'): je Stufe +18 % Tempo für Wächter und Terraformer der Linie.
   const tempo = 1 + world.rules.terraform.tempoStep * buildingUpgradeLevel(world, e.owner, e.defId as BuildingId, 'tempo');
-  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo;
+  // Rudel (Schlussstein Hund): Bruten auf einer heulenden Lane füllen ihr Gelege schneller.
+  const pack = e.producer!.clutch && world.pack[e.owner][e.producer!.route] > world.tick ? 1 + world.rules.keystone.packClutch : 1;
+  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { KEYSTONE_OF, keystoneId } from './keystones';
 import { BUILDING_IDS } from './buildings';
 import type { BuildingId } from './buildings';
 import type { UnitId } from './units';
@@ -60,6 +61,10 @@ export interface UpgradeDef {
   requires?: string;
   /** Gabelung: Von allen Upgrades mit derselben Gabel-ID kann man nur eines erforschen. */
   fork?: string;
+  /** Weitere Voraussetzungen (Schlussstein: Panzerung II; Schalter rules.keystone.needArmor). */
+  alsoRequires?: string[];
+  /** Schlussstein (26.10.): ändert eine Regel der Einheitenart (siehe data/keystones.ts). */
+  keystone?: boolean;
 }
 
 export interface FactionBuilding {
@@ -281,6 +286,23 @@ function special(unit: UnitId, id: string, name: string, description: string, co
   return { id, unit, name, description, cost: Math.round((cost * 1.2) / 5) * 5, seconds, effect };
 }
 
+/** Schlussstein (26.10.): vierte Stufe der Waffen- (bzw. Heilungs-)Kette; Voraussetzung Stufe III und Panzerung II. 200 Energie, 30 s. */
+function keystoneUpgrade(unit: UnitId, chainKey: 'weapons' | 'heal' = 'weapons'): UpgradeDef {
+  const k = KEYSTONE_OF[unit]!;
+  return {
+    id: keystoneId(unit),
+    unit,
+    name: `Schlussstein: ${k.name}`,
+    description: `${k.rule} (${k.rein})`,
+    cost: 200,
+    seconds: 30,
+    effect: {},
+    requires: `${k.line}-${chainKey}-3`,
+    alsoRequires: [`${k.line}-armor-2`],
+    keystone: true,
+  };
+}
+
 /** Gebäude-Ausbau in zwei Stufen (zentral für alle Gebäude dieser Art). */
 function buildingChain(building: BuildingId, kind: BuildingUpgradeKind, steps: readonly { name: string; description: string; cost: number; seconds: number }[]): BuildingUpgradeDef[] {
   return steps.map((st, k) => ({
@@ -376,6 +398,9 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
       special('bomber', 'bomber-sprint', 'Zündeifer', '+20 % Tempo', 80, 12, { speed: 1.2 }),
       ...healing('hound'), ...armor('hound', ['T', 'SV', 'W']),
       special('hound', 'hound-pack', 'Rudelruf', '+1,5 Aura-Radius', 80, 15, { range: 1.5 }),
+      // 26.10.: Schlusssteine der Myriaden (Hund: an der Heilungs-Kette).
+      ...(['catapult', 'drone', 'bomber', 'myrcannon', 'sphere'] as const).map((u) => keystoneUpgrade(u)),
+      keystoneUpgrade('hound', 'heal'),
       ...weapons('myrcannon', ['S', 'AP', 'D']), ...armor('myrcannon', ['T', 'SV', 'W']),
       special('myrcannon', 'cannon-spread', 'Streuladung', 'größerer Flächenschaden (+0,5 Radius)', 90, 15, { splash: 0.5 }),
       ...weapons('catapult', ['AP', 'AP', 'D']), ...armor('catapult', ['T', 'SV', 'W']),
@@ -417,6 +442,8 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
       // 26.10.: Naturspeicher +1 – gilt für neu gebaute Terraformer der Linie (ein Ruf mehr).
       ...(['wardMeadow', 'wardForest', 'wardMud', 'wardSnow', 'wardRubble'] as const).map((w) =>
         special(w, `${w}-store`, 'Naturspeicher', 'neue Terraformer dieser Linie rufen einmal öfter', 100, 20, { store: 1 })),
+      // 26.10.: Schlusssteine – Wächter und Gerufene je Linie (Forschung an der Linienfabrik).
+      ...(['wardMeadow', 'wardForest', 'wardMud', 'wardSnow', 'wardRubble', 'specialMeadow', 'specialForest', 'specialMud', 'specialSnow', 'specialRubble'] as const).map((u) => keystoneUpgrade(u)),
     ],
     buildingUpgrades: [...tfLine('meadowhall'), ...tfLine('grove'), ...tfLine('mudpit'), ...tfLine('frosthall'), ...tfLine('quarry')],
     hero: { unit: 'landformer', cost: 200, respawnSeconds: 45 },

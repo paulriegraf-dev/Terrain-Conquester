@@ -10,7 +10,8 @@ import { UNITS, UNIT_IDS } from '../../data/units';
 import type { WeaponDef } from '../../data/units';
 import { SpatialGrid } from '../spatial';
 import { launchTarget } from './myr';
-import { leashOk } from './terraform';
+import { camouflageRange, leashOk } from './terraform';
+import { hasKeystone, onOwn } from './keystone';
 import { breaksWalls } from './abilities';
 import type { World } from '../world';
 
@@ -70,8 +71,22 @@ function canAttack(world: World, e: Entity, t: Entity): boolean {
   return (
     t.alive &&
     t.owner !== e.owner &&
-    world.isVisibleTo(e.owner, t) // Nebel: nur Sichtbares ist angreifbar
+    (world.isVisibleTo(e.owner, t) || treeShot(world, e, t)) // Nebel: nur Sichtbares ist angreifbar
   );
+}
+
+/** Wipfelschuss (Schlussstein Borkenschützen): aus eigenem Wald über Erdwälle hinweg – Ziel in eigener Sichtweite. */
+function treeShot(world: World, e: Entity, t: Entity): boolean {
+  if (e.defId !== 'wardForest' || t.kind !== 'unit' || !hasKeystone(world, e.owner, 'wardForest') || !onOwn(world, e, TERRAIN_INDEX.forest)) return false;
+  if (camouflageRange(world, t) !== null) return false;
+  return (t.pos.x - e.pos.x) ** 2 + (t.pos.y - e.pos.y) ** 2 <= e.vision * e.vision;
+}
+
+/** Grasnarbe: Halmläufer mit Schlussstein steht seit mindestens 1 s still auf Wiese. */
+function grassCover(world: World, t: Entity): boolean {
+  if (!hasKeystone(world, t.owner, 'wardMeadow')) return false;
+  if (world.grid.terrain[world.grid.index(Math.floor(t.pos.x), Math.floor(t.pos.y))] !== TERRAIN_INDEX.meadow) return false;
+  return world.tick - (t.movedTick ?? 0) >= world.tps;
 }
 
 const ARMOR_INDEX: Record<string, number> = { infantry: 0, light: 1, heavy: 2, structure: 3 };
@@ -172,6 +187,11 @@ export function updateTargeting(world: World): void {
   for (const e of world.entities) {
     if (!e.alive || !e.weapon) continue;
     const w = e.weapon;
+    // Heimkehr (Schlussstein Steppenjäger): auf dem Rückzug kein Ziel.
+    if (e.ks?.retreat) {
+      w.targetId = 0;
+      continue;
+    }
     const range = w.def.range;
     const canChase = !!e.mover && world.tick >= e.mover.chaseBlockedUntil;
     const baseSearch = range + (canChase ? CHASE_EXTRA : 0);
@@ -242,6 +262,8 @@ export function updateTargeting(world: World): void {
       const d = rangeTo(e, t);
       if (d > (t.kind === 'unit' ? searchRange : structureRange)) return;
       if (!canAttack(world, e, t)) return;
+      // Grasnarbe (Schlussstein Halmläufer): still auf Wiese – Artillerie und Batterien nur aus der Nähe.
+      if (t.defId === 'wardMeadow' && (isSiege(w.def) || range >= 6) && d > world.rules.keystone.grassDistance && grassCover(world, t)) return;
       if (!allowed(t, d, 0)) return;
       const charging = !!e.charge && e.charge.target === t.id && world.tick < e.charge.until;
       if (udef?.leash && !leashOk(world, e, t, charging)) return; // Schlammmonster: nur nahe eigenem Matsch (beim Losstürmen weiter)
@@ -263,6 +285,8 @@ export function updateTargeting(world: World): void {
       const taunt = t.kind === 'unit' ? UNITS[t.defId as keyof typeof UNITS]?.taunt : undefined;
       if (taunt && dist(e.pos, t.pos) <= taunt.radius) score = rank * 1000 + (score - rank * 1000) * 0.25;
       if (charging) score = rank * 1000; // Losstürmen: genau dieser Gegner zuerst
+      // Heimkehr: der Steppenjäger auf dem Rückzug ist markiert – Fernkampf (ab 5 Reichweite) nimmt ihn bevorzugt.
+      if (t.ks?.retreat && range >= 5) score = rank * 1000 + (score - rank * 1000) * 0.4;
       // Gleichstand: kleinere ID gewinnt – unabhängig von der Suchreihenfolge.
       if (score < bestScore || (score === bestScore && best && t.id < best.id)) {
         bestScore = score;
