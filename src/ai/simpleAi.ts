@@ -42,6 +42,10 @@ import { distanceFromBase } from '../sim/costs';
 import type { PlayerId, Route } from '../sim/types';
 import { ROUTES } from '../sim/types';
 import type { World } from '../sim/world';
+import { ANTI_HEAVY_PAIRS, AREA_PAIRS, COUNTER_LINE, GROUND_BUILDING, SYNERGY_PLAN, VERBUND_PLAN, dominant, mapKind, planGround } from './plans';
+import type { SeenClass, SynergyPlanDef } from './plans';
+import { productionFactor } from '../sim/systems/market';
+import { SYNERGY_GROUNDS, laneCounts } from '../sim/systems/synergy';
 
 /**
  * Gegner-KI. Sie spielt nach denselben Regeln wie du:
@@ -160,7 +164,16 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
   seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean; tfStrictBuys: boolean; targetResearch: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, targetResearch: true, tfSpawnBuy: true, tfSpawnBuyEvery: 20 };
+  plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
+  counterLine: { on: boolean; hysteresis: number; share: number; budget: number };
+  marketWar: { on: boolean; takt: number; gap: number; selfLimit: number; ausweichenAb: number };
+  intel: { on: boolean; maxAge: number; deceive: boolean };
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, targetResearch: true, tfSpawnBuy: true, tfSpawnBuyEvery: 20,
+  plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
+  counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
+  marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
+  intel: { on: true, maxAge: 40, deceive: true },
+};
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -216,6 +229,49 @@ export class SimpleAi {
   private lastLive = 0;
   private lastOrder = -1e9;
   private lastDisguise = -1e9;
+  // ---- Pläne (26.10.): Synergie-Plan (Terra-Former), Verbund-Plan (Technoclan), Konter-Linie, Anpassung
+  private planReady = false;
+  private planList: readonly SynergyPlanDef[] = [];
+  private planIdx = 0;
+  /** Terra-Former: Boden (Linie) je Lane. */
+  laneGround: Record<Route, TerrainId> | null = null;
+  /** Technoclan: Ziel-Paar je Lane. */
+  lanePair: Record<Route, readonly [VerbundUnit, VerbundUnit]> | null = null;
+  private pairIdx: Record<Route, number> = { top: 0, mid: 1, bottom: 2 };
+  private readonly laneSwitchAt: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
+  private lastLaneSwitch = -1e9;
+  /** Statistik für die Messung: Planwechsel (Tick) und Konter-Linienwechsel. */
+  readonly planChanges: number[] = [];
+  private scoutBoostUntil = -1e9;
+  private lastPlanBuy = -1e9;
+  /** Gesehene Klassen je Route (abklingend, Halbwertszeit 45 s) und letzte Messung (alle 30 s) für die Hysterese. */
+  private readonly seenLane: Record<Route, Record<SeenClass, number>> = {
+    top: { infantry: 0, light: 0, heavy: 0, mass: 0 }, mid: { infantry: 0, light: 0, heavy: 0, mass: 0 }, bottom: { infantry: 0, light: 0, heavy: 0, mass: 0 },
+  };
+  private readonly domPrev: Record<Route, SeenClass | null> = { top: null, mid: null, bottom: null };
+  private readonly domNow: Record<Route, SeenClass | null> = { top: null, mid: null, bottom: null };
+  private lastDomSample = 0;
+  /** Verluste je Lane (aus den Todes-Ereignissen): Tick, Lane, eigener Verband? */
+  private readonly losses: { tick: number; lane: Route; mine: boolean }[] = [];
+  private lastEventSeq = 0;
+  // ---- Markt (Patch A)
+  private readonly priceHist: { tick: number; prices: Record<PartId, number>; own: Record<PartId, number> }[] = [];
+  private avoidPart: PartId | null = null;
+  private avoidUntil = -1e9;
+  private readonly enemyOrders: number[] = [];
+  private lastMarketLook = -1e9;
+  // ---- Spionage (Patch B)
+  private readonly intelSeen = new Map<number, { level: number; unit: UnitId; first: number }>();
+  private scoutOccasion = -1e9;
+  private readonly reports: { tick: number; levels: Record<Route, number> }[] = [];
+  private uncertainUntil = -1e9;
+  private noPushUntil = -1e9;
+  private pushLaneAt: { lane: Route; at: number } | null = null;
+  private readonly reactions: { lane: Route; cls: SeenClass; until: number }[] = [];
+  private falseReactions = 0;
+  private trendOnlyUntil = -1e9;
+  /** Messwerte (für Testläufe): Spähberichte mit Anlass, Täuschungen, Fehlreaktionen. */
+  readonly stats = { scoutsWithReason: 0, deceptions: 0, falseReactions: 0, counterSwitches: 0, marketOrders: 0, avoided: 0 };
 
   constructor(
     readonly player: PlayerId,
@@ -316,6 +372,8 @@ export class SimpleAi {
     const commands: Command[] = [];
     // Notfallverlegung, sobald sie bereit ist: der bedrängte Bauabschnitt zieht in den Rückraum.
     if (checkEmergency(world, this.player).ok) commands.push({ type: 'emergency' });
+    const plan = this.decidePlan(world);
+    if (plan) commands.push(plan);
     const build = this.decideBuild(world);
     if (build) commands.push(build);
     const route = this.decideRoute(world);
@@ -394,9 +452,13 @@ export class SimpleAi {
       light: { toughness: 0, save: 0, wounds: 0, n: 0 },
       heavy: { toughness: 0, save: 0, wounds: 0, n: 0 },
     };
+    // Pläne/Konter (26.10.): gesehene Klassen je Route abklingen lassen (Halbwertszeit 45 s).
+    const fade = Math.pow(0.5, this.interval / world.tps / 45);
+    for (const r of ROUTES) for (const k of ['infantry', 'light', 'heavy', 'mass'] as const) this.seenLane[r][k] *= fade;
     for (const e of this.visibleEnemyUnits(world)) {
       // Stärke nach belegtem Einheitenlimit: zwei Drohnen zählen wie eine volle Einheit.
       const w = weight(e);
+      this.seenLane[band(world, e.pos.y)][this.classOf(e)] += w * (1 - fade);
       now[e.armor as SeenArmor] += w;
       const d = defs[e.armor as SeenArmor];
       if (d) {
@@ -412,8 +474,11 @@ export class SimpleAi {
       moves[def.move] += w;
     }
     // Lagebild: gesehene gegnerische Fabriken lassen erwarten, was kommt (Täuschung führt hier in die Irre).
-    for (const rec of world.intel[this.player].values()) {
+    for (const [id, rec] of world.intel[this.player]) {
       if (world.tick - rec.seenTick > 90 * world.tps) continue;
+      // Täuschung erkennen (Patch B): Fabrik, die seit 60 s keine Einheit ihrer Art zeigt, zählt nicht.
+      const first = this.intelSeen.get(id)?.first ?? world.tick;
+      if (AI_TUNING.intel.on && world.tick - first > 60 * world.tps && !this.visibleEnemyUnits(world).some((e) => e.defId === rec.unit) && this.seenParts[UNITS[rec.unit].part] < 0.5) continue;
       const def = UNITS[rec.unit];
       if (def.armor === 'infantry' || def.armor === 'light' || def.armor === 'heavy') now[def.armor] += 0.5;
       nowByRoute[rec.route] += 0.5;
@@ -427,14 +492,28 @@ export class SimpleAi {
     }
     // Spähbericht: auch was im Nebel steht
     const report = world.players[this.player].scout.last;
-    if (report && report.tick !== this.lastReport) {
+    // Spionage (Patch B): nur auf Berichte handeln, die nicht älter als intel.maxAge s sind.
+    const usable = report && (!AI_TUNING.intel.on || this.freshReport(world));
+    if (report && usable && report.tick !== this.lastReport) {
       this.lastReport = report.tick;
+      const levels = { top: report.routes.top.level, mid: report.routes.mid.level, bottom: report.routes.bottom.level };
+      // Widerspricht der Bericht dem letzten in ≤ 20 s (keine → viele), gilt er als unsicher: zweiter Bericht vor dem Umbau.
+      const last = this.reports[this.reports.length - 1];
+      if (AI_TUNING.intel.on && last && report.tick - last.tick <= 20 * world.tps && ROUTES.some((r) => Math.abs(levels[r] - last.levels[r]) >= 3)) {
+        this.uncertainUntil = world.tick + 30 * world.tps;
+        this.scoutOccasion = world.tick;
+      }
+      this.reports.push({ tick: report.tick, levels });
+      if (this.reports.length > 4) this.reports.shift();
       for (const r of ROUTES) {
         const x = report.routes[r];
         nowByRoute[r] = Math.max(nowByRoute[r], x.strength);
         if (x.armor) now[x.armor] = Math.max(now[x.armor], x.strength);
+        if (x.armor) this.seenLane[r][x.armor] = Math.max(this.seenLane[r][x.armor], x.strength * 0.5);
       }
     }
+    if (AI_TUNING.intel.on) this.intelLook(world);
+    if (AI_TUNING.marketWar.on) this.marketLook(world);
     // Verteidigungswerte: gleitender Mittelwert über das, was man gerade sieht.
     for (const k of ['infantry', 'light', 'heavy'] as const) {
       const d = defs[k];
@@ -465,12 +544,14 @@ export class SimpleAi {
 
   private decideBuild(world: World): Command | null {
     const me = world.players[this.player];
-    const type = this.chooseType(world);
+    const planned = this.plannedBuild(world);
+    // Konter-Antwort mit neuer Fabrik nur mit Energie ≥ Puffer + counterLine.budget.
+    const type = planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
     const def = BUILDINGS[type];
     // Etwas Energie für den Erdwall zurückhalten (nur auf „Normal“).
     const reserve = this.level === 'normal' ? WALL.cost : 0;
     if (me.energy < def.buildCost * (me.faction.buildings[type]!.costFactor ?? 1) + reserve) return null;
-    const order = this.zoneOrder(world);
+    const order = planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
     const site = this.chooseSite(world, type, me.energy - reserve, order);
     if (!site) return null;
     this.wantedRoute.set(`${site.x},${site.y}`, order[0]!);
@@ -545,6 +626,13 @@ export class SimpleAi {
       let score = (((this.strategy.mix[id] ?? 2) * counter) / (owned[id] + 1)) * (0.85 + this.rng.next() * 0.3);
       score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
+      // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
+      const part = BUILDINGS[id].part;
+      if (AI_TUNING.marketWar.on && this.avoidPart === part && world.tick < this.avoidUntil) score *= 0.4;
+      if (AI_TUNING.marketWar.on && this.enemyTrades(world)) {
+        const parts = new Set(this.ownBuildings(world).filter((b) => b.producer).map((b) => BUILDINGS[b.defId as BuildingId].part));
+        if (parts.size === 1 && parts.has(part)) score *= 0.3;
+      }
       // Myriaden: Wer Munition verschießt, braucht eine eigene Drohnen-Linie – und eine zweite,
       // die zu Sprengetopps und Hunden aufsteigen kann.
       const lineMakesAmmo = ids.some((other) => faction.buildings[other]!.tiers.some((u) => UNITS[u].ammo?.unit === faction.buildings[id]!.tiers[0]));
@@ -632,12 +720,19 @@ export class SimpleAi {
     // 1. Umrüsten, wenn eine freigeschaltete Einheit klar besser passt.
     for (const f of this.rng.shuffled(factories)) {
       const pr = f.producer!;
-      if (world.tick - (this.lastRetool.get(f.id) ?? -1e9) < 90 * world.tps) continue;
+      // Konter-Hysterese (counterLine): höchstens ein Umrüsten je counterLine.hysteresis s je Fabrik (sonst 90 s).
+      const retoolLock = AI_TUNING.counterLine.on ? Math.max(90, AI_TUNING.counterLine.hysteresis) : 90;
+      if (world.tick - (this.lastRetool.get(f.id) ?? -1e9) < retoolLock * world.tps) continue;
       const options = unlockedUnits(world, f);
       // Technoclan-Verbund (25.10.): Einheiten, die mit der Partner-Fabrik der Lane einen Verbund bilden, sind mehr wert –
       // Spezialisierung (gleiche Einheit) etwas mehr als eine Kombination.
       const partner = me.faction.network ? this.verbundPartner(world, f) : null;
-      const vb = (u: UnitId): number => (!partner ? 1 : u === partner ? 1.3 : VERBUND[verbundKey(u as VerbundUnit, partner as VerbundUnit)] ? 1.2 : 1);
+      const vb = (u: UnitId): number => {
+        // Verbund-Plan (26.10.): das Plan-Paar der Lane ×1,6 statt ×1,3/×1,2.
+        const plan = this.planPairWeight(f, u, partner);
+        if (plan > 0) return plan;
+        return !partner ? 1 : u === partner ? 1.3 : VERBUND[verbundKey(u as VerbundUnit, partner as VerbundUnit)] ? 1.2 : 1;
+      };
       let best = pr.unit;
       let bestScore = scoreOf(pr.unit, options.indexOf(pr.unit) + 1) * vb(pr.unit);
       options.forEach((u, k) => {
@@ -678,6 +773,7 @@ export class SimpleAi {
           const now = Math.max(...tiers.slice(0, lvl).map((u, k) => scoreOf(u, k + 1)));
           const next = tiers[lvl];
           if (fbd.former) return lvl === 1 ? 1.5 : 1.2; // Terra-Former: die Stufe ist der Naturspeicher (II = 2, III = 3 Rufe)
+          if (next && this.lanePair && (this.lanePair[f.producer!.route] as readonly string[]).includes(next)) return 1.6 * scoreOf(next, lvl + 1) / Math.max(0.1, now);
           if (next) return scoreOf(next, lvl + 1) / Math.max(0.1, now);
           // Beimischung (Unterstützer): die erste solche Fabrik hat Vorrang, sobald eine Armee steht – Unterstützer sollen
           // auftauchen (Wunsch 24.10.); sie kosten keine Linie.
@@ -986,7 +1082,8 @@ export class SimpleAi {
     // 3. Angreifen: ab und zu die Route wählen, auf der am wenigsten Gegner gesehen wurden.
     if (this.level === 'normal' && this.rng.chance(this.strategy.aggression * 0.35)) {
       const weakest = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
-      const b = buildings.find((x) => x.producer!.route !== weakest);
+      // Pläne (26.10.): Plan-Fabriken (Synergie-Linie, Verbund, Elite in Reichweite) bleiben auf ihrer Lane.
+      const b = buildings.find((x) => x.producer!.route !== weakest && !this.planBound(world, x));
       if (b) return this.setRoute(world, b, weakest);
     }
     return null;
@@ -1079,8 +1176,24 @@ export class SimpleAi {
     // der Gegner sei so stark wie man selbst und gleichmäßig verteilt.
     const myTotal = mine.top + mine.mid + mine.bottom;
     const assumed = Math.max(this.enemyEstimate, myTotal) / 3;
+    // Spionage (Patch B): Gegner stuft eine Fabrik hoch → 20 s später Druck auf ihre Lane, wenn man dort ≥ 60 % hat;
+    // „viele“ auf einer Route und „keine“ auf einer anderen → Druck auf die leere Route.
+    if (AI_TUNING.intel.on && world.tick >= this.noPushUntil) {
+      if (this.pushLaneAt && world.tick >= this.pushLaneAt.at) {
+        const r = this.pushLaneAt.lane;
+        this.pushLaneAt = null;
+        if (!me.pendingStance[r] && me.stance[r] === 'hold' && mine[r] >= 0.6 * Math.max(1, this.seenByRoute[r]) && mine[r] >= 3) return { type: 'setStance', route: r, stance: 'push' };
+      }
+      const rep = world.players[this.player].scout.last;
+      if (rep && this.freshReport(world)) {
+        const empty = ROUTES.find((r) => rep.routes[r].level === 0 && me.stance[r] === 'hold' && !me.pendingStance[r] && mine[r] >= 3);
+        if (empty && ROUTES.some((r) => rep.routes[r].level === 3)) return { type: 'setStance', route: empty, stance: 'push' };
+      }
+    }
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
+      // Sammel-Signal des Gegners gesehen: 60 s kein eigener Druck.
+      if (AI_TUNING.intel.on && world.tick < this.noPushUntil && me.stance[r] !== 'push') continue;
       const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);
       const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
       const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
@@ -1189,6 +1302,8 @@ export class SimpleAi {
    * mit genug Energie auch eine Schlucht, die den Korridor verengt.
    */
   private decideTerrain(world: World): Command | null {
+    const plan = this.planBuy(world);
+    if (plan) return plan;
     const spawnBuy = this.spawnBuy(world);
     if (spawnBuy) return spawnBuy;
     const f = this.profile.terrain;
@@ -1303,6 +1418,35 @@ export class SimpleAi {
       }
     }
     this.lastShape = world.tick - 10 * world.tps; // nichts gefunden: bald erneut versuchen
+    return null;
+  }
+
+  /**
+   * Synergie-Plan halten und erreichen (KI-Patch 26.10., plans.synergyBuy): Fehlen einer Lane höchstens 8 Kacheln bis
+   * zur Plan-Farbe – oder verliert sie ihre Farbe (Nachlauf läuft) –, kauft die KI dort 2×2 des Plan-Bodens. Vor jeder
+   * anderen Gelände-Ausgabe, höchstens einer je plans.buyEvery s, nur mit Energie über dem Puffer.
+   */
+  private planBuy(world: World): Command | null {
+    const me = world.players[this.player];
+    if (!this.laneGround || !AI_TUNING.plans.synergyBuy || me.faction.id !== 'terraformer') return null;
+    if (world.tick - this.lastPlanBuy < AI_TUNING.plans.buyEvery * world.tps || this.spare(world) < 40) return null;
+    const counts = laneCounts(world, this.player);
+    const min = world.rules.synergy.laneMin;
+    const hold = world.synergyHold[this.player];
+    const lanes = [...ROUTES].sort((a, b) => (hold.lanes[ROUTES.indexOf(b)]! >= 0 ? 1 : 0) - (hold.lanes[ROUTES.indexOf(a)]! >= 0 ? 1 : 0));
+    for (const r of lanes) {
+      const ground = this.laneGround[r];
+      const have = counts[ROUTES.indexOf(r)]![SYNERGY_GROUNDS.indexOf(ground)] ?? 0;
+      const fading = hold.lanes[ROUTES.indexOf(r)]! >= 0;
+      if (have >= min && !fading) continue;
+      if (min - have > 8 && !fading) continue;
+      const buy = this.synergyBuy(world, r, ground);
+      if (buy) {
+        this.lastPlanBuy = world.tick;
+        me.stats.synergyBuys++;
+        return buy;
+      }
+    }
     return null;
   }
 
@@ -1441,9 +1585,15 @@ export class SimpleAi {
   private decideScout(world: World): Command | null {
     const f = this.profile.scout;
     if (f <= 0 || world.seconds < 60) return null;
-    if (world.tick - this.lastScout < (45 / f) * world.tps) return null;
+    // Spionage (Patch B): sofort bei Anlass (Planwechsel, gegnerischer Umbau, neue Fabrik, Sammeln, Verbund, unsicherer
+    // Bericht); nach einem Planwechsel 2 min lang alle 20 s; sonst im Grundtakt.
+    const reason = AI_TUNING.intel.on && this.scoutOccasion > this.lastScout;
+    const boost = AI_TUNING.intel.on && world.tick < this.scoutBoostUntil;
+    const every = reason ? 0 : boost ? 20 : 45 / f;
+    if (world.tick - this.lastScout < every * world.tps) return null;
     if (this.spare(world) < scoutCost(world, this.player) + 40 || !checkScout(world, this.player).ok) return null;
     this.lastScout = world.tick;
+    if (reason) this.stats.scoutsWithReason++;
     return { type: 'scout' };
   }
 
@@ -1454,6 +1604,7 @@ export class SimpleAi {
   private decideMarket(world: World): Command | null {
     const f = this.profile.market;
     if (f <= 0 || world.seconds < 120) return null;
+    if (AI_TUNING.marketWar.on) return this.marketWar(world, f);
     if (world.tick - this.lastOrder < (60 / f) * world.tps) return null;
     if (this.spare(world) < orderCost(world, this.player, MARKET.orderCost) + (f >= 2 ? 30 : 70)) return null;
     const running = world.market.orders.filter((o) => o.owner === this.player && o.endTick > world.tick).length;
@@ -1477,12 +1628,59 @@ export class SimpleAi {
   }
 
   /**
+   * Täuschen mit Zweck (Patch B): nur direkt vor einem echten Zug – ein eigener Druck beginnt (Fake-Route auf eine
+   * andere Lane) oder ein Planwechsel (Fake-Typ mit der Panzerung, die der Gegner gerade kontert). Nie zwei in 60 s;
+   * gegen Gegenspionage (HQ-Aufklärung ≥ 4) gar nicht.
+   */
+  private purposefulDisguise(world: World, f: number): Command | null {
+    if (world.players[1 - this.player]!.hq.intel >= 4) return null;
+    if (world.tick - this.lastDisguise < Math.max(60, 90 / f) * world.tps) return null;
+    if (this.spare(world) < DISGUISE.cost + 40) return null;
+    const me = world.players[this.player];
+    const pushing = ROUTES.filter((r) => me.stance[r] === 'push' || me.pendingStance[r]?.stance === 'push');
+    const justSwitched = this.planChanges.length > 0 && world.tick - this.planChanges[this.planChanges.length - 1]! <= 10 * world.tps;
+    if (pushing.length === 0 && !justSwitched) return null;
+    const candidates = this.ownBuildings(world).filter((b) => b.producer && !(b.disguise && world.tick < b.disguise.until));
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => distanceFromBase(world, this.player, b.rect!) - distanceFromBase(world, this.player, a.rect!) || a.id - b.id);
+    const b = candidates[0]!;
+    const quiet = ROUTES.filter((r) => !pushing.includes(r));
+    const route = quiet.length > 0 ? this.rng.pick(quiet) : this.rng.pick(ROUTES.filter((r) => r !== b.producer!.route));
+    const types = buildingIds(me.faction).filter((t) => t !== b.defId);
+    this.lastDisguise = world.tick;
+    this.stats.deceptions++;
+    return { type: 'disguise', entityId: b.id, as: this.rng.pick(types), route };
+  }
+
+  /**
+   * Markt als Waffe (Patch A): Scheinbestellung auf das Druckziel, höchstens alle marketWar.takt s (mit
+   * Großbestellung, HQ-Markt ≥ 4: alle 60 s), nie zwei zugleich; nur mit Energie ≥ Puffer + 60. Bevorzugt (halber Takt),
+   * wenn der Gegner gerade sichtbar umbaut. Händler-Profil: Takt ÷ Profilstärke.
+   */
+  private marketWar(world: World, f: number): Command | null {
+    const big = world.players[this.player].hq.market >= 4;
+    let takt = (big ? 60 : AI_TUNING.marketWar.takt) / Math.max(1, f);
+    if (world.tick - this.scoutOccasion <= 20 * world.tps) takt /= 2; // Gegner baut gerade um: teure Nachproduktion
+    if (world.tick - this.lastOrder < takt * world.tps) return null;
+    if (this.spare(world) < orderCost(world, this.player, MARKET.orderCost) + 60) return null;
+    if (world.market.orders.some((o) => o.owner === this.player && o.endTick > world.tick)) return null; // nie zwei Bauteile zugleich
+    const running = world.market.orders.filter((o) => o.owner === this.player && o.endTick > world.tick).length;
+    if (running >= maxOrders(world, this.player, MARKET.maxOrders)) return null;
+    const part = this.pressureTarget(world);
+    if (!part) return null;
+    this.lastOrder = world.tick;
+    this.stats.marketOrders++;
+    return { type: 'order', part };
+  }
+
+  /**
    * Täuschung: eine Fabrik weiter vorn (eher im Blick des Gegners) zeigt einen anderen Typ
    * und eine andere Route.
    */
   private decideDisguise(world: World): Command | null {
     const f = this.profile.deceive;
     if (f <= 0 || world.seconds < 120) return null;
+    if (AI_TUNING.intel.on && AI_TUNING.intel.deceive) return this.purposefulDisguise(world, f);
     if (world.tick - this.lastDisguise < (90 / f) * world.tps) return null;
     const me = world.players[this.player];
     if (this.spare(world) < DISGUISE.cost + (f >= 2 ? 30 : 70)) return null;
@@ -1494,6 +1692,342 @@ export class SimpleAi {
     const routes = ROUTES.filter((r) => r !== b.producer!.route);
     this.lastDisguise = world.tick;
     return { type: 'disguise', entityId: b.id, as: this.rng.pick(types), route: this.rng.pick(routes) };
+  }
+
+  // ------------------------------------------------------------ Pläne, Konter, Anpassung (KI-Patch 26.10.)
+
+  /**
+   * Pläne einmal je Denkschritt: beim ersten Mal den Synergie-Plan (Terra-Former) bzw. Verbund-Plan (Technoclan)
+   * wählen; alle 30 s die gesehene Panzerung je Route messen (Hysterese: zwei gleiche Messungen), Konter-Linie
+   * setzen; alle 60 s prüfen, ob eine Plan-Lane überrannt wird. Gibt höchstens einen Befehl zurück (Umwidmen).
+   */
+  private decidePlan(world: World): Command | null {
+    const me = world.players[this.player];
+    const enemy = world.players[1 - this.player]!.faction.id;
+    if (!this.planReady) {
+      this.planReady = true;
+      if (me.faction.id === 'terraformer' && AI_TUNING.plans.synergy) {
+        this.planList = SYNERGY_PLAN[enemy][mapKind(world.map.def.id)];
+        this.setSynergyPlan(this.planList[0]!);
+      }
+      if (me.faction.network && AI_TUNING.plans.verbund) {
+        const list = VERBUND_PLAN[enemy];
+        this.lanePair = { top: list[0 % list.length]!, mid: list[1 % list.length]!, bottom: list[2 % list.length]! };
+      }
+    }
+    this.readLosses(world);
+    // Messung alle 30 s: vorherrschende Klasse je Route (ab counterLine.share), Hysterese über zwei Messungen.
+    if (world.tick - this.lastDomSample >= 30 * world.tps) {
+      this.lastDomSample = world.tick;
+      for (const r of ROUTES) {
+        this.domPrev[r] = this.domNow[r];
+        this.domNow[r] = dominant(this.seenLane[r], AI_TUNING.counterLine.share);
+      }
+      this.checkReactions(world);
+    }
+    // Anpassung alle 60 s: Plan-Lane überrannt (eigene Verluste in 90 s > 2× gegnerische) → Plan für diese Lane wechseln.
+    if (AI_TUNING.plans.adapt && world.tick % (60 * world.tps) < this.interval) {
+      for (const r of ROUTES) {
+        const since = world.tick - 90 * world.tps;
+        const mine = this.losses.filter((l) => l.lane === r && l.mine && l.tick >= since).length;
+        const theirs = this.losses.filter((l) => l.lane === r && !l.mine && l.tick >= since).length;
+        if (mine >= 3 && mine > 2 * theirs && this.laneSwitchOk(world, r, 180)) { // höchstens ein Planwechsel je 3 min und Lane
+          this.switchLane(world, r, this.domNow[r]);
+          break;
+        }
+      }
+    }
+    // Konter-Linie: bestätigte vorherrschende Panzerung auf einer Lane.
+    if (AI_TUNING.counterLine.on) {
+      // Nach zwei Fehlreaktionen 3 min nur nach Trend: die Klasse muss bestätigt sein und die Route darf nicht schrumpfen.
+      const trendOnly = world.tick < this.trendOnlyUntil;
+      const lanes = ROUTES.filter((r) => this.domNow[r] && this.domNow[r] === this.domPrev[r] && world.tick >= this.uncertainUntil && (!trendOnly || this.trend(world, r) >= 0));
+      lanes.sort((a, b) => this.shareOf(b) - this.shareOf(a));
+      for (const r of lanes) {
+        const cls = this.domNow[r]!;
+        if (!this.wantsCounter(world, r, cls) || !this.laneSwitchOk(world, r)) continue;
+        this.switchLane(world, r, cls);
+        this.reactions.push({ lane: r, cls, until: world.tick + 90 * world.tps });
+        this.stats.counterSwitches++;
+        // Gleiche Panzerung auf allen drei Lanes: die Konter-Linie wird zum Plan (eine Lane nach der anderen).
+        break;
+      }
+    }
+    return this.planConvert(world);
+  }
+
+  private shareOf(r: Route): number {
+    const c = this.seenLane[r];
+    const total = c.infantry + c.light + c.heavy + c.mass;
+    const d = this.domNow[r];
+    return d && total > 0 ? c[d] / total : 0;
+  }
+
+  /** Lane-Wechsel erlaubt? Höchstens einer je Lane je counterLine.hysteresis s und nie zwei Lanes innerhalb von 60 s. */
+  private laneSwitchOk(world: World, r: Route, lockSeconds = AI_TUNING.counterLine.hysteresis): boolean {
+    return world.tick - this.laneSwitchAt[r] >= lockSeconds * world.tps && world.tick - this.lastLaneSwitch >= 60 * world.tps;
+  }
+
+  /** Passt die Lane schon zur Panzerung? */
+  private wantsCounter(world: World, r: Route, cls: SeenClass): boolean {
+    const me = world.players[this.player];
+    if (this.laneGround && me.faction.id === 'terraformer') return this.laneGround[r] !== COUNTER_LINE[cls];
+    if (this.lanePair && me.faction.network) {
+      const pool = cls === 'heavy' ? ANTI_HEAVY_PAIRS : AREA_PAIRS;
+      return !pool.some((p) => p[0] === this.lanePair![r][0] && p[1] === this.lanePair![r][1]);
+    }
+    return false;
+  }
+
+  /** Plan einer Lane wechseln: Konter zur Klasse, sonst der nächste Eintrag der Tabelle. */
+  private switchLane(world: World, r: Route, cls: SeenClass | null): void {
+    const me = world.players[this.player];
+    if (this.laneGround && me.faction.id === 'terraformer') {
+      if (cls) this.laneGround[r] = COUNTER_LINE[cls];
+      else {
+        this.planIdx = (this.planIdx + 1) % Math.max(1, this.planList.length);
+        this.laneGround[r] = planGround(this.planList[this.planIdx]!, r);
+      }
+      // Dieselbe Panzerung auf allen Lanes: Konter-Linie als neuer Plan.
+      if (cls && ROUTES.every((x) => this.domNow[x] === cls)) for (const x of ROUTES) this.laneGround[x] = COUNTER_LINE[cls];
+    } else if (this.lanePair && me.faction.network) {
+      const pool = cls === 'heavy' ? ANTI_HEAVY_PAIRS : cls ? AREA_PAIRS : VERBUND_PLAN[world.players[1 - this.player]!.faction.id];
+      this.pairIdx[r] = (this.pairIdx[r] + 1) % pool.length;
+      this.lanePair[r] = pool[this.pairIdx[r] % pool.length]!;
+    } else {
+      return;
+    }
+    this.laneSwitchAt[r] = world.tick;
+    this.lastLaneSwitch = world.tick;
+    this.planChanges.push(world.tick);
+    this.scoutBoostUntil = world.tick + 120 * world.tps; // nach einem Planwechsel häufiger spähen
+    this.scoutOccasion = world.tick;
+  }
+
+  private setSynergyPlan(p: SynergyPlanDef): void {
+    this.laneGround = { top: planGround(p, 'top'), mid: planGround(p, 'mid'), bottom: planGround(p, 'bottom') };
+  }
+
+  /**
+   * Terra-Former: Fabrik einer Lane umwidmen, wenn dort eine andere Linie geplant ist und kein Bauplatz frei ist
+   * (sonst baut decideBuild die neue Fabrik). Nie die Fabrik, die die Lane-Farbe der aktiven Synergie trägt.
+   */
+  private planConvert(world: World): Command | null {
+    const me = world.players[this.player];
+    if (!this.laneGround || me.faction.id !== 'terraformer') return null;
+    if (slotLimit(world, this.player) - slotsUsed(world, this.player) >= 1) return null;
+    if (this.spare(world) < 0) return null;
+    // nie zwei Lanes gleichzeitig umbauen
+    if (this.ownBuildings(world).some((b) => b.producer?.job?.kind === 'convert')) return null;
+    const syn = world.synergy[this.player];
+    for (const r of ROUTES) {
+      const want = GROUND_BUILDING[this.laneGround[r]];
+      if (!want) continue;
+      const onLane = this.ownBuildings(world).filter((b) => b.producer && b.producer.route === r);
+      if (onLane.some((b) => b.defId === want)) continue;
+      const cand = onLane
+        .filter((b) => {
+          const g = UNITS[b.producer!.unit].ground;
+          return !(syn.base && g && (g === syn.base || g === syn.accent) && syn.lanes[ROUTES.indexOf(r)] === g);
+        })
+        .sort((a, b) => a.producer!.level - b.producer!.level || a.id - b.id)[0];
+      if (!cand) continue;
+      return { type: 'convertFactory', entityId: cand.id, to: want };
+    }
+    return null;
+  }
+
+  /** Neue Fabrik nach Plan: die erste Lane, der ihre Plan-Linie (bzw. eine Fabrik für ihr Verbund-Paar) fehlt. */
+  private plannedBuild(world: World): { type: BuildingId; route: Route } | null {
+    const me = world.players[this.player];
+    const buildings = this.ownBuildings(world).filter((b) => b.producer);
+    if (this.laneGround && me.faction.id === 'terraformer') {
+      for (const r of this.zoneOrder(world)) {
+        const want = GROUND_BUILDING[this.laneGround[r]];
+        if (want && !buildings.some((b) => b.defId === want && b.producer!.route === r)) return { type: want, route: r };
+      }
+      return null;
+    }
+    if (this.lanePair && me.faction.network && buildings.length < 6) {
+      for (const r of this.zoneOrder(world)) {
+        for (const u of this.lanePair[r]) {
+          const type = buildingIds(me.faction).find((id) => me.faction.buildings[id]!.tiers.includes(u));
+          if (type && !buildings.some((b) => b.defId === type && b.producer!.route === r)) return { type, route: r };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Gehört diese Fabrik zum Plan ihrer Lane (Marschbefehl nicht ändern)? */
+  private planBound(world: World, b: Entity): boolean {
+    if (!AI_TUNING.plans.keepLanes || !b.producer) return false;
+    const r = b.producer.route;
+    if (this.laneGround && GROUND_BUILDING[this.laneGround[r]] === b.defId) return true;
+    if (this.lanePair) {
+      const st = world.verbund[this.player][r];
+      if (st.active?.factories.includes(b.id) || st.pending?.factories.includes(b.id)) return true;
+      // Elite in Reichweite: Lane mit einem Verband aus drei Bausteinen 20 s nicht umlenken.
+      if (world.entities.some((e) => e.alive && e.owner === this.player && e.net && e.net.protocols.length === 3 && e.mover?.route === r)) return true;
+    }
+    return false;
+  }
+
+  /** Plan-Gewicht beim Umrüsten (Technoclan): das Plan-Paar ×1,6, ein Plan-Partner ×1,25. */
+  private planPairWeight(f: Entity, u: UnitId, partner: UnitId | null): number {
+    if (!this.lanePair) return 0;
+    const pair = this.lanePair[f.producer!.route];
+    if (!(pair as readonly string[]).includes(u)) return 0;
+    if (partner && ((pair[0] === u && pair[1] === partner) || (pair[1] === u && pair[0] === partner))) return 1.6;
+    return 1.25;
+  }
+
+  /** Verluste je Lane aus den Todes-Ereignissen seit dem letzten Denken. */
+  private readLosses(world: World): void {
+    for (const ev of world.events) {
+      if (ev.seq <= this.lastEventSeq) continue;
+      this.lastEventSeq = ev.seq;
+      if (ev.type === 'death' && ev.kind === 'unit') this.losses.push({ tick: ev.tick, lane: band(world, ev.pos.y), mine: ev.owner === this.player });
+    }
+    const keep = world.tick - 120 * world.tps;
+    while (this.losses.length > 0 && this.losses[0]!.tick < keep) this.losses.shift();
+  }
+
+  /** Fehlreaktionen: auf eine Klasse umgestellt, die in 90 s nicht vorherrschend wurde. Zwei davon → 3 min nur Trend. */
+  private checkReactions(world: World): void {
+    for (let k = this.reactions.length - 1; k >= 0; k--) {
+      const r = this.reactions[k]!;
+      if (this.domNow[r.lane] === r.cls) {
+        this.reactions.splice(k, 1);
+      } else if (world.tick >= r.until) {
+        this.reactions.splice(k, 1);
+        this.falseReactions++;
+        this.stats.falseReactions++;
+        if (this.falseReactions >= 2) {
+          this.trendOnlyUntil = world.tick + 180 * world.tps;
+          this.scoutBoostUntil = this.trendOnlyUntil;
+          this.falseReactions = 0;
+        }
+      }
+    }
+  }
+
+  /** Gesehene Klasse einer Einheit (Masse = mit Lebensuhr). */
+  private classOf(e: Entity): SeenClass {
+    if (e.lifespan) return 'mass';
+    return e.armor === 'heavy' ? 'heavy' : e.armor === 'light' ? 'light' : 'infantry';
+  }
+
+  // ------------------------------------------------------------ Markt als Waffe (KI-Patch A)
+
+  /**
+   * Lagebild Markt alle 30 s: eigener und gegnerischer Bedarf je Bauteil, Preise, Verdacht auf Markteingriff.
+   * Druckziel: das Bauteil, das der Gegner (Anteil) um ≥ marketWar.gap mehr braucht als man selbst.
+   */
+  private marketLook(world: World): void {
+    if (world.tick - this.lastMarketLook < 30 * world.tps) return;
+    this.lastMarketLook = world.tick;
+    const own = world.market.boundBy[this.player];
+    this.priceHist.push({ tick: world.tick, prices: { ...world.market.prices }, own: { ...own } });
+    if (this.priceHist.length > 6) this.priceHist.shift();
+    for (const o of world.market.orders) if (o.owner !== this.player && !this.enemyOrders.includes(o.endTick)) this.enemyOrders.push(o.endTick);
+    while (this.enemyOrders.length > 0 && this.enemyOrders[0]! < world.tick - 240 * world.tps) this.enemyOrders.shift();
+    // Verteidigung: eigenes Kernbauteil in 60 s um ≥ 40 % teurer, ohne eigenen Mehrbedarf → Eingriff vermutet.
+    const core = this.corePart(world);
+    const old = this.priceHist.find((h) => h.tick <= world.tick - 60 * world.tps);
+    if (core && old && world.market.prices[core] >= old.prices[core] * AI_TUNING.marketWar.ausweichenAb && own[core] <= old.own[core] * 1.1 + 0.5) {
+      const hqMarket = world.players[this.player].hq.market;
+      if (hqMarket >= 3) return; // Durchhalten: Lieferverträge
+      if (this.profileId === 'trader') {
+        this.lastOrder = -1e9; // Gegenschlag: nächster Denkschritt darf bestellen
+      } else {
+        this.avoidPart = core;
+        this.avoidUntil = world.tick + 120 * world.tps;
+        this.stats.avoided++;
+      }
+    }
+  }
+
+  /** Bauteil, das die eigenen Fabriken am meisten binden. */
+  private corePart(world: World): PartId | null {
+    const own = world.market.boundBy[this.player];
+    let best: PartId | null = null;
+    for (const k of PART_KEYS) if (own[k] > 0 && (!best || own[k] > own[best])) best = k;
+    return best;
+  }
+
+  /** Druckziel (Patch A): Gegner braucht es deutlich mehr als man selbst; kein Ziel, wenn beide dasselbe am meisten brauchen. */
+  private pressureTarget(world: World): PartId | null {
+    const enemyTotal = PART_KEYS.reduce((s, k) => s + this.seenParts[k], 0);
+    if (enemyTotal < 1) return null;
+    const own = world.market.boundBy[this.player];
+    const ownTotal = Math.max(1, PART_KEYS.reduce((s, k) => s + own[k], 0));
+    const enemyTop = PART_KEYS.reduce((a, k) => (this.seenParts[k] > this.seenParts[a] ? k : a), PART_KEYS[0]!);
+    const ownTop = this.corePart(world);
+    if (ownTop && ownTop === enemyTop) return null;
+    let best: PartId | null = null;
+    let bestGap = AI_TUNING.marketWar.gap;
+    for (const k of PART_KEYS) {
+      const gap = this.seenParts[k] / enemyTotal - own[k] / ownTotal;
+      if (gap >= bestGap) {
+        bestGap = gap;
+        best = k;
+      }
+    }
+    // Eigenen Verlust mitrechnen: wird das Bauteil für einen selbst zu teuer, keine weitere Bestellung.
+    if (best && productionFactor(world, this.player, best) > AI_TUNING.marketWar.selfLimit) return null;
+    return best;
+  }
+
+  /** Gegner zeigt das Händler-Profil (≥ 2 Scheinbestellungen in 3 Minuten gesehen)? */
+  private enemyTrades(world: World): boolean {
+    return this.enemyOrders.filter((t) => t >= world.tick - 180 * world.tps).length >= 2;
+  }
+
+  // ------------------------------------------------------------ Spionage mit Anlass (KI-Patch B)
+
+  /** Anlässe zum Spähen und Täuschungen erkennen – aus dem Lagebild der gegnerischen Fabriken. */
+  private intelLook(world: World): void {
+    const intel = world.intel[this.player];
+    for (const [id, rec] of intel) {
+      const prev = this.intelSeen.get(id);
+      if (!prev) {
+        this.intelSeen.set(id, { level: rec.level, unit: rec.unit, first: world.tick });
+        if (world.seconds > 60) this.scoutOccasion = world.tick; // neue gegnerische Fabrik
+        continue;
+      }
+      if (prev.level !== rec.level || prev.unit !== rec.unit) {
+        // Umbau sichtbar (Stufe/Umrüsten): Anlass zum Spähen, 20 s später Druck auf diese Lane prüfen.
+        this.scoutOccasion = world.tick;
+        if (rec.level > prev.level) this.pushLaneAt = { lane: rec.route, at: world.tick + 20 * world.tps };
+        prev.level = rec.level;
+        prev.unit = rec.unit;
+      }
+    }
+    const enemy = world.players[1 - this.player]!;
+    // Sammel-Signal: Verteidigung vorbereiten, 60 s kein eigener Druck auf einer anderen Lane.
+    if (enemy.hero && enemy.hero.mode === 'gather' && enemy.hero.respawnTick < 0) {
+      if (this.noPushUntil < world.tick) this.scoutOccasion = world.tick;
+      this.noPushUntil = world.tick + 60 * world.tps;
+    }
+    // Verbund-Leuchten des Gegners
+    for (const r of ROUTES) if (world.verbund[1 - this.player]?.[r]?.pending) this.scoutOccasion = Math.max(this.scoutOccasion, world.tick - 1);
+  }
+
+  /** Spähbericht noch frisch genug, um darauf zu handeln (intel.maxAge)? */
+  private freshReport(world: World): boolean {
+    const rep = world.players[this.player].scout.last;
+    return !!rep && world.tick - rep.tick <= AI_TUNING.intel.maxAge * world.tps;
+  }
+
+  /** Trend je Route aus den letzten zwei Berichten (≤ 60 s Abstand): +1 wächst, −1 fällt, 0 gleich. */
+  private trend(world: World, r: Route): number {
+    const n = this.reports.length;
+    if (n < 2) return 0;
+    const a = this.reports[n - 2]!;
+    const b = this.reports[n - 1]!;
+    if (b.tick - a.tick > 60 * world.tps) return 0;
+    return Math.sign(b.levels[r] - a.levels[r]);
   }
 
   // ------------------------------------------------------------ Hilfen

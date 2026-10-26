@@ -49,10 +49,17 @@ describe('KI: Terra-Former formen eigenen Boden', () => {
     stepTimes(world, 95 * world.tps); // Gelände formt die KI erst ab 1:30
     world.players[0].energy = 400;
     const ai = new SimpleAi(0, 3);
+    const before = { ...AI_TUNING.plans };
+    AI_TUNING.plans.synergyBuy = false; // ohne Synergie-Plan (Käufe und Bau-Reihenfolge hätten Vorrang)
+    AI_TUNING.plans.synergy = false;
     let shaped: Command | undefined;
-    for (let k = 0; k < 40 && !shaped; k++) {
-      shaped = nextThought(world, ai).find((c) => c.type === 'swapTerrain');
-      world.step();
+    try {
+      for (let k = 0; k < 40 && !shaped; k++) {
+        shaped = nextThought(world, ai).find((c) => c.type === 'swapTerrain');
+        world.step();
+      }
+    } finally {
+      Object.assign(AI_TUNING.plans, before);
     }
     assert.ok(shaped && shaped.type === 'swapTerrain', 'die KI formt Gelände');
     assert.equal(shaped.terrain, 'snow');
