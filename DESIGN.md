@@ -2053,3 +2053,10 @@ ausgerichtet – offener Punkt).
 **Korrektur 26.10. spät (Nutzer):** Verschlammung wirkt gerade gegen Schwere über Zeit – Rüstung UND Widerstand zählen
 nicht, jede Stufe macht 1 Schaden/s auf jede Panzerung (`mudStacks.toughness` = false; der Verwunden-Wurf war eine
 Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
+
+## Nach-Patch 27.10. (Terra-Former: Erholung)
+- Ladungen des Beschwörers verdoppelt: Fabrikstufe I/II/III = 4/6/8 (vorher 2/3/4).
+- Alle Terra-Former-Fabriken kosten 60 (vorher 70, Steinbruch 90). Stufe I → II kostet 60 und dauert 10 s (halbiert); II → III unverändert 180.
+- Jeder 4. Verband ist ein Beschwörer (vorher jeder 5.). Wiesenhof und Schlammgrube produzieren +20 %.
+- Rückzug: bedrohter Beschwörer (Gegner ≤ 6 Kacheln ohne eigenen Wächter dazwischen) läuft mit Tempo ×1,6 bis zum nächsten eigenen Gebäude oder Wächter-Verband (≥ 3 Einheiten), auch über die Wegmitte, bleibt dann 8 s stehen. Beschwörer jagen keinen Gegnern mehr nach. Frontabstand 4 Kacheln.
+- Belagerungsdruck (Bonusschaden an HQ und Gebäuden bei Gebietsvorsprung) entfernt (siegeFactor 0). Offen: Belagerungsturm (Station) ×1,5.

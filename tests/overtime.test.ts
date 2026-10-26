@@ -66,9 +66,9 @@ describe('Patt-Auflöser (Verlängerung)', () => {
       w.territory[0] = 600;
       w.territory[1] = 200;
     }
-    const lead = (siegeMultiplier(plain, 1) - 1) / RULES.front.siegeFactor;
-    assert.ok(lead > 0);
-    assert.ok(Math.abs(siegeMultiplier(world, 1) - (1 + 2 * RULES.front.siegeFactor * lead)) < 1e-9);
+    // 27.10.: Der Belagerungsdruck (Bonusschaden an HQ und Gebäuden) ist abgeschafft – immer ×1.
+    assert.equal(siegeMultiplier(plain, 1), 1);
+    assert.equal(siegeMultiplier(world, 1), 1);
     assert.ok(Math.abs(territoryIncome(world, 0) - 2 * territoryIncome(plain, 0)) < 1e-9);
   });
 

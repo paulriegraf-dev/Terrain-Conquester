@@ -55,7 +55,8 @@ export function factorySpeed(world: World, e: Entity): number {
   const tempo = 1 + world.rules.terraform.tempoStep * buildingUpgradeLevel(world, e.owner, e.defId as BuildingId, 'tempo');
   // Rudel (Schlussstein Hund): Bruten auf einer heulenden Lane füllen ihr Gelege schneller.
   const pack = e.producer!.clutch && world.pack[e.owner][e.producer!.route] > world.tick ? 1 + world.rules.keystone.packClutch : 1;
-  return surgeFactor(world, e.owner) * productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
+  const line = world.rules.terraform.lineSpeed[e.defId] ?? 1; // Wiesenhof / Schlammgrube: +20 % (27.10.)
+  return line * surgeFactor(world, e.owner) * productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
 }
 
 /**

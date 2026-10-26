@@ -565,6 +565,47 @@ function exposed(world: World, e: Entity): boolean {
 }
 
 /**
+ * Rückzugsziel (27.10.): das nächste eigene Gebäude (HQ, Fabrik, Außenposten) oder der nächste größere Wächter-Verband
+ * (mindestens retreatGroup Einheiten seiner Route), der selbst nicht bedroht ist und hinter dem Terraformer liegt
+ * (oder zumindest näher an der eigenen Basis). Ohne Treffer: null.
+ */
+function retreatTarget(world: World, e: Entity): Vec2 | null {
+  const r = world.rules.terraform;
+  const p = e.owner;
+  const dir = forward(world, p);
+  const threatened = (x: number, y: number): boolean => {
+    for (const o of world.entities) {
+      if (!o.alive || o.owner === p || o.kind !== 'unit') continue;
+      if ((o.pos.x - x) ** 2 + (o.pos.y - y) ** 2 <= r.retreatRadius * r.retreatRadius) return true;
+    }
+    return false;
+  };
+  let best: Vec2 | null = null;
+  let bestD = Infinity;
+  const consider = (x: number, y: number): void => {
+    if ((e.pos.x - x) * dir < -0.5) return; // nie weiter nach vorn
+    const d = (x - e.pos.x) ** 2 + (y - e.pos.y) ** 2;
+    if (d < 4 || d >= bestD || threatened(x, y)) return;
+    best = { x, y };
+    bestD = d;
+  };
+  const wards: Entity[] = [];
+  for (const o of world.entities) {
+    if (!o.alive || o.owner !== p) continue;
+    if (o.kind === 'building' || o.kind === 'hq') consider(o.pos.x + dir * 2.4, o.pos.y); // vor dem Gebäude stehen (nie dahinter: die Linie zum Ziel muss frei sein)
+    else if (o.kind === 'unit' && o.mover?.route === e.mover!.route && isWardUnit(o)) wards.push(o);
+  }
+  for (const w of wards) {
+    let n = 0;
+    let sx = 0;
+    let sy = 0;
+    for (const o of wards) if ((o.pos.x - w.pos.x) ** 2 + (o.pos.y - w.pos.y) ** 2 <= 9) { n++; sx += o.pos.x; sy += o.pos.y; }
+    if (n >= r.retreatGroup) consider(sx / n - dir * 1.0, sy / n);
+  }
+  return best;
+}
+
+/**
  * Terraformer (Umbau 23.10.): Ritual auf einem fertigen Block → sonst die nächste Kachel in der Umgebung umformen
  * (er bleibt dafür stehen) → sonst ein Stück vorrücken (beim Halten nicht über die Grenze hinaus).
  */
@@ -661,10 +702,30 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   const canSummon = tf.store > 0 && (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
   // Frontabstand: nach dem Sprint – Gegner in retreatRadius ohne Wächter dazwischen → 3 Kacheln zurück (alle 10 Ticks geprüft).
-  if (rules.frontGap > 0 && !tf.firstFree && !tf.block && (world.tick + e.id) % 10 === 0 && exposed(world, e)) {
-    tf.stepTo = { x: e.pos.x - forward(world, p) * 3, y: e.pos.y };
-    tf.stepUntil = world.tick + 6 * world.tps;
-    tf.workCell = -1;
+  // 27.10.: Rückzug auch über die Hälfte des Weges – bis zum nächsten Gebäude oder größeren Wächter-Verband, nicht nur 3 Kacheln.
+  if (rules.frontGap > 0 && (world.tick + e.id) % 10 === 0 && exposed(world, e)) {
+    const back = retreatTarget(world, e);
+    tf.retreat = back ? { x: back.x, y: back.y, until: world.tick + Math.round(rules.retreatSeconds * world.tps) } : null;
+    if (back) {
+      tf.workCell = -1;
+      tf.block = null;
+      tf.stepTo = null;
+      tf.firstFree = false;
+      tf.sprint = false;
+    } else {
+      tf.stepTo = { x: e.pos.x - forward(world, p) * 3, y: e.pos.y };
+      tf.stepUntil = world.tick + 6 * world.tps;
+      tf.workCell = -1;
+    }
+  }
+  if (tf.retreat) {
+    const d2 = (e.pos.x - tf.retreat.x) ** 2 + (e.pos.y - tf.retreat.y) ** 2;
+    if (d2 > 0.6 * 0.6 && world.tick < tf.retreat.until) {
+      m.goal = tf.retreat;
+      return;
+    }
+    tf.retreat = null;
+    tf.hold = world.tick + 8 * world.tps; // nach dem Rückzug kurz stehen bleiben – nicht gleich wieder vorstoßen
   }
   // Schritt nach dem Ruf: erst ankommen, dann weiter nach Prüfreihenfolge.
   if (tf.stepTo) {
@@ -741,6 +802,10 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   const dir = forward(world, p);
   // Nach dem Sprint gilt der Frontabstand (hinter dem vordersten Wächter seiner Route), sonst die alte Grenze.
   const limit = rules.frontGap > 0 && !tf.firstFree ? frontLimit(world, e) : advanceLimit(world, e);
+  if (tf.hold !== undefined && world.tick < tf.hold) {
+    m.goal = here;
+    return;
+  }
   const routeY = world.map.waypoints[m.route].y;
   const ahead = { x: e.pos.x + dir * rules.advanceStep, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 0.5) };
   if (limit !== null && (ahead.x - limit) * dir > 0) {

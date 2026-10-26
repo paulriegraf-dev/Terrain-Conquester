@@ -234,7 +234,7 @@ export interface Entity {
    * Terra-Former: auf eigenem Boden? Terraformer: aktueller 2×2-Block, fertige Kacheln, nächster
    * Arbeitsschritt (Tick), Stufe der Fabrik. Fähigkeiten: nächster Einsatz, letzter Schuss.
    */
-  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; store?: number; rangeAdd?: number; work?: number; sprint?: boolean; firstFree?: boolean; spawnTick?: number; stepTo?: Vec2 | null; stepUntil?: number; lastRitual?: number; nextSummon?: number; workCell?: number; started?: boolean; home?: Vec2; gb?: GroundBonus | null };
+  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; store?: number; rangeAdd?: number; work?: number; sprint?: boolean; firstFree?: boolean; spawnTick?: number; stepTo?: Vec2 | null; retreat?: { x: number; y: number; until: number } | null; hold?: number; stepUntil?: number; lastRitual?: number; nextSummon?: number; workCell?: number; started?: boolean; home?: Vec2; gb?: GroundBonus | null };
   /**
    * Technoclan-Netzwerk: Netz-ID (0 = in keinem Netz), Protokolle (eigenes + geerbte) und
    * Aufstieg bis Tick.

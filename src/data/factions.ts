@@ -448,7 +448,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     // der Linie hat: Stufe I 0, II 2, III 3 (rules.terraform.storeByLevel). „Mehr Terraformer“ und „Starke Gerufene“
     // bleiben zentraler Gebäude-Ausbau.
     levelUpgrades: [
-      { cost: 120, seconds: 20 },
+      { cost: 60, seconds: 10 },
       { cost: 180, seconds: 25 },
     ],
     upgrades: [

@@ -77,18 +77,25 @@ export function updateMovement(world: World): void {
     const slow = Math.min(1, ground) * terrainSpeed;
     const barrier = barrierSlow(world, e);
     const slowed = barrier < 1 ? Math.max(slow * barrier, Math.min(slow, sites.barrier.floor)) : slow;
-    const speed = ref * boost * slowed;
+    const retreatBoost = e.tf?.retreat && world.tick < e.tf.retreat.until ? world.rules.terraform.retreatSpeed : 1; // 27.10.: auf dem Rückzug schneller
+    const speed = ref * boost * slowed * retreatBoost;
 
     let dir: Vec2 = { x: 0, y: 0 };
     let chasing = false;
-    if (target && target.alive) {
+    // 27.10.: Ein Terraformer auf dem Rückzug rennt nicht dem Ziel nach – und jagt auch sonst keinem Gegner hinterher.
+    const retreating = !!e.tf && !!e.tf.retreat && world.tick < e.tf.retreat.until;
+    if (target && target.alive && !retreating) {
       // Mit den Positionen vom Tick-Anfang rechnen (prev) – sonst hätte die Seite, die später
       // drankommt, einen Vorteil, weil sie schon die neuen Positionen der anderen sieht.
       const snap = startOfTick(target);
       const aim = aimPoint(e, snap);
       if (rangeTo(e, snap) > e.weapon!.def.range) {
-        dir = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
-        chasing = true;
+        if (e.tf) {
+          dir = m.goal ? (lineClear(world, e.pos, m.goal, profile, e.owner) ? steer(e, m.goal) : flowDirection(world, e, profile, slots.get(e.id), near)) : { x: 0, y: 0 };
+        } else {
+          dir = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
+          chasing = true;
+        }
       } else {
         const look = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
         if (look.x !== 0 || look.y !== 0) m.heading = look;

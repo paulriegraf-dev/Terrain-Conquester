@@ -34,11 +34,11 @@ export const BUILDINGS: Readonly<Record<BuildingId, BuildingDef>> = {
   workshop: { id: 'workshop', key: '2', part: 'wheels', lineName: 'Fahrzeuglinie', buildCost: 90, hp: 1400, toughness: 10, save: 4, vision: 5 },
   foundry: { id: 'foundry', key: '3', part: 'plates', lineName: 'Panzerlinie', buildCost: 120, hp: 1800, toughness: 10, save: 4, vision: 5 },
   // Terra-Former (22.10.): eine Fabrik je Bodenart
-  meadowhall: { id: 'meadowhall', key: '1', part: 'arms', lineName: 'Wiesenlinie', buildCost: 70, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  grove: { id: 'grove', key: '2', part: 'arms', lineName: 'Waldlinie', buildCost: 70, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  mudpit: { id: 'mudpit', key: '3', part: 'arms', lineName: 'Matschlinie', buildCost: 70, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  frosthall: { id: 'frosthall', key: '4', part: 'arms', lineName: 'Schneelinie', buildCost: 70, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  quarry: { id: 'quarry', key: '5', part: 'plates', lineName: 'Geröll-Linie', buildCost: 90, hp: 1500, toughness: 10, save: 4, vision: 5 },
+  meadowhall: { id: 'meadowhall', key: '1', part: 'arms', lineName: 'Wiesenlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  grove: { id: 'grove', key: '2', part: 'arms', lineName: 'Waldlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  mudpit: { id: 'mudpit', key: '3', part: 'arms', lineName: 'Matschlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  frosthall: { id: 'frosthall', key: '4', part: 'arms', lineName: 'Schneelinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  quarry: { id: 'quarry', key: '5', part: 'plates', lineName: 'Geröll-Linie', buildCost: 60, hp: 1500, toughness: 10, save: 4, vision: 5 },
 };
 
 /** Alle Gebäude-IDs (welche eine Fraktion baut: buildingIds(faction) in factions.ts). */

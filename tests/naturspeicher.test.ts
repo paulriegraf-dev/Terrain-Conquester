@@ -21,7 +21,7 @@ function formerFrom(world: World, level: number) {
 }
 
 describe('Naturspeicher (26.10.)', () => {
-  it('Speicher nach Fabrikstufe: I = 2, II = 3, III = 4; Wurzelwerk I gibt +1 (Schalter rootsStoreAtLevel: erst mit Stufe II)', () => {
+  it('Speicher nach Fabrikstufe: I = 4, II = 6, III = 8 (27.10.: verdoppelt); Wurzelwerk I gibt +1 (Schalter rootsStoreAtLevel: erst mit Stufe II)', () => {
     const store = (level: number, upgrade = false, atLevel = false): number => {
       const rules = atLevel ? { ...smallBases, terraform: { ...RULES.terraform, rootsStoreAtLevel: true } } : smallBases;
       const world = new World({ map: openMap, seed: 1, rules, ...tf });
@@ -30,12 +30,12 @@ describe('Naturspeicher (26.10.)', () => {
       world.step();
       return f.tf!.store!;
     };
-    assert.equal(store(1), 2);
-    assert.equal(store(2), 3);
-    assert.equal(store(3), 4);
-    assert.equal(store(2, true), 4);
-    assert.equal(store(1, true, true), 2, 'Schalter: Wurzelwerk I zählt auf Stufe I nicht');
-    assert.equal(store(2, false, true), 4, 'Schalter: +1 kommt mit Fabrikstufe II');
+    assert.equal(store(1), 4);
+    assert.equal(store(2), 6);
+    assert.equal(store(3), 8);
+    assert.equal(store(2, true), 7);
+    assert.equal(store(1, true, true), 4, 'Schalter: Wurzelwerk I zählt auf Stufe I nicht');
+    assert.equal(store(2, false, true), 7, 'Schalter: +1 kommt mit Fabrikstufe II');
   });
 
   it('Speicher 0 (Schalter): der Terraformer formt, ruft aber nie und bleibt bestehen', () => {
@@ -48,7 +48,7 @@ describe('Naturspeicher (26.10.)', () => {
   });
 
   it('Speicher 2: zwei Rufe, beim letzten geht der Terraformer in das Wesen über; kein Nachfüllen', () => {
-    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+    const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, terraform: { ...RULES.terraform, storeByLevel: [2, 3, 4] } }, ...tf });
     const f = formerFrom(world, 1); // Stufe I: Speicher 2
     f.mover!.speed = 2;
     f.hp = f.maxHp = 1e6; // kleine Testkarte: das gegnerische HQ ist nah

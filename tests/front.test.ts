@@ -153,12 +153,12 @@ describe('Gebiet zahlt sich aus', () => {
     assert.ok(incomePerSecond(world, 0) > world.rules.energyPerSecond);
   });
 
-  it('Belagerungsdruck: Wer mehr Gebiet hält, trifft HQ und Gebäude härter', () => {
+  it('Belagerungsdruck abgeschafft (27.10.): kein Bonusschaden an HQ und Gebäuden', () => {
     const world = new World({ map: felsenpass, seed: 1 });
     world.territory[0] = 600;
     world.territory[1] = 200;
-    assert.equal(siegeMultiplier(world, 1), 1 + world.rules.front.siegeFactor * 0.5);
-    assert.equal(siegeMultiplier(world, 0), 1, 'wer vorn liegt, bekommt keinen Malus');
+    assert.equal(siegeMultiplier(world, 1), 1);
+    assert.equal(siegeMultiplier(world, 0), 1);
   });
 
   it('das eigene Gebiet ist immer aufgedeckt', () => {

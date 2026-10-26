@@ -390,7 +390,7 @@ function basicsTab(): string {
     `Einheiten und Gebäude bauen Einfluss auf; wer allein ist, übernimmt Kacheln nach und nach. Das HQ hält ${r.influence.hqRadius} Kacheln von Anfang an.`,
     'In der Kartenmitte liegt das <b>Niemandsland</b>: dort baut niemand Einfluss auf.',
     `<b>Heimvorteil:</b> Einheiten im eigenen Gebiet heilen ${pct(r.front.regenPerSecond)} ihrer Leben je Sekunde${r.homeDamageTaken < 1 ? ` und nehmen nur ${pct(r.homeDamageTaken)} Schaden` : ''} (ab ${Math.floor(r.homeLate.at / 60)}:00 nur noch ${pct(r.homeLate.factor)} davon).`,
-    `<b>Belagerungsdruck:</b> Wer mehr Gebiet hält, trifft HQ und Gebäude des Gegners härter (×(1 + ${num(r.front.siegeFactor, 1)} × Vorsprung)).`,
+    ...(r.front.siegeFactor > 0 ? [`<b>Belagerungsdruck:</b> Wer mehr Gebiet hält, trifft HQ und Gebäude des Gegners härter (×(1 + ${num(r.front.siegeFactor, 1)} × Vorsprung)).`] : []),
   ])}
   ${section('Fabriken und Produktion', [
     'Eine Fabrik baut ununterbrochen ihre gewählte Einheit und schickt sie über ihre Lane. Der erste Verband kommt in halber Zeit.',
