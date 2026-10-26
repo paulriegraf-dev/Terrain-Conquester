@@ -464,13 +464,20 @@ function keystoneList(f: FactionId, bought: Record<string, number>): string {
     const k = KEYSTONE_OF[u.unit]!;
     const gate = bought[u.id];
     const tag = gate ? ` · gekauft mit Tor ${gate}` : '';
+    // Terra-Former: ein Kauf je Linienfabrik gibt Wächter UND Gerufenem der Linie ihren eigenen Schlussstein.
+    const partner = Object.values(KEYSTONE_OF).find((x) => x && x.line === u.unit && x.unit !== u.unit);
+    if (partner) {
+      const fb = Object.values(FACTIONS[f].buildings).find((b) => b?.tiers[0] === u.unit);
+      const line = (x: typeof k): string => `<b>${escapeHtml(x.icon)} ${escapeHtml(UNITS[x.unit].name)} – ${escapeHtml(x.name)}:</b> ${escapeHtml(x.rule)} <span class="cx-sub">(${escapeHtml(x.rein)})</span>`;
+      return `<tr><th scope="row">${escapeHtml(k.lineName ?? '')}${fb ? ` · ${escapeHtml(fb.name)}` : ''}<span class="cx-role">ein Kauf – beide Einheiten der Linie${tag}</span></th><td>${line(k)}<br>${line(partner)}</td></tr>`;
+    }
     return `<tr><th scope="row">${escapeHtml(k.icon)} ${escapeHtml(UNITS[u.unit].name)}<span class="cx-role">${escapeHtml(u.name.replace(/^Schlussstein:? ?/, ''))}${tag}${k.placeholder ? ' · Platzhalter' : ''}</span></th><td>${escapeHtml(u.description)}</td></tr>`;
   }).join('');
   const g = RULES.keystoneGate;
   const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
   return `<h3 class="cx-h3">Schlusssteine</h3>
     <p class="cx-lede">Ändern eine Regel, keine Zahl. Freigegeben über das Schlussstein-Tor: erstes Tor bei ${clock(g.first)}, danach alle ${clock(g.every)}; je Tor ein Schlussstein (ungenutzte Tore bleiben). Preis nach Reihenfolge ${g.prices.join(' · ')} (dann +${g.step}), ${g.seconds} s an einer Fabrik, die die Einheit baut. Wer die Kartenmitte (${g.centerSize}×${g.centerSize}) ${g.centerHold} s ununterbrochen hält, öffnet das nächste Tor sofort.</p>
-    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit</th><th>Regel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit / Linie</th><th>Regel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function technoTraits(): string {
