@@ -28,6 +28,7 @@ import type { HqPathId } from '../data/hq';
 import type { FactionId } from '../data/factions';
 import { controllerAt } from '../sim/systems/influence';
 import { formerNeedsBlock } from '../sim/systems/terraform';
+import { laneOfRow, synergyHint } from '../sim/systems/synergy';
 import type { TerrainId } from '../data/terrain';
 import { TERRAIN_INDEX } from '../data/terrain';
 import { checkBuyHero } from '../sim/systems/hero';
@@ -157,8 +158,8 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -1089,6 +1090,19 @@ export class SimpleAi {
         }
       }
     }
+    // Lane-Synergie (26.10.): Fehlen der nächsten Synergie höchstens 8 Kacheln, kauft die KI dort Boden der passenden Art
+    // im eigenen Gebiet der Lane (Schalter AI_TUNING.synergyBuys). Keine Umwidmungen dafür.
+    if (AI_TUNING.synergyBuys && world.players[this.player].faction.id === 'terraformer' && this.spare(world) >= 80) {
+      const hint = synergyHint(world, this.player);
+      if (hint && hint.missing <= 8) {
+        const buy = this.synergyBuy(world, hint.need[0]!.lane, hint.ground);
+        if (buy) {
+          this.lastShape = world.tick;
+          world.players[this.player].stats.synergyBuys++;
+          return buy;
+        }
+      }
+    }
     const pressure = [...ROUTES].sort((a, b) => this.seenByRoute[b] - this.seenByRoute[a]);
     const route = this.seenByRoute[pressure[0]!] > 0.5 ? pressure[0]! : this.rng.chance(0.3) ? this.rng.pick(ROUTES) : null;
     if (!route) return null;
@@ -1152,6 +1166,31 @@ export class SimpleAi {
       }
     }
     this.lastShape = world.tick - 10 * world.tps; // nichts gefunden: bald erneut versuchen
+    return null;
+  }
+
+  /** Gelände-Kauf für eine Lane-Synergie: Boden `ground` im eigenen Gebiet dieser Lane, nahe der eigenen Grenze. */
+  private synergyBuy(world: World, lane: Route, ground: TerrainId): Command | null {
+    const g = world.grid;
+    const dir = this.player === 0 ? 1 : -1;
+    const wy = Math.floor(world.map.waypoints[lane].y);
+    let edge = -1;
+    for (let k = 0; k < g.width; k++) {
+      const x = this.player === 0 ? k : g.width - 1 - k;
+      if (controllerAt(world, g.index(x, wy)) === this.player) edge = x;
+    }
+    if (edge < 0) return null;
+    const t = TERRAIN_INDEX[ground];
+    for (const back of [2, 3, 4, 1, 5, 6]) {
+      for (const dy of [0, -2, 2, -1, 1, -3, 3]) {
+        const x = edge - dir * back;
+        const y = wy + dy;
+        if (laneOfRow(world, y) !== lane) continue;
+        const fresh = swapArea(x, y).filter(([cx, cy]) => g.inBounds(cx, cy) && !(g.terrain[g.index(cx, cy)] === t && world.formed[g.index(cx, cy)] === this.player + 1)).length;
+        if (fresh < 3) continue;
+        if (checkSwapArea(world, this.player, x, y, ground).ok) return { type: 'swapTerrain', x, y, terrain: ground };
+      }
+    }
     return null;
   }
 

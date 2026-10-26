@@ -1,3 +1,4 @@
+import { SWAP } from '../../data/abilities';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
 import { UNITS } from '../../data/units';
@@ -35,6 +36,15 @@ export interface SynergyState {
 
 export const NO_SYNERGY: SynergyState = { lanes: [null, null, null], base: null, accent: null, triple: false };
 
+/** Nachlauf (26.10.): Tick, seit dem die Bedingung fehlt (−1 = besteht oder nichts zu halten). */
+export interface SynergyHold {
+  lanes: [number, number, number];
+  base: number;
+  triple: number;
+}
+
+export const newHold = (): SynergyHold => ({ lanes: [-1, -1, -1], base: -1, triple: -1 });
+
 export const SYNERGY_GROUNDS: readonly TerrainId[] = ['forest', 'snow', 'mud', 'rubble', 'meadow'];
 
 export const SYNERGY_NAMES: Readonly<Record<string, string>> = {
@@ -60,7 +70,7 @@ export function laneOfRow(world: World, y: number): Route {
   return y < h / 3 ? 'top' : y < (2 * h) / 3 ? 'mid' : 'bottom';
 }
 
-/** Lane-Synergien neu bestimmen (alle rules.synergy.every Sekunden, nur für Terra-Former). */
+/** Lane-Synergien neu bestimmen (alle rules.synergy.every Sekunden, nur für Terra-Former). Setzen sofort, Fallen mit Nachlauf. */
 export function updateSynergy(world: World): void {
   if (world.tick % Math.round(world.rules.synergy.every * world.tps) !== 0) return;
   for (const p of PLAYERS) {
@@ -68,22 +78,118 @@ export function updateSynergy(world: World): void {
       world.synergy[p] = NO_SYNERGY;
       continue;
     }
-    world.synergy[p] = computeSynergy(world, p);
+    world.synergy[p] = withHysteresis(world, p, computeSynergy(world, p));
   }
 }
 
-export function computeSynergy(world: World, p: PlayerId): SynergyState {
+/**
+ * Nachlauf (26.10., rules.laneHysteresis): Eine Lane-Farbe, eine aktive Synergie und ihre Verstärkung bleiben noch
+ * so lange bestehen, nachdem ihre Bedingung weggefallen ist. Kehrt die Bedingung zurück, läuft nichts ab. Ein anderer
+ * Boden / eine andere Synergie gilt sofort.
+ */
+function withHysteresis(world: World, p: PlayerId, raw: SynergyState): SynergyState {
+  const prev = world.synergy[p];
+  const hold = world.synergyHold[p];
+  const limit = Math.round(world.rules.laneHysteresis * world.tps);
+  const keep = (since: number): boolean => since >= 0 && world.tick - since < limit;
+  const lanes = raw.lanes.map((now, k) => {
+    if (now !== null || prev.lanes[k] === null) {
+      hold.lanes[k] = -1;
+      return now;
+    }
+    if (hold.lanes[k] < 0) hold.lanes[k] = world.tick;
+    if (keep(hold.lanes[k])) return prev.lanes[k];
+    hold.lanes[k] = -1;
+    return null;
+  }) as [TerrainId | null, TerrainId | null, TerrainId | null];
+  if (raw.base) {
+    hold.base = -1;
+    if (prev.base === raw.base && prev.triple && !raw.triple) {
+      if (hold.triple < 0) hold.triple = world.tick;
+      if (keep(hold.triple)) return { lanes, base: raw.base, accent: null, triple: true };
+    }
+    hold.triple = -1;
+    return { ...raw, lanes };
+  }
+  hold.triple = -1;
+  if (!prev.base) {
+    hold.base = -1;
+    return { ...raw, lanes };
+  }
+  if (hold.base < 0) hold.base = world.tick;
+  if (keep(hold.base)) return { lanes, base: prev.base, accent: prev.accent, triple: prev.triple };
+  hold.base = -1;
+  return { ...raw, lanes };
+}
+
+/** Restzeit des Nachlaufs der aktiven Synergie in Sekunden (null = Bedingung erfüllt, kein Ablauf). */
+export function synergyFadeLeft(world: World, p: PlayerId): number | null {
+  const h = world.synergyHold[p];
+  const since = h.base >= 0 ? h.base : h.triple;
+  if (since < 0 || !world.synergy[p].base) return null;
+  return Math.max(0, world.rules.laneHysteresis - (world.tick - since) / world.tps);
+}
+
+/** Eigene geformte Kacheln je Lane und Boden (Index wie SYNERGY_GROUNDS). */
+export function laneCounts(world: World, p: PlayerId): number[][] {
   const g = world.grid;
-  const counts = ROUTES.map(() => new Map<number, number>());
+  const out = ROUTES.map(() => SYNERGY_GROUNDS.map(() => 0));
+  const idx = new Map(SYNERGY_GROUNDS.map((id, k) => [TERRAIN_INDEX[id], k]));
   for (let i = 0; i < world.formed.length; i++) {
     if (world.formed[i] !== p + 1) continue;
-    const y = Math.floor(i / g.width);
-    const lane = ROUTES.indexOf(laneOfRow(world, y));
-    const t = g.terrain[i]!;
-    counts[lane]!.set(t, (counts[lane]!.get(t) ?? 0) + 1);
+    const k = idx.get(g.terrain[i]!);
+    if (k === undefined) continue;
+    const lane = ROUTES.indexOf(laneOfRow(world, Math.floor(i / g.width)));
+    out[lane]![k]!++;
   }
+  return out;
+}
+
+export interface SynergyHint {
+  /** Ziel-Boden und ob es um die Verstärkung (alle drei Lanes) geht. */
+  ground: TerrainId;
+  triple: boolean;
+  /** Fehlende Kacheln je Lane (nur Lanes mit Bedarf). */
+  need: { lane: Route; missing: number }[];
+  missing: number;
+  /** Käufe: aufgerundet fehlende Kacheln / Kacheln je Kauf. */
+  buys: number;
+}
+
+/**
+ * Zielhinweis (26.10.): die Synergie, die mit den wenigsten zusätzlichen Kacheln erreichbar ist. Ist schon eine aktiv,
+ * die nächste stärkere (Verstärkung derselben) – oder nichts.
+ */
+export function synergyHint(world: World, p: PlayerId, counts = laneCounts(world, p)): SynergyHint | null {
   const min = world.rules.synergy.laneMin;
-  const n = (lane: number, id: TerrainId): number => counts[lane]!.get(TERRAIN_INDEX[id]) ?? 0;
+  const per = SWAP.brush * SWAP.brush;
+  const s = world.synergy[p];
+  const deficit = (lane: number, k: number): number => Math.max(0, min - counts[lane]![k]!);
+  const make = (ground: TerrainId, triple: boolean, lanes: number[]): SynergyHint => {
+    const k = SYNERGY_GROUNDS.indexOf(ground);
+    const need = lanes.filter((l) => deficit(l, k) > 0).map((l) => ({ lane: ROUTES[l]!, missing: deficit(l, k) }));
+    const missing = need.reduce((a, n) => a + n.missing, 0);
+    return { ground, triple, need, missing, buys: Math.ceil(missing / per) };
+  };
+  if (s.base) {
+    if (s.triple) return null;
+    const h = make(s.base, true, [0, 1, 2]);
+    return h.missing > 0 ? h : null;
+  }
+  let best: SynergyHint | null = null;
+  for (const id of SYNERGY_GROUNDS) {
+    const k = SYNERGY_GROUNDS.indexOf(id);
+    const lanes = [0, 1, 2].sort((a, b) => deficit(a, k) - deficit(b, k) || a - b).slice(0, 2);
+    const h = make(id, false, lanes);
+    if (h.missing > 0 && (!best || h.missing < best.missing)) best = h;
+  }
+  return best;
+}
+
+export function computeSynergy(world: World, p: PlayerId): SynergyState {
+  const counts = laneCounts(world, p);
+  const min = world.rules.synergy.laneMin;
+  const n = (lane: number, id: TerrainId): number => counts[lane]![SYNERGY_GROUNDS.indexOf(id)]!;
   // Anzeige: vorherrschender Boden je Lane (ab laneMin Kacheln)
   const lanes = counts.map((_, lane) => {
     let best: TerrainId | null = null;

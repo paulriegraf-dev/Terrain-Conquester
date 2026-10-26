@@ -158,6 +158,8 @@ export interface Rules {
   upgradePriceMax: number;
   /** Grund-Einkommen pro Sekunde. */
   energyPerSecond: number;
+  /** Terra-Former (26.10.): Lane-Farbe und aktive Synergie bleiben so viele Sekunden, nachdem ihre Bedingung weggefallen ist. */
+  laneHysteresis: number;
   /**
    * Nur noch technische Grenze für Rechenleistung (24.10.: das spielerische Einheitenlimit von 40 ist weg – es bremste
    * fast nur die Terra-Former; die bremst jetzt die Ruf-Pause ihrer Terraformer).
@@ -339,6 +341,7 @@ export const RULES: Rules = {
   maxEnergy: 400,
   upgradePriceMax: 1.5,
   energyPerSecond: 3,
+  laneHysteresis: 30,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,
   // Täuschung und Konter Zeit zum Greifen haben. Vorher 21 (Technoclan) bzw. 34 (Myriaden) Verbände pro Minute.
   unitCap: 150,

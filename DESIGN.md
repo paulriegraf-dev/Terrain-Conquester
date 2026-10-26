@@ -1911,3 +1911,12 @@ Ziel: kein Dauernachschub an Gerufenen mehr, ohne globale Obergrenze. Der Nachsc
 - **Schrauben, nicht anfassen:** Preis des 2×2 = Energiepreis eines Rufs; Gerufene-Werte; Lane-Synergien (danach separat).
 - **Offen / geplant:** Gelände (kaufbar) von 3×3 auf 2×2, über HQ-Upgrades verbreiterbar; Beschwörer an Fabrik-Upgrades binden; Beschwörungsverhalten mit Zählen im Umkreis und festem Schritt.
 - **Messwerte davor** (Lauf 1/2, Varianten-Test): Lauf 1 (Bauzeit 6,5 s) 42 % Siege der Terra-Former; Phase 2 mit Block 3×3 nur 9 %; Block 2×2 (Variante C, 24 Partien) 46 %.
+
+## Lane-Anzeige und Nachlauf der Lane-Synergien (26.10.)
+
+Ziel: Synergien gezielt ansteuern (Umwidmen, Gelände-Kauf). Synergie-Tabelle, Schwelle (12 Kacheln) und Wirkungen unverändert.
+
+- **Anzeige je Lane** (Kommando-Anzeige ohne Auswahl): unter 12 eigenen Kacheln „Oben · 7/12 Wald“ mit Balken; ab 12 „Wald 68 %“; knapp (Abstand ≤ 3) „Wald 9 / Matsch 8“. Tooltip: alle fünf Böden mit Kachelzahl. Das Wort „ausgeglichen“ gibt es nicht mehr.
+- **Zielhinweis:** die Synergie mit den wenigsten fehlenden Kacheln, z. B. „Wald-Doppel: Mitte fehlen 5 Wald (≈ 1 Kauf)“; ist eine aktiv, die Verstärkung (Dreifach) oder nichts. Käufe = aufgerundet fehlende Kacheln ÷ Kacheln je Kauf (heute 3×3 = 9; nach der Umstellung auf 2×2 automatisch ÷ 4).
+- **Nachlauf** (`rules.laneHysteresis = 30`): Lane-Farbe, aktive Synergie und Verstärkung bleiben 30 s, nachdem ihre Bedingung weggefallen ist; kehrt sie zurück, läuft nichts ab. Setzen bleibt sofort (alle 5 s). Ring neben dem Synergie-Namen läuft im Nachlauf ab („fällt in n s“).
+- **KI** (`AI_TUNING.synergyBuys`, Standard an): Fehlen der nächsten Synergie höchstens 8 Kacheln und ist Energie über dem Puffer, kauft die Terra-Former-KI den passenden Boden im eigenen Gebiet dieser Lane. Keine Umwidmungen dafür. Statistik `synergyBuys`.

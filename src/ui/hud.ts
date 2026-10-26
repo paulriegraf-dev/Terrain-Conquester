@@ -25,7 +25,7 @@ import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/produc
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
 import { checkResearch, ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
-import { synergyLabel } from '../sim/systems/synergy';
+import { SYNERGY_GROUNDS, laneCounts, synergyFadeLeft, synergyHint, synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
 import { VERBUND } from '../data/verbund';
 import { siegeMultiplier } from '../sim/systems/front';
@@ -859,15 +859,56 @@ function factoryVerbundLine(world: World, e: Entity): string {
   return `<p class="muted" title="Auf jeder Lane bilden die zwei Fabriken mit der höchsten Stufe einen Verbund">Verbund: –</p>`;
 }
 
-/** Terra-Former: aktive Lane-Synergie (2 gleiche Lanes + Färbung durch die dritte). */
+/** Terra-Former: Lanes, aktive Synergie (mit Nachlauf-Ring) und Zielhinweis (26.10.). */
 function synergyLine(world: World, me: PlayerId): string {
   if (world.players[me].faction.id !== 'terraformer') return '';
   const s = world.synergy[me];
+  const counts = laneCounts(world, me);
+  const min = world.rules.synergy.laneMin;
+  const name = (id: string): string => TERRAIN_LIST[TERRAIN_INDEX[id as keyof typeof TERRAIN_INDEX]]!.name;
+  const rows = ROUTES.map((r, lane) => {
+    const c = counts[lane]!;
+    const order = SYNERGY_GROUNDS.map((id, k) => ({ id, n: c[k]! })).sort((a, b) => b.n - a.n);
+    const top = order[0]!;
+    const second = order[1]!;
+    const total = c.reduce((a, n) => a + n, 0);
+    const tip = SYNERGY_GROUNDS.map((id, k) => `${name(id)} ${c[k]}`).join(' · ');
+    const held = s.lanes[lane] && top.n < min ? ` · hält noch ${Math.ceil(laneHoldLeft(world, me, lane))} s` : '';
+    let text: string;
+    let bar = '';
+    if (top.n < min) {
+      text = `${ROUTE_NAMES[r]} · ${top.n}/${min}${top.n > 0 ? ` ${name(top.id)}` : ''}`;
+      bar = `<div class="cooldown"><i style="width:${(top.n / min) * 100}%"></i></div>`;
+    } else if (second.n > 0 && top.n - second.n <= 3) {
+      text = `${ROUTE_NAMES[r]} · ${name(top.id)} ${top.n} / ${name(second.id)} ${second.n}`;
+    } else {
+      text = `${ROUTE_NAMES[r]} · ${name(top.id)} ${Math.round((top.n / Math.max(1, total)) * 100)} %`;
+    }
+    return `<p class="muted syn-lane" title="${escapeHtml(tip)}">${escapeHtml(text + held)}</p>${bar}`;
+  }).join('');
   const label = synergyLabel(s);
-  const lanes = s.lanes.map((g) => (g ? TERRAIN_LIST[TERRAIN_INDEX[g]]!.name : '–')).join(' · ');
-  return label
-    ? `<p>Synergie: <strong>${escapeHtml(label)}</strong>${s.triple ? ' (verstärkt)' : ''}</p><p class="muted">Lanes: ${escapeHtml(lanes)}</p>`
-    : `<p class="muted">Synergie: keine – zwei Lanes mit gleichem Boden formen (Lanes: ${escapeHtml(lanes)})</p>`;
+  const fade = synergyFadeLeft(world, me);
+  const ring = label ? synergyRing(fade === null ? 1 : fade / world.rules.laneHysteresis) : '';
+  const head = label
+    ? `<p>Synergie: ${ring} <strong>${escapeHtml(label)}</strong>${fade !== null ? ` <span class="muted">· fällt in ${Math.ceil(fade)} s</span>` : ''}</p>`
+    : `<p class="muted">Synergie: keine – zwei Lanes mit gleichem Boden formen</p>`;
+  const hint = synergyHint(world, me, counts);
+  const hintLine = hint
+    ? `<p class="muted">${escapeHtml(`${name(hint.ground)}-${hint.triple ? 'Dreifach' : 'Doppel'}: ${hint.need.map((n) => `${ROUTE_NAMES[n.lane]} fehlen ${n.missing}`).join(', ')} ${name(hint.ground)} (≈ ${hint.buys} ${hint.buys === 1 ? 'Kauf' : 'Käufe'})`)}</p>`
+    : '';
+  return head + rows + hintLine;
+}
+
+/** Restzeit des Nachlaufs einer Lane-Farbe (Sekunden). */
+function laneHoldLeft(world: World, me: PlayerId, lane: number): number {
+  const since = world.synergyHold[me].lanes[lane]!;
+  return since < 0 ? world.rules.laneHysteresis : Math.max(0, world.rules.laneHysteresis - (world.tick - since) / world.tps);
+}
+
+/** Kleiner Ring: voll = Synergie steht, läuft im Nachlauf ab. */
+function synergyRing(share: number): string {
+  const c = 2 * Math.PI * 5;
+  return `<svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-1px"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2"/><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="${(share * c).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 6 6)"/></svg>`;
 }
 
 function hpLine(e: Entity): string {

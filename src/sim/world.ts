@@ -31,8 +31,8 @@ import { onNetworkDeath, updateNetworks } from './systems/network';
 import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
-import { NO_SYNERGY } from './systems/synergy';
-import type { SynergyState } from './systems/synergy';
+import { NO_SYNERGY, newHold } from './systems/synergy';
+import type { SynergyHold, SynergyState } from './systems/synergy';
 import { releaseClutch, updateMyr } from './systems/myr';
 import type { SiteState } from './systems/sites';
 import type { HqPathId } from '../data/hq';
@@ -146,6 +146,8 @@ export interface PlayerStats {
   research: number;
   /** Gelände-Käufe (Flächen) ohne Schlucht, gegrabene Schluchten, zugeschüttete Schluchten. */
   shaped: number;
+  /** Terra-Former-KI (26.10.): Gelände-Käufe, die der Synergie-Zielhinweis ausgelöst hat. */
+  synergyBuys: number;
   gorges: number;
   refills: number;
   /** Verbände, die an ihrer Lebensuhr verfallen sind (Myriaden-Drohnen). */
@@ -344,6 +346,8 @@ export class World {
   readonly wasteUntil: Uint32Array;
   /** Terra-Former: Lane-Synergie je Spieler (alle 5 s neu bestimmt, siehe systems/synergy.ts). */
   synergy: [SynergyState, SynergyState] = [NO_SYNERGY, NO_SYNERGY];
+  /** Nachlauf (26.10.): seit diesem Tick ist die Bedingung weg (−1 = besteht) – je Lane, Grundwirkung, Verstärkung. */
+  synergyHold: [SynergyHold, SynergyHold] = [newHold(), newHold()];
   /** Terra-Former: Schlammmonster-Gelege je Matschfeld (Index der 3×3-Zelle → gesammelte Sekunden), je Spieler. */
   readonly mudNests: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
   /** Myriaden: geworfene Myrs im Flug (Kanone, Katapult). */
@@ -934,6 +938,7 @@ export class World {
         bounty: 0,
         research: 0,
         shaped: 0,
+        synergyBuys: 0,
         gorges: 0,
         refills: 0,
         expired: 0,
