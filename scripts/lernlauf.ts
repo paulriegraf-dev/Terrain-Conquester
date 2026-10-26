@@ -60,7 +60,7 @@ for (let g = first; g < first + perMap * 2; g++) {
     world.step(commands);
   }
   const winner = world.result?.winner ?? null;
-  const notes = [0, 1].map((p) => memory.learn(keys[p]!, factions[p]!, world.players[p]!.stats, winner === null ? 0 : winner === p ? 1 : -1));
+  const notes = [0, 1].map((p) => memory.learn(keys[p]!, factions[p]!, world.players[p]!.stats, winner === null ? 0 : winner === p ? 1 : -1, world.players[1 - p]!.stats.damageTo));
   const rec = {
     n: g, map: map.id, seed, left, right, winner, seconds: world.tick / world.tps,
     players: world.players.map((p, i) => ({

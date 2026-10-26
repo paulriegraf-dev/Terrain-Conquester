@@ -27,6 +27,17 @@ describe('Lernen der KI (26.10.)', () => {
     assert.ok(b.plasma! < 1.08, 'Plasmawerfer sinkt');
   });
 
+  it('Tank zählt mit: wer viel einsteckt, steigt auch bei wenig eigenem Schaden', () => {
+    const s = stats({ colossus: 10, plasma: 10 }, { colossus: 300, plasma: 3000 });
+    const damageOnly = new AiMemory();
+    damageOnly.learn('k', 'technoclan', s, 1);
+    assert.ok(damageOnly.get('k', 'technoclan').unitBias.plasma! > damageOnly.get('k', 'technoclan').unitBias.colossus!, 'nur Schaden: Plasma vorn');
+    const withTank = new AiMemory();
+    withTank.learn('k', 'technoclan', s, 1, { colossus: 20000 });
+    const b = withTank.get('k', 'technoclan').unitBias;
+    assert.ok(b.colossus! > b.plasma!, `mit Tank: Koloss vorn (${b.colossus} gegen ${b.plasma})`);
+  });
+
   it('Vorliebe bleibt in den Grenzen', () => {
     const mem = new AiMemory();
     for (let i = 0; i < 80; i++) mem.learn('x', 'technoclan', stats({ sniper: 10, plasma: 10 }, { sniper: 9000, plasma: 1 }), 1);

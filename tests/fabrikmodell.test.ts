@@ -36,10 +36,12 @@ describe('Fabrikmodell: Gebäude-Ausbau zentral', () => {
     assert.equal(world.players[0].labs.length, 0);
   });
 
-  it('Terra-Former: keine Fabrikstufen, „Mehr Terraformer“ gilt für alle Fabriken der Linie', () => {
+  it('Terra-Former: Fabrikstufen I–III (Naturspeicher), „Mehr Terraformer“ gilt für alle Fabriken der Linie', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['terraformer', 'technoclan'] });
     const f = world.addBuilding(0, BUILDINGS.meadowhall, { x: 3, y: 0, w: 2, h: 2 });
-    assert.equal(checkLevelUp(world, f).ok, false);
+    assert.equal(checkLevelUp(world, f).ok, true, 'Stufe II möglich');
+    f.producer!.level = 3;
+    assert.equal(checkLevelUp(world, f).ok, false, 'Stufe III ist die höchste');
     assert.equal(mixOf(world, f)!.every, RULES.terraform.every);
     world.players[0].research.push('meadowhall-formers-1');
     assert.equal(mixOf(world, f)!.every, RULES.terraform.everyLevel2);

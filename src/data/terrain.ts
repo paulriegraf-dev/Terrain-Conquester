@@ -5,7 +5,7 @@
  * Neue Bodenart = Eintrag hier + Spalte in jedem Bewegungsprofil + freies Kartenzeichen.
  */
 
-export type TerrainId = 'meadow' | 'forest' | 'mud' | 'snow' | 'mountain' | 'gorge' | 'wall' | 'rubble';
+export type TerrainId = 'meadow' | 'forest' | 'mud' | 'snow' | 'mountain' | 'gorge' | 'wall' | 'rubble' | 'waste';
 
 export interface TerrainDef {
   id: TerrainId;
@@ -60,6 +60,11 @@ export const TERRAIN_LIST: readonly TerrainDef[] = [
   {
     id: 'wall', name: 'Erdwall', char: '=', solid: false, blocksVision: true, leavesTracks: false, buildFactor: null,
     color: '#8a6a45', hint: 'Von Spielern errichtet. Blockiert Weg und Sicht, bis schwere Einheiten oder Artillerie ihn brechen.',
+  },
+  {
+    // Ödland (26.10.): Ort einer Beschwörung der Terra-Former – 150 s ohne Boden-Bonus, nicht formbar, kein Block für Rufe.
+    id: 'waste', name: 'Ödland', char: '%', solid: true, blocksVision: false, leavesTracks: false, buildFactor: 1,
+    color: '#6b5a48', hint: 'Ausgelaugter Boden nach einer Beschwörung: kein Boden-Bonus, nicht formbar, nicht kaufbar. Nach einiger Zeit kehrt der natürliche Boden zurück.',
   },
 ];
 

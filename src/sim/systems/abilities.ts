@@ -170,6 +170,7 @@ export function checkWall(world: World, p: PlayerId, x: number, y: number, verti
     const blocked = shapingBlocked(world, p, cx, cy);
     if (blocked) return fail(blocked);
     if (!grid.isFreeGround(cx, cy)) return fail('Nur auf freiem, festem Boden');
+    if (grid.terrain[grid.index(cx, cy)] === TERRAIN_INDEX.waste) return fail('Ödland – erst wenn es abgelaufen ist');
     if (taken.has(grid.index(cx, cy))) return fail('Dort wird schon gebaut');
   }
   // Truppen auf den Feldern sind kein Hindernis mehr – sie weichen beim Aufsteigen aus.
@@ -202,7 +203,7 @@ export function updateWalls(world: World): void {
   world.walls = world.walls.filter((w) => world.tick < w.raiseTick);
   for (const wall of due) {
     const cells = wall.cells.map((c) => c.index);
-    const free = cells.every((i) => world.grid.structure[i] === 0 && TERRAIN_LIST[world.grid.terrain[i]!]!.solid && world.grid.terrain[i] !== TERRAIN_INDEX.wall);
+    const free = cells.every((i) => world.grid.structure[i] === 0 && TERRAIN_LIST[world.grid.terrain[i]!]!.solid && world.grid.terrain[i] !== TERRAIN_INDEX.wall && world.grid.terrain[i] !== TERRAIN_INDEX.waste);
     if (!free || !staysOpenWith(world, cells, TERRAIN_INDEX.wall)) {
       // Inzwischen verbaut oder würde den letzten Weg schließen: Energie zurück.
       world.players[wall.owner].energy += WALL.cost;
@@ -251,6 +252,7 @@ export function checkSwap(world: World, p: PlayerId, x: number, y: number, terra
   if (TERRAIN_LIST[grid.terrain[index]!]!.id === terrain) return { ok: false, reason: 'Ist schon diese Bodenart' };
   const blocked = shapingBlocked(world, p, x, y);
   if (blocked) return { ok: false, reason: blocked };
+  if (grid.terrain[index] === TERRAIN_INDEX.waste) return { ok: false, reason: 'Ödland – erst wenn es abgelaufen ist' };
   if (world.swaps.some((s) => s.index === index)) return { ok: false, reason: 'Wird schon umgebaut' };
   if (world.walls.some((w) => w.cells.some((c) => c.index === index))) return { ok: false, reason: 'Dort steigt gleich ein Erdwall auf' };
   // Seit 24.10.: Truppen auf einer künftigen Schlucht weichen beim Fertigwerden aus (siehe updateSwaps).

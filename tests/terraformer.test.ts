@@ -9,6 +9,7 @@ import type { Entity } from '../src/sim/entity';
 import { assignSlots, holdAnchor } from '../src/sim/systems/formation';
 import { controllerAt } from '../src/sim/systems/influence';
 import { defenseOf } from '../src/sim/systems/hitmath';
+import { checkSwap } from '../src/sim/systems/abilities';
 import { cmd, lastBuilding, openMap, smallBases, stepTimes } from './fixtures';
 
 const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoclan'] };
@@ -16,12 +17,14 @@ const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoc
 function unit(world: World, owner: 0 | 1, id: UnitId, x: number, y: number, still = true): Entity {
   const u = world.addUnit(owner, UNITS[id], { x, y }, y < 3 ? 'top' : y < 6 ? 'mid' : 'bottom');
   if (still) u.mover!.speed = 0;
+  if (u.tf && UNITS[id].former) u.tf.store = 2; // Naturspeicher der Fabrikstufe II (siehe tests/naturspeicher.test.ts)
   return u;
 }
 
 function setTerrain(world: World, x: number, y: number, t: keyof typeof TERRAIN_INDEX): void {
   world.grid.setTerrain(world.grid.index(x, y), TERRAIN_INDEX[t]);
 }
+
 
 describe('Terra-Former: Fabriken und Terraformer', () => {
   it('jede Bodenart ist eine eigene Fabrik; jeder fünfte Verband ist ein Terraformer', () => {
@@ -38,15 +41,16 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.ok(world.events.some((e) => e.type === 'rejected' && /Fraktion/.test(e.reason)));
   });
 
-  it('der Terraformer formt die Kacheln in seiner Umgebung (2 s je Kachel) und ruft auf einem fertigen 2×2-Block', () => {
+  it('der Terraformer formt die Kacheln in seiner Umgebung (1,5 s je Kachel) und ruft auf einem fertigen 2×2-Block', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     const former = unit(world, 0, 'formerForest', 7.5, 7.5, false);
+    former.tf!.store = 5;
     const summoned = (): boolean => world.entities.some((e) => e.alive && e.defId === 'specialForest');
     while (!summoned() && world.tick < 40 * world.tps) world.step();
     const keeper = world.entities.find((e) => e.alive && e.defId === 'specialForest');
     assert.ok(keeper, 'ein Hainhüter wurde gerufen');
-    // Nach 4 Kacheln (8 s) und dem Ritual (4 s): etwa 12 s
-    assert.ok(world.tick / world.tps <= 16, `gerufen nach ${(world.tick / world.tps).toFixed(1)} s`);
+    // Nach 4 Kacheln (6 s), Gehen und dem Ritual (4 s): gut 20 s
+    assert.ok(world.tick / world.tps <= 26, `gerufen nach ${(world.tick / world.tps).toFixed(1)} s`);
     stepTimes(world, 20 * world.tps);
     const formed = [...world.formed].map((v, i) => (v === 1 ? i : -1)).filter((i) => i >= 0);
     assert.ok(formed.length >= 8, `er formt weiter die Umgebung (${formed.length} Kacheln)`);
@@ -71,21 +75,26 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     assert.equal(former.tf!.waiting, false);
   });
 
-  it('nach dem Ruf haben die vier Kacheln 90 s Abklingzeit – formt der Gegner eine um, ist sie sein Boden', () => {
+  it('nach dem Ruf sind die vier Kacheln 150 s Ödland – dann kehrt der natürliche Boden der Karte zurück', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     unit(world, 0, 'formerMud', 7.5, 7.5, false);
     while (!world.entities.some((e) => e.alive && e.defId === 'specialMud') && world.tick < 40 * world.tps) world.step();
-    const n = world.formed.length;
-    const cooled = [...world.formed.keys()].filter((i) => world.tileCooldown[i]! > world.tick);
-    assert.equal(cooled.length, 4, 'vier Kacheln mit Abklingzeit');
-    const i = cooled[0]!;
-    assert.ok(world.tileCooldown[i]! >= world.tick + 85 * world.tps, 'etwa 90 s');
-    assert.equal(world.tileCooldown[n + i], 0, 'nur für diesen Spieler');
-    // Der Gegner formt die Kachel um (wie ein fertiger Umbau aus „Gelände formen“)
-    world.swaps.push({ owner: 1, batch: 999, index: i, target: TERRAIN_INDEX.meadow, startTick: world.tick, doneTick: world.tick + 1 });
-    stepTimes(world, 3);
-    assert.equal(world.formed[i], 2, 'jetzt Boden des Gegners');
+    const waste = [...world.wasteUntil.keys()].filter((i) => world.wasteUntil[i]! > world.tick);
+    assert.equal(waste.length, 4, 'vier Ödland-Kacheln');
+    const i = waste[0]!;
+    assert.ok(world.wasteUntil[i]! >= world.tick + 145 * world.tps, 'etwa 150 s');
+    assert.equal(world.grid.terrain[i], TERRAIN_INDEX.waste);
+    assert.equal(world.formed[i], 0, 'gehört niemandem');
+    const natural = world.map.terrain[i]!;
+    // Ödland ist nicht kaufbar
+    const x = i % world.grid.width;
+    const y = (i - x) / world.grid.width;
+    const buy = checkSwap(world, 1, x, y, 'meadow');
+    assert.equal(buy.ok, false);
+    while (world.wasteUntil[i]! > 0 && world.tick < 200 * world.tps) world.step();
+    assert.equal(world.grid.terrain[i], natural, 'abgelaufen: natürlicher Boden der Karte');
   });
+
   it('Gelände formen zählt als eigener Boden (Schlucht nicht)', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     world.players[0].energy = 400;
@@ -98,8 +107,9 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
   it('auf selbst vorbereitetem Boden ruft der Terraformer nach dem Ritual (4 s) – natürlicher Boden muss erst umgeformt werden', () => {
     const timeToSummon = (prepared: boolean): number => {
       const world = new World({ map: openMap, seed: 1, ...tf });
-      for (let x = 8; x <= 9; x++) {
-        for (let y = 7; y <= 8; y++) {
+      // Seit 26.10.: erst der Boden in der Umgebung, dann der Block – vorbereitet heißt: auch das Umfeld ist schon eigener Boden.
+      for (let x = 6; x <= 12; x++) {
+        for (let y = 5; y <= 11; y++) {
           setTerrain(world, x, y, 'forest');
           if (prepared) world.formed[world.grid.index(x, y)] = 1;
         }
@@ -117,8 +127,8 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
   it('selbst geformten Boden weiter vorn auf der Route sieht er und zieht gezielt dorthin', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     world.players[0].stance.mid = 'push';
-    for (let x = 12; x <= 13; x++) {
-      for (let y = 5; y <= 6; y++) {
+    for (let x = 12; x <= 14; x++) {
+      for (let y = 5; y <= 7; y++) {
         setTerrain(world, x, y, 'forest');
         world.formed[world.grid.index(x, y)] = 1;
       }
@@ -126,13 +136,14 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     const former = unit(world, 0, 'formerForest', 3.5, 5.5, false);
     former.hp = former.maxHp = 1e6; // die kleine Testkarte: das gegnerische HQ ist nah
     let keeper: Entity | undefined;
-    while (!keeper && world.tick < 60 * world.tps) {
+    // Seit 26.10. formt er unterwegs erst den Boden um sich herum – die Beschwörung kommt später.
+    while (!keeper && world.tick < 240 * world.tps) {
       world.step();
       keeper = world.entities.find((e) => e.alive && e.defId === 'specialForest');
     }
     assert.ok(keeper, 'er ruft');
     assert.ok(keeper.pos.x >= 12, `auf dem vorbereiteten Block (x = ${keeper.pos.x.toFixed(1)})`);
-    assert.equal([...world.formed].filter((v) => v === 1).length, 4, 'unterwegs nichts umgeformt');
+    assert.ok([...world.wasteUntil].filter((v) => v > 0).length >= 4, 'der Block wurde zu Ödland');
   });
 
   it('Test-Schalter: maxSummons begrenzt, wie oft ein Terraformer ruft', () => {
@@ -145,14 +156,14 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
         }
       }
       unit(world, 0, 'formerForest', 8.0, 8.0, false);
-      stepTimes(world, 30 * world.tps);
+      stepTimes(world, 90 * world.tps);
       return world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;
     };
     assert.equal(keepers(1), 1);
     assert.ok(keepers(0) >= 2);
   });
 
-  it('Kacheln mit Abklingzeit tragen keine zweite Beschwörung – er braucht neue Kacheln', () => {
+  it('Ödland trägt keine zweite Beschwörung – er braucht neue Kacheln', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     for (let x = 8; x <= 9; x++) {
       for (let y = 7; y <= 8; y++) {
@@ -162,10 +173,10 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     }
     unit(world, 0, 'formerForest', 9.0, 8.0, false);
     const keepers = (): number => world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;
-    while (keepers() < 2 && world.tick < 90 * world.tps) world.step();
+    while (keepers() < 2 && world.tick < 240 * world.tps) world.step();
     assert.equal(keepers(), 2);
-    const cooled = [...world.formed.keys()].filter((i) => world.tileCooldown[i]! > world.tick).length;
-    assert.equal(cooled, 8, 'zwei Beschwörungen, acht verschiedene Kacheln');
+    const waste = [...world.wasteUntil].filter((v) => v > world.tick).length;
+    assert.equal(waste, 8, 'zwei Beschwörungen, acht verschiedene Kacheln');
   });
 
   it('er formt auch eigenen Boden anderer Linien um (ohne Abklingzeit)', () => {

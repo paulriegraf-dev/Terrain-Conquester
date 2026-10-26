@@ -26,25 +26,25 @@ export const MOVE_PROFILES: Readonly<Record<MoveProfileId, MoveProfile>> = {
     id: 'foot',
     name: 'zu Fuß',
     hint: 'Nutzt Deckung: kommt fast ungebremst durch den Wald.',
-    speed: { meadow: 1, forest: 0.95, mud: 0.7, snow: 0.8, mountain: 0, gorge: 0, wall: 0, rubble: 0.7 },
+    speed: { meadow: 1, forest: 0.95, mud: 0.7, snow: 0.8, mountain: 0, gorge: 0, wall: 0, rubble: 0.7, waste: 1 },
   },
   wheels: {
     id: 'wheels',
     name: 'Räder',
     hint: 'Schnell auf Wiese, meidet Matsch und Wald – nimmt lieber Umwege.',
-    speed: { meadow: 1, forest: 0.5, mud: 0.4, snow: 0.7, mountain: 0, gorge: 0, wall: 0, rubble: 0.4 },
+    speed: { meadow: 1, forest: 0.5, mud: 0.4, snow: 0.7, mountain: 0, gorge: 0, wall: 0, rubble: 0.4, waste: 1 },
   },
   tracks: {
     id: 'tracks',
     name: 'Ketten',
     hint: 'Walzt durch Matsch, im Wald schwerfällig.',
-    speed: { meadow: 1, forest: 0.6, mud: 0.85, snow: 0.75, mountain: 0, gorge: 0, wall: 0, rubble: 0.9 },
+    speed: { meadow: 1, forest: 0.6, mud: 0.85, snow: 0.75, mountain: 0, gorge: 0, wall: 0, rubble: 0.9, waste: 1 },
   },
   hover: {
     id: 'hover',
     name: 'Schweber',
     hint: 'Gleitet über Schluchten; Matsch und Schnee bremsen nicht, im Wald langsamer.',
-    speed: { meadow: 1, forest: 0.7, mud: 1, snow: 1, mountain: 0, gorge: 0.8, wall: 0, rubble: 0.9 },
+    speed: { meadow: 1, forest: 0.7, mud: 1, snow: 1, mountain: 0, gorge: 0.8, wall: 0, rubble: 0.9, waste: 1 },
   },
 };
 

@@ -50,7 +50,9 @@ export function settleFactor(world: World, e: Entity): number {
 /** Tempo genau dieser Fabrik: Markt, Phase, Synergie, Notfall – und Einspielen. */
 export function factorySpeed(world: World, e: Entity): number {
   const workshop = stationActive(world, e.owner, e.producer!.route, 'workshop') ? world.rules.sites.workshop : 1; // Werkhalle (Station)
-  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop;
+  // Terra-Former „Erntezeit“ (Gebäude-Ausbau 'tempo'): je Stufe +18 % Tempo für Wächter und Terraformer der Linie.
+  const tempo = 1 + world.rules.terraform.tempoStep * buildingUpgradeLevel(world, e.owner, e.defId as BuildingId, 'tempo');
+  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo;
 }
 
 /**

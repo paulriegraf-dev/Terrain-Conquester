@@ -2,6 +2,7 @@ import { AI_STRATEGIES } from '../ai/simpleAi';
 import { orderCost, scoutCost, scoutDelay } from '../sim/systems/hq';
 import { DISGUISE, SWAP, WALL } from '../data/abilities';
 import { BUILDINGS, HQ } from '../data/buildings';
+import type { BuildingId } from '../data/buildings';
 import { MARKET, MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
 import { OVERTIME_VARIANTS, OVERTIME_VARIANT_IDS } from '../data/rules';
 import type { OvertimeVariant, Rules } from '../data/rules';
@@ -800,6 +801,7 @@ function buildingInfo(e: Entity, world: World): string {
     ? `<p>Beimischung: jeder ${mix.every}. Verband ${escapeHtml(UNITS[mix.unit].name)}${pr.clutch ? ' (einer je Gelege)' : ''}</p>`
     : '') + (mix2 ? `<p>Beimischung: jeder ${mix2.every}. Verband ${escapeHtml(UNITS[mix2.unit].name)}</p>` : '');
   const settle = settleFactor(world, e);
+  const fbStore = world.players[e.owner].faction.buildings[e.defId as BuildingId]?.former ? (world.rules.terraform.storeByLevel[Math.min(pr.level, world.rules.terraform.storeByLevel.length) - 1] ?? 0) : 0;
   const nextSettle = world.rules.settle.find((st) => st.speed > settle);
   const sinceS = (world.tick - pr.unitSince) / tps;
   const settleLine = settle > 1 || nextSettle
@@ -809,6 +811,7 @@ function buildingInfo(e: Entity, world: World): string {
     <p>Stufe ${pr.level} · baut <strong>${escapeHtml(unit.name)}</strong></p>
     ${mixLine}
     ${settleLine}
+    ${fbStore ? `<p>Naturspeicher neuer Terraformer: <strong>${fbStore}</strong> Rufe${pr.level < 3 ? ' (höhere Fabrikstufe = mehr)' : ''}</p>` : ''}
     ${pr.clutch ? `<p>Gelege <strong>${pr.clutch.length} / ${clutchSize(world, e) ?? pr.clutch.length}</strong> – schlüpft gemeinsam (bei Gefahr sofort)</p>` : ''}
     <p class="counters">stark gegen <strong>${escapeHtml(counters.strong)}</strong> · schwach gegen <strong>${escapeHtml(counters.weak)}</strong></p>
     <div class="progress${job ? ' job' : ''}"><i style="width:${Math.min(100, bar * 100)}%"></i></div>

@@ -259,7 +259,7 @@ export interface Rules {
    * Terra-Former (Umbau 23.10.): Terraformer formen möglichst viele Kacheln im Umkreis `workRadius` um sich herum
    * (je Kachel `formSeconds`), rücken langsam vor (Schritt `advanceStep`, beim Halten höchstens `frontOffset` Kacheln
    * über die eigene Grenze) und rufen auf einem 2×2-Block eigener Kacheln ihrer Art nach einem Ritual von
-   * `ritualSeconds` die Spezialeinheit ihrer Linie; die vier Kacheln haben danach `cooldownSeconds` Abklingzeit.
+   * `ritualSeconds` die Spezialeinheit ihrer Linie; die vier Kacheln werden danach `wasteSeconds` lang Ödland.
    * Fertige eigene Blöcke sieht er auf seiner Route bis `preparedRadius` voraus. Jede Fabrik schickt jeden
    * `every`-ten Verband als Terraformer (ab Stufe II jeden `everyLevel2`-ten), auf Stufe III haben Gerufene
    * `level3Hp` × Leben. `summonNeedsRoom`: Gerufene zählen aufs Einheitenlimit. `lineResearch`: Forschung des
@@ -269,8 +269,8 @@ export interface Rules {
    * sie mit ihrem Boden zu – das dauert `gorgeFactor`-mal so lange wie eine Kachel.
    */
   terraform: {
-    formSeconds: number; ritualSeconds: number; cooldownSeconds: number; workRadius: number; advanceStep: number; frontOffset: number;
-    preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
+    formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number;
+    preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; tempoStep: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
   };
   /**
    * Terra-Former: Schlammmonster. Eine 3×3-Zelle mit mindestens `fieldMin` eigenen Matsch-Kacheln ist ein Matschfeld;
@@ -428,8 +428,8 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 2, ritualSeconds: 4, cooldownSeconds: 90, workRadius: 2, advanceStep: 1.5, frontOffset: 2,
-    preparedRadius: 16, maxSummons: 0, summonEvery: 20, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [0, 2, 3], workRadius: 2, startRadius: 6, blockSide: 2, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
+    preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },
   synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },

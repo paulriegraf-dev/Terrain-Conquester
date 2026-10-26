@@ -176,7 +176,7 @@ function mainCommands(ctx: CommandContext): CommandSet {
   }
   buttons.push({
     id: 'terrain', glyph: '≋', label: 'Gelände', key: 't', disabled: !canAct,
-    tip: `Gelände formen: eine ${SWAP.brush}×${SWAP.brush}-Fläche im eigenen Gebiet und bis ${SHAPING_REACH} Kacheln davor umbauen (ab ${SWAP.cost} Energie pro Fläche) – auch Schluchten graben.${p.faction.id === 'terraformer' ? ' Geformter Boden zählt für deine Terraformer: Auf einem fertigen 2×2-Block ihrer Art rufen sie nach kurzem Ritual.' : ''} Anklicken oder darüberziehen.`,
+    tip: `Gelände formen: eine ${SWAP.brush}×${SWAP.brush}-Fläche im eigenen Gebiet und bis ${SHAPING_REACH} Kacheln davor umbauen (ab ${SWAP.cost} Energie pro Fläche) – auch Schluchten graben.${p.faction.id === 'terraformer' ? ' Geformter Boden zählt für deine Terraformer: Auf einem fertigen 2×2-Block ihrer Art rufen sie nach kurzem Ritual (jeder Ruf kostet einen Punkt Naturspeicher, die Kacheln werden 150 s Ödland).' : ''} Anklicken oder darüberziehen.`,
     action: 'menu', data: { menu: 'terrain' },
   });
   return { title: 'Befehle', buttons };

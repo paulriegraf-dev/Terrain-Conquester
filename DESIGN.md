@@ -1897,3 +1897,17 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 ## Terra-Former: Wächter-Bauzeit 6,5 s (26.10.)
 
 Befund aus 1512 Lernpartien: Terra-Former gewinnen 98 %, weil sie rund dreimal so viele Einheiten bauen wie der Technoclan (≈20 gegen 7 je Minute), obwohl der Technoclan die Gefechte gewinnt (Abschüsse 158 : 67). Änderung (Wunsch des Nutzers): Bauzeit der Wächter und Terraformer 4 → 6,5 s (−38 % Ausstoß); Steinbruch bleibt +20 % = 7,8 s. Verringerung später über Gebäude-Ausbau (offen, Brainstorming). Identität „Masse“ gehört den Myriaden; Terra-Former: schwacher Anfang, starkes Ende durch Boden (offen).
+
+## Terra-Former: Naturspeicher-Patch (26.10.)
+
+Ziel: kein Dauernachschub an Gerufenen mehr, ohne globale Obergrenze. Der Nachschub hängt an Fabrikstufe (Menge), Ödland (Fläche) und Zeit.
+
+- **Fabrikstufen sind zurück** (Terra-Former): Stufe II 120 Energie / 20 s, Stufe III 180 / 25 s. Der Ausbau „Eingespielter Boden“ (kleinerer Block) entfällt – der Block ist fest **2×2**.
+- **Naturspeicher** je Terraformer (ganze Zahl, beim Bau gesetzt, füllt sich nie nach): Stufe I = 0 (formt nur), II = 2, III = 3. Unit-Upgrade **Naturspeicher** (+1 für neue Terraformer der Linie, 120 Energie, 20 s). Jeder Ruf kostet 1; beim letzten Punkt geht der Terraformer selbst im Wesen auf. Anzeige: Punkte über dem Terraformer, Zeile im Fabrik-Tooltip.
+- **Ruf-Pause 10 s** (technisch; vorher 15/20 s). Die Zeit je Kachel bleibt 1,5 s.
+- **Ödland** (neuer Boden, 150 s): Die vier Kacheln eines Rufs werden Ödland – kein Boden-Bonus, nicht formbar, nicht kaufbar, kein Erdwall, zählt nicht als Block; Bewegung wie Wiese. Danach der **natürliche** Boden der Karte. Ersetzt die 90-s-Abklingzeit.
+- **KI:** Terraformer mit Speicher suchen Blöcke eher am vorderen Rand (Gewicht 0,4 statt 0,2); die erste Fabrik wird bei zwei Fabriken und 150 Energie auf Stufe II gebracht; hat ein Terraformer mit Speicher keinen Block in Reichweite, kauft die KI vor ihm Gelände (Schalter `AI_TUNING.buyForStorers`).
+- **Kraft-Pool** (4 volle Gerufene je Beschwörer, −8 % je weiterem, min. 50 %, „Starke Gerufene“ +2) bleibt als Schalter (`terraform.poolFree`, Standard aus = 999).
+- **Schrauben, nicht anfassen:** Preis des 2×2 = Energiepreis eines Rufs; Gerufene-Werte; Lane-Synergien (danach separat).
+- **Offen / geplant:** Gelände (kaufbar) von 3×3 auf 2×2, über HQ-Upgrades verbreiterbar; Beschwörer an Fabrik-Upgrades binden; Beschwörungsverhalten mit Zählen im Umkreis und festem Schritt.
+- **Messwerte davor** (Lauf 1/2, Varianten-Test): Lauf 1 (Bauzeit 6,5 s) 42 % Siege der Terra-Former; Phase 2 mit Block 3×3 nur 9 %; Block 2×2 (Variante C, 24 Partien) 46 %.

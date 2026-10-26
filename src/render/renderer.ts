@@ -615,6 +615,17 @@ export class Renderer {
               g.fillRect(px + ox * t, py + oy * t, s, s);
             }
             break;
+          case 'waste':
+            g.strokeStyle = 'rgba(25,18,10,0.45)';
+            g.lineWidth = Math.max(1, t * 0.06);
+            g.beginPath();
+            g.moveTo(px + t * 0.15, py + t * (0.25 + n * 0.3));
+            g.lineTo(px + t * 0.55, py + t * 0.55);
+            g.lineTo(px + t * 0.85, py + t * (0.45 + n * 0.3));
+            g.moveTo(px + t * 0.55, py + t * 0.55);
+            g.lineTo(px + t * 0.45, py + t * 0.9);
+            g.stroke();
+            break;
           case 'mountain':
             g.fillStyle = 'rgba(255,255,255,0.08)';
             g.fillRect(px, py, t, t * 0.18);
@@ -889,6 +900,19 @@ export class Renderer {
       ctx.font = `${Math.max(9, Math.round(t * 0.5))}px ${MONO}`;
       ctx.textAlign = 'center';
       ctx.fillText(e.tf.waiting ? '4/4 · Limit' : `${e.tf.done}/4`, e.pos.x * t, e.pos.y * t - t * 0.7);
+    }
+    // Naturspeicher (26.10.): Punkte über jedem Terraformer – so viele Rufe hat er noch
+    for (const e of world.entities) {
+      const store = e.tf?.store;
+      if (!e.alive || !store || store <= 0) continue;
+      if (view.fog && view.human !== null && e.owner !== view.human && !world.isVisibleTo(view.human, e)) continue;
+      const r = Math.max(2, t * 0.09);
+      ctx.fillStyle = withAlpha(PALETTE.player[e.owner], 0.95);
+      for (let k = 0; k < store; k++) {
+        ctx.beginPath();
+        ctx.arc(e.pos.x * t + (k - (store - 1) / 2) * r * 2.6, e.pos.y * t - t * 0.45, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

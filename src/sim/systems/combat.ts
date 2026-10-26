@@ -81,6 +81,7 @@ export function updateCombat(world: World): void {
     if (damage <= 0) continue;
     if (e.tf) damage *= ambushFactor(world, e) * synergyDamageFactor(world, e); // Hinterhalt, Blühende Wiese
     if (e.weaken && world.tick < e.weaken.until) damage *= e.weaken.damage; // geschwächt (Schlammschleuder)
+    if (e.power !== undefined) damage *= e.power; // Gerufener mit gemindertem Kraft-Pool des Beschwörers
     damage *= flankFactor(world, e); // Flankenangriff nach dem Überqueren einer gegnerischen Schlucht
     // Technoclan-Verbund/Elite (25.10.): Ansitz (still gestanden) und Kopfschuss (erster Treffer auf ein neues Ziel).
     const tech = e.tech;

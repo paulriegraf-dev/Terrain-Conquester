@@ -27,6 +27,7 @@ import { checkHqUpgrade, gorgeLimit } from '../sim/systems/hq';
 import type { HqPathId } from '../data/hq';
 import type { FactionId } from '../data/factions';
 import { controllerAt } from '../sim/systems/influence';
+import { formerNeedsBlock } from '../sim/systems/terraform';
 import type { TerrainId } from '../data/terrain';
 import { TERRAIN_INDEX } from '../data/terrain';
 import { checkBuyHero } from '../sim/systems/hero';
@@ -156,8 +157,8 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1 };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -646,13 +647,18 @@ export class SimpleAi {
       }
     }
 
+    // Terra-Former (Naturspeicher-Patch): ohne Fabrikstufe II rufen Terraformer nie – die erste Fabrik wird früh hochgestuft,
+    // sobald zwei Fabriken stehen (Stufen warten sonst bis zur vierten, siehe buildFirst).
+    if (me.faction.id === 'terraformer' && factories.length >= 2 && !factories.some((f) => f.producer!.level >= 2) && me.energy >= 150) {
+      const first = factories.find((f) => checkLevelUp(world, f).ok);
+      if (first) return { type: 'upgradeFactory', entityId: first.id };
+    }
     // 2. Hochstufen oder forschen, wenn Energie übrig ist (Energie ist sonst schnell am Maximum).
     if (me.energy < reserve + 80) return null;
     // Aufbau zuerst (AI_TUNING.buildFirst): nur vom Überschuss über die Fabrik-Rücklage.
     const keep = AI_TUNING.buildFirst ? Math.max(reserve, this.saving) : reserve;
     if (this.rng.chance(0.6)) {
-      // Gebäude-Ausbau (24.10., zentral je Gebäudeart: Gelege, Terraformer-Takt, Gerufene) – Terra-Former haben keine
-      // Fabrikstufen mehr, für sie ist das der einzige Ausbau.
+      // Gebäude-Ausbau (24.10., zentral je Gebäudeart: Gelege, Terraformer-Takt, Gerufene).
       const building = this.pickBuildingUpgrade(world, keep);
       const candidates = factories.filter((f) => checkLevelUp(world, f).ok);
       if (building && (candidates.length === 0 || this.rng.chance(0.5))) return building;
@@ -665,6 +671,7 @@ export class SimpleAi {
           const lvl = f.producer!.level;
           const now = Math.max(...tiers.slice(0, lvl).map((u, k) => scoreOf(u, k + 1)));
           const next = tiers[lvl];
+          if (fbd.former) return lvl === 1 ? 1.5 : 1.2; // Terra-Former: die Stufe ist der Naturspeicher (II = 2, III = 3 Rufe)
           if (next) return scoreOf(next, lvl + 1) / Math.max(0.1, now);
           // Beimischung (Unterstützer): die erste solche Fabrik hat Vorrang, sobald eine Armee steht – Unterstützer sollen
           // auftauchen (Wunsch 24.10.); sie kosten keine Linie.
@@ -715,7 +722,7 @@ export class SimpleAi {
       const c = checkResearch(world, this.player, u.id);
       if (!c.ok || me.energy < c.cost + keep) continue;
       const count = this.ownBuildings(world).filter((b) => b.defId === u.building).length;
-      const value = count * (u.kind === 'summons' ? 0.8 : 1);
+      const value = count * (u.kind === 'summons' ? 0.8 : u.kind === 'tempo' ? 0.9 : 1);
       if (value <= 0) continue;
       if (!best || value > best.value + 1e-9 || (Math.abs(value - best.value) <= 1e-9 && u.id < best.id)) best = { id: u.id, value };
     }
@@ -1063,6 +1070,25 @@ export class SimpleAi {
     const f = this.profile.terrain;
     if (f <= 0 || world.seconds < 90 || world.tick - this.lastShape < (20 / f) * world.tps) return null;
     if (this.spare(world) < (f >= 2 ? 60 : 110)) return null;
+    // Naturspeicher-Patch (26.10.): Hat ein Terra-Former-Terraformer mit Speicher keinen Block in Reichweite, kauft die KI
+    // ein 2×2 (die 3×3-Fläche enthält eines) vor ihm – am vorderen Rand, wenn die Energie über dem Puffer liegt.
+    if (AI_TUNING.buyForStorers && world.players[this.player].faction.id === 'terraformer' && this.spare(world) >= 80) {
+      const dirS = this.player === 0 ? 1 : -1;
+      const storer = world.entities.find((e) => e.owner === this.player && formerNeedsBlock(world, e));
+      if (storer) {
+        const ground = UNITS[storer.defId as UnitId].ground!;
+        for (const ahead of [2, 3, 1, 4]) {
+          for (const dy of [0, -1, 1, -2, 2]) {
+            const x = Math.floor(storer.pos.x) + dirS * ahead;
+            const y = Math.floor(storer.pos.y) + dy;
+            if (checkSwapArea(world, this.player, x, y, ground).ok) {
+              this.lastShape = world.tick;
+              return { type: 'swapTerrain', x, y, terrain: ground };
+            }
+          }
+        }
+      }
+    }
     const pressure = [...ROUTES].sort((a, b) => this.seenByRoute[b] - this.seenByRoute[a]);
     const route = this.seenByRoute[pressure[0]!] > 0.5 ? pressure[0]! : this.rng.chance(0.3) ? this.rng.pick(ROUTES) : null;
     if (!route) return null;

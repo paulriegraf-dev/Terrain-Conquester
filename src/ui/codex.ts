@@ -68,7 +68,7 @@ export function factionEntries(f: FactionId): Entry[] {
     if (fb.former) {
       add(fb.former, `${fb.name} · jeder ${RULES.terraform.every}. Verband`);
       const special = UNITS[fb.former].former?.special;
-      if (special) add(special, `ruft der ${UNITS[fb.former].name} auf 2×2 eigenem Boden`);
+      if (special) add(special, `ruft der ${UNITS[fb.former].name} auf einem 2×2-Block eigenen Bodens – Naturspeicher: Fabrikstufe I 0, II 2, III 3 Rufe; die Kacheln werden danach 150 s Ödland`);
     }
   }
   for (const e of [...out]) {

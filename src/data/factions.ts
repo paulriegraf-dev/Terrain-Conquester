@@ -41,6 +41,8 @@ export interface UpgradeEffect {
   save?: number;
   /** Lebensuhr: +n Sekunden bis zum Verfall (nur für Einheiten mit Lebensuhr). */
   lifespan?: number;
+  /** Terra-Former (26.10.): Naturspeicher +n – so viele Rufe mehr je neu gebautem Terraformer der Linie. */
+  store?: number;
   /** Durchschuss: Jeder Schuss trifft mit diesem Anteil auch den nächsten Gegner dahinter. */
   pierce?: number;
 }
@@ -100,8 +102,9 @@ export interface FactionBuilding {
  * - `clutch`: Gelege der Myr-Brut größer (je Stufe ein Eintrag weiter in `clutch`).
  * - `formers`: Terra-Former – Terraformer kommen öfter (rules.terraform.everyLevel2 statt every).
  * - `summons`: Terra-Former – gerufene Spezialeinheiten der Linie mit rules.terraform.level3Hp Leben.
+ * - `tempo`: Terra-Former – Wächter und Terraformer der Linie schneller (rules.terraform.tempoStep je Stufe).
  */
-export type BuildingUpgradeKind = 'clutch' | 'formers' | 'summons';
+export type BuildingUpgradeKind = 'clutch' | 'formers' | 'summons' | 'tempo';
 
 export interface BuildingUpgradeDef {
   id: string;
@@ -296,6 +299,11 @@ function buildingChain(building: BuildingId, kind: BuildingUpgradeKind, steps: r
 const tfLine = (building: BuildingId): BuildingUpgradeDef[] => [
   ...buildingChain(building, 'formers', [{ name: 'Mehr Terraformer', description: 'jeder vierte statt jeder fünfte Verband ist ein Terraformer', cost: 100, seconds: 18 }]),
   ...buildingChain(building, 'summons', [{ name: 'Starke Gerufene', description: 'gerufene Spezialeinheiten dieser Linie +25 % Leben', cost: 160, seconds: 25 }]),
+  // 26.10.: Wächter-Bauzeit 6,5 s (vorher 4) – der Ausbau holt sie zurück (Stufe I ≈ 5,5 s, II ≈ 4,8 s).
+  ...buildingChain(building, 'tempo', [
+    { name: 'Erntezeit I', description: 'Wächter und Terraformer dieser Linie kommen 18 % schneller', cost: 110, seconds: 20 },
+    { name: 'Erntezeit II', description: 'noch einmal 18 % schneller (insgesamt 36 %)', cost: 170, seconds: 28 },
+  ]),
 ];
 
 export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
@@ -387,21 +395,28 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     prepPlacements: 8,
     description: 'Raum statt Masse oder Technik: je Bodenart eine Fabrik, zähe Wächter, Terraformer formen Boden und rufen Spezialeinheiten.',
     buildings: {
-      meadowhall: { name: 'Wiesenhof', letter: 'W', tiers: ['wardMeadow'], former: 'formerMeadow' },
-      grove: { name: 'Hain', letter: 'H', tiers: ['wardForest'], former: 'formerForest' },
-      mudpit: { name: 'Schlammgrube', letter: 'M', tiers: ['wardMud'], former: 'formerMud' },
-      frosthall: { name: 'Frosthalle', letter: 'F', tiers: ['wardSnow'], former: 'formerSnow' },
-      quarry: { name: 'Steinbruch', letter: 'G', tiers: ['wardRubble'], former: 'formerRubble' },
+      meadowhall: { name: 'Wiesenhof', letter: 'W', tiers: ['wardMeadow'], levels: 3, former: 'formerMeadow' },
+      grove: { name: 'Hain', letter: 'H', tiers: ['wardForest'], levels: 3, former: 'formerForest' },
+      mudpit: { name: 'Schlammgrube', letter: 'M', tiers: ['wardMud'], levels: 3, former: 'formerMud' },
+      frosthall: { name: 'Frosthalle', letter: 'F', tiers: ['wardSnow'], levels: 3, former: 'formerSnow' },
+      quarry: { name: 'Steinbruch', letter: 'G', tiers: ['wardRubble'], levels: 3, former: 'formerRubble' },
     },
-    // 24.10.: Terra-Former-Fabriken haben keine Stufen mehr – ihre Boni (Terraformer öfter, Gerufene stärker) sind
-    // zentraler Gebäude-Ausbau je Linie (vorher Stufe II und III, 100 / 160 Energie).
-    levelUpgrades: [],
+    // 26.10. (Naturspeicher-Patch): Die Fabrikstufen sind zurück – sie bestimmen, wie viele Rufe ein neuer Terraformer
+    // der Linie hat: Stufe I 0, II 2, III 3 (rules.terraform.storeByLevel). „Mehr Terraformer“ und „Starke Gerufene“
+    // bleiben zentraler Gebäude-Ausbau.
+    levelUpgrades: [
+      { cost: 120, seconds: 20 },
+      { cost: 180, seconds: 25 },
+    ],
     upgrades: [
       ...weapons('wardMeadow', ['S', 'AP', 'D']), ...armor('wardMeadow', ['T', 'SV', 'W']),
       ...weapons('wardForest', ['S', 'AP', 'D']), ...armor('wardForest', ['T', 'SV', 'W']),
       ...weapons('wardMud', ['S', 'BS', 'D']), ...armor('wardMud', ['T', 'SV', 'W']),
       ...weapons('wardSnow', ['S', 'AP', 'D']), ...armor('wardSnow', ['T', 'SV', 'W']),
       ...weapons('wardRubble', ['S', 'AP', 'D']), ...armor('wardRubble', ['T', 'W', 'W']),
+      // 26.10.: Naturspeicher +1 – gilt für neu gebaute Terraformer der Linie (ein Ruf mehr).
+      ...(['wardMeadow', 'wardForest', 'wardMud', 'wardSnow', 'wardRubble'] as const).map((w) =>
+        special(w, `${w}-store`, 'Naturspeicher', 'neue Terraformer dieser Linie rufen einmal öfter', 100, 20, { store: 1 })),
     ],
     buildingUpgrades: [...tfLine('meadowhall'), ...tfLine('grove'), ...tfLine('mudpit'), ...tfLine('frosthall'), ...tfLine('quarry')],
     hero: { unit: 'landformer', cost: 200, respawnSeconds: 45 },

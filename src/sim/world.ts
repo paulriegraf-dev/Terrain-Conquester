@@ -340,6 +340,8 @@ export class World {
    * weitere (Index p × Kacheln + Kachel; 0 = frei).
    */
   readonly tileCooldown: Uint32Array;
+  /** Terra-Former (26.10.): Ödland – bis zu diesem Tick bleibt die Kachel Ödland (0 = kein Ödland); danach der natürliche Boden. */
+  readonly wasteUntil: Uint32Array;
   /** Terra-Former: Lane-Synergie je Spieler (alle 5 s neu bestimmt, siehe systems/synergy.ts). */
   synergy: [SynergyState, SynergyState] = [NO_SYNERGY, NO_SYNERGY];
   /** Terra-Former: Schlammmonster-Gelege je Matschfeld (Index der 3×3-Zelle → gesammelte Sekunden), je Spieler. */
@@ -399,6 +401,7 @@ export class World {
     this.siteStates = initialSites(this);
     this.formed = new Uint8Array(cells);
     this.tileCooldown = new Uint32Array(cells * 2);
+    this.wasteUntil = new Uint32Array(cells);
 
     const factions = config.factions ?? ['technoclan', 'technoclan'];
     this.players = [this.createPlayer(0, factions[0]), this.createPlayer(1, factions[1])];
@@ -868,7 +871,7 @@ export class World {
   upgradeEffects(owner: PlayerId, unit: UnitId): UpgradeEffect {
     const p = this.players[owner];
     const fx: Required<UpgradeEffect> = {
-      hp: 1, damage: 1, speed: 1, heal: 1, vision: 0, range: 0, splash: 0, strength: 0, ap: 0, hit: 0, toughness: 0, save: 0, lifespan: 0, pierce: 0,
+      hp: 1, damage: 1, speed: 1, heal: 1, vision: 0, range: 0, splash: 0, strength: 0, ap: 0, hit: 0, toughness: 0, save: 0, lifespan: 0, pierce: 0, store: 0,
     };
     // Terra-Former: Forschung der Linie (Wächter) gilt auch für Terraformer und Gerufene.
     const line = this.rules.terraform.lineResearch ? lineUnit(unit) : unit;

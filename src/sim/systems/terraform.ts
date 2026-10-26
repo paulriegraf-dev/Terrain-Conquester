@@ -1,7 +1,7 @@
 import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
-import { UNITS } from '../../data/units';
+import { UNITS, lineUnit } from '../../data/units';
 import type { GroundBonus, UnitDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { BUILD_ZONE } from '../map';
@@ -39,6 +39,7 @@ export function updateTerraform(world: World): void {
   if (world.merges.length > 0) world.merges = world.merges.filter((m) => world.tick < m.until);
   updateSynergy(world);
   updateGround(world);
+  expireWaste(world);
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
@@ -164,8 +165,34 @@ export function camouflageRange(world: World, e: Entity): number | null {
 // ------------------------------------------------------------------ Terraformer
 
 /** Abklingzeit: Bis zu diesem Tick trägt die Kachel Spieler p keine Beschwörung (und wird nicht umgeformt). */
-export function cooling(world: World, i: number, p: PlayerId): boolean {
-  return world.tileCooldown[p * world.formed.length + i]! > world.tick;
+export function cooling(world: World, i: number, _p: PlayerId): boolean {
+  return world.grid.terrain[i] === TERRAIN_INDEX.waste;
+}
+
+/** Ödland (26.10.): abgelaufenes Ödland wird wieder natürlicher Boden der Karte (nicht der geformte). */
+function expireWaste(world: World): void {
+  if (world.tick % world.tps !== 0) return;
+  for (let i = 0; i < world.wasteUntil.length; i++) {
+    const until = world.wasteUntil[i]!;
+    if (until === 0 || world.tick < until) continue;
+    world.wasteUntil[i] = 0;
+    if (world.grid.terrain[i] === TERRAIN_INDEX.waste) world.grid.setTerrain(i, world.map.terrain[i]!);
+  }
+}
+
+/** Naturspeicher eines neuen Terraformers (26.10.): nach Fabrikstufe der Linie, dazu die Einheiten-Upgrades „Naturspeicher“. Füllt sich nie nach. */
+function initialStore(world: World, e: Entity): number {
+  const p = world.players[e.owner];
+  const b = e.fromBuilding !== undefined ? world.entities.find((x) => x.id === e.fromBuilding) : undefined;
+  const level = b?.producer?.level ?? 1;
+  const base = world.rules.terraform.storeByLevel;
+  let store = level <= 1 ? 0 : (base[Math.min(level, base.length) - 1] ?? 0);
+  const line = lineUnit(e.defId as UnitId);
+  for (const id of p.research) {
+    const u = p.faction.upgrades.find((x) => x.id === id);
+    if (u?.effect.store && lineUnit(u.unit) === line) store += u.effect.store;
+  }
+  return store;
 }
 
 /**
@@ -184,6 +211,7 @@ export function ownGroundTile(world: World, i: number, p: PlayerId, ground: numb
 export function convertible(world: World, i: number, p: PlayerId, ground: number): boolean {
   const g = world.grid;
   if (ownGroundTile(world, i, p, ground) || world.locked[i] || g.structure[i] !== 0) return false;
+  if (g.terrain[i] === TERRAIN_INDEX.waste) return false;
   if (!TERRAIN_LIST[g.terrain[i]!]!.solid || g.terrain[i] === TERRAIN_INDEX.wall) return false;
   if (world.map.buildZone[i] === BUILD_ZONE.base) return false;
   if (cooling(world, i, p)) return false;
@@ -196,7 +224,15 @@ function blockCells(world: World, r: CellRect): number[] {
   return out;
 }
 
-/** Block für eine Beschwörung: vier eigene Kacheln seiner Art ohne Abklingzeit. */
+/**
+ * Größe des Beschwörungsblocks (26.10.): Grundgröße 3×3 (9 Kacheln); der Gebäude-Ausbau „Eingespielter Boden“ der Linie
+ * verkleinert sie auf 3×2 / 2×3 (Stufe I) und 2×2 (Stufe II).
+ */
+export function blockDims(world: World, _p: PlayerId, _former: UnitId): readonly (readonly [number, number])[] {
+  return [[world.rules.terraform.blockSide, world.rules.terraform.blockSide]];
+}
+
+/** Block für eine Beschwörung: alle Kacheln des Blocks sind eigene Kacheln seiner Art ohne Abklingzeit. */
 function readyBlock(world: World, r: CellRect, p: PlayerId, ground: number): boolean {
   return blockCells(world, r).every((i) => ownGroundTile(world, i, p, ground) && !cooling(world, i, p));
 }
@@ -227,27 +263,40 @@ function findReadyBlock(world: World, e: Entity, ground: number, far = true): Ce
   const dir = forward(world, p);
   const near = Math.ceil(world.rules.terraform.workRadius) + 1;
   const RP = far ? Math.max(near, world.rules.terraform.preparedRadius) : near;
+  const dims = blockDims(world, p, e.defId as UnitId);
   let best: CellRect | null = null;
   let bestScore = -Infinity;
   for (let y = cy - RP; y <= cy + RP; y++) {
     for (let x = cx - RP; x <= cx + RP; x++) {
-      if (!g.inBounds(x, y) || !g.inBounds(x + 1, y + 1)) continue;
-      const far = Math.abs(x - cx) > near || Math.abs(y - cy) > near;
-      if (far && (Math.abs(y + 1 - routeY) > 6 || (x + 1 - e.pos.x) * dir < -1)) continue; // weit weg nur voraus auf der Route
-      const r = { x, y, w: 2, h: 2 };
-      if (!readyBlock(world, r, p, ground)) continue;
-      if (!push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
-      const mx = x + 1;
-      const my = y + 1;
-      const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
-      const score = 0.2 * (mx - e.pos.x) * dir - d;
-      if (score > bestScore + 1e-9) {
-        bestScore = score;
-        best = r;
+      if (!g.inBounds(x, y)) continue;
+      for (const [w, h] of dims) {
+        if (!g.inBounds(x + w - 1, y + h - 1)) continue;
+        const mx = x + w / 2;
+        const my = y + h / 2;
+        const distant = Math.abs(x - cx) > near || Math.abs(y - cy) > near;
+        if (distant && (Math.abs(my - routeY) > 6 || (mx - e.pos.x) * dir < -1)) continue; // weit weg nur voraus auf der Route
+        const r = { x, y, w, h };
+        if (!readyBlock(world, r, p, ground)) continue;
+        if (!push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
+        const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
+        const score = 0.4 * (mx - e.pos.x) * dir - d;
+        if (score > bestScore + 1e-9) {
+          bestScore = score;
+          best = r;
+        }
       }
     }
   }
   return best;
+}
+
+/** Terraformer mit Naturspeicher, der noch keinen fertigen Block in Reichweite hat (für den KI-Kauf eines Blocks, 26.10.). */
+export function formerNeedsBlock(world: World, e: Entity): boolean {
+  const def = UNITS[e.defId as UnitId];
+  if (!e.alive || !e.tf || !def.former || e.tf.block) return false;
+  const store = e.tf.store ?? initialStore(world, e);
+  if (store <= 0 || world.tick < (e.tf.nextSummon ?? 0)) return false;
+  return findReadyBlock(world, e, TERRAIN_INDEX[def.ground!], true) === null;
 }
 
 /** Nächste umformbare Kachel im Umkreis: zuerst Kacheln, die noch nicht eigener Boden sind; bei Gleichstand weiter vorn. */
@@ -350,7 +399,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       tf.workTick = 0;
       m.goal = null;
     } else {
-      const center = { x: tf.block.x + 1, y: tf.block.y + 1 };
+      const center = { x: tf.block.x + tf.block.w / 2, y: tf.block.y + tf.block.h / 2 };
       m.goal = center;
       tf.done = 4;
       const near = (e.pos.x - center.x) * (e.pos.x - center.x) + (e.pos.y - center.y) * (e.pos.y - center.y) <= 1.2 * 1.2;
@@ -363,11 +412,26 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       // Das Einheitenlimit gilt auch für Gerufene: Ist es voll, wartet der Terraformer auf seinem Block.
       tf.waiting = !hasRoom(world, p, def.former!.special);
       if (tf.waiting) return;
-      const until = world.tick + Math.round(rules.cooldownSeconds * world.tps);
-      for (const i of blockCells(world, tf.block)) world.tileCooldown[p * world.formed.length + i] = until;
-      summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
+      // Ödland (26.10.): die vier Kacheln sind wasteSeconds lang Ödland; der Ruf kostet einen Punkt Naturspeicher.
+      const until = world.tick + Math.round(rules.wasteSeconds * world.tps);
+      for (const i of blockCells(world, tf.block)) {
+        world.wasteUntil[i] = until;
+        world.formed[i] = 0;
+        world.grid.setTerrain(i, TERRAIN_INDEX.waste);
+        world.players[p].vision.learn(i);
+      }
+      const made = summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
+      tf.store = (tf.store ?? 0) - 1;
       tf.summons = (tf.summons ?? 0) + 1;
       tf.nextSummon = world.tick + Math.round(rules.summonEvery * world.tps);
+      if (tf.store <= 0) {
+        // Letzter Punkt: Der Terraformer geht selbst in das Wesen über – es erscheint an seiner Stelle.
+        made.pos.x = e.pos.x;
+        made.pos.y = e.pos.y;
+        made.prev.x = e.pos.x;
+        made.prev.y = e.pos.y;
+        e.alive = false; // aufgegangen, nicht gefallen
+      }
       tf.block = null;
       tf.done = 0;
       tf.workTick = 0;
@@ -377,7 +441,8 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   // Rufen nur, solange die Kraft reicht (rules.terraform.maxSummons) und seine eigene Pause (summonEvery) um ist –
   // sonst formt er nur weiter Boden (für Linien-Boni und Synergien).
-  const canSummon = (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
+  if (tf.store === undefined) tf.store = initialStore(world, e);
+  const canSummon = tf.store > 0 && (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
   // 2. Kachel in Arbeit (auch eine gegnerische Schlucht, die er zuschüttet)
   if (tf.workCell !== undefined && tf.workCell >= 0) {
     const i = tf.workCell;
@@ -415,17 +480,28 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   // Reihenfolge (24.10.): fertiger Block in der Nähe → Arbeit in der Nähe → vorbereiteter Block weiter voraus →
   // vorrücken. So formt er das Gelände nahe der Basis, statt daran vorbeizulaufen.
+  // 26.10. (Wunsch des Nutzers): zuerst den Boden in der Umgebung umformen, erst danach fertige Blöcke – wer nur am Rand
+  // formt, bekommt seine Gerufenen später. Ein neuer Terraformer beginnt bei sich: nächste umformbare Kachel bis startRadius.
   const cell = nextWorkCell(world, e, ground, rules.workRadius);
-  const block = canSummon ? findReadyBlock(world, e, ground, cell === null) : null;
+  const block = canSummon && cell === null ? findReadyBlock(world, e, ground, true) : null;
   if (block) {
     tf.block = block;
     tf.workTick = 0;
     tf.workCell = -1;
-    m.goal = { x: block.x + 1, y: block.y + 1 };
+    m.goal = { x: block.x + block.w / 2, y: block.y + block.h / 2 };
     return;
   }
   tf.done = 0;
+  if (cell === null && !tf.started) {
+    const first = nextWorkCell(world, e, ground, rules.startRadius);
+    if (first !== null) {
+      m.goal = { x: (first % world.grid.width) + 0.5, y: Math.floor(first / world.grid.width) + 0.5 };
+      tf.workCell = -1;
+      return;
+    }
+  }
   if (cell !== null) {
+    tf.started = true;
     tf.workCell = cell;
     tf.workTick = world.tick + Math.round(rules.formSeconds * world.tps);
     m.goal = here;
@@ -460,9 +536,30 @@ function strongSummons(world: World, p: PlayerId, former: UnitId): boolean {
   return false;
 }
 
+/**
+ * Kraft-Pool (26.10.): Die ersten `poolFree` lebenden Gerufenen eines Terraformers sind voll stark, jeder weitere hat
+ * `poolDecay` weniger Leben und Schaden (mindestens `poolFloor`). „Starke Gerufene“ erhöht die vollen Plätze um `poolStrong`.
+ * Der Wert wird beim Rufen festgelegt und bleibt danach; fällt ein Gerufener, ist der Pool beim nächsten Rufen wieder größer.
+ */
+export function summonPower(world: World, former: Entity, strong: boolean): number {
+  const r = world.rules.terraform;
+  let alive = 0;
+  for (const e of world.entities) if (e.alive && e.summoner === former.id) alive++;
+  const over = alive + 1 - (r.poolFree + (strong ? r.poolStrong : 0));
+  return over <= 0 ? 1 : Math.max(r.poolFloor, 1 - r.poolDecay * over);
+}
+
 /** Spezialeinheit rufen (mit „Starke Gerufene“: +25 % Leben). */
 function summon(world: World, former: Entity, unit: UnitId, at: { x: number; y: number }, strong: boolean): Entity {
+  const power = summonPower(world, former, strong);
   const s = world.addUnit(former.owner, UNITS[unit], { x: at.x, y: at.y }, former.mover!.route);
+  s.summoner = former.id;
+  if (power < 1) {
+    s.power = power;
+    s.maxHp *= power;
+    s.hp *= power;
+    s.modelWounds *= power;
+  }
   if (strong) {
     const k = world.rules.terraform.level3Hp;
     s.maxHp *= k;

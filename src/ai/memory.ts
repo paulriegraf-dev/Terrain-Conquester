@@ -68,6 +68,23 @@ export function relativeEfficiency(stats: LineStat[], minBuilt: number): Map<Uni
   return out;
 }
 
+/**
+ * Bewertung nach dem Spiel (26.10., Wunsch des Nutzers): nicht nur Schaden, sondern auch eingesteckter Schaden („Tank“)
+ * zählt – `taken` ist der Schaden, den der Gegner auf eigene Einheiten gemacht hat (Stat `damageTo` des Gegners).
+ * Wert = (Schaden + TANK_WEIGHT × getankt) je gebauter Einheit und Bau-Sekunde. Wurf-Geschosse (Myr-Drohnen von Kanone
+ * und Katapult) und Unterstützer bleiben unbewertet – ihr Nutzen steckt nicht im eigenen Schaden.
+ */
+export const TANK_WEIGHT = 0.5;
+
+export function lineStatsFull(stats: Pick<PlayerStats, 'damageBy' | 'spawned'>, taken: Record<string, number> = {}): LineStat[] {
+  const thrown = new Set<UnitId>(UNIT_IDS.map((u) => UNITS[u].launch?.unit).filter(Boolean) as UnitId[]);
+  const tank = new Map<UnitId, number>();
+  for (const [k, v] of Object.entries(taken)) if (k in UNITS) tank.set(lineUnit(k as UnitId), (tank.get(lineUnit(k as UnitId)) ?? 0) + v);
+  return lineStats(stats)
+    .filter((s) => !thrown.has(s.line))
+    .map((s) => ({ ...s, eff: (s.damage + TANK_WEIGHT * (tank.get(s.line) ?? 0)) / s.built / UNITS[s.line].spawnInterval }));
+}
+
 export interface MatchupMemory {
   games: number;
   wins: number;
@@ -95,12 +112,12 @@ export class AiMemory {
    * Nach einer Partie lernen. `result`: 1 Sieg, 0 offen, −1 Niederlage.
    * Gibt eine kurze Notiz zurück, was sich geändert hat (für den Bericht).
    */
-  learn(key: string, own: FactionId, stats: PlayerStats, result: 1 | 0 | -1): string {
+  learn(key: string, own: FactionId, stats: PlayerStats, result: 1 | 0 | -1, taken?: Record<string, number>): string {
     const m = this.get(key, own);
     m.games++;
     if (result > 0) m.wins++;
     if (result < 0) m.losses++;
-    const rel = relativeEfficiency(lineStats(stats), 2);
+    const rel = relativeEfficiency(taken ? lineStatsFull(stats, taken) : lineStats(stats), 2);
     const changes: string[] = [];
     for (const [line, { rel: r, share }] of rel) {
       const before = m.unitBias[line] ?? 1;

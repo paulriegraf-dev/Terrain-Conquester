@@ -194,6 +194,9 @@ export interface Entity {
   };
   /** Zielmarkierung einer gegnerischen Elite: wer zu `owner` gehört, trifft dieses Ziel bis `until` um 1 besser. */
   mark?: { owner: PlayerId; until: number };
+  /** Terra-Former (26.10.): Kraft eines Gerufenen (1 = voll; sinkt, wenn sein Beschwörer schon viele lebende Gerufene hat) und wer ihn gerufen hat. Gilt ab dem Rufen. */
+  power?: number;
+  summoner?: number;
   /** Myr-Kanone (25.10.): Stein-Modus aktiv (viele Schwere rundum). */
   stoneMode?: boolean;
   /** Myr-Drohnen (25.10.): Tempo-Faktor nahe der eigenen Basis (alle 10 Ticks neu), Ansturm bis/nächster ab (Ticks). */
@@ -210,7 +213,7 @@ export interface Entity {
    * Terra-Former: auf eigenem Boden? Terraformer: aktueller 2×2-Block, fertige Kacheln, nächster
    * Arbeitsschritt (Tick), Stufe der Fabrik. Fähigkeiten: nächster Einsatz, letzter Schuss.
    */
-  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; nextSummon?: number; workCell?: number; home?: Vec2; gb?: GroundBonus | null };
+  tf?: { onGround: boolean; block: CellRect | null; done: number; workTick: number; level: number; nextAbility: number; lastShot: number; waiting?: boolean; summons?: number; store?: number; nextSummon?: number; workCell?: number; started?: boolean; home?: Vec2; gb?: GroundBonus | null };
   /**
    * Technoclan-Netzwerk: Netz-ID (0 = in keinem Netz), Protokolle (eigenes + geerbte) und
    * Aufstieg bis Tick.
