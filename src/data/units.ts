@@ -20,11 +20,12 @@ export type UnitId =
   // Myriaden
   | 'drone' | 'bomber' | 'hound' | 'myrcannon' | 'catapult' | 'sphere' | 'swarmmind' | 'taunter'
   // Terra-Former: je Bodenart Wächter, Terraformer und gerufene Spezialeinheit, dazu der Held
-  | 'wardMeadow' | 'formerMeadow' | 'specialMeadow'
-  | 'wardForest' | 'formerForest' | 'specialForest'
-  | 'wardMud' | 'formerMud' | 'specialMud'
-  | 'wardSnow' | 'formerSnow' | 'specialSnow'
-  | 'wardRubble' | 'formerRubble' | 'specialRubble'
+  | 'terraformer'
+  | 'wardMeadow' | 'specialMeadow'
+  | 'wardForest' | 'specialForest'
+  | 'wardMud' | 'specialMud'
+  | 'wardSnow' | 'specialSnow'
+  | 'wardRubble' | 'specialRubble'
   | 'landformer' | 'mudling';
 
 /**
@@ -490,6 +491,15 @@ const RAW: Record<UnitId, UnitInput> = {
   // ---------------------------------------------------------------- Terra-Former (Entwurf 22.10.)
   // Raum statt Masse oder Technik: Wächter sind zäh, langsam und schwach im Angriff (sie erkaufen Zeit),
   // jeder fünfte Verband ist ein Terraformer, der Boden formt und nach 4 Kacheln eine Spezialeinheit ruft.
+  // 26.10. spät: EIN Terraformer für alle Linien. Welchen Boden er formt, bestimmt die Lane-Farbe seiner Route (sonst die
+  // Linie seiner Fabrik), welches Wesen er ruft, der Boden unter seinem 2×2-Block (siehe systems/terraform.ts).
+  terraformer: {
+    id: 'terraformer', name: 'Terraformer', armor: 'light', hp: 120, toughness: 4, save: 5,
+    speed: 0.6, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 5.5,
+    ground: 'meadow', former: { special: 'specialMeadow' },
+    shape: 'cross', letter: 't', role: 'Terraformer: formt den Boden seiner Lane (oder seiner Linie) und ruft auf einem 2×2-Block das Wesen dieses Bodens',
+  },
+
   wardMeadow: {
     id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 5.5,
@@ -498,12 +508,6 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
   },
 
-  formerMeadow: {
-    id: 'formerMeadow', name: 'Säer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'wheels', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 5.5,
-    ground: 'meadow', former: { special: 'specialMeadow' },
-    shape: 'cross', letter: 'ś', role: 'Terraformer: formt die Umgebung zu Wiese, ruft auf 4 Kacheln einen Steppenjäger',
-  },
 
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 145, toughness: 5, save: 4,
@@ -521,12 +525,6 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im Wald getarnt (erst aus 2 Kacheln zu sehen)',
   },
 
-  formerForest: {
-    id: 'formerForest', name: 'Pflanzer', armor: 'infantry', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 5.5,
-    ground: 'forest', former: { special: 'specialForest' },
-    shape: 'cross', letter: 'p', role: 'Terraformer: lässt die Umgebung zu Wald wachsen, ruft auf 4 Kacheln einen Hainhüter',
-  },
 
   specialForest: {
     id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 290, toughness: 8, save: 3,
@@ -545,12 +543,6 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im Matsch bremst er Gegner in 2 Kacheln',
   },
 
-  formerMud: {
-    id: 'formerMud', name: 'Wässerer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 5.5,
-    ground: 'mud', former: { special: 'specialMud' },
-    shape: 'cross', letter: 'ẃ', role: 'Terraformer: weicht die Umgebung zu Matsch auf, ruft auf 4 Kacheln eine Schlammschleuder',
-  },
 
   specialMud: {
     id: 'specialMud', name: 'Schlammschleuder', armor: 'light', hp: 200, toughness: 5, save: 5,
@@ -571,12 +563,6 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf Schnee bremst er stärker',
   },
 
-  formerSnow: {
-    id: 'formerSnow', name: 'Frostbringer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'hover', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 5.5,
-    ground: 'snow', former: { special: 'specialSnow' },
-    shape: 'cross', letter: 'ƒ', role: 'Terraformer: lässt es in der Umgebung schneien, ruft auf 4 Kacheln einen Lawinenrufer',
-  },
 
   specialSnow: {
     id: 'specialSnow', name: 'Lawinenrufer', armor: 'heavy', hp: 240, toughness: 6, save: 4,
@@ -594,12 +580,6 @@ const RAW: Record<UnitId, UnitInput> = {
     shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf Geröll Rüstung +1',
   },
 
-  formerRubble: {
-    id: 'formerRubble', name: 'Brecher', armor: 'light', hp: 140, toughness: 5, save: 5,
-    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 6.6,
-    ground: 'rubble', former: { special: 'specialRubble' },
-    shape: 'cross', letter: 'ǵ', role: 'Terraformer: bricht die Umgebung zu Geröll, ruft auf 4 Kacheln einen Frontbrecher',
-  },
 
   specialRubble: {
     id: 'specialRubble', name: 'Frontbrecher', armor: 'heavy', hp: 420, toughness: 9, save: 3,

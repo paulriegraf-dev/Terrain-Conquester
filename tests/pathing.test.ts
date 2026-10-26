@@ -23,13 +23,13 @@ function tracePath(world: World, target: string, profile: MoveProfile, x: number
 }
 
 describe('Wegfindung mit Bewegungsprofilen', () => {
-  it('Flitzer (Räder) meiden Matsch stärker als Kolosse (Ketten)', () => {
+  it('Fußtruppen meiden Geröll stärker als Fahrzeuge (Wegkosten-Tabelle, Nachtrag G.3a)', () => {
     const world = new World({ map: felsenpass, seed: 1 });
-    const rough = (path: number[]): number => path.filter((c) => world.grid.terrain[c] === TERRAIN_INDEX.mud).length;
+    for (let x = 14; x <= 34; x++) for (let y = 11; y <= 15; y++) world.grid.setTerrain(world.grid.index(x, y), TERRAIN_INDEX.rubble);
+    const rough = (path: number[]): number => path.filter((c) => world.grid.terrain[c] === TERRAIN_INDEX.rubble).length;
+    const foot = tracePath(world, waypointKey('mid'), MOVE_PROFILES.foot, 10, 13);
     const wheels = tracePath(world, waypointKey('mid'), MOVE_PROFILES.wheels, 10, 13);
-    const tracks = tracePath(world, waypointKey('mid'), MOVE_PROFILES.tracks, 10, 13);
-    assert.notDeepEqual(wheels, tracks, 'gleicher Weg für unterschiedliche Profile');
-    assert.ok(rough(wheels) < rough(tracks), `Matsch: Räder ${rough(wheels)}, Ketten ${rough(tracks)}`);
+    assert.ok(rough(foot) <= rough(wheels), `Geröll: Fuß ${rough(foot)}, Räder ${rough(wheels)}`);
   });
 
   it('Schweber gleiten über die Schlucht, Fußtruppen müssen zur Brücke', () => {

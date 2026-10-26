@@ -1,5 +1,6 @@
 import { MARKET, PART_IDS } from '../../data/market';
 import { energyCap } from './economy';
+import { frozenPrice } from './purchases';
 import { marketDelay, maxOrders, orderCost, orderSeconds, orderStrength, priceBrake } from './hq';
 import type { PartId } from '../../data/market';
 import { UNITS, bindsOf } from '../../data/units';
@@ -71,8 +72,10 @@ export function productionFactor(world: World, player: PlayerId, part: PartId): 
   const total = world.market.bound[part];
   if (total === 0) return 1;
   const share = Math.min(1, world.market.boundBy[player][part] / total);
+  // Vorratskauf (Nachtrag G): eingefrorener Preis für die eigenen Fabriken.
+  const price = frozenPrice(world, player, part) ?? world.market.prices[part];
   // Lieferverträge (HQ-Zweig Markt): die Preisbremse kommt nur halb an.
-  return Math.min(MARKET.maxPrice, 1 + (world.market.prices[part] - 1) * 2 * share * priceBrake(world, player));
+  return Math.min(MARKET.maxPrice, 1 + (price - 1) * 2 * share * priceBrake(world, player));
 }
 
 /** Faktor auf die Baukosten einer Fabrik, die dieses Bauteil braucht. */

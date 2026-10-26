@@ -5,6 +5,8 @@ import { UNITS } from '../src/data/units';
 import { sellValue } from '../src/sim/systems/applyCommand';
 import { checkConvert, checkLevelUp } from '../src/sim/systems/factory';
 import { World } from '../src/sim/world';
+import { formerGround } from '../src/sim/systems/terraform';
+import { TERRAIN_INDEX } from '../src/data/terrain';
 import { cmd, noIncome, openMap, stepTimes } from './fixtures';
 
 /** Verkaufen, Wiederaufbau-Bonus und Umwidmen (24.10. abends). */
@@ -57,25 +59,20 @@ describe('Umwidmen', () => {
     assert.equal(k.maxHp, BUILDINGS.workshop.hp);
   });
 
-  it('Terra-Former: Die Säer aus dem Wiesenhof werden zu Brechern, andere bleiben', () => {
+  it('Terra-Former: Terraformer bleiben beim Umwidmen erhalten – ohne Lane-Farbe formen sie danach den neuen Boden der Fabrik', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['terraformer', 'technoclan'] });
     const w = world.addBuilding(0, BUILDINGS.meadowhall, { x: 3, y: 0, w: 2, h: 2 });
-    const mine = world.addUnit(0, UNITS.formerMeadow, { x: 6.5, y: 2.5 }, 'top');
+    const mine = world.addUnit(0, UNITS.terraformer, { x: 6.5, y: 2.5 }, 'top');
     mine.fromBuilding = w.id;
-    const other = world.addUnit(0, UNITS.formerMeadow, { x: 6.5, y: 8.5 }, 'mid');
-    other.fromBuilding = 999;
-    mine.tf!.store = 0; // ohne Speicher: er formt nur (sonst ginge er beim Ruf im Wesen auf)
-    other.tf!.store = 0;
+    mine.tf!.store = 0;
+    assert.equal(formerGround(world, mine), TERRAIN_INDEX.meadow);
     world.step([cmd(0, { type: 'convertFactory', entityId: w.id, to: 'quarry' })]);
     stepTimes(world, 20 * world.tps + 1);
     assert.equal(w.defId, 'quarry');
     assert.equal(w.producer!.unit, 'wardRubble');
-    assert.equal(mine.alive, false);
-    const brecher = world.entities.filter((e) => e.alive && e.defId === 'formerRubble');
-    assert.equal(brecher.length, 1, 'aus dem Säer wurde ein Brecher');
-    assert.equal(brecher[0]!.fromBuilding, w.id);
-    assert.equal(other.alive, true, 'Säer aus einer anderen Fabrik bleiben');
-    assert.equal(world.players[0].stats.lost.formerMeadow, 0, 'zählt nicht als Verlust');
+    assert.equal(mine.alive, true, 'derselbe Terraformer');
+    assert.equal(formerGround(world, mine), TERRAIN_INDEX.rubble);
+    assert.equal(world.players[0].stats.lost.terraformer, 0, 'zählt nicht als Verlust');
   });
 });
 

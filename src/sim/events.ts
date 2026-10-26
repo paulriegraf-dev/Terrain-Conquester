@@ -64,6 +64,7 @@ export type SimEventData =
   | { type: 'hq'; owner: PlayerId; path: HqPathId; tier: number; name: string }
   /** Forschung abgeschlossen (zentral, seit 24.10.). */
   | { type: 'research'; owner: PlayerId; upgrade: string; name: string }
+  | { type: 'gate'; owner: PlayerId; early: boolean }
   /** Erdwall gefallen (zerstört). */
   | { type: 'wallBroken'; owner: PlayerId; cells: number[] }
   /** Ein Spähbericht ist angekommen. */

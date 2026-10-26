@@ -11,7 +11,9 @@ import type { World } from '../world';
 import { STANCES } from '../world';
 import { buyHero, setHeroMode, setHeroRoute } from './hero';
 import { prepTerrain } from './prep';
-import { castWall, swapTerrain } from './abilities';
+import { castWall, fillWall, swapTerrain } from './abilities';
+import { buy } from './purchases';
+import { setRally } from './rally';
 import { DISGUISE } from '../../data/abilities';
 import { placeOrder } from './market';
 import { convertFactory, mergeBroods, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
@@ -31,6 +33,9 @@ const fail = (reason: string): CommandResult => ({ ok: false, reason });
 export function applyCommand(world: World, player: PlayerId, cmd: Command): CommandResult {
   const result = execute(world, player, cmd);
   if (!result.ok) world.emit({ type: 'rejected', owner: player, reason: result.reason });
+  // Messung (26.10. spät): Entscheidungen je Minute – Stufe, Kauf, Umwidmen (Forschung zählt startResearch).
+  else if (cmd.type === 'upgradeFactory' || cmd.type === 'swapTerrain' || cmd.type === 'convertFactory') world.players[player].stats.decisions++;
+  else if (cmd.type === 'rushOrder') world.players[player].stats.buys.rush = (world.players[player].stats.buys.rush ?? 0) + 1;
   return result;
 }
 
@@ -150,6 +155,15 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       return castWall(world, player, cmd.x, cmd.y, cmd.vertical);
     case 'swapTerrain':
       return swapTerrain(world, player, cmd.x, cmd.y, cmd.terrain, cmd.vertical ?? true);
+    case 'buy':
+      return buy(world, player, cmd.kind, cmd.route, cmd.part);
+    case 'fillWall':
+      return fillWall(world, player, cmd.x, cmd.y);
+    case 'setRally': {
+      const b = ownBuilding(world, player, cmd.entityId);
+      if (typeof b === 'string') return fail(b);
+      return setRally(world, b, cmd.x, cmd.y);
+    }
     case 'order': {
       const reason = placeOrder(world, player, cmd.part);
       return reason ? fail(reason) : OK;

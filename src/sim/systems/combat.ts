@@ -82,6 +82,7 @@ export function updateCombat(world: World): void {
     }
     let damage = damagePerWound(world, e, t);
     if (damage <= 0) continue;
+    if (t.kind === 'wall') world.wallHitters[e.owner].add(e.id); // Messung: bricht statt umgeht
     if (e.tf) damage *= ambushFactor(world, e) * synergyDamageFactor(world, e); // Hinterhalt, Blühende Wiese
     if (e.weaken && world.tick < e.weaken.until) damage *= e.weaken.damage; // geschwächt (Schlammschleuder)
     if (e.power !== undefined) damage *= e.power; // Gerufener mit gemindertem Kraft-Pool des Beschwörers
@@ -522,5 +523,6 @@ function splashHits(world: World, shooter: Entity, target: Entity, shots: number
     if (damage <= 0) continue;
     const n = (shots + blastShots(blast, o)) * factor * (shooter.tech?.eliteFx?.splashFull ? 1 : 0.5); // Elite-Fläche: alle Schüsse
     collect(w.acc, o, n * woundsPerShot(w.def, defenseOf(world, o, shooter), bonus), damage, shooter.owner, hits, shooter.defId);
+    world.players[shooter.owner].stats.splashHits++; // Messung (Nachtrag G.3g)
   }
 }

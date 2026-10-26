@@ -36,6 +36,8 @@ export interface CodexState {
   faction: FactionId;
   /** Gegner der Konter-Tabelle. */
   enemy: FactionId;
+  /** Laufende Partie (26.10. spät): gekaufte Schlusssteine je Fraktion mit Tor-Nummer. */
+  bought?: Partial<Record<FactionId, Record<string, number>>>;
 }
 
 export const FACTION_SHORT: Readonly<Record<FactionId, string>> = { technoclan: 'TC', myriaden: 'Myr', terraformer: 'TF' };
@@ -67,9 +69,11 @@ export function factionEntries(f: FactionId): Entry[] {
       if (entry) entry.source += ` · ab Stufe ${ROMAN[fb.mix2.level]} auch als Beimischung (jeder ${fb.mix2.every}. Verband)`;
     }
     if (fb.former) {
-      add(fb.former, `${fb.name} · jeder ${RULES.terraform.every}. Verband`);
-      const special = UNITS[fb.former].former?.special;
-      if (special) add(special, `ruft der ${UNITS[fb.former].name} auf einem 2×2-Block eigenen Bodens – Naturspeicher: Fabrikstufe I 0, II 2, III 3 Rufe; die Kacheln werden danach 150 s Ödland`);
+      add(fb.former, `jede Linienfabrik · jeder ${RULES.terraform.every}. Verband – formt die Lane-Farbe seiner Route (sonst den Boden seiner Fabrik)`);
+      // 26.10. spät: Das Wesen bestimmt der Boden unter dem 2×2-Block, nicht der Terraformer.
+      const ground = UNITS[fb.tiers[0]!].ground;
+      const special = ({ meadow: 'specialMeadow', forest: 'specialForest', mud: 'specialMud', snow: 'specialSnow', rubble: 'specialRubble' } as const)[ground as 'meadow'];
+      if (special) add(special, `ruft der Terraformer auf einem 2×2-Block eigenen Bodens dieser Art – Naturspeicher: Fabrikstufe I ${RULES.terraform.storeByLevel[0]}, II ${RULES.terraform.storeByLevel[1]}, III ${RULES.terraform.storeByLevel[2]} Rufe; die Kacheln werden danach ${RULES.terraform.wasteSeconds} s Ödland`);
     }
   }
   for (const e of [...out]) {
@@ -402,14 +406,15 @@ function basicsTab(): string {
   ${section('Gelände', [
     'In der <b>Vorbereitung</b> formst du Flächen deiner Hälfte, ohne dass der Gegner es sieht. Danach jederzeit gegen Energie – im eigenen Kartendrittel immer, sonst im eigenen Gebiet, im Niemandsland und kurz vor der Grenze.',
     'Wald gibt Deckung (Rüstung +1), Matsch und Schnee bremsen, Geröll bremst Räder. Jede Truppenart bewegt sich anders – siehe Tab Gelände.',
-    '<b>Erdwall</b> sperrt einen Weg für eine Weile; Schwere und Artillerie brechen ihn. <b>Schluchten</b> gibt es über den HQ-Zweig Gelände; Schweber gleiten darüber und bekommen danach einen Flankenbonus.',
+    '<b>Erdwall</b> ist Gelände (Budget 24 Kacheln, 15 Energie je Kachel, eigene Wälle kostenlos zuschütten): Alle Einheiten nehmen den billigsten Weg; ein Wall darf jede gegnerische Route höchstens doppelt so teuer machen. <b>Stellung</b>: je Fabrik ein Sammelpunkt für haltende Verbände. Käufe am HQ: Gegenspionage, Dauerspähen, Vorratskauf, Nachschub; an jeder Fabrik das Aufgebot. <b>Schluchten</b> gibt es über den HQ-Zweig Gelände; Schweber gleiten darüber und bekommen danach einen Flankenbonus.',
   ])}
   ${section('Aufklärung und Täuschung', [
     `Den Gegner verbirgt der Nebel. Ein <b>Späher</b> (${r.scout.cost} Energie, alle ${r.scout.cooldownSeconds} s) meldet nach ${r.scout.delaySeconds} s Stärke und Panzerung je Lane, Fabriken und Verbünde.`,
     'Fabriken lassen sich <b>tarnen</b>: Der Gegner sieht dann eine Weile eine andere Fabrik und Lane.',
   ])}
   ${section('Forschung, HQ und Held', [
-    `Forschung (bis ${r.researchSlots} gleichzeitig) verbessert Waffen und Panzerung einzelner Einheiten. Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
+    `Forschung (bis ${r.researchSlots} gleichzeitig): <b>Ausrüstung I–III</b> je Fabrikart (Angriff und Panzerung aller Einheiten dieser Fabrik, Heiler: Heilung) und einzelne Sonder-Upgrades. Terra-Former zusätzlich <b>Naturkraft</b> (Gerufene) und <b>Wurzelwerk</b> (Terraformer). Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
+    `<b>Schlusssteine</b> öffnet ein Tor: das erste in Minute ${Math.round(r.keystoneGate.first / 60)}, danach alle ${r.keystoneGate.every / 60} Minuten; je Tor ein Schlussstein (Preis steigt mit der Reihenfolge). Wer die Kartenmitte ${r.keystoneGate.centerHold} s allein hält, öffnet das nächste Tor früher.`,
     'Jede Fraktion hat einen Helden, der über das HQ kommt und nach seinem Tod zurückkehrt.',
   ])}
   ${section('Stationen', ['Oben und unten je eine Station mit einem Vorteil nur für ihre Lane – Tabelle und Pool je Karte im Tab Gelände.'])}`;
@@ -448,20 +453,24 @@ export function renderCodex(state: CodexState): string {
 function traitsTab(state: CodexState): string {
   const f = state.faction;
   const body = f === 'technoclan' ? technoTraits() : f === 'terraformer' ? terraTraits() : myrTraits();
-  return `${factionChips(state, 'faction', 'Fraktion')}${body}${keystoneList(f)}`;
+  return `${factionChips(state, 'faction', 'Fraktion')}${body}${keystoneList(f, state.bought?.[f] ?? {})}`;
 }
 
 /** Schlusssteine der Fraktion (26.10.) aus den Spielwerten. */
-function keystoneList(f: FactionId): string {
+function keystoneList(f: FactionId, bought: Record<string, number>): string {
   const ups = FACTIONS[f].upgrades.filter((u) => u.keystone);
   if (ups.length === 0) return '';
   const rows = ups.map((u) => {
     const k = KEYSTONE_OF[u.unit]!;
-    return `<tr><th scope="row">${escapeHtml(k.icon)} ${escapeHtml(UNITS[u.unit].name)}<span class="cx-role">${escapeHtml(k.name)}</span></th><td>${escapeHtml(k.rule)}</td><td>${escapeHtml(k.rein)}</td></tr>`;
+    const gate = bought[u.id];
+    const tag = gate ? ` · gekauft mit Tor ${gate}` : '';
+    return `<tr><th scope="row">${escapeHtml(k.icon)} ${escapeHtml(UNITS[u.unit].name)}<span class="cx-role">${escapeHtml(u.name.replace(/^Schlussstein:? ?/, ''))}${tag}${k.placeholder ? ' · Platzhalter' : ''}</span></th><td>${escapeHtml(u.description)}</td></tr>`;
   }).join('');
+  const g = RULES.keystoneGate;
+  const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
   return `<h3 class="cx-h3">Schlusssteine</h3>
-    <p class="cx-lede">Letzte Forschung je Einheit: ändert eine Regel, keine Zahl. Voraussetzung Waffen III${RULES.keystone.needArmor ? ' und Panzerung II' : ''} der Linie, 200 Energie, 30 s. Gilt für alle Einheiten der Art, auch lebende.</p>
-    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit</th><th>Regel</th><th>Zügel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <p class="cx-lede">Ändern eine Regel, keine Zahl. Freigegeben über das Schlussstein-Tor: erstes Tor bei ${clock(g.first)}, danach alle ${clock(g.every)}; je Tor ein Schlussstein (ungenutzte Tore bleiben). Preis nach Reihenfolge ${g.prices.join(' · ')} (dann +${g.step}), ${g.seconds} s an einer Fabrik, die die Einheit baut. Wer die Kartenmitte (${g.centerSize}×${g.centerSize}) ${g.centerHold} s ununterbrochen hält, öffnet das nächste Tor sofort.</p>
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit</th><th>Regel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function technoTraits(): string {

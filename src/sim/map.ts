@@ -31,6 +31,8 @@ export interface MapDef {
   description: string;
   /** y-Position der drei Routen-Wegpunkte; x liegt immer in der Kartenmitte. */
   waypointsY: Readonly<Record<Route, number>>;
+  /** Umkämpfte Kartenmitte (Zentrumsanreiz, 26.10. spät) – Standard: der mittlere Wegpunkt (auf allen sechs Karten geprüft). */
+  center?: { x: number; y: number };
   /** Linke Kartenhälfte, eine Zeichenkette pro Zeile (gespiegelte Karten). */
   halfRows?: readonly string[];
   /** Bauzonen der linken Hälfte, gleiche Größe wie halfRows. */

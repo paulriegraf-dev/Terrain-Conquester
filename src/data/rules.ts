@@ -159,11 +159,38 @@ export interface Rules {
   /** Grund-Einkommen pro Sekunde. */
   energyPerSecond: number;
   /**
-   * Schlusssteine (26.10.): Schalter und Schrauben. `enabled` aus = die KI erforscht keine (Kontrolle); `needArmor` =
-   * Panzerung II ist Pflicht. Je Schlussstein Zügel/Schrauben wie im Patch (Heimkehr, Wurzelgriff, …).
+   * Schlusssteine (26.10.): Schalter und Schrauben. `enabled` aus = die KI erforscht keine (Kontrolle). Je Schlussstein Zügel/Schrauben wie im Patch (Heimkehr, Wurzelgriff, …).
    */
+  /**
+   * Schlussstein-Tor (26.10. spät): erstes Tor nach `first` s, danach alle `every` s; je Tor ein Schlussstein (Guthaben).
+   * Preis nach Reihenfolge `prices`, danach je weiterer +`step`; Forschung `seconds` s. Zentrumsanreiz (`center`): wer die
+   * Kartenmitte (`centerSize`×`centerSize`) `centerHold` s ununterbrochen hält, öffnet das nächste Tor sofort.
+   */
+  /**
+   * Verschlammung (26.10. spät, siehe sim/systems/mud.ts): Stufen je Modell-Treffer, Obergrenze, Schaden je Stufe und
+   * Sekunde, Abbaustart, Abbau je Sekunde, Stufen je Schleuder-Einschlag, Bremse außerhalb des Felds, Widerstand zählt.
+   */
+  /**
+   * Käufe (Nachtrag G, 26.10. spät, sim/systems/purchases.ts): Preis steigt je Nutzung innerhalb von `window` s.
+   * Aufgebot (rush): je Fabrik 40 → 60 → 90. Nachschub ab Minute `surge.from`/60.
+   */
+  /**
+   * Erdwall als Gelände (Nachtrag G.3, 26.10. spät): Budget in Kacheln (HQ-Gelände 5: budget5), Preis je Kachel,
+   * Umwegfaktor (gegnerische Route ≤ detour × Kosten ohne Wälle), Leben beim Brechen (wie Bauwerk: Widerstand/Rüstung).
+   */
+  walls: { budget: number; budget5: number; tileCost: number; detour: number; breakHp: number; toughness: number; save: number };
+  purchases: {
+    window: number;
+    watch: { prices: readonly number[]; seconds: number; every: number };
+    counter: { cost: number; seconds: number };
+    stock: { seconds: number; share: number; scale: number; min: number };
+    rush: { prices: readonly number[] };
+    surge: { prices: readonly number[]; seconds: number; factor: number; from: number };
+  };
+  mudStacks: { enabled: boolean; perHit: number; max: number; dps: number; decayAfter: number; decay: number; slingStacks: number; slowFactor: number; toughness: boolean };
+  keystoneGate: { first: number; every: number; prices: readonly number[]; step: number; seconds: number; center: boolean; centerHold: number; centerSize: number };
   keystone: {
-    enabled: boolean; needArmor: boolean; only: 'all' | 'wards' | 'summons';
+    enabled: boolean; only: 'all' | 'wards' | 'summons';
     homeThreshold: number; homeHeal: number; homeRadius: number;
     gripSeconds: number; gripCooldown: number;
     bedEvery: number; bedNests: boolean;
@@ -294,7 +321,7 @@ export interface Rules {
    * sie mit ihrem Boden zu – das dauert `gorgeFactor`-mal so lange wie eine Kachel.
    */
   terraform: {
-    formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; ritualFirst: boolean; anyLineBlock: boolean; workPerSummon: number; stepAfterSummon: number; sprintOnSpawn: boolean; sprintWindow: number; frontGap: number; retreatRadius: number; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number;
+    formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; ritualFirst: boolean; anyLineBlock: boolean; workPerSummon: number; stepAfterSummon: number; sprintOnSpawn: boolean; sprintWindow: number; formSecondsRoots: number; rootsStoreAtLevel: boolean; stripeSeconds: number; stripeLevel2: number; stripeLevel3: number; frontGap: number; retreatRadius: number; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number;
     preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; tempoStep: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
   };
   /**
@@ -364,8 +391,19 @@ export const RULES: Rules = {
   maxEnergy: 400,
   upgradePriceMax: 1.5,
   energyPerSecond: 3,
+  walls: { budget: 24, budget5: 36, tileCost: 15, detour: 2.0, breakHp: 200, toughness: 10, save: 4 },
+  purchases: {
+    window: 180,
+    watch: { prices: [60, 90, 130], seconds: 120, every: 20 },
+    counter: { cost: 40, seconds: 60 },
+    stock: { seconds: 90, share: 0.2, scale: 10, min: 20 },
+    rush: { prices: [40, 60, 90] },
+    surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 480 },
+  },
+  mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: true },
+  keystoneGate: { first: 660, every: 150, prices: [200, 260, 340, 420], step: 80, seconds: 20, center: true, centerHold: 60, centerSize: 5 },
   keystone: {
-    enabled: true, needArmor: true, only: 'all',
+    enabled: true, only: 'all',
     homeThreshold: 0.5, homeHeal: 5, homeRadius: 12,
     gripSeconds: 2, gripCooldown: 20,
     bedEvery: 8, bedNests: false,
@@ -472,7 +510,7 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [2, 3, 4], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, frontGap: 3, retreatRadius: 4, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [2, 3, 4], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 3, retreatRadius: 4, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
     preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 5, everyLevel2: 4, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },

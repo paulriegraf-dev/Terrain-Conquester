@@ -59,23 +59,24 @@ export function structureVisionBonus(world: World, p: PlayerId): number {
 export function scoutNamesUnits(world: World, p: PlayerId): boolean {
   return hqTier(world, p, 'intel') >= 3;
 }
-/** Gegenspionage: gegnerische Täuschungen fliegen auf. */
+/** Gegenspionage (seit Nachtrag G ein Kauf ab Aufklärung 2): gegnerische Täuschungen fliegen auf. */
 export function seesThroughDisguise(world: World, p: PlayerId): boolean {
-  return hqTier(world, p, 'intel') >= 4;
+  return world.tick < world.players[p].buys.counterUntil;
 }
-/** Gegenspionage: eigene Täuschungen halten so viel länger. */
-export function disguiseFactor(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'intel') >= 4 ? HQ_FX.disguiseFactor : 1;
+/** Eigene Täuschungen: Dauer-Faktor (seit Nachtrag G immer 1). */
+export function disguiseFactor(_world: World, _p: PlayerId): number {
+  return 1;
 }
-/** Lagezentrum: alle n Sekunden ein Spähbericht von selbst (0 = aus). */
-export function autoScoutSeconds(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'intel') >= 5 ? HQ_FX.autoScoutSeconds : 0;
+/** Lagezentrum (bis Nachtrag G): automatischer Bericht – ersetzt durch den Kauf „Dauerspähen“. */
+export function autoScoutSeconds(_world: World, _p: PlayerId): number {
+  return 0;
 }
 
 // ------------------------------------------------------------------ Markt
 
 export function orderCost(world: World, p: PlayerId, base: number): number {
-  return Math.max(0, base - (hqTier(world, p, 'market') >= 1 ? HQ_FX.orderDiscount : 0));
+  const c = Math.max(0, base - (hqTier(world, p, 'market') >= 1 ? HQ_FX.orderDiscount : 0));
+  return hqTier(world, p, 'market') >= 5 ? Math.round(c * HQ_FX.orderDiscount5) : c; // Großbestellung −30 %
 }
 /** Börsenticker: Marktanzeige ohne Verzögerung. */
 export function marketDelay(world: World, p: PlayerId, base: number): number {
@@ -88,19 +89,19 @@ export function maxOrders(world: World, p: PlayerId, base: number): number {
 export function priceBrake(world: World, p: PlayerId): number {
   return hqTier(world, p, 'market') >= 3 ? HQ_FX.priceBrake : 1;
 }
-/** Großbestellung: Preisschub und Dauer einer Scheinbestellung. */
+/** Großbestellung (Markt 5 seit Nachtrag G): Preisschub und Dauer einer Scheinbestellung. */
 export function orderStrength(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'market') >= 4 ? HQ_FX.orderStrength : 1;
+  return hqTier(world, p, 'market') >= 5 ? HQ_FX.orderStrength : 1;
 }
 export function orderSeconds(world: World, p: PlayerId, base: number): number {
-  return hqTier(world, p, 'market') >= 4 ? Math.max(base, HQ_FX.orderSeconds) : base;
+  return hqTier(world, p, 'market') >= 5 ? Math.max(base, HQ_FX.orderSeconds) : base;
 }
-/** Börsenmacht: Einkommen und Energie-Maximum. */
-export function incomeFactor(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'market') >= 5 ? HQ_FX.income : 1;
+/** Börsenmacht entfällt (Nachtrag G: keine Einkommens-Upgrades). */
+export function incomeFactor(_world: World, _p: PlayerId): number {
+  return 1;
 }
-export function maxEnergyBonus(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'market') >= 5 ? HQ_FX.maxEnergy : 0;
+export function maxEnergyBonus(_world: World, _p: PlayerId): number {
+  return 0;
 }
 
 // ------------------------------------------------------------------ Gelände
@@ -121,11 +122,22 @@ export function shapingFactor(world: World, p: PlayerId): number {
 export function wallLimit(world: World, p: PlayerId, base: number): number {
   return base + (HQ_FX.extraWalls[hqTier(world, p, 'terrain')] ?? 0);
 }
-/** Wallbau: Leben neuer Erdwälle. */
-export function wallHpFactor(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'terrain') >= 4 ? HQ_FX.wallHp : 1;
+/** Wall-Leben (Nachtrag G: kein Wallbau-Leben mehr). */
+export function wallHpFactor(_world: World, _p: PlayerId): number {
+  return 1;
 }
-/** Landnahme: so viele Kacheln ins gegnerische Gebiet darf man formen, Wälle setzen und graben. */
-export function enemyReach(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'terrain') >= 5 ? HQ_FX.enemyReach : 0;
+/** Landnahme entfällt (Nachtrag G). */
+export function enemyReach(_world: World, _p: PlayerId): number {
+  return 0;
+}
+/** Landvermesser (Gelände 4): Kauffläche 3×3 statt 2×2. */
+export function swapBrush(world: World, p: PlayerId, base: number): number {
+  return hqTier(world, p, 'terrain') >= 4 ? 3 : base;
+}
+/** Wall-Budget (Kacheln) und Preis je Kachel (Gelände 5: 36 Kacheln, −30 %). */
+export function wallBudget(world: World, p: PlayerId): number {
+  return hqTier(world, p, 'terrain') >= 5 ? world.rules.walls.budget5 : world.rules.walls.budget;
+}
+export function wallTileCost(world: World, p: PlayerId): number {
+  return Math.round(world.rules.walls.tileCost * (hqTier(world, p, 'terrain') >= 5 ? HQ_FX.wallDiscount : 1));
 }

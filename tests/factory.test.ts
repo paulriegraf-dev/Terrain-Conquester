@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { SWAP } from '../src/data/abilities';
 import { RULES } from '../src/data/rules';
-import { FACTIONS } from '../src/data/factions';
+import { FACTIONS, GEAR_STEPS } from '../src/data/factions';
 import { felsenpass } from '../src/data/maps/felsenpass';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
@@ -55,75 +55,70 @@ describe('Fabriken: Stufen erweitern die Auswahl', () => {
   });
 });
 
-describe('Fabriken: kleine Upgrades', () => {
-  it('Forschung gilt für alle Einheiten dieser Art beim Spieler', () => {
+describe('Ausrüstung je Fabrikart (26.10. spät)', () => {
+  it('Ausrüstung I der Kaserne: nächster Angriffs- UND Panzerungsschritt für alle Kasernen-Einheiten, nicht beim Gegner', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     const f = factory(world);
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'sniper-armor-1' })]);
-    stepTimes(world, 12 * world.tps + 1);
-    assert.deepEqual(world.players[0].research, ['sniper-armor-1']);
+    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'barracks-gear-1' })]);
+    stepTimes(world, 15 * world.tps + 1);
+    assert.deepEqual(world.players[0].research, ['barracks-gear-1']);
+    const g = GEAR_STEPS.sniper!;
     const u = world.addUnit(0, UNITS.sniper, { x: 5, y: 5 }, 'mid');
-    assert.equal(u.save, UNITS.sniper.save - 1, 'Panzerung I beim Scharfschützen: Rüstung +1');
+    const a = g.attack[0]!;
+    if (a.strength) assert.equal(u.weapon!.def.strength, UNITS.sniper.weapon!.strength + a.strength);
+    if (a.hit) assert.equal(u.weapon!.def.skill, UNITS.sniper.weapon!.skill - a.hit);
+    if (a.ap) assert.equal(u.weapon!.def.ap, UNITS.sniper.weapon!.ap + a.ap);
+    const r = g.armor[0]!;
+    if (r.save) assert.equal(u.save, UNITS.sniper.save - r.save);
+    if (r.toughness) assert.equal(u.toughness, UNITS.sniper.toughness + r.toughness);
     const other = world.addUnit(1, UNITS.sniper, { x: 15, y: 5 }, 'mid');
     assert.equal(other.save, UNITS.sniper.save, 'nicht beim Gegner');
+    assert.equal(other.weapon!.def.strength, UNITS.sniper.weapon!.strength);
   });
 
-  it('nur für Einheiten, die eine eigene Fabrik bauen kann', () => {
+  it('Stufe II erst nach Stufe I; Preise 120/180/240, 15/20/25 s', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
-    const f = factory(world);
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'colossus-armor-1' })]);
+    factory(world);
+    const steps = FACTIONS.technoclan.buildingUpgrades.filter((u) => u.building === 'barracks' && u.kind === 'gear');
+    assert.deepEqual(steps.map((u) => u.cost), [120, 180, 240]);
+    assert.deepEqual(steps.map((u) => u.seconds), [15, 20, 25]);
+    world.step([cmd(0, { type: 'research', upgrade: 'barracks-gear-2' })]);
+    assert.equal(world.players[0].labs.length, 0, 'II ohne I geht nicht');
+  });
+
+  it('Heiler (Beimischung der Kaserne): Ausrüstung gibt Heilung +20 % je Stufe', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich });
+    factory(world);
+    world.players[0].research.push('barracks-gear-1', 'barracks-gear-2');
+    const m = world.addUnit(0, UNITS.nanomedic, { x: 5, y: 5 }, 'mid');
+    assert.ok(Math.abs(m.support!.heal - UNITS.nanomedic.support!.heal * 1.44) < 1e-9);
+  });
+
+  it('ohne Fabrik dieser Art kein Ausbau – und die Ausrüstung bleibt beim Verkaufen erhalten', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich });
+    world.step([cmd(0, { type: 'research', upgrade: 'foundry-gear-1' })]);
     assert.equal(world.players[0].labs.length, 0);
-    const reasons = world.events.filter((e) => e.type === 'rejected').map((e) => (e.type === 'rejected' ? e.reason : ''));
-    assert.match(reasons.at(-1) ?? '', /Koloss/);
-  });
-});
-
-describe('Upgrade-Ketten (I, II, III)', () => {
-  it('Stufe II erst nach Stufe I, die Wirkung stapelt sich', () => {
-    const world = new World({ map: openMap, seed: 1, rules: rich });
     const f = factory(world);
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'sniper-armor-2' })]);
-    assert.equal(f.producer!.job, null, 'II ohne I geht nicht');
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'sniper-armor-1' })]);
-    stepTimes(world, 12 * world.tps + 1);
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'sniper-armor-2' })]);
-    stepTimes(world, 16 * world.tps + 1);
-    assert.deepEqual(world.players[0].research, ['sniper-armor-1', 'sniper-armor-2']);
+    world.players[0].research.push('barracks-gear-1');
+    world.step([cmd(0, { type: 'sell', entityId: f.id })]);
     const u = world.addUnit(0, UNITS.sniper, { x: 5, y: 5 }, 'mid');
-    assert.equal(u.save, UNITS.sniper.save - 2, 'Rüstung +1 und noch einmal +1');
+    assert.ok(world.players[0].research.includes('barracks-gear-1'));
+    assert.equal(u.weapon!.def.strength + u.weapon!.def.ap - u.weapon!.def.skill > UNITS.sniper.weapon!.strength + UNITS.sniper.weapon!.ap - UNITS.sniper.weapon!.skill || u.save < UNITS.sniper.save, true, 'gilt weiter, sobald wieder gebaut wird');
   });
 
-  it('Waffen- und Panzerungs-Stufen verändern die Angriffsfolge (Stärke, Durchschlag, Treffen, Widerstand, Leben)', () => {
-    const world = new World({ map: openMap, seed: 1, rules: rich });
-    world.players[0].research.push('gunner-weapons-1', 'gunner-weapons-2', 'gunner-weapons-3a', 'gunner-armor-1', 'gunner-armor-2', 'gunner-armor-3');
-    const u = world.addUnit(0, UNITS.gunner, { x: 5, y: 5 }, 'mid');
-    const w = UNITS.gunner.weapon!;
-    assert.equal(u.weapon!.def.skill, w.skill - 1, 'Treffen +1');
-    assert.equal(u.weapon!.def.strength, w.strength + 1, 'Stärke +1');
-    assert.ok(Math.abs(u.weapon!.def.damage - w.damage * 1.4) < 1e-9, 'Waffen III Überladung: Schaden +40 %');
-    assert.equal(u.toughness, UNITS.gunner.toughness + 2, 'Widerstand +1 zweimal');
-    assert.equal(u.maxHp, Math.round(UNITS.gunner.hp * 1.2), 'Leben +20 %');
-  });
-
-  it('keine Stufe ist wirkungslos: Treffen +1 nur bei Waffen, die nicht schon auf 2+ treffen', () => {
-    for (const f of Object.values(FACTIONS)) {
-      for (const up of f.upgrades) {
-        const w = UNITS[up.unit].weapon;
-        if (up.effect.hit) assert.ok(w && w.skill > 2, `${up.name} (${up.unit})`);
-        if (up.effect.save) assert.ok(UNITS[up.unit].save > 2, `${up.name} (${up.unit})`);
-      }
-    }
-  });
-
-  it('jede Einheit beider Fraktionen hat mindestens eine Kette mit drei Stufen', () => {
+  it('jede Einheit, die eine Fabrik baut, hat drei Angriffs- und drei Panzerungsschritte', () => {
     for (const f of Object.values(FACTIONS)) {
       for (const b of Object.values(f.buildings)) {
         for (const unit of b.tiers) {
-          const steps = f.upgrades.filter((u) => u.unit === unit && u.requires);
-          assert.ok(steps.length >= 2, `${f.name}: ${unit}`);
+          const g = GEAR_STEPS[unit];
+          assert.ok(g && g.attack.length === 3 && g.armor.length === 3, `${f.name}: ${unit}`);
         }
       }
     }
+  });
+
+  it('keine Einzelketten mehr (Waffen/Panzerung/Heilung I–III)', () => {
+    for (const f of Object.values(FACTIONS)) assert.ok(!f.upgrades.some((u) => /-(weapons|armor|heal)-\d/.test(u.id)), f.name);
   });
 });
 

@@ -9,7 +9,7 @@ import { openMap, smallBases } from './fixtures';
 describe('Kraft-Pool der Beschwörer (26.10.)', () => {
   it('erste vier voll, danach −8 % je weiterem, mindestens 50 %; Fall gibt Kraft zurück', () => {
     const world = new World({ map: openMap, seed: 1, factions: ['terraformer', 'technoclan'], rules: { ...smallBases, terraform: { ...RULES.terraform, poolFree: 4 } } });
-    const former = world.addUnit(0, UNITS.formerMeadow, { x: 5, y: 5 }, 'mid');
+    const former = world.addUnit(0, UNITS.terraformer, { x: 5, y: 5 }, 'mid');
     const made = [];
     for (let k = 0; k < 14; k++) {
       const pw = summonPower(world, former, false);

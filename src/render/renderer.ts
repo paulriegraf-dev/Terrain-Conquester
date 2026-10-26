@@ -10,8 +10,9 @@ import { UNITS } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
 import { hqKey } from '../sim/keys';
-import { checkSwapArea, checkWall, shapeArea, wallCoords } from '../sim/systems/abilities';
-import { PREP } from '../data/abilities';
+import { checkSwapArea, checkWallPreview, shapeArea, wallCoords } from '../sim/systems/abilities';
+import { PREP, SWAP } from '../data/abilities';
+import { swapBrush } from '../sim/systems/hq';
 
 /** Vorbereitung: Fläche um (x, y) mit Seitenlänge PREP.brush (die Vorbereitung bleibt 3×3). */
 function prepArea(x: number, y: number): [number, number][] {
@@ -166,6 +167,7 @@ export class Renderer {
     this.drawSwaps(world, view);
     this.drawEffects(world, view);
     this.drawWallTimers(world, view);
+    this.drawRallies(world, view);
     if (view.fog && view.human !== null) this.drawFog(world, view.human, view.prep);
     this.drawIntelGhosts(world, view);
     this.drawGatherSignals(world, view);
@@ -1118,6 +1120,21 @@ export class Renderer {
       ctx.arc(x, y, r * 1.55, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Verschlammung (26.10. spät): je Stufe ein Tropfen über dem Verband.
+    const mudN = e.mud ? Math.round(e.mud.n) : 0;
+    if (mudN > 0) {
+      const d = Math.max(2, t * 0.11);
+      ctx.fillStyle = 'rgba(122,88,48,0.95)';
+      for (let k = 0; k < mudN; k++) {
+        const dx = x + (k - (mudN - 1) / 2) * d * 1.6;
+        const dy = y - r * 1.9;
+        ctx.beginPath();
+        ctx.moveTo(dx, dy - d * 1.2);
+        ctx.quadraticCurveTo(dx + d * 0.9, dy + d * 0.2, dx, dy + d * 0.6);
+        ctx.quadraticCurveTo(dx - d * 0.9, dy + d * 0.2, dx, dy - d * 1.2);
+        ctx.fill();
+      }
+    }
     if (e.root && tick < e.root.until) {
       ctx.strokeStyle = 'rgba(110,190,90,0.95)';
       ctx.lineWidth = Math.max(1.5, t * 0.09);
@@ -1385,6 +1402,27 @@ export class Renderer {
    * Erdwälle (seit 24.10. dauerhaft): angekündigte als gestrichelter Umriss mit Countdown (Truppen weichen gleich
    * aus), stehende mit Lebensleiste, sobald sie angeschlagen sind.
    */
+  /** Stellungen (Nachtrag G.3d): eigene immer, gegnerische wie ein Bauwerk, sobald die Kachel gesehen wird. */
+  private drawRallies(world: World, view: ViewState): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    for (const e of world.entities) {
+      const r = e.alive ? e.producer?.rally : null;
+      if (!r) continue;
+      if (view.human !== null && e.owner !== view.human && !world.players[view.human].vision.isVisible(Math.floor(r.x), Math.floor(r.y))) continue;
+      const x = r.x * t;
+      const y = r.y * t;
+      ctx.strokeStyle = PALETTE.player[e.owner];
+      ctx.lineWidth = Math.max(1.5, t * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(x - t * 0.2, y + t * 0.45);
+      ctx.lineTo(x - t * 0.2, y - t * 0.45);
+      ctx.lineTo(x + t * 0.4, y - t * 0.25);
+      ctx.lineTo(x - t * 0.2, y - t * 0.05);
+      ctx.stroke();
+    }
+  }
+
   private drawWallTimers(world: World, view: ViewState): void {
     const ctx = this.ctx;
     const t = this.tile;
@@ -1608,7 +1646,7 @@ export class Renderer {
       const area = view.prep
         ? checkPrep(world, view.human, hover.x, hover.y, view.swap.terrain)
         : checkSwapArea(world, view.human, hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true);
-      for (const [cx, cy] of view.prep ? prepArea(hover.x, hover.y) : shapeArea(hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true)) {
+      for (const [cx, cy] of view.prep ? prepArea(hover.x, hover.y) : shapeArea(hover.x, hover.y, view.swap.terrain, view.swap.vertical ?? true, swapBrush(world, view.human ?? 0, SWAP.brush))) {
         if (!world.grid.inBounds(cx, cy)) continue;
         const ok = area.ok && area.cells.includes(world.grid.index(cx, cy));
         ctx.fillStyle = ok ? PALETTE.previewOk : PALETTE.previewBad;
@@ -1636,12 +1674,59 @@ export class Renderer {
       }
       return;
     }
+    if (view.wall?.fill && view.human !== null) {
+      ctx.strokeStyle = 'rgba(240,220,120,0.9)';
+      ctx.lineWidth = Math.max(1, t * 0.1);
+      ctx.strokeRect(hover.x * t + 1, hover.y * t + 1, t - 2, t - 2);
+      return;
+    }
     if (view.wall && view.human !== null) {
-      const check = checkWall(world, view.human, hover.x, hover.y, view.wall.vertical);
+      // Vorschau (Nachtrag G.3e): neue gegnerische Route je Lane gestrichelt und ihr Umwegfaktor – zwischengespeichert,
+      // weil die Wegberechnung je Mausposition einmal reicht.
+      const check = checkWallPreview(world, view.human, hover.x, hover.y, view.wall.vertical);
       ctx.fillStyle = check.ok ? PALETTE.previewOk : PALETTE.previewBad;
       for (const [x, y] of wallCoords(hover.x, hover.y, view.wall.vertical)) {
         if (world.grid.inBounds(x, y)) ctx.fillRect(x * t, y * t, t, t);
       }
+      if (check.ratios) {
+        const w = world.grid.width;
+        ctx.save();
+        ctx.setLineDash([t * 0.4, t * 0.3]);
+        ctx.lineWidth = Math.max(1, t * 0.12);
+        ctx.font = `${Math.round(t * 0.55)}px ${MONO}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const r of ROUTES) {
+          const d = check.ratios[r];
+          const bad = d.ratio > world.rules.walls.detour + 1e-9;
+          ctx.strokeStyle = bad ? 'rgba(235,90,70,0.9)' : d.ratio > 1.01 ? 'rgba(240,200,90,0.9)' : 'rgba(200,220,240,0.55)';
+          ctx.beginPath();
+          d.path.forEach((c, k) => {
+            const px = ((c % w) + 0.5) * t;
+            const py = (Math.floor(c / w) + 0.5) * t;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          const wp = world.map.waypoints[r];
+          ctx.fillStyle = 'rgba(10,15,12,0.8)';
+          ctx.fillRect(wp.x * t - t * 1.3, wp.y * t - t * 0.4, t * 2.6, t * 0.8);
+          ctx.fillStyle = bad ? '#f08a70' : '#f2f0e6';
+          ctx.fillText(`×${d.ratio.toFixed(2)}`, wp.x * t, wp.y * t);
+        }
+        ctx.restore();
+      }
+      return;
+    }
+    if (view.rally && view.human !== null) {
+      ctx.strokeStyle = 'rgba(240,220,120,0.95)';
+      ctx.lineWidth = Math.max(1, t * 0.1);
+      ctx.beginPath();
+      ctx.moveTo((hover.x + 0.3) * t, (hover.y + 0.9) * t);
+      ctx.lineTo((hover.x + 0.3) * t, (hover.y + 0.1) * t);
+      ctx.lineTo((hover.x + 0.85) * t, (hover.y + 0.3) * t);
+      ctx.lineTo((hover.x + 0.3) * t, (hover.y + 0.5) * t);
+      ctx.stroke();
       return;
     }
     ctx.strokeStyle = PALETTE.hover;

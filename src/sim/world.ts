@@ -1,11 +1,11 @@
 import { HQ } from '../data/buildings';
 import { updateFlank } from './systems/flank';
 import type { BuildingDef, BuildingId } from '../data/buildings';
-import { FACTIONS } from '../data/factions';
+import { FACTIONS, GEAR_STEPS, NATURE_STEPS } from '../data/factions';
 import type { FactionDef, FactionId, UpgradeEffect } from '../data/factions';
 import { RULES, overtimeEnabled } from '../data/rules';
 import type { PhaseDef, Rules } from '../data/rules';
-import { UNITS, emptyUnitCounts, lineUnit } from '../data/units';
+import { UNITS, emptyUnitCounts } from '../data/units';
 import type { UnitDef, UnitId, WeaponDef } from '../data/units';
 import type { PlayerCommand, TimedCommand } from './commands';
 import type { Entity, MoverState, WeaponState } from './entity';
@@ -24,6 +24,10 @@ import type { StationMode } from '../data/stations';
 import { removeWall, updateSwaps, updateWalls } from './systems/abilities';
 import { applyCommand } from './systems/applyCommand';
 import { updateCombat } from './systems/combat';
+import { mudLevel, updateMud } from './systems/mud';
+import { newBuyState, updatePurchases } from './systems/purchases';
+import { updateWallRatios } from './systems/walls';
+import type { BuyState } from './systems/purchases';
 import { updateLifespans } from './systems/lifespan';
 import { updateEmergency } from './systems/emergency';
 import { updateScout } from './systems/scout';
@@ -32,7 +36,7 @@ import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
 import { NO_SYNERGY, newHold } from './systems/synergy';
-import { keystoneDeath } from './systems/keystone';
+import { keystoneDeath, updateGates } from './systems/keystone';
 import type { SynergyHold, SynergyState } from './systems/synergy';
 import { releaseClutch, updateMyr } from './systems/myr';
 import type { SiteState } from './systems/sites';
@@ -158,6 +162,18 @@ export interface PlayerStats {
   /** Terra-Former-Diagnose (26.10. abends): Gelände-Käufe für Terraformer mit Speicher; Terraformer je Fabrikstufe (Index 0 = Stufe I). */
   storerBuys: number;
   formersByLevel: number[];
+  /** 26.10. spät: Rufe je Wesen; Rufe auf einem Block mit gekauftem Boden; Entscheidungen (Forschung, Stufe, Kauf, Umwidmen). */
+  summonsByGround: Record<string, number>;
+  boughtSummons: number;
+  decisions: number;
+  /** Verschlammung: schwere Verluste dieses Spielers, Summe der Stufen beim Tod, davon mit ≥ 4 Stufen. */
+  /** Käufe je Art (Nachtrag G) und Aufgebote; Sekunden mit Energie ≥ 90 % des Speichers. */
+  buys: Record<string, number>;
+  energyJam: number;
+  splashHits: number;
+  heavyDeaths: number;
+  heavyMudSum: number;
+  heavyMud4: number;
   /** Erntehelfer (26.10. abends): Rufe, davon Sprint-Rufe, auf Block anderer eigener Linie; Rufe ab Minute 5 vorn/hinten; Abstände; Terraformer mit Restspeicher gefallen; Basiskäufe. */
   rituals: number;
   sprintRituals: number;
@@ -232,6 +248,14 @@ export interface PlayerState {
   emergency: { pressure: number; section: number; used: number[]; bonusUntil: number; open: boolean };
   /** Spähbericht: wieder möglich ab Tick, unterwegs (kommt zu `dueTick` an), zuletzt erhaltener Bericht. */
   scout: { readyTick: number; pending: { dueTick: number; report: ScoutReport } | null; last: ScoutReport | null };
+  /** Käufe (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub. */
+  buys: BuyState;
+  /**
+   * Schlussstein-Tor (26.10. spät): offene Tore (Guthaben), Tick des nächsten Tors, Zahl der geöffneten Tore, gekaufte
+   * Schlusssteine (für den Preis), seit wann die Kartenmitte gehalten wird (−1 = nicht), vorgezogene Tore, Tor-Nummer je
+   * gekauftem Schlussstein.
+   */
+  gate: { credits: number; next: number; opened: number; bought: number; holdSince: number; early: number; byKeystone: Record<string, number> };
   /** Übrige Gelände-Platzierungen der Vorbereitungsphase. */
   prepLeft: number;
   /** Held (über das HQ geholt): null = noch keiner. respawnTick −1 = lebt. */
@@ -265,6 +289,8 @@ export interface ActiveWall {
   owner: PlayerId;
   cells: { index: number; original: number }[];
   raiseTick: number;
+  /** Bezahlte Energie (Zuschütten vor dem Aufsteigen: zurück). */
+  cost?: number;
 }
 
 export interface MatchResult {
@@ -299,6 +325,13 @@ export class World {
   /** Nach ID sortiert (neue Entities kommen immer hinten dazu). */
   entities: Entity[] = [];
   walls: ActiveWall[] = [];
+  /** Umwegfaktor durch Wälle je Angreifer und Route (Nachtrag G.3, alle 2 s); Sekunden mit Umweg (Messung). */
+  wallRatio: [Record<Route, number>, Record<Route, number>] = [{ top: 1, mid: 1, bottom: 1 }, { top: 1, mid: 1, bottom: 1 }];
+  wallBlockedSeconds = 0;
+  /** Messung (G.3g): Verbände, deren Route einen Wall-Umweg hatte, und Verbände, die einen Wall beschossen haben; Sekunden gegnerischer Verbände auf eigenem Matsch/Schnee. */
+  wallFaced: [Set<number>, Set<number>] = [new Set(), new Set()];
+  wallHitters: [Set<number>, Set<number>] = [new Set(), new Set()];
+  slowGroundSeconds: [number, number] = [0, 0];
   /**
    * Lagebild je Spieler: was er über gegnerische Gebäude weiß (zuletzt gesehen).
    * Schlüssel = Gebäude-ID. Kann durch Täuschung falsch sein und veraltet sein:
@@ -363,6 +396,8 @@ export class World {
   readonly tileCooldown: Uint32Array;
   /** Schlusssteine (26.10.): im Kampf geformter Boden (Kachel → Tick) – zählt erst nach laneDelay für Lanes, nie für Rufe. */
   readonly combatGround = new Map<number, number>();
+  /** Kacheln, die zuletzt über einen Gelände-Kauf entstanden sind (für die Messung „Kauf bestellt ein Wesen“). */
+  readonly boughtTiles = new Set<number>();
   /** Gerölltreppen (Spalt): Kachel → Besitzer und Ende. */
   readonly stairs = new Map<number, { owner: PlayerId; until: number }>();
   /** Rudel (Schlussstein Hund): je Spieler und Lane – bis zu diesem Tick heult das Rudel. */
@@ -485,9 +520,12 @@ export class World {
     updateFront(this);
     updateEmergency(this);
     updateScout(this);
+    updatePurchases(this);
+    updateWallRatios(this);
     updateSites(this);
     updateFactories(this);
     updateResearch(this);
+    updateGates(this);
     updateHeroes(this);
     updateMarket(this);
     if (this.tick % this.rules.visionEvery === 0) updateVision(this);
@@ -500,6 +538,7 @@ export class World {
     updateMovement(this);
     updateFlank(this);
     updateCombat(this);
+    updateMud(this);
     updateLifespans(this);
     this.removeDead();
     checkVictory(this);
@@ -821,6 +860,13 @@ export class World {
   private onUnitDeath(e: Entity, killer: PlayerId): void {
     const def = UNITS[e.defId as UnitId];
     keystoneDeath(this, e, killer); // Schlusssteine: Bluff, Nachzünder
+    if (e.armor === 'heavy') {
+      const st = this.players[e.owner].stats;
+      const lv = mudLevel(e);
+      st.heavyDeaths++;
+      st.heavyMudSum += lv;
+      if (lv >= 4) st.heavyMud4++;
+    }
     if (def.former && (e.tf?.store ?? 0) >= 1) this.players[e.owner].stats.formersWasted++; // Terraformer mit Restspeicher gefallen
     if (def.deathSpawn) {
       // Zerfall: so viele Modelle, aufgeteilt auf Verbände (z. B. Battlesphäre → 16 Drohnen = 2 Verbände).
@@ -907,12 +953,7 @@ export class World {
     const fx: Required<UpgradeEffect> = {
       hp: 1, damage: 1, speed: 1, heal: 1, vision: 0, range: 0, splash: 0, strength: 0, ap: 0, hit: 0, toughness: 0, save: 0, lifespan: 0, pierce: 0, store: 0,
     };
-    // Terra-Former: Forschung der Linie (Wächter) gilt auch für Terraformer und Gerufene.
-    const line = this.rules.terraform.lineResearch ? lineUnit(unit) : unit;
-    for (const id of p.research) {
-      const u = p.faction.upgrades.find((x) => x.id === id);
-      if (!u || (u.unit !== unit && u.unit !== line)) continue;
-      const e = u.effect;
+    const add = (e: UpgradeEffect): void => {
       if (e.hp) fx.hp *= e.hp;
       if (e.damage) fx.damage *= e.damage;
       if (e.speed) fx.speed *= e.speed;
@@ -927,6 +968,33 @@ export class World {
       if (e.hit) fx.hit += e.hit;
       if (e.toughness) fx.toughness += e.toughness;
       if (e.save) fx.save += e.save;
+    };
+    // Einzel-Upgrades dieser Einheit (Sonder-Upgrades, Technoclan-Schlussstein-Türen).
+    for (const id of p.research) {
+      const u = p.faction.upgrades.find((x) => x.id === id);
+      if (u && u.unit === unit) add(u.effect);
+    }
+    // Ausrüstung I–III (26.10. spät): je Fabrikart, für alle Einheiten, die sie baut (Beimischungen eingeschlossen).
+    const level = (building: string, kind: string): number =>
+      p.faction.buildingUpgrades.filter((x) => x.building === building && x.kind === kind && p.research.includes(x.id)).length;
+    let gear = 0;
+    for (const [id, fb] of Object.entries(p.faction.buildings)) {
+      if (!fb) continue;
+      if (fb.tiers.includes(unit) || fb.mix?.unit === unit || fb.mix2?.unit === unit || fb.former === unit) gear = Math.max(gear, level(id, 'gear'));
+    }
+    const steps = GEAR_STEPS[unit];
+    for (let k = 0; k < gear && steps; k++) {
+      if (steps.attack[k]) add(steps.attack[k]!);
+      if (steps.armor[k]) add(steps.armor[k]!);
+    }
+    // Naturkraft I–III (Terra-Former, fraktionsweit): alle Gerufenen der Terraformer.
+    const def = UNITS[unit];
+    if (def.summoned && !def.leash) {
+      const n = level('meadowhall', 'nature');
+      for (let k = 0; k < n; k++) {
+        add(NATURE_STEPS.attack[k]!);
+        add(NATURE_STEPS.armor[k]!);
+      }
     }
     return fx;
   }
@@ -946,6 +1014,8 @@ export class World {
       rushReadyTick: 0,
       emergency: { pressure: 0, section: -1, used: [], bonusUntil: 0, open: false },
       scout: { readyTick: 0, pending: null, last: null },
+      buys: newBuyState(),
+      gate: { credits: 0, next: Math.round(this.rules.keystoneGate.first * this.tps), opened: 0, bought: 0, holdSince: -1, early: 0, byKeystone: {} },
       prepLeft: FACTIONS[faction].prepPlacements + this.rules.shaping.prepExtra,
       hero: null,
       vision: new Vision(this.grid),
@@ -974,6 +1044,15 @@ export class World {
         combatTiles: 0,
         storerBuys: 0,
         formersByLevel: [0, 0, 0],
+        summonsByGround: {},
+        boughtSummons: 0,
+        buys: {},
+        energyJam: 0,
+        splashHits: 0,
+        heavyDeaths: 0,
+        heavyMudSum: 0,
+        heavyMud4: 0,
+        decisions: 0,
         rituals: 0,
         sprintRituals: 0,
         otherLineBlocks: 0,

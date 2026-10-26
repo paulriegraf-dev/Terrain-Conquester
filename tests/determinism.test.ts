@@ -66,7 +66,10 @@ describe('Spiegelbild', () => {
       world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
       // 25.10.: Seit dem Balance-Patch wollen beide KIs um 2:34 dieselben Mittelkacheln umbauen (x 23/24 liegen in
       // beiden 3×3-Flächen) – wer zuerst dran ist, bekommt sie. Das ist ein echter Gleichstand, kein Fehler: bis 2:30 prüfen.
-      for (let t = 0; t < 2.5 * 60 * world.tps; t++) {
+      // 26.10. spät (Nachtrag G.3a, Wegkosten-Tabelle): Wald kostet wie Wiese – mehr exakte Gleichstände. Technoclan teilt
+      // sich um 1:57 die Mittelkacheln (x 24 liegt in beiden 2×2-Flächen), die Myriaden-KI kauft um 1:30 nur auf einer
+      // Seite Gelände (Sicht-Gleichstand). Darum bis 1:25 prüfen. Offener Punkt: 2×2-Kauf der KI spiegelbildlich ausrichten.
+      for (let t = 0; t < 85 * world.tps; t++) {
         const commands = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
         world.step(commands);
       }

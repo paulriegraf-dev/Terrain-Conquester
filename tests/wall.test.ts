@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { WALL } from '../src/data/abilities';
+import { felsenpass } from '../src/data/maps/felsenpass';
+import { MOVE_PROFILES, PATH_COST } from '../src/data/movement';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
-import { checkWall } from '../src/sim/systems/abilities';
+import { checkWall, mayBreakWall, wallTiles } from '../src/sim/systems/abilities';
+import { detourRatios } from '../src/sim/systems/walls';
 import { pathsStayOpen } from '../src/sim/connectivity';
 import { World } from '../src/sim/world';
 import { RULES } from '../src/data/rules';
@@ -11,95 +14,106 @@ import { chokeMap, cmd, openMap, smallBases, stepTimes } from './fixtures';
 
 const calm = { ...smallBases, front: { ...RULES.front, regenPerSecond: 0 } };
 
-describe('Erdwall (seit 24.10.: dauerhaft, zerstörbar, Truppen weichen aus)', () => {
-  it('wird angekündigt, steigt auf, schiebt Truppen beiseite und bleibt stehen', () => {
+/** Nachtrag G.3 (26.10. spät): Erdwall als Gelände, Budget in Kacheln, Umweg-Regel, Brechen nur bei zu großem Umweg. */
+describe('Erdwall als Gelände (Nachtrag G.3)', () => {
+  it('wird angekündigt, steigt auf, schiebt Truppen beiseite und bleibt stehen – 15 Energie je Kachel', () => {
     const world = new World({ map: openMap, seed: 1, rules: calm });
-    const u = world.addUnit(0, UNITS.sniper, { x: 6.5, y: 7.5 }, 'bottom');
+    const u = world.addUnit(0, UNITS.sniper, { x: 4.5, y: 7.5 }, 'bottom');
     u.mover!.speed = 0;
     u.weapon = undefined;
     world.step();
+    const energy = world.players[0].energy;
     const version = world.grid.version;
-    world.step([cmd(0, { type: 'castWall', x: 6, y: 7, vertical: true })]);
-    assert.equal(world.grid.terrain[world.grid.index(6, 7)], TERRAIN_INDEX.meadow, 'erst angekündigt');
+    world.step([cmd(0, { type: 'castWall', x: 4, y: 7, vertical: true })]);
+    assert.ok(Math.abs(world.players[0].energy - (energy - WALL.length * RULES.walls.tileCost)) < 1, 'drei Kacheln × 15');
+    assert.equal(world.grid.terrain[world.grid.index(4, 7)], TERRAIN_INDEX.meadow, 'erst angekündigt');
     stepTimes(world, WALL.raiseSeconds * world.tps + 1);
-    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(6, y)], TERRAIN_INDEX.wall);
+    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(4, y)], TERRAIN_INDEX.wall);
     assert.ok(world.grid.version > version, 'Raster-Version muss steigen (Wegfindung rechnet neu)');
-    assert.notEqual(Math.floor(u.pos.x), 6, 'der Scharfschütze ist ausgewichen');
-
-    world.step([cmd(0, { type: 'castWall', x: 4, y: 0, vertical: false })]);
-    const rejected = world.events.filter((e) => e.type === 'rejected');
-    assert.match(rejected.at(-1)?.type === 'rejected' ? rejected.at(-1)!.reason : '', /lädt noch/);
-
-    stepTimes(world, 60 * world.tps);
-    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(6, y)], TERRAIN_INDEX.wall, 'dauerhaft');
+    assert.notEqual(Math.floor(u.pos.x), 4, 'der Scharfschütze ist ausgewichen');
+    stepTimes(world, 120 * world.tps);
+    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(4, y)], TERRAIN_INDEX.wall, 'keine Lebensdauer');
+    assert.equal(wallTiles(world, 0), 3);
   });
 
-  it('leichte Truppen kommen nicht durch – schwere brechen ihn, dann kehrt der Boden zurück', () => {
-    const hit = (unit: 'sniper' | 'gunner'): boolean => {
-      const world = new World({ map: openMap, seed: 1, rules: calm });
-      world.players[1].vision.reveal(10, 7, 20);
-      world.step([cmd(0, { type: 'castWall', x: 6, y: 7, vertical: true })]);
-      stepTimes(world, WALL.raiseSeconds * world.tps + 1);
-      const wall = world.entities.find((e) => e.alive && e.kind === 'wall')!;
-      assert.ok(wall, 'Wall-Bauwerk');
-      const s = world.addUnit(1, UNITS[unit], { x: 8.5, y: 7.5 }, 'bottom');
-      s.mover!.speed = 0;
-      stepTimes(world, 60 * world.tps);
-      return !wall.alive;
-    };
-    assert.equal(hit('sniper'), false, 'Scharfschützen (Infanterie) brechen keinen Wall');
-    assert.equal(hit('gunner'), true, 'der Technogunner (schwer) bricht ihn');
+  it('zuschütten ist kostenlos, der Boden kehrt zurück, das Budget wird frei', () => {
     const world = new World({ map: openMap, seed: 1, rules: calm });
-    world.step([cmd(0, { type: 'castWall', x: 6, y: 7, vertical: true })]);
+    world.step([cmd(0, { type: 'castWall', x: 4, y: 7, vertical: true })]);
     stepTimes(world, WALL.raiseSeconds * world.tps + 1);
-    const wall = world.entities.find((e) => e.alive && e.kind === 'wall')!;
-    world.destroy(wall, 1);
-    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(6, y)], TERRAIN_INDEX.meadow);
+    const energy = world.players[0].energy;
+    world.step([cmd(0, { type: 'fillWall', x: 4, y: 8 })]);
+    for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(4, y)], TERRAIN_INDEX.meadow);
+    assert.equal(wallTiles(world, 0), 0);
+    assert.ok(world.players[0].energy >= energy, 'kostenlos');
   });
 
-  it(`höchstens ${WALL.maxActive} gleichzeitig`, () => {
-    const world = new World({ map: openMap, seed: 1, rules: { ...calm, startEnergy: 400 } });
-    world.step();
-    for (let k = 0; k < WALL.maxActive; k++) {
-      world.players[0].wallReadyTick = 0;
-      world.step([cmd(0, { type: 'castWall', x: 3 + k, y: 1, vertical: true })]);
+  it('Budget 24 Kacheln je Spieler', () => {
+    const world = new World({ map: felsenpass, seed: 1, rules: { startEnergy: 400, maxEnergy: 2000 } });
+    world.players[0].energy = 2000;
+    let placed = 0;
+    for (let x = 2; x <= 12 && placed < 8; x += 2) for (const y of [2, 24]) {
+      if (placed >= 8) break;
+      if (checkWall(world, 0, x, y, true).ok) {
+        world.step([cmd(0, { type: 'castWall', x, y, vertical: true })]);
+        placed++;
+      }
     }
-    world.players[0].wallReadyTick = 0;
-    const check = checkWall(world, 0, 3, 6, true);
-    assert.equal(check.ok, false);
-    assert.match(check.ok ? '' : check.reason, /Höchstens/);
+    assert.equal(wallTiles(world, 0), 24);
+    const next = checkWall(world, 0, 14, 2, true);
+    assert.equal(next.ok, false);
+    assert.match(next.ok ? '' : next.reason, /Budget/);
   });
 
-  it('nicht im gegnerischen Gebiet', () => {
-    const world = new World({ map: openMap, seed: 1, rules: smallBases });
-    world.addUnit(0, UNITS.hoverscout, { x: 12.5, y: 7.5 }, 'bottom'); // sieht weit
-    world.step();
-    const check = checkWall(world, 0, 18, 7, true);
-    assert.equal(check.ok, false);
-    assert.match(check.ok ? '' : check.reason, /gegnerischen Gebiet|vor die Grenze|sichtbarem/);
-  });
-
-  it('geht nur in sichtbarem Gebiet', () => {
+  it('nur im eigenen Kartendrittel oder in der eigenen Einflusszone', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases });
     world.step();
-    const check = checkWall(world, 0, 15, 7, true);
+    const check = checkWall(world, 0, 16, 7, true);
     assert.equal(check.ok, false);
-    assert.match(check.ok ? '' : check.reason, /sichtbarem Gebiet/);
+    assert.match(check.ok ? '' : check.reason, /Kartendrittel|Einflusszone/);
   });
 
-  it('ein Weg von HQ zu HQ bleibt immer offen', () => {
+  it('ein Weg von HQ zu HQ bleibt immer offen; Umweg über 2,0 wird abgelehnt', () => {
     const world = new World({ map: chokeMap, seed: 1, rules: smallBases });
-    world.addUnit(0, UNITS.sniper, { x: 4.5, y: 3.5 }, 'mid');
     world.step();
     const blocked = checkWall(world, 0, 8, 3, true); // genau im Engpass
     assert.equal(blocked.ok, false);
-    assert.match(blocked.ok ? '' : blocked.reason, /HQ zu HQ/);
-    assert.equal(checkWall(world, 0, 6, 3, true).ok, true); // daneben ist Platz drumherum
+    assert.match(blocked.ok ? '' : blocked.reason, /HQ zu HQ|Umweg/);
+  });
+
+  it('Umwegfaktor: gegnerische Route mit Wall teurer, ohne Wall 1,0', () => {
+    const world = new World({ map: felsenpass, seed: 1 });
+    const none = detourRatios(world, 1);
+    assert.ok(Math.abs(none.mid.ratio - 1) < 1e-9);
+    const wy = Math.floor(world.map.waypoints.mid.y);
+    const cells = [-1, 0, 1].map((dy) => world.grid.index(12, wy + dy));
+    const r = detourRatios(world, 1, cells);
+    assert.ok(r.mid.ratio >= 1, `×${r.mid.ratio.toFixed(3)}`);
+  });
+
+  it('Brechen nur bei Umweg über 2,0 und nur mit Bauwerk-Schaden; Infanterie nie', () => {
+    const world = new World({ map: openMap, seed: 1, rules: calm });
+    const sniper = world.addUnit(1, UNITS.sniper, { x: 8.5, y: 7.5 }, 'bottom');
+    const gunner = world.addUnit(1, UNITS.colossus, { x: 8.5, y: 6.5 }, 'bottom');
+    world.wallRatio[1].bottom = 1.5;
+    assert.equal(mayBreakWall(world, sniper), false);
+    const siege = (UNITS.colossus.weapon!.structureDamage ?? 1) >= 2;
+    assert.equal(mayBreakWall(world, gunner), siege, 'Umweg 1,5: nur Belagerung beschießt Wälle');
+    world.wallRatio[1].bottom = 2.4;
+    assert.equal(mayBreakWall(world, gunner), true, 'Umweg 2,4: Schwere brechen');
+    assert.equal(mayBreakWall(world, sniper), false);
+  });
+
+  it('Wegkosten-Tabelle: Geröll für Fußtruppen 1,4, Matsch für Boden 1,7, Schweber gleiten über Wälle', () => {
+    assert.equal(PATH_COST.foot.rubble, 1.4);
+    assert.equal(PATH_COST.ground.rubble, 1);
+    assert.equal(PATH_COST.ground.mud, 1.7);
+    assert.equal(PATH_COST.hover.mud, 1);
+    assert.ok(MOVE_PROFILES.hover.speed.wall > 0);
+    assert.equal(MOVE_PROFILES.foot.speed.wall, 0);
   });
 
   it('einzelne Routen dürfen ganz zu sein (seit 24.10.)', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases });
-    // Oberen Routen-Wegpunkt einmauern: Der Weg von HQ zu HQ führt unten herum.
     const wp = world.map.waypoints.top;
     const wx = Math.floor(wp.x);
     for (let x = wx - 2; x <= wx + 2; x++) world.grid.setTerrain(world.grid.index(x, 2), TERRAIN_INDEX.wall);

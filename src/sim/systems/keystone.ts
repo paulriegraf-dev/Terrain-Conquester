@@ -5,7 +5,7 @@
  */
 import { keystoneId } from '../../data/keystones';
 import { TERRAIN_INDEX } from '../../data/terrain';
-import { UNITS } from '../../data/units';
+import { UNITS, lineUnit } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import type { PlayerId } from '../types';
@@ -17,7 +17,9 @@ import { defenseOf, woundsPerShot } from './hitmath';
 
 /** Hat Spieler p den Schlussstein dieser Einheitenart? */
 export function hasKeystone(world: World, p: PlayerId, unit: string): boolean {
-  return world.players[p].research.includes(keystoneId(unit as UnitId));
+  const r = world.players[p].research;
+  // Terra-Former (26.10. spät): ein Schlussstein je Linie – er gilt für Wächter UND Gerufenen.
+  return r.includes(keystoneId(unit as UnitId)) || r.includes(keystoneId(lineUnit(unit as UnitId)));
 }
 
 /** Auslösung zählen (Statistik nach der Runde). */
@@ -332,4 +334,62 @@ export function tryPressure(world: World, e: Entity, consumed: Map<Entity, numbe
 /** Hochdruck aktiv? */
 export function underPressure(world: World, e: Entity): boolean {
   return (e.ks?.pressureUntil ?? 0) > world.tick;
+}
+
+// ------------------------------------------------------------------ Schlussstein-Tor (26.10. spät)
+
+/** Preis des nächsten Schlussteins nach Reihenfolge (200 · 260 · 340 · 420, dann +80). */
+export function keystonePrice(world: World, p: PlayerId): number {
+  const g = world.rules.keystoneGate;
+  const n = world.players[p].gate.bought;
+  return n < g.prices.length ? g.prices[n]! : g.prices[g.prices.length - 1]! + g.step * (n - g.prices.length + 1);
+}
+
+/** Kartenmitte (Kartendatum, sonst der mittlere Wegpunkt). */
+export function mapCenter(world: World): { x: number; y: number } {
+  return world.map.def.center ?? world.map.waypoints.mid;
+}
+
+/** Wer hält gerade die Kartenmitte (mindestens ein eigener Verband darin, kein gegnerischer)? null = niemand. */
+export function centerHolder(world: World): PlayerId | null {
+  const c = mapCenter(world);
+  const h = world.rules.keystoneGate.centerSize / 2;
+  const inside = [false, false];
+  for (const e of world.entities) {
+    if (!e.alive || e.kind !== 'unit') continue;
+    if (Math.abs(e.pos.x - c.x) <= h && Math.abs(e.pos.y - c.y) <= h) inside[e.owner] = true;
+  }
+  if (inside[0] && !inside[1]) return 0;
+  if (inside[1] && !inside[0]) return 1;
+  return null;
+}
+
+/** Tore öffnen (im Takt und vorzeitig über die gehaltene Mitte), einmal je Sekunde. */
+export function updateGates(world: World): void {
+  if (world.tick % world.tps !== 0) return;
+  const g = world.rules.keystoneGate;
+  const holder = g.center ? centerHolder(world) : null;
+  for (const p of [0, 1] as PlayerId[]) {
+    const gate = world.players[p].gate;
+    if (world.tick >= gate.next) {
+      gate.credits++;
+      gate.opened++;
+      gate.next += Math.round(g.every * world.tps);
+      world.emit({ type: 'gate', owner: p, early: false });
+    }
+    if (holder === p) {
+      if (gate.holdSince < 0) gate.holdSince = world.tick;
+      if (world.tick - gate.holdSince >= g.centerHold * world.tps) {
+        // Vorzeitig: das nächste Tor öffnet jetzt, der Takt läuft von hier weiter; die Mitte muss neu gehalten werden.
+        gate.credits++;
+        gate.opened++;
+        gate.early++;
+        gate.next = world.tick + Math.round(g.every * world.tps);
+        gate.holdSince = world.tick;
+        world.emit({ type: 'gate', owner: p, early: true });
+      }
+    } else {
+      gate.holdSince = -1;
+    }
+  }
 }

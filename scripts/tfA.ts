@@ -62,7 +62,7 @@ games.forEach((G, k) => {
   const rituals = UNIT_IDS.reduce((x, u) => x + (u.startsWith('special') ? P.stats.spawned[u] : 0), 0);
   rows.push({
     pair: G.pair, map: G.map, win: world.result?.winner === tf, minutes: world.tick / world.tps / 60,
-    summons: total, rituals, mudlings: P.stats.spawned.mudling, formerMinutes: formerSeconds / 60, sprint: P.stats.sprintRituals, otherLine: P.stats.otherLineBlocks, ahead: P.stats.ritualsAhead, home: P.stats.ritualsHome, gaps: P.stats.ritualGaps, wasted: P.stats.formersWasted, spawnBuys: P.stats.spawnBuys, formersTotal: P.stats.spawned.formerMeadow + P.stats.spawned.formerForest + P.stats.spawned.formerMud + P.stats.spawned.formerSnow + P.stats.spawned.formerRubble, perMinute, firstSummon, firstLevel2, energy, formersByLevel: P.stats.formersByLevel, buys: P.stats.shaped, storerBuys: P.stats.storerBuys, synergyBuys: P.stats.synergyBuys,
+    summons: total, rituals, mudlings: P.stats.spawned.mudling, formerMinutes: formerSeconds / 60, sprint: P.stats.sprintRituals, otherLine: P.stats.otherLineBlocks, ahead: P.stats.ritualsAhead, home: P.stats.ritualsHome, gaps: P.stats.ritualGaps, wasted: P.stats.formersWasted, spawnBuys: P.stats.spawnBuys, formersTotal: P.stats.spawned.terraformer + P.stats.spawned.terraformer + P.stats.spawned.terraformer + P.stats.spawned.terraformer + P.stats.spawned.terraformer, perMinute, firstSummon, firstLevel2, energy, formersByLevel: P.stats.formersByLevel, buys: P.stats.shaped, storerBuys: P.stats.storerBuys, synergyBuys: P.stats.synergyBuys,
   });
   console.log(`${label} ${G.pair.join(' vs ')} → TF ${world.result?.winner === tf ? 'Sieg' : 'Niederlage'} ${(world.tick / world.tps / 60).toFixed(1)} min · Rufe ${rituals} · erster Ruf ${firstSummon.toFixed(1)}`);
 });

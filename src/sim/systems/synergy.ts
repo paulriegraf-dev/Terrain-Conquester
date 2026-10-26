@@ -189,6 +189,12 @@ export function synergyHint(world: World, p: PlayerId, counts = laneCounts(world
   return best;
 }
 
+/** Steht auf dieser Lane eine Linienfabrik der Stufe III dieses Bodens? */
+function levelThree(world: World, p: PlayerId, lane: Route, ground: TerrainId): boolean {
+  return world.entities.some((e) => e.alive && e.owner === p && e.producer && e.producer.level >= 3 && e.producer.route === lane &&
+    UNITS[world.players[p].faction.buildings[e.defId as keyof typeof world.players[0]['faction']['buildings']]?.tiers[0] ?? 'drone']?.ground === ground);
+}
+
 export function computeSynergy(world: World, p: PlayerId): SynergyState {
   const counts = laneCounts(world, p);
   const min = world.rules.synergy.laneMin;
@@ -197,7 +203,10 @@ export function computeSynergy(world: World, p: PlayerId): SynergyState {
   const lanes = counts.map((_, lane) => {
     let best: TerrainId | null = null;
     let bestN = min - 1;
-    for (const id of SYNERGY_GROUNDS) if (n(lane, id) > bestN) { bestN = n(lane, id); best = id; }
+    for (const id of SYNERGY_GROUNDS) {
+      // Gleichstand (26.10. spät): eine Linienfabrik der Stufe III auf dieser Lane setzt ihre Linie durch.
+      if (n(lane, id) > bestN || (n(lane, id) === bestN && best !== null && levelThree(world, p, ROUTES[lane]!, id))) { bestN = n(lane, id); best = id; }
+    }
     return best;
   }) as [TerrainId | null, TerrainId | null, TerrainId | null];
   // 24.10. (Wunsch: Synergien möglichst oft aktiv): Eine Lane „hat“ Boden X, sobald dort mindestens laneMin eigene

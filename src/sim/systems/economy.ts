@@ -34,7 +34,10 @@ export function overtimeHint(world: World): string {
  */
 export function updateEconomy(world: World): void {
   for (const p of world.players) {
-    p.energy = Math.min(energyCap(world, p.id), p.energy + incomePerSecond(world, p.id) / world.tps);
+    const cap = energyCap(world, p.id);
+    p.energy = Math.min(cap, p.energy + incomePerSecond(world, p.id) / world.tps);
+    // Messung (Nachtrag G.5): Sekunden mit Energie-Stau (≥ 90 % des Speichers).
+    if (world.tick % world.tps === 0 && p.energy >= 0.9 * cap) p.stats.energyJam++;
   }
 }
 

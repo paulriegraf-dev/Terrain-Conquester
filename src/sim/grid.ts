@@ -1,4 +1,5 @@
 import type { MoveProfile, MoveProfileId } from '../data/movement';
+import { PATH_CLASS, PATH_COST } from '../data/movement';
 import { TERRAIN_LIST } from '../data/terrain';
 import type { TerrainDef } from '../data/terrain';
 import type { ParsedMap } from './map';
@@ -65,9 +66,16 @@ export class Grid {
 
   /** Wegkosten einer Kachel für die Wegfindung (langsamer = teurer). */
   moveCost(i: number, profile: MoveProfile): number {
-    const speed = this.table(profile)[this.terrain[i]!]!;
-    return speed > 0 ? 1 / speed : 1;
+    let t = this.costTables.get(profile.id);
+    if (!t) {
+      const c = PATH_COST[PATH_CLASS[profile.id]];
+      t = Float64Array.from(TERRAIN_LIST, (terrain) => c[terrain.id]);
+      this.costTables.set(profile.id, t);
+    }
+    return t[this.terrain[i]!]!;
   }
+  /** Wegkosten-Tabellen je Profil (Nachtrag G.3a: PATH_COST statt 1/Tempo). */
+  private costTables = new Map<string, Float64Array>();
 
   /** Blockiert die Kachel Sicht? Außerhalb der Karte blockiert alles. */
   blocksVision(x: number, y: number): boolean {

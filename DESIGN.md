@@ -1967,3 +1967,85 @@ Ein gemeinsamer Bau aus vier Vorgaben (Synergie/Verbund-Plan, Konter-Linie, Mark
 - **Täuschen mit Zweck:** nur direkt vor einem eigenen Druck (Fake-Route auf eine ruhige Lane) oder nach einem Planwechsel; nie zwei in 60 s; nie gegen HQ-Aufklärung ≥ 4. Fake-Sammeln gibt es als Spielmittel nicht.
 - **Labor-Test Geröll** (2 Steinwächter, stehend, Abstand 1,8): gegen 2 Technogunner ohne Geröll verloren (Gegner 22 % übrig), mit Geröll gewonnen (10 % übrig) – Geröll trägt dort. Gegen 1 Koloss in beiden Fällen gewonnen, mit Geröll aber mit weniger Rest (56 % statt 100 %) – widersprüchlich, der Aufbau ist grob (stehende Einheiten, ein Durchgang).
 - **Lern-KI:** Vordatei mit allen Signalen der heutigen Patches unter `docs/lern-ki-vordatei.md`.
+
+## Terra-Former-Umbau, Ausrüstung je Fabrik, Schlussstein-Tor, Verschlammung (26.10. spät)
+
+Patch des Nutzers (Entscheidung 26.10. spät), umgesetzt in der Reihenfolge A → B → C → D.
+
+**A. Ein Terraformer.** Die fünf Typen (Säer, Pflanzer, Wässerer, Frostbringer, Brecher) sind ein Einheitentyp
+`terraformer`. Werte, Spawn (jeder 5. Verband jeder Linienfabrik), Naturspeicher I/II/III = 2/3/4 (+1 HQ-Gelände),
+Erntehelfer, Sprint, Frontabstand, Ödland unverändert. Er formt die **Lane-Farbe seiner Route** (vorherrschender eigener
+Boden ab 12 Kacheln), sonst den Boden der Fabrik, die ihn gebaut hat (`formerGround`). Das **Wesen bestimmt der Boden
+unter dem 2×2-Block** (Wiese → Steppenjäger, Wald → Hainhüter, Matsch → Schlammschleuder, Schnee → Lawinenrufer,
+Geröll → Frontbrecher); Mischblock: Boden unter dem Terraformer. Ein 2×2-Kauf bestellt damit ein Wesen
+(`stats.boughtSummons`). **Linienfabrik Stufe II** formt den Streifen ihrer Lane (Wegpunkt-Zeile ±1) bis 6 Kacheln vor
+die eigene Gebietsgrenze, 1 Kachel je 6 s, nur neutral/fremd, nie eigene Kacheln; **Stufe III** bis 12 Kacheln und ihre
+Linie gewinnt bei Gleichstand die Lane-Farbe. „Mehr Terraformer“/„Starke Gerufene“ entfallen. Gelege unverändert.
+Umwidmen: der Terraformer bleibt (gleicher Typ), ohne Lane-Farbe formt er danach den neuen Boden der Fabrik.
+
+**B. Ausrüstung.** Einzelketten (Waffen/Panzerung/Heilung I–III) entfallen; ihre Schritte bleiben als Daten
+(`GEAR_STEPS`). „Ausrüstung I·II·III“ je Fabrikart (120/180/240, 15/20/25 s, ein Forschungsplatz, bleibt beim
+Umwidmen/Verkaufen): je Stufe +1 Angriffs- und +1 Panzerungsschritt für alle Einheiten dieser Fabrikart inkl.
+Beimischungen; Heiler/Hund: Heilung +20 % statt Angriff. Terra-Former fraktionsweit (an jeder Linienfabrik,
+150/220/300): **Naturkraft I–III** (Gerufene je Stufe Stärke/Durchschlag/Schaden und Widerstand/Rüstung/Leben) und
+**Wurzelwerk I–III** (Speicher +1 · Formtakt 1,5 → 1,2 s · Arbeit je Ruf 4 → 3); Schalter
+`terraform.rootsStoreAtLevel` (aus): Wurzelwerk I entfällt, +1 Speicher mit Fabrikstufe II. Sonder-Upgrades bleiben.
+
+**C. Schlussstein-Tor.** Erstes Tor Minute 11, dann alle 2,5 min; je offenem Tor ein Schlussstein (Guthaben). Preis
+nach Reihenfolge 200 · 260 · 340 · 420, dann +80 (Marktaufschlag wie üblich), 20 s an einer Fabrik, die die Einheit
+baut (TF: Linienfabrik). **Zentrumsanreiz** (`keystoneGate.center`, `centerHold` 60, `centerSize` 5): 60 s Kartenmitte
+allein halten → nächstes Tor sofort, Takt läuft von dort weiter. Kartenmitte = optionales Kartendatum `MapDef.center`,
+sonst der mittlere Wegpunkt; auf allen sechs Karten geprüft (Mitte begehbar, auch auf Steilküste/Schluchtenland liegt
+die Mitte auf der umkämpften Mittel-Lane – kein eigenes Datum nötig). Terra-Former: fünf Linien-Schlusssteine (je zwei
+Regeln, z. B. Wiese = Grasnarbe + Heimkehr); Myriaden: sechs unverändert; Technoclan: je Einheit ein Schlussstein mit
+zwei Türen (Scharfschützen, Plasmawerfer wie gebaut; Hover Scout, Batterie, Technogunner, Koloss, Nano-Heiler als
+Platzhalter-Daten). Anzeige: „Schlussstein: 1 offen · nächstes 13:30 · Mitte 42/60 s“ neben der Uhr; Knöpfe erst ab
+dem ersten Tor; Eigenheiten zeigt die gekauften mit Tor-Nummer. KI: Weg zum Schlussstein entfällt; Wahl-Regel (Art mit
+den meisten lebenden Verbänden, TC-Tür nach gesehener Panzerung); `AI_TUNING.aiCenter`: hält die Mitte, wenn sie dort
+seit 30 s allein steht und das nächste Tor über 60 s entfernt ist.
+
+**D. Verschlammung** (`rules.mudStacks`, `sim/systems/mud.ts`). Schlammwerfer: je Modell-Treffer eine Stufe (erwartete
+Treffer), Schlammschleuder: 2 Stufen auf alle Getroffenen (Splash-Radius); höchstens 6; je Stufe 1 Schaden/s ohne
+Rüstungswurf, Widerstand gilt (Verwunden mit der Stärke des Werfers gegen den Widerstand des Ziels, Schalter
+`toughness`); Abbau 1/s ab 3 s nach dem letzten Treffer; Verschlammte tragen das Bremsfeld-Tempo (0,7). Keine Bauwerke.
+Anzeige: Tropfen je Stufe über dem Verband, Status „Verschlammung 4 – 4/s“.
+Hinweis: Einheiten im eigenen Gebiet heilen 2 %/s – beim Koloss 8/s, mehr als 6 Stufen gegen Widerstand 9 (1/s).
+
+**E. Aufgeräumt.** Fünf Terraformer-Typen, Einzelketten, Gebäude-Ausbau je Linie (außer Erntezeit), Schlussstein als
+Kettenstufe (`alsoRequires`, `keystone.needArmor`), KI „Weg zum Schlussstein“ (`targetResearch`).
+
+## Nachtrag G: HQ-Zweige, Energie-Abflüsse, Erdwall als Gelände, Stellung (26.10. spät) – zusammen „Patch 2.1“
+
+**HQ-Zweige** bleiben generisch (5-2-0), Stufen 1–3 wie bisher (passiv). Stufe 4/5: Aufklärung 4 Dauerspähen verfügbar,
+5 Dauerspähen halber Preis · Markt 4 Vorratskauf verfügbar, 5 Großbestellung (Scheinbestellungen −30 %, doppelter
+Preisschub, 45 s) · Gelände 4 Kauffläche 3×3 statt 2×2, 5 Erdwall −30 % je Kachel und Budget 36. Entfallen: Lagezentrum
+(automatischer Bericht), passive Gegenspionage, Börsenmacht (Einkommen), Wallbau-Leben, Landnahme.
+
+**Käufe** (`sim/systems/purchases.ts`, `rules.purchases`; Preis steigt je Nutzung innerhalb von 3 min; alle im
+Spähbericht): Dauerspähen (60 → 90 → 130, 120 s, alle 20 s ein Bericht zu einer Route) · Gegenspionage (ab Aufklärung 2,
+40, 60 s) · Vorratskauf (Bauteilpreis 90 s für die eigenen Fabriken eingefroren; 20 % × Preis × eigener Bedarf × 10,
+mindestens 20 – Annahme für die Skala, Schraube `stock.scale`) · Aufgebot (ersetzt den Eilauftrag: nächster Verband
+sofort, 40 → 60 → 90 je Fabrik, nicht während Stufe/Umrüsten) · Nachschub (ab Minute 8, alle Fabriken 60 s +30 %,
+120 → 180 → 260, Spähbericht „Gegner beschleunigt“). Nicht gebaut: HQ-Panzerung, HQ-Reparatur, Türme, Einkommen.
+
+**Erdwall vorher** (zum Vergleich): 50 Energie je Wall (3 Kacheln), 20 s Abklingzeit je Spieler, dauerhaft, 900 Leben,
+Widerstand 8, Rüstung 4+, höchstens 4 gleichzeitig (HQ-Gelände bis +3), brechbar von Schweren, Artillerie, Sprengetopps.
+
+**Erdwall als Gelände** (`sim/systems/walls.ts`, `rules.walls`): Wegkosten-Tabelle je Klasse (`PATH_COST`:
+Wiese/Wald/Schnee 1,0 · Geröll 1,4 Fuß / 1,0 Fahrzeuge · Matsch 1,7 Boden / 1,0 Schweber · Wall und Schlucht für Boden
+unpassierbar, Schweber 1,0 – Schweber gleiten jetzt über Wälle); Flussfelder in ganzzahligen Schritten (exakte
+Gleichstände). Wall = Gelände ohne Leben/Lebensdauer: im eigenen Drittel immer, sonst in der eigenen Einflusszone,
+Budget 24 Kacheln, 15 Energie je Kachel, eigene Wälle kostenlos zuschütten (Werkzeug „Zuschütten“, Z). Setzen nur,
+wenn jede gegnerische Route (Fuß und Fahrzeug) ≤ 2,0 × ihre Kosten ohne Wälle bleibt (Vorschau: gestrichelte neue
+gegnerische Route je Lane mit Umwegfaktor). Brechen nur bei Umweg > 2,0 und Bauwerk-Schaden (Belagerung, Schwere mit
+Durchschlag, Sprengetopps, Frontbrecher; 200 Leben, Widerstand 10, Rüstung 4+); Belagerung darf Wälle in Reichweite
+auch sonst beschießen, nimmt sie aber zuletzt. **Stellung** je Fabrik (⚑, Taste Y): Sammelpunkt für haltende Verbände
+dieser Fabrik, im eigenen Drittel oder der Einflusszone; der Gegner sieht sie, sobald die Kachel in Sicht ist.
+
+**KI** (`AI_TUNING.buys`): Dauerspähen nach 2 min Anlass auf einer Route (statt Einzelbericht), Aufgebot nur bei
+bedrängter Lane und Energie über Puffer + 90, Nachschub direkt nach dem eigenen Vorrück-Befehl, Vorratskauf bei
+vermutetem Markteingriff (ab Markt 4), Trichter (zwei senkrechte Wälle schräg vor der Lane-Grenze, Stellung dort,
+Matsch/Schnee hinein) bei Matsch-/Schnee-Synergie oder -Ausrüstung und Umweg ≤ 1,6, höchstens zwei je Partie;
+Gegenseite: Umweg 1,5–2,0 → mit Belagerung vorrücken (Näherung für „Belagerung an die Spitze“). Spiegeltest jetzt bis
+1:25 (Wald = Wiese bei den Wegkosten macht mehr exakte Gleichstände; die 2×2-Käufe der KI sind nicht spiegelbildlich
+ausgerichtet – offener Punkt).

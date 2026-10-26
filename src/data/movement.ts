@@ -44,8 +44,21 @@ export const MOVE_PROFILES: Readonly<Record<MoveProfileId, MoveProfile>> = {
     id: 'hover',
     name: 'Schweber',
     hint: 'Gleitet über Schluchten; Matsch und Schnee bremsen nicht, im Wald langsamer.',
-    speed: { meadow: 1, forest: 0.7, mud: 1, snow: 1, mountain: 0, gorge: 0.8, wall: 0, rubble: 0.9, waste: 1 },
+    speed: { meadow: 1, forest: 0.7, mud: 1, snow: 1, mountain: 0, gorge: 0.8, wall: 0.8, rubble: 0.9, waste: 1 },
   },
 };
 
 export const MOVE_PROFILE_IDS: readonly MoveProfileId[] = ['foot', 'wheels', 'tracks', 'hover'];
+
+/**
+ * Wegkosten je Einheitenklasse (Nachtrag G.3a, 26.10. spät) – getrennt vom Tempo: Einheiten nehmen den billigsten Weg
+ * zwischen ihren Routenpunkten. Fußtruppen / Boden (Räder, Ketten) / Schweber. Erdwall und Schlucht sind für Boden
+ * unpassierbar (Tempo 0), für Schweber 1,0. Schraube: diese Tabelle.
+ */
+export type PathClass = 'foot' | 'ground' | 'hover';
+export const PATH_CLASS: Readonly<Record<MoveProfileId, PathClass>> = { foot: 'foot', wheels: 'ground', tracks: 'ground', hover: 'hover' };
+export const PATH_COST: Record<PathClass, Record<TerrainId, number>> = {
+  foot: { meadow: 1, forest: 1, snow: 1, rubble: 1.4, mud: 1.7, waste: 1, mountain: 1, gorge: 1, wall: 1 },
+  ground: { meadow: 1, forest: 1, snow: 1, rubble: 1, mud: 1.7, waste: 1, mountain: 1, gorge: 1, wall: 1 },
+  hover: { meadow: 1, forest: 1, snow: 1, rubble: 1, mud: 1, waste: 1, mountain: 1, gorge: 1, wall: 1 },
+};

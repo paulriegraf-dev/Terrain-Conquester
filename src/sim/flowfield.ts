@@ -86,8 +86,10 @@ function computeDistances(grid: Grid, sources: readonly number[], profile: MoveP
     for (const [dx, dy] of NEIGHBORS) {
       if (!canStep(grid, x, y, dx, dy, profile)) continue;
       const n = i + dy * w + dx;
-      const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-      const nd = d + (step * (costHere + grid.moveCost(n, profile))) / 2;
+      // Ganzzahlige Schritte (gerade 10, schräg 14, Kosten in Zehnteln): gleich lange Wege sind exakt gleich lang –
+      // sonst entscheiden Rundungsreste je nach Reihenfolge, und gespiegelte Seiten liefen verschieden (Nachtrag G.3a).
+      const step = dx !== 0 && dy !== 0 ? 14 : 10;
+      const nd = d + Math.round((step * (costHere + grid.moveCost(n, profile)) * 10) / 2);
       if (nd < dist[n]!) {
         dist[n] = nd;
         heap.push(n, nd);

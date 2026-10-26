@@ -9,15 +9,17 @@ import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { UNITS } from '../data/units';
 import { buildCost } from '../sim/costs';
 import type { BuildingId } from '../data/buildings';
-import { checkConvert, checkMerge, mergePartner, checkLevelUp, checkResearch, checkRushOrder, researching, rushReadyTick, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { checkConvert, checkMerge, mergePartner, checkLevelUp, checkResearch, checkRushOrder, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { sellValue } from '../sim/systems/applyCommand';
 import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
 import { routeChangeSeconds } from '../sim/systems/sites';
 import { counterLine } from '../sim/counters';
 import { weaponRoleOf } from './weaponRole';
-import { gorgeAreas, swapCostAt, wallCount } from '../sim/systems/abilities';
-import { disguiseFactor, gorgeLimit, scoutCost, scoutDelay, scoutNamesUnits, wallLimit } from '../sim/systems/hq';
+import { gorgeAreas, swapCostAt, wallTiles } from '../sim/systems/abilities';
+import { disguiseFactor, gorgeLimit, scoutCost, scoutDelay, scoutNamesUnits, wallBudget, wallTileCost } from '../sim/systems/hq';
+import { checkBuy } from '../sim/systems/purchases';
+import { PARTS, PART_IDS } from '../data/market';
 import type { Entity } from '../sim/entity';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
 import type { Stance, World } from '../sim/world';
@@ -75,7 +77,7 @@ export function commandsFor(ctx: CommandContext): CommandSet {
   if (sel?.kind === 'pad') return outpostCommands(ctx, sel.padId);
   if (sel?.kind === 'entity') {
     const e = world.get(sel.id);
-    if (e?.alive && e.kind === 'hq' && e.owner === view.human) return hqCommands(ctx);
+    if (e?.alive && e.kind === 'hq' && e.owner === view.human) return view.menu === 'watch' ? watchCommands(ctx) : view.menu === 'stock' ? stockCommands(ctx) : hqCommands(ctx);
     if (e?.alive && e.producer && e.owner === view.human) {
       if (view.menu === 'disguise') return disguiseCommands(ctx, e);
       if (view.menu === 'research') return researchCommands(ctx, e);
@@ -119,23 +121,29 @@ function mainCommands(ctx: CommandContext): CommandSet {
   const { world, view, canAct } = ctx;
   const me = view.human ?? 0;
   const p = world.players[me];
-  const wallLeft = Math.max(0, Math.ceil((p.wallReadyTick - world.tick) / world.tps));
   const buttons = buildButtons(ctx, null, false);
+  const tiles = wallTiles(world, me);
+  const budget = wallBudget(world, me);
+  const tileCost = wallTileCost(world, me);
   buttons.push({
     id: 'wall',
     glyph: '▤',
-    label: wallLeft ? `Erdwall ${wallLeft}s` : 'Erdwall',
+    label: `Erdwall ${tiles}/${budget}`,
     key: 'w',
-    cost: WALL.cost,
+    cost: WALL.length * tileCost,
     disabled: !canAct,
-    pressed: !!view.wall,
-    tip: `Erdwall (${WALL.cost} Energie, lädt ${WALL.cooldown} s): dauerhaft, blockiert Weg und Sicht. Brechen können ihn nur schwere Einheiten, Artillerie und Sprengetopps. Steigt nach ${WALL.raiseSeconds} s auf – Truppen darauf weichen aus. Eigenes Gebiet, Niemandsland und bis ${SHAPING_REACH} Kacheln vor die Grenze; ein Weg von HQ zu HQ bleibt immer. Deine: ${wallCount(world, me)} von ${wallLimit(world, me, WALL.maxActive)}.`,
+    pressed: !!view.wall && !view.wall.fill,
+    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg und Sicht, kein Ziel, keine Lebensdauer. Im eigenen Kartendrittel immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher).`,
     action: 'wall',
   });
   if (view.wall) {
     buttons.push({
       id: 'wall-rotate', glyph: view.wall.vertical ? '⇅' : '⇄', label: 'Drehen', key: 'r', disabled: !canAct,
       tip: 'Erdwall drehen (auch Rechtsklick).', action: 'wall-rotate',
+    });
+    buttons.push({
+      id: 'wall-fill', glyph: '▥', label: 'Zuschütten', key: 'z', disabled: !canAct, pressed: !!view.wall.fill,
+      tip: 'Eigenen Erdwall anklicken: kostenlos zuschütten, das Budget wird frei.', action: 'wall-fill',
     });
   }
   buttons.push({
@@ -353,7 +361,7 @@ function outpostCommands(ctx: CommandContext, padId: number): CommandSet {
 }
 
 function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
-  const { world, canAct, sellArmed } = ctx;
+  const { world, canAct, sellArmed, view } = ctx;
   const pr = e.producer!;
   const player = world.players[e.owner];
   const fb = player.faction.buildings[e.defId as BuildingId]!;
@@ -464,16 +472,19 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     },
   );
   const rush = checkRushOrder(world, e);
-  const rushRules = world.rules.rushOrder;
-  const readyTick = rushReadyTick(world, e);
-  const cooling = world.tick < readyTick;
+  const rushPrices = world.rules.purchases.rush.prices;
   buttons.push({
-    id: 'rush-order', glyph: '↯', label: 'Eilauftrag', key: 'b',
+    id: 'rush-order', glyph: '↯', label: 'Aufgebot', key: 'b',
     cost: rush.ok ? rush.cost : undefined,
     disabled: !canAct || !rush.ok,
-    pending: cooling ? `wieder in ${secs(readyTick)}s` : undefined,
-    tip: `Eilauftrag: ${UNITS[pr.unit].name} kommt sofort heraus – für ${rushRules.perSecond} Energie je Sekunde Restzeit (mindestens ${rushRules.min}), danach ${rushRules.cooldownSeconds} s Pause für Eilaufträge ${rushRules.perPlayer ? 'an allen eigenen Fabriken' : 'an dieser Fabrik'}. ${rush.ok ? `Jetzt ${rush.cost} Energie.` : rush.reason}`,
+    tip: `Aufgebot: der nächste Verband (${UNITS[pr.unit].name}) dieser Fabrik ist sofort fertig. ${rushPrices.join(' → ')} Energie je Nutzung innerhalb von ${world.rules.purchases.window / 60} Minuten an dieser Fabrik; nicht während Stufe oder Umrüsten. ${rush.ok ? `Jetzt ${rush.cost} Energie.` : rush.reason}`,
     action: 'rush-order',
+  });
+  buttons.push({
+    id: 'rally', glyph: '⚑', label: pr.rally ? 'Stellung ✓' : 'Stellung', key: 'y', disabled: !canAct,
+    pressed: view.rally?.entityId === e.id,
+    tip: `Stellung: Kachel im eigenen Kartendrittel oder in der eigenen Einflusszone anklicken. Verbände dieser Fabrik mit Haltung „Halten“ sammeln sich dort und halten; „Vorrücken“ ignoriert sie. Der Gegner sieht die Stellung wie ein Bauwerk.${pr.rally ? ' Erneut drücken und auf die Fabrik klicken hebt sie auf.' : ''}`,
+    action: 'rally-tool',
   });
   // Myriaden: zwei Bruten auf höchster Stufe → Superbrut (eigene Zeile, nur wenn es passt).
   if (fb.clutch && !pr.super && pr.level >= (fb.levels ?? fb.tiers.length)) {
@@ -521,9 +532,9 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const player = world.players[e.owner];
   const mixDef = player.faction.buildings[e.defId as BuildingId]?.mix;
   const ups = [
-    ...visibleUpgrades(player.faction, pr.unit, player.research),
+    ...visibleUpgrades(player.faction, pr.unit, player.research, player.gate.opened > 0),
     // Beimischung (Hund an der Brut ab Stufe III): seine Ketten und sein Schlussstein (26.10.)
-    ...(mixDef && pr.level >= mixDef.level ? visibleUpgrades(player.faction, mixDef.unit, player.research) : []),
+    ...(mixDef && pr.level >= mixDef.level ? visibleUpgrades(player.faction, mixDef.unit, player.research, player.gate.opened > 0) : []),
   ];
   const buildingUps = visibleBuildingUpgrades(player.faction, e.defId as BuildingId, player.research);
   const buttons: CommandButton[] = ups.map((u, k) => {
@@ -540,7 +551,7 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
       disabled: !canAct || done || !c.ok,
       pressed: done,
       pending: lab ? `${Math.max(0, Math.ceil((lab.doneTick - world.tick) / world.tps))}s` : running ? 'läuft' : undefined,
-      tip: `${u.name}: ${u.keystone ? `${KEYSTONE_OF[u.unit]?.rule} Zügel: ${KEYSTONE_OF[u.unit]?.rein} Gilt` : `${u.description}`} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
+      tip: `${u.name}: ${u.keystone ? `${u.description}. Gilt` : `${u.description}`} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
       action: 'research',
       data: { upgrade: u.id },
     };
@@ -617,6 +628,7 @@ function disguiseCommands(ctx: CommandContext, e: Entity): CommandSet {
  */
 function hqCommands(ctx: CommandContext): CommandSet {
   const { world, view, canAct } = ctx;
+  const secs = (tick: number): number => Math.max(0, Math.ceil((tick - world.tick) / world.tps));
   const me = view.human ?? 0;
   const tiers = world.players[me].hq;
   const buttons: CommandButton[] = HQ_PATH_IDS.map((id) => {
@@ -638,8 +650,69 @@ function hqCommands(ctx: CommandContext): CommandSet {
       data: { path: id },
     };
   });
+  // Käufe (Nachtrag G): je ein Klick, zeitlich begrenzt, Preis steigt je Nutzung in 3 min; alle spähbar.
+  const b = world.players[me].buys;
+  const left = (until: number): string | undefined => (world.tick < until ? `${secs(until)}s` : undefined);
+  const counter = checkBuy(world, me, 'counter');
+  buttons.push({
+    id: 'buy-counter', glyph: '◑', label: 'Gegenspionage', key: '4', cost: counter.ok ? counter.cost : undefined,
+    disabled: !canAct || !counter.ok, pending: left(b.counterUntil),
+    tip: `Gegenspionage (ab Aufklärung 2, ${world.rules.purchases.counter.cost} Energie): ${world.rules.purchases.counter.seconds} s lang fliegen gegnerische Täuschungen auf.${counter.ok ? '' : ` ${counter.reason}.`}`,
+    action: 'buy', data: { kind: 'counter' },
+  });
+  const watch = checkBuy(world, me, 'watch', 'mid');
+  buttons.push({
+    id: 'buy-watch', glyph: '◎', label: 'Dauerspähen', key: '5', cost: watch.ok ? watch.cost : undefined,
+    disabled: !canAct || (!watch.ok && world.tick >= b.watch.until && !/Route/.test(watch.ok ? '' : watch.reason)), pending: left(b.watch.until),
+    tip: `Dauerspähen (ab Aufklärung 4, ${world.rules.purchases.watch.prices.join(' → ')} Energie in 3 min, Aufklärung 5 halber Preis): ${world.rules.purchases.watch.seconds} s lang alle ${world.rules.purchases.watch.every} s ein Spähbericht zu einer Route – ohne Klick.${watch.ok ? '' : ` ${watch.reason}.`}`,
+    action: 'menu', data: { menu: 'watch' },
+  });
+  const stock = checkBuy(world, me, 'stock', undefined, 'arms');
+  buttons.push({
+    id: 'buy-stock', glyph: '¤', label: 'Vorratskauf', key: '6',
+    disabled: !canAct || world.players[me].hq.market < 4 || (!!b.stock && world.tick < b.stock.until), pending: b.stock ? left(b.stock.until) : undefined,
+    tip: `Vorratskauf (ab Markt 4): Preis eines Bauteils ${world.rules.purchases.stock.seconds} s für deine Fabriken einfrieren; kostet ${Math.round(world.rules.purchases.stock.share * 100)} % des Bauteilpreises × deinem Bedarf.${stock.ok ? '' : ` ${stock.reason}.`}`,
+    action: 'menu', data: { menu: 'stock' },
+  });
+  const surge = checkBuy(world, me, 'surge');
+  buttons.push({
+    id: 'buy-surge', glyph: '⇶', label: 'Nachschub', key: '7', cost: surge.ok ? surge.cost : undefined,
+    disabled: !canAct || !surge.ok, pending: left(b.surgeUntil),
+    tip: `Nachschub (ab Minute ${world.rules.purchases.surge.from / 60}, ${world.rules.purchases.surge.prices.join(' → ')} Energie in 3 min): alle Fabriken ${world.rules.purchases.surge.seconds} s lang ${Math.round((world.rules.purchases.surge.factor - 1) * 100)} % schneller. Der Gegner kann es erspähen („Gegner beschleunigt“).${surge.ok ? '' : ` ${surge.reason}.`}`,
+    action: 'buy', data: { kind: 'surge' },
+  });
   buttons.push(backButton('Abwählen'));
-  return { title: 'HQ · Zweige', buttons };
+  return { title: 'HQ · Zweige und Käufe', buttons };
+}
+
+/** Dauerspähen: Route wählen. */
+function watchCommands(ctx: CommandContext): CommandSet {
+  const { world, view, canAct } = ctx;
+  const me = view.human ?? 0;
+  const buttons: CommandButton[] = ROUTES.map((r) => {
+    const c = checkBuy(world, me, 'watch', r);
+    return {
+      id: `watch-${r}`, glyph: ROUTE_GLYPH[r], label: ROUTE_NAMES[r], key: ROUTE_KEY[r], cost: c.ok ? c.cost : undefined, disabled: !canAct || !c.ok,
+      tip: `Dauerspähen auf ${ROUTE_NAMES[r]}.${c.ok ? '' : ` ${c.reason}.`}`, action: 'buy', data: { kind: 'watch', route: r },
+    };
+  });
+  buttons.push(backButton());
+  return { title: 'Dauerspähen · Route', buttons };
+}
+
+/** Vorratskauf: Bauteil wählen. */
+function stockCommands(ctx: CommandContext): CommandSet {
+  const { world, view, canAct } = ctx;
+  const me = view.human ?? 0;
+  const buttons: CommandButton[] = PART_IDS.map((part, k) => {
+    const c = checkBuy(world, me, 'stock', undefined, part);
+    return {
+      id: `stock-${part}`, glyph: PARTS[part].name[0]!, label: PARTS[part].name, key: String(k + 1), cost: c.ok ? c.cost : undefined, disabled: !canAct || !c.ok,
+      tip: `Preis für ${PARTS[part].name} einfrieren.${c.ok ? '' : ` ${c.reason}.`}`, action: 'buy', data: { kind: 'stock', part },
+    };
+  });
+  buttons.push(backButton());
+  return { title: 'Vorratskauf · Bauteil', buttons };
 }
 
 function backButton(label = 'Zurück'): CommandButton {

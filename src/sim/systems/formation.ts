@@ -1,3 +1,4 @@
+import { rallyOf } from './rally';
 import { MOVE_PROFILES } from '../../data/movement';
 import { TERRAIN_INDEX } from '../../data/terrain';
 import { UNITS } from '../../data/units';
@@ -47,6 +48,7 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
   for (const p of PLAYERS) {
     for (const r of ROUTES) {
       const groups: Record<'hold' | 'defend' | 'secure', [Entity[], Entity[]]> = { hold: [[], []], defend: [[], []], secure: [[], []] };
+      const rallies = new Map<string, { at: Vec2; rows: [Entity[], Entity[]] }>();
       const site = siteOfRoute(world, r);
       for (const e of world.entities) {
         if (!e.alive || e.kind !== 'unit' || e.owner !== p || !e.mover || e.mover.route !== r) continue;
@@ -54,6 +56,15 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
         if (o === 'push') continue;
         if (o === 'secure' && !site) o = 'hold'; // keine Station auf dieser Lane: wie Halten
         const row = (e.weapon?.def.range ?? 0) >= rules.backRowRange ? 1 : 0;
+        // Stellung (Nachtrag G.3d): haltende Verbände einer Fabrik mit Stellung sammeln sich dort.
+        const rally = o === 'hold' ? rallyOf(world, e) : null;
+        if (rally) {
+          const key = `${rally.x},${rally.y}`;
+          const g = rallies.get(key) ?? { at: rally, rows: [[], []] as [Entity[], Entity[]] };
+          g.rows[row].push(e);
+          rallies.set(key, g);
+          continue;
+        }
         groups[o][row].push(e);
       }
       for (const stance of ['hold', 'defend'] as const) {
@@ -65,6 +76,11 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
         // an die Grenze (sonst würde niemand die Grenze vorschieben).
         placeRow(world, p, stance, anchor, front, slots, true);
         placeRow(world, p, stance, anchor, back, slots, front.length > 0);
+      }
+      for (const g of [...rallies.values()].sort((a, b) => a.at.x - b.at.x || a.at.y - b.at.y)) {
+        const anchor: Anchor = { pos: { x: g.at.x, y: g.at.y }, dir: { x: p === 0 ? 1 : -1, y: 0 } };
+        placeRow(world, p, 'hold', anchor, g.rows[0], slots, true);
+        placeRow(world, p, 'hold', anchor, g.rows[1], slots, g.rows[0].length > 0);
       }
       if (site) {
         const [front, back] = groups.secure;

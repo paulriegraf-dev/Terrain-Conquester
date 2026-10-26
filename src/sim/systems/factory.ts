@@ -1,7 +1,9 @@
+import { stepPrice } from './purchases';
 import type { BuildingUpgradeDef, BuildingUpgradeKind, FactionDef, UpgradeDef } from '../../data/factions';
 import { BUILDINGS } from '../../data/buildings';
 import type { BuildingId } from '../../data/buildings';
 import { UNITS, lineUnit } from '../../data/units';
+import { keystonePrice } from './keystone';
 import type { UnitId } from '../../data/units';
 import type { CommandResult } from '../commands';
 import type { Entity } from '../entity';
@@ -108,9 +110,13 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
     const prev = p.faction.upgrades.find((x) => x.id === u.requires || x.id === `${u.requires}a`);
     return { ok: false, reason: `Erst ${prev?.name.replace(/:.*$/, '') ?? 'die vorige Stufe'} erforschen` };
   }
-  if (u.keystone && world.rules.keystone.needArmor) {
-    const miss = (u.alsoRequires ?? []).find((r) => !p.research.includes(r));
-    if (miss) return { ok: false, reason: `Erst ${p.faction.upgrades.find((x) => x.id === miss)?.name ?? 'die Voraussetzung'} erforschen` };
+  // Schlussstein-Tor (26.10. spät): nur mit offenem Tor; Preis nach Reihenfolge, 20 s.
+  if (u.keystone) {
+    if (p.gate.credits <= 0) {
+      const next = Math.max(0, Math.ceil((p.gate.next - world.tick) / world.tps));
+      return { ok: false, reason: `Kein Schlussstein-Tor offen – das nächste in ${Math.floor(next / 60)}:${String(next % 60).padStart(2, '0')}` };
+    }
+    if (p.labs.some((l) => p.faction.upgrades.find((x) => x.id === l.upgrade)?.keystone)) return { ok: false, reason: 'Es wird schon ein Schlussstein erforscht' };
   }
   if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon erforscht' };
   if (u.fork) {
@@ -118,9 +124,9 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
     if (other) return { ok: false, reason: `Gabelung: schon ${other.name} gewählt` };
   }
   if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
-  const cost = upgradePrice(world, u.cost, researchPriceFactor(world, u.unit));
+  const cost = upgradePrice(world, u.keystone ? keystonePrice(world, owner) : u.cost, researchPriceFactor(world, u.unit));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
-  return { ok: true, cost, seconds: u.seconds };
+  return { ok: true, cost, seconds: u.keystone ? world.rules.keystoneGate.seconds : u.seconds };
 }
 
 /** Besitzt Spieler p ein (fertiges oder entstehendes) Gebäude dieser Art? */
@@ -133,7 +139,8 @@ function checkBuildingUpgrade(world: World, owner: PlayerId, u: BuildingUpgradeD
   const p = world.players[owner];
   const fb = p.faction.buildings[u.building];
   if (!fb) return { ok: false, reason: 'Unbekanntes Gebäude' };
-  if (!ownsBuilding(world, owner, u.building)) return { ok: false, reason: `Erst ein Gebäude „${fb.name}“ bauen` };
+  const anyOwned = u.anyBuilding && Object.keys(p.faction.buildings).some((id) => ownsBuilding(world, owner, id as BuildingId));
+  if (!anyOwned && !ownsBuilding(world, owner, u.building)) return { ok: false, reason: `Erst ein Gebäude „${fb.name}“ bauen` };
   if (p.research.includes(u.id)) return { ok: false, reason: 'Schon ausgebaut' };
   if (u.requires && !p.research.includes(u.requires)) {
     const prev = p.faction.buildingUpgrades.find((x) => x.id === u.requires);
@@ -164,6 +171,14 @@ export function startResearch(world: World, owner: PlayerId, upgradeId: string):
   const c = checkResearch(world, owner, upgradeId);
   if (!c.ok) return c;
   pay(world, owner, c.cost);
+  const ks = world.players[owner].faction.upgrades.find((x) => x.id === upgradeId)?.keystone;
+  if (ks) {
+    const gate = world.players[owner].gate;
+    gate.credits--;
+    gate.bought++;
+    gate.byKeystone[upgradeId] = gate.opened - gate.credits; // Nummer des Tors, mit dem er gekauft wurde
+  }
+  world.players[owner].stats.decisions++;
   world.players[owner].labs.push({ upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) });
   return { ok: true };
 }
@@ -337,7 +352,8 @@ function applyConvert(world: World, e: Entity, to: BuildingId): void {
   // Terra-Former: Die Terraformer aus dieser Fabrik wechseln die Linie (Säer → Brecher usw.).
   const oldFormer = faction.buildings[from]?.former;
   const newFormer = fb.former;
-  if (oldFormer && newFormer) {
+  // 26.10. spät: ein Terraformer für alle Linien – beim Umwidmen bleibt er, wie er ist.
+  if (oldFormer && newFormer && oldFormer !== newFormer) {
     for (const u of [...world.entities]) {
       if (!u.alive || u.kind !== 'unit' || u.owner !== e.owner || u.defId !== oldFormer || u.fromBuilding !== e.id) continue;
       const share = u.maxHp > 0 ? u.hp / u.maxHp : 1;
@@ -397,11 +413,12 @@ export function requirementMet(research: readonly string[], req: string): boolea
   return research.includes(req) || research.includes(`${req}a`) || research.includes(`${req}b`);
 }
 
-export function visibleUpgrades(faction: FactionDef, unit: UnitId, research: readonly string[]): UpgradeDef[] {
+export function visibleUpgrades(faction: FactionDef, unit: UnitId, research: readonly string[], gateOpen = true): UpgradeDef[] {
   // Schlusssteine der Gerufenen erscheinen an der Linienfabrik (26.10.).
   const ups = faction.upgrades.filter((u) => u.unit === unit || (u.keystone && lineUnit(u.unit) === unit));
   const out: UpgradeDef[] = [];
   for (const u of ups) {
+    if (u.keystone && !gateOpen) continue; // Schlussstein-Knöpfe erst mit dem ersten Tor
     const next = ups.find((x) => x.requires === u.id);
     if (u.requires && !requirementMet(research, u.requires)) continue; // vorige Stufe fehlt noch
     if (research.includes(u.id) && next) continue; // erledigt, die nächste Stufe steht schon da
@@ -414,7 +431,8 @@ export function visibleUpgrades(faction: FactionDef, unit: UnitId, research: rea
 
 /** Gebäude-Ausbau, den das Menü für eine Gebäudeart zeigt: je Kette die nächste offene (oder die letzte) Stufe. */
 export function visibleBuildingUpgrades(faction: FactionDef, building: BuildingId, research: readonly string[]): BuildingUpgradeDef[] {
-  const ups = faction.buildingUpgrades.filter((u) => u.building === building);
+  // Fraktionsweite Ketten (Naturkraft, Wurzelwerk) an jeder Linienfabrik.
+  const ups = faction.buildingUpgrades.filter((u) => u.building === building || (u.anyBuilding && !!faction.buildings[building]?.former));
   return ups.filter((u) => {
     if (u.requires && !research.includes(u.requires)) return false;
     const next = ups.find((x) => x.requires === u.id);
@@ -427,15 +445,14 @@ export function visibleBuildingUpgrades(faction: FactionDef, building: BuildingI
  * Kosten nach der echten Restzeit (mit Marktbremse), damit ein schwerer Verband teurer ist als Drohnen.
  */
 export function checkRushOrder(world: World, e: Entity): { ok: true; cost: number } | { ok: false; reason: string } {
+  // Aufgebot (Nachtrag G, 26.10. spät): nächster Verband sofort, 40 → 60 → 90 je Fabrik innerhalb von 3 min;
+  // nicht während Stufen, Umrüsten oder Umwidmen.
   const pr = e.producer!;
-  const rules = world.rules.rushOrder;
   if (pr.paused) return { ok: false, reason: 'Fabrik ist pausiert' };
-  if (pr.job) return { ok: false, reason: 'Fabrik ist gerade beschäftigt' };
-  const ready = rushReadyTick(world, e);
-  if (world.tick < ready) return { ok: false, reason: `Eilauftrag erst wieder in ${Math.ceil((ready - world.tick) / world.tps)} s` };
+  if (pr.job) return { ok: false, reason: 'Nicht während Stufe, Umrüsten oder Umwidmen' };
   const left = rushSecondsLeft(world, e);
   if (left <= 0.05) return { ok: false, reason: 'Der nächste Verband ist schon fertig' };
-  const cost = Math.max(rules.min, Math.ceil(left * rules.perSecond));
+  const cost = stepPrice(world, world.rules.purchases.rush.prices, pr.rushUses ?? []);
   if (world.players[e.owner].energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
   return { ok: true, cost };
 }
@@ -459,9 +476,7 @@ export function rushOrder(world: World, e: Entity): CommandResult {
   p.energy -= check.cost;
   p.stats.energySpent += check.cost;
   pr.progress = pr.intervalTicks; // fertig – kommt in diesem Tick heraus (sofern Limit und Platz es erlauben)
-  const ready = world.tick + Math.round(world.rules.rushOrder.cooldownSeconds * world.tps);
-  if (world.rules.rushOrder.perPlayer) p.rushReadyTick = ready;
-  else pr.rushReadyTick = ready;
+  (pr.rushUses ??= []).push(world.tick);
   world.emit({ type: 'rush', owner: e.owner, name: e.name, unit: UNITS[pr.unit].name, cost: check.cost });
   return { ok: true };
 }

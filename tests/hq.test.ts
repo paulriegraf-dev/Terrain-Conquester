@@ -51,22 +51,25 @@ describe('Forschung (24.10.): zentral, parallel zur Produktion', () => {
   it('ohne Fabrik-Klick, die Fabrik baut weiter, höchstens zwei gleichzeitig', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     const f = world.addBuilding(0, BUILDINGS.barracks, { x: 1, y: 0, w: 2, h: 2 });
+    world.addBuilding(0, BUILDINGS.workshop, { x: 1, y: 3, w: 2, h: 2 });
+    world.addBuilding(0, BUILDINGS.foundry, { x: 1, y: 6, w: 2, h: 2 });
     const before = f.producer!.progress;
-    world.step([cmd(0, { type: 'research', upgrade: 'sniper-armor-1' }), cmd(0, { type: 'research', upgrade: 'sniper-weapons-1' })]);
+    world.step([cmd(0, { type: 'research', upgrade: 'barracks-gear-1' }), cmd(0, { type: 'research', upgrade: 'workshop-gear-1' })]);
     assert.equal(world.players[0].labs.length, 2);
-    const third = checkResearch(world, 0, 'plasma-armor-1');
-    assert.equal(third.ok, false, 'Plasmawerfer erst ab Kasernen-Stufe 2 – und die Plätze sind voll');
+    const third = checkResearch(world, 0, 'foundry-gear-1');
+    assert.equal(third.ok, false, 'die Plätze sind voll');
     stepTimes(world, 2 * world.tps);
     assert.ok(f.producer!.progress > before, 'die Kaserne produziert weiter');
-    stepTimes(world, 12 * world.tps);
-    assert.deepEqual([...world.players[0].research].sort(), ['sniper-armor-1', 'sniper-weapons-1']);
+    stepTimes(world, 14 * world.tps);
+    assert.deepEqual([...world.players[0].research].sort(), ['barracks-gear-1', 'workshop-gear-1']);
     assert.equal(world.players[0].labs.length, 0);
   });
 
   it('nur für Einheiten, die eine eigene Fabrik bauen kann', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     world.addBuilding(0, BUILDINGS.barracks, { x: 1, y: 0, w: 2, h: 2 });
-    const c = checkResearch(world, 0, 'colossus-armor-1');
+    world.players[0].gate.credits = 1;
+    const c = checkResearch(world, 0, 'colossus-keystone-a');
     assert.equal(c.ok, false);
     assert.match(c.ok ? '' : c.reason, /Koloss/);
   });

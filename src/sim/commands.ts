@@ -56,7 +56,13 @@ export type Command =
   /** Notfallverlegung: den bedrängten Bauabschnitt in den Rückraum hinter dem HQ verlegen. */
   | { type: 'emergency' }
   /** Spähbericht anfordern: grobe gegnerische Stärke je Route (kostet Energie, kommt verzögert). */
-  | { type: 'scout' };
+  | { type: 'scout' }
+  /** Nachtrag G: Kauf (Dauerspähen auf einer Route, Gegenspionage, Vorratskauf eines Bauteils, Nachschub). */
+  | { type: 'buy'; kind: 'watch' | 'counter' | 'stock' | 'surge'; route?: Route; part?: PartId }
+  /** Nachtrag G.3: eigenen Erdwall zuschütten (kostenlos). */
+  | { type: 'fillWall'; x: number; y: number }
+  /** Nachtrag G.3d: Stellung einer Fabrik setzen (x < 0 = aufheben). */
+  | { type: 'setRally'; entityId: number; x: number; y: number };
 
 export interface PlayerCommand {
   player: PlayerId;

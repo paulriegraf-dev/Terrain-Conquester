@@ -1,28 +1,32 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { BUILDINGS } from '../src/data/buildings';
+import { MAPS } from '../src/data/maps';
+import { MOVE_PROFILES } from '../src/data/movement';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
 import { checkResearch } from '../src/sim/systems/factory';
+import { keystonePrice, mapCenter, updateGates } from '../src/sim/systems/keystone';
 import { applyHits } from '../src/sim/systems/combat';
 import { World } from '../src/sim/world';
-import { openMap, smallBases } from './fixtures';
+import { cmd, openMap, smallBases } from './fixtures';
 
 const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoclan'] };
 const rich = { ...smallBases, startEnergy: 400 };
 
 describe('Schlusssteine Terra-Former (26.10.)', () => {
-  it('Forschung: Waffen III und Panzerung II nötig, 200 Energie, 30 s; Gerufene an der Linienfabrik', () => {
+  it('Linien-Schlussstein: erst mit offenem Tor, ohne Forschungs-Voraussetzung, 200 Energie, 20 s; beide Regeln der Linie', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
     world.addBuilding(0, BUILDINGS.meadowhall, { x: 3, y: 0, w: 2, h: 2 });
     const p = world.players[0];
-    assert.equal(checkResearch(world, 0, 'wardMeadow-keystone').ok, false);
-    p.research.push('wardMeadow-weapons-1', 'wardMeadow-weapons-2', 'wardMeadow-weapons-3');
-    assert.equal(checkResearch(world, 0, 'wardMeadow-keystone').ok, false, 'Panzerung II fehlt');
-    p.research.push('wardMeadow-armor-1', 'wardMeadow-armor-2');
+    const shut = checkResearch(world, 0, 'wardMeadow-keystone');
+    assert.equal(shut.ok, false, 'kein Tor offen');
+    assert.match(shut.ok ? '' : shut.reason, /Tor/);
+    p.gate.credits = 1;
+    p.gate.opened = 1;
     const c = checkResearch(world, 0, 'wardMeadow-keystone');
-    assert.ok(c.ok && c.cost >= 200 && c.seconds === 30);
-    assert.ok(checkResearch(world, 0, 'specialMeadow-keystone').ok, 'Steppenjäger-Schlussstein an der Wiesenfabrik');
+    assert.ok(c.ok && c.cost >= 200 && c.seconds === 20);
+    assert.equal(checkResearch(world, 0, 'wardRubble-keystone').ok, false, 'nur an der Fabrik der Linie');
   });
 
   it('Heimkehr: unter 50 % zurück auf eigene Wiese, dort voll geheilt – einmal je Leben', () => {
@@ -114,12 +118,66 @@ describe('Schlusssteine Myriaden (26.10.)', () => {
   });
 });
 
-describe('Schlussstein nach Gabelung', () => {
-  it('Waffen III als Gabelung (…-3a/-3b) erfüllt die Voraussetzung', () => {
-    const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['myriaden', 'technoclan'] });
-    const w = world.addBuilding(0, BUILDINGS.foundry, { x: 3, y: 0, w: 2, h: 2 });
-    w.producer!.level = 2;
-    world.players[0].research.push('sphere-weapons-1', 'sphere-weapons-2', 'sphere-weapons-3a', 'sphere-armor-1', 'sphere-armor-2');
-    assert.ok(checkResearch(world, 0, 'sphere-keystone').ok);
+describe('Schlussstein-Tor (26.10. spät)', () => {
+  it('erstes Tor Minute 11, danach alle 2,5 Minuten; Tore sind ein Guthaben', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
+    const g = world.players[0].gate;
+    assert.equal(g.next, 660 * world.tps);
+    world.tick = 660 * world.tps;
+    updateGates(world);
+    assert.equal(g.credits, 1);
+    world.tick = 810 * world.tps;
+    updateGates(world);
+    assert.equal(g.credits, 2, 'ungenutzte Tore verfallen nicht');
+    assert.equal(g.next, 960 * world.tps);
+  });
+
+  it('Preis nach Reihenfolge 200 · 260 · 340 · 420, dann +80; ein Schlussstein je Tor', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
+    const g = world.players[0].gate;
+    const prices = [0, 1, 2, 3, 4, 5].map((n) => {
+      g.bought = n;
+      return keystonePrice(world, 0);
+    });
+    assert.deepEqual(prices, [200, 260, 340, 420, 500, 580]);
+    g.bought = 0;
+    world.addBuilding(0, BUILDINGS.meadowhall, { x: 3, y: 0, w: 2, h: 2 });
+    world.addBuilding(0, BUILDINGS.quarry, { x: 3, y: 3, w: 2, h: 2 });
+    world.players[0].energy = 2000;
+    g.credits = 1;
+    world.step([cmd(0, { type: 'research', upgrade: 'wardMeadow-keystone' })]);
+    assert.equal(g.credits, 0);
+    assert.equal(checkResearch(world, 0, 'wardRubble-keystone').ok, false, 'das Tor ist verbraucht');
+  });
+
+  it('Zentrumsanreiz: 60 s Mitte allein halten öffnet das nächste Tor vorzeitig, der Takt läuft von dort', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
+    const c = mapCenter(world);
+    const u = world.addUnit(0, UNITS.wardMeadow, { x: c.x, y: c.y }, 'mid');
+    u.mover!.speed = 0;
+    u.weapon = undefined;
+    const g = world.players[0].gate;
+    for (let t = 0; t <= 61; t++) {
+      world.tick = (100 + t) * world.tps;
+      updateGates(world);
+    }
+    assert.equal(g.credits, 1);
+    assert.equal(g.early, 1);
+    assert.ok(g.next < 660 * world.tps, 'das nächste Tor rückt nach vorn');
+    const foe = world.addUnit(1, UNITS.sniper, { x: c.x + 1, y: c.y }, 'mid');
+    foe.mover!.speed = 0;
+    world.tick += world.tps;
+    updateGates(world);
+    assert.equal(g.holdSince, -1, 'ein Gegner in der Mitte unterbricht das Halten');
+  });
+
+  it('alle sechs Karten: die 5×5-Mitte ist begehbar', () => {
+    for (const map of MAPS) {
+      const world = new World({ map, seed: 1 });
+      const c = mapCenter(world);
+      let open = 0;
+      for (let y = Math.floor(c.y - 2); y <= Math.floor(c.y + 2); y++) for (let x = Math.floor(c.x - 2); x <= Math.floor(c.x + 2); x++) if (world.grid.isPassable(x, y, MOVE_PROFILES.foot)) open++;
+      assert.ok(open >= 15, `${map.id}: ${open}`);
+    }
   });
 });

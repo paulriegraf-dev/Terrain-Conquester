@@ -39,32 +39,39 @@ describe('Marschbefehl sofort umstellen', () => {
 });
 
 describe('Eilauftrag', () => {
-  it('der nächste Verband kommt sofort, die Kosten richten sich nach der Restzeit', () => {
+  it('Aufgebot (Nachtrag G): der nächste Verband kommt sofort, 40 → 60 → 90 je Fabrik innerhalb von 3 min', () => {
     const { world, id } = withBarracks();
     const b = world.get(id)!;
-    b.producer!.progress = 0; // ein ganzer Takt liegt noch vor ihr
-    const check = checkRushOrder(world, b);
-    assert.ok(check.ok);
-    const seconds = b.producer!.intervalTicks / world.tps;
-    assert.equal(check.cost, Math.max(world.rules.rushOrder.min, Math.ceil(seconds * world.rules.rushOrder.perSecond)));
-    const units = world.unitCount(0);
-    const energy = world.players[0].energy;
-    world.step([cmd(0, { type: 'rushOrder', entityId: id })]);
-    assert.equal(world.unitCount(0), units + 1, 'ein Verband mehr – sofort');
-    assert.equal(world.players[0].energy, energy - check.cost);
+    world.players[0].energy = 400;
+    const costs: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      b.producer!.progress = 0;
+      const check = checkRushOrder(world, b);
+      assert.ok(check.ok);
+      costs.push(check.cost);
+      const units = world.unitCount(0);
+      world.step([cmd(0, { type: 'rushOrder', entityId: id })]);
+      assert.equal(world.unitCount(0), units + 1, 'ein Verband mehr – sofort');
+    }
+    assert.deepEqual(costs, [40, 60, 90, 90]);
     assert.ok(world.events.some((e) => e.type === 'rush'));
+    stepTimes(world, 181 * world.tps);
+    b.producer!.progress = 0;
+    const later = checkRushOrder(world, b);
+    assert.ok(later.ok && later.cost === 40, 'nach 3 min wieder der Grundpreis');
   });
 
-  it('danach Pause für Eilaufträge an dieser Fabrik; pausierte Fabriken gehen nicht', () => {
+  it('nicht während Stufe/Umrüsten; pausierte Fabriken gehen nicht', () => {
     const { world, id } = withBarracks();
-    world.step([cmd(0, { type: 'rushOrder', entityId: id })]);
     const b = world.get(id)!;
-    const again = checkRushOrder(world, b);
-    assert.equal(again.ok, false, 'gleich danach nicht nochmal');
-    stepTimes(world, world.rules.rushOrder.cooldownSeconds * world.tps);
-    assert.equal(checkRushOrder(world, b).ok, true, 'nach der Pause wieder');
     b.producer!.paused = true;
     assert.equal(checkRushOrder(world, b).ok, false, 'pausiert');
+    b.producer!.paused = false;
+    world.players[0].energy = 400;
+    world.step([cmd(0, { type: 'upgradeFactory', entityId: id })]);
+    const busy = checkRushOrder(world, b);
+    assert.equal(busy.ok, false);
+    if (!busy.ok) assert.match(busy.reason, /Stufe/);
   });
 
   it('zu wenig Energie: abgelehnt', () => {

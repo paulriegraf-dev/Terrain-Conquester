@@ -14,6 +14,7 @@ import type { Entity } from '../sim/entity';
 import { hashWorld } from '../sim/hash';
 import { dist, rectContains } from '../sim/math';
 import { checkSwapArea, checkWall } from '../sim/systems/abilities';
+import { checkRally } from '../sim/systems/rally';
 import { SWAP } from '../data/abilities';
 import { checkBuild, siteUnderCursor } from '../sim/placement';
 import { BUILD_ZONE } from '../sim/map';
@@ -535,6 +536,10 @@ export class Game {
         case 'research':
           if (ev.owner === human) this.hud.log(s, `Erforscht: ${ev.name}`, 'good');
           break;
+        case 'gate':
+          if (ev.owner === human) this.hud.log(s, ev.early ? 'Kartenmitte gehalten: ein Schlussstein-Tor öffnet vorzeitig' : 'Ein Schlussstein-Tor ist offen', 'good');
+          else if (ev.early && human !== null) this.hud.log(s, 'Der Gegner hält die Kartenmitte – sein Schlussstein-Tor öffnet vorzeitig', 'warn');
+          break;
         case 'wallBroken':
           if (ev.owner === human) this.hud.log(s, 'Ein Erdwall ist gebrochen', 'bad');
           else if (human !== null) this.hud.log(s, 'Gegnerischer Erdwall gebrochen', 'good');
@@ -734,6 +739,24 @@ export class Game {
       } else {
         this.hud.flash(check.reason);
       }
+      return;
+    }
+    if (this.view.rally && human !== null) {
+      const b = world.get(this.view.rally.entityId);
+      if (b?.alive && b.rect && rectContains(b.rect, cell.x, cell.y)) this.session.issue({ type: 'setRally', entityId: b.id, x: -1, y: -1 });
+      else if (b?.alive) {
+        const reason = checkRally(world, b, cell.x, cell.y);
+        if (reason) {
+          this.hud.flash(reason);
+          return;
+        }
+        this.session.issue({ type: 'setRally', entityId: b.id, x: cell.x, y: cell.y });
+      }
+      this.view.rally = null;
+      return;
+    }
+    if (this.view.wall?.fill && human !== null) {
+      this.session.issue({ type: 'fillWall', x: cell.x, y: cell.y });
       return;
     }
     if (this.view.wall && human !== null) {
@@ -944,7 +967,11 @@ export class Game {
   }
 
   private renderCodex(): void {
-    this.doc.getElementById('codex-body')!.innerHTML = renderCodex(this.codex);
+    // Gekaufte Schlusssteine der laufenden Partie (mit Tor-Nummer) – nur die eigenen, nichts aus dem Nebel.
+    const w = this.session?.world;
+    const me = w ? (this.session.human ?? 0) : 0;
+    const bought = w ? { [w.players[me].faction.id]: w.players[me].gate.byKeystone } : undefined;
+    this.doc.getElementById('codex-body')!.innerHTML = renderCodex({ ...this.codex, bought });
     for (const b of this.doc.querySelectorAll<HTMLElement>('.codex-tab')) b.setAttribute('aria-selected', String(b.dataset.tab === this.codex.tab));
   }
 
@@ -985,6 +1012,7 @@ export class Game {
   private back(): void {
     this.hudSellArmed = 0;
     if (this.view.build) this.view.build = null;
+    else if (this.view.rally) this.view.rally = null;
     else if (this.view.wall) this.view.wall = null;
     else if (this.view.swap) this.view.swap = null;
     else if (this.view.menu !== 'main') this.view.menu = 'main';
@@ -1205,6 +1233,23 @@ export class Game {
         if (b) this.session.issue({ type: 'rushOrder', entityId: b.id });
         break;
       }
+      case 'rally-tool': {
+        const b = own();
+        if (!b) break;
+        this.view.rally = this.view.rally?.entityId === b.id ? null : { entityId: b.id };
+        this.hud.flash(this.view.rally ? 'Stellung: Kachel anklicken (auf die Fabrik klicken hebt sie auf)' : 'Stellung abgebrochen');
+        break;
+      }
+      case 'buy': {
+        const kind = data.kind as 'watch' | 'counter' | 'stock' | 'surge' | undefined;
+        if (!kind) break;
+        this.session.issue({ type: 'buy', kind, route: data.route as Route | undefined, part: data.part as PartId | undefined });
+        if (kind === 'watch' || kind === 'stock') this.view.menu = 'main';
+        break;
+      }
+      case 'wall-fill':
+        if (this.view.wall) this.view.wall = { ...this.view.wall, fill: !this.view.wall.fill };
+        break;
       case 'emergency':
         this.session.issue({ type: 'emergency' });
         break;
@@ -2096,8 +2141,10 @@ export class Game {
           ? (unit.elite ? ` · ELITE ${unit.tech?.eliteFx?.kind === 'hybrid' ? `Hybrid (${PROTOCOLS[unit.tech.eliteFx.dominant].name})` : 'reinrassig'} (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '') +
             (unit.tech?.key ? ` · Verbund ${VERBUND[unit.tech.key]?.name ?? ''}${unit.elite?.print ? ' (Elite-Prägung)' : ' (seit Geburt)'}` : '')
           : '';
+        const mudN = unit.mud ? Math.round(unit.mud.n) : 0;
+        const mud = mudN > 0 ? ` · Verschlammung ${mudN} – ${mudN * world.rules.mudStacks.dps}/s` : '';
         this.hud.setStatus(
-          `${unit.name} (${who}) · ${Math.ceil(unit.hp)}/${unit.maxHp}${squad}${net} · ${weaponRoleOf(unit.defId as UnitId).label} · Panzerung ${ARMOR_LABEL[unit.armor as 'infantry' | 'light' | 'heavy'] ?? unit.armor} · ${counterLine(unit.defId as UnitId, enemyFaction)} · Widerstand ${unit.toughness}, Rüstung ${save}${profile} · ${ROUTE_NAMES[m.route]} · ${MOVE_PROFILES[m.profile].name}`,
+          `${unit.name} (${who}) · ${Math.ceil(unit.hp)}/${unit.maxHp}${squad}${mud}${net} · ${weaponRoleOf(unit.defId as UnitId).label} · Panzerung ${ARMOR_LABEL[unit.armor as 'infantry' | 'light' | 'heavy'] ?? unit.armor} · ${counterLine(unit.defId as UnitId, enemyFaction)} · Widerstand ${unit.toughness}, Rüstung ${save}${profile} · ${ROUTE_NAMES[m.route]} · ${MOVE_PROFILES[m.profile].name}`,
         );
         return;
       }

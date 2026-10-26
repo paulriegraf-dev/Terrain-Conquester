@@ -1,3 +1,4 @@
+import { surgeFactor } from './purchases';
 import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
 import { UNITS } from '../../data/units';
@@ -54,7 +55,7 @@ export function factorySpeed(world: World, e: Entity): number {
   const tempo = 1 + world.rules.terraform.tempoStep * buildingUpgradeLevel(world, e.owner, e.defId as BuildingId, 'tempo');
   // Rudel (Schlussstein Hund): Bruten auf einer heulenden Lane füllen ihr Gelege schneller.
   const pack = e.producer!.clutch && world.pack[e.owner][e.producer!.route] > world.tick ? 1 + world.rules.keystone.packClutch : 1;
-  return productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
+  return surgeFactor(world, e.owner) * productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
 }
 
 /**
@@ -66,8 +67,7 @@ export function mixOf(world: World, building: Entity): { unit: UnitId; every: nu
   const pr = building.producer;
   if (!fb || !pr) return null;
   if (fb.former) {
-    const more = buildingUpgradeLevel(world, building.owner, building.defId as BuildingId, 'formers') > 0;
-    return { unit: fb.former, every: more ? world.rules.terraform.everyLevel2 : world.rules.terraform.every };
+    return { unit: fb.former, every: world.rules.terraform.every };
   }
   if (fb.mix && pr.level >= fb.mix.level) {
     const every = fb.mix.every === 'clutch' ? (clutchSize(world, building) ?? 5) : fb.mix.every;
@@ -117,7 +117,7 @@ function producePlayer(world: World, owner: PlayerId): void {
       pr.blockedBy = blocked;
       continue;
     }
-    // Beimischung: Terraformer (jeder fünfte, mit „Mehr Terraformer“ jeder vierte Verband) oder Unterstützer.
+    // Beimischung: Terraformer (jeder fünfte Verband) oder Unterstützer.
     const mix = mixOf(world, building);
     const mix2 = mix2Of(world, building);
     const def =

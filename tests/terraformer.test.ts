@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { RULES } from '../src/data/rules';
+import { BUILDINGS } from '../src/data/buildings';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
 import type { UnitId } from '../src/data/units';
@@ -14,10 +15,21 @@ import { cmd, lastBuilding, openMap, smallBases, stepTimes } from './fixtures';
 
 const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoclan'] };
 
-function unit(world: World, owner: 0 | 1, id: UnitId, x: number, y: number, still = true): Entity {
-  const u = world.addUnit(owner, UNITS[id], { x, y }, y < 3 ? 'top' : y < 6 ? 'mid' : 'bottom');
+/** 26.10. spät: ein Terraformer-Typ; die alten IDs stehen hier für „Terraformer aus der Fabrik dieser Linie“. */
+const LINE_OF = { formerMeadow: 'meadowhall', formerForest: 'grove', formerMud: 'mudpit', formerSnow: 'frosthall', formerRubble: 'quarry' } as const;
+type TestUnit = UnitId | keyof typeof LINE_OF;
+
+function unit(world: World, owner: 0 | 1, id: TestUnit, x: number, y: number, still = true): Entity {
+  const line = id in LINE_OF ? LINE_OF[id as keyof typeof LINE_OF] : undefined;
+  const real: UnitId = line ? 'terraformer' : (id as UnitId);
+  const u = world.addUnit(owner, UNITS[real], { x, y }, y < 3 ? 'top' : y < 6 ? 'mid' : 'bottom');
+  if (line) {
+    const hall = world.addBuilding(owner, BUILDINGS[line], { x: owner === 0 ? 0 : world.grid.width - 2, y: world.grid.height - 2, w: 2, h: 2 });
+    hall.producer!.paused = true;
+    u.fromBuilding = hall.id;
+  }
   if (still) u.mover!.speed = 0;
-  if (u.tf && UNITS[id].former) {
+  if (u.tf && UNITS[real].former) {
     // Naturspeicher der Fabrikstufe II und Sprint beim Spawn (Erntehelfer, 26.10. abends): darf sofort rufen.
     u.tf.store = 2;
     u.tf.work = RULES.terraform.workPerSummon;
@@ -40,9 +52,9 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     const b = lastBuilding(world);
     assert.equal(b.name, 'Wiesenhof');
     const s = world.players[0].stats.spawned;
-    while (s.wardMeadow + s.formerMeadow < 5 && world.tick < 60 * world.tps) world.step();
+    while (s.wardMeadow + s.terraformer < 5 && world.tick < 60 * world.tps) world.step();
     assert.equal(s.wardMeadow, 4);
-    assert.equal(s.formerMeadow, 1, 'der fünfte Verband ist ein Säer');
+    assert.equal(s.terraformer, 1, 'der fünfte Verband ist ein Terraformer');
     // Fremde Gebäude gibt es bei den Terra-Formern nicht
     world.step([cmd(0, { type: 'build', x: 1, y: 6, building: 'barracks' })]);
     assert.ok(world.events.some((e) => e.type === 'rejected' && /Fraktion/.test(e.reason)));
@@ -203,7 +215,7 @@ describe('Terra-Former: Fabriken und Terraformer', () => {
     former.mover!.speed = 0;
     stepTimes(world, 12 * world.tps);
     assert.equal(mud.filter((i) => world.grid.terrain[i] === TERRAIN_INDEX.forest).length, 0, 'kein Matsch wurde zu Wald');
-    assert.equal(world.entities.filter((e) => e.alive && e.defId === 'specialForest').length, 1, 'Ruf auf dem Matsch-Block: Hainhüter');
+    assert.equal(world.entities.filter((e) => e.alive && e.defId === 'specialMud').length, 1, 'Ruf auf dem Matsch-Block: der Boden bestimmt das Wesen (Schlammschleuder)');
     assert.equal(world.players[0].stats.otherLineBlocks, 1);
   });
 
@@ -300,15 +312,20 @@ describe('Terra-Former: eigener Boden', () => {
     assert.equal(jumped(true), true, 'mit Synergie: gesprungen');
     assert.equal(jumped(false), false, 'ohne: kein Wurzelnetz');
   });
-  it('Forschung der Linie gilt auch für ihre gerufene Spezialeinheit', () => {
-    const toughness = (lineResearch: boolean): number => {
-      const world = new World({ map: openMap, seed: 1, ...tf });
-      world.rules.terraform = { ...world.rules.terraform, lineResearch };
-      world.players[0].research.push('wardForest-armor-1'); // Widerstand +1
-      return unit(world, 0, 'specialForest', 4.5, 7.5).toughness;
-    };
-    assert.equal(toughness(true), UNITS.specialForest.toughness + 1);
-    assert.equal(toughness(false), UNITS.specialForest.toughness);
+  it('Naturkraft gilt für Gerufene, Ausrüstung der Linienfabrik für ihre Wächter und Terraformer (26.10. spät)', () => {
+    const world = new World({ map: openMap, seed: 1, ...tf });
+    world.players[0].research.push('meadowhall-nature-1');
+    const k = unit(world, 0, 'specialForest', 4.5, 7.5);
+    assert.equal(k.toughness, UNITS.specialForest.toughness + 1, 'Naturkraft I: Widerstand +1');
+    assert.equal(k.weapon!.def.strength, UNITS.specialForest.weapon!.strength + 1, 'Naturkraft I: Stärke +1');
+    const w2 = new World({ map: openMap, seed: 1, ...tf });
+    w2.players[0].research.push('grove-gear-1');
+    const k2 = unit(w2, 0, 'specialForest', 4.5, 7.5);
+    assert.equal(k2.toughness, UNITS.specialForest.toughness, 'Ausrüstung wirkt nicht auf Gerufene');
+    w2.addBuilding(0, BUILDINGS.grove, { x: 0, y: 0, w: 2, h: 2 });
+    const ward = unit(w2, 0, 'wardForest', 5.5, 7.5);
+    const base = UNITS.wardForest;
+    assert.ok(ward.toughness > base.toughness || ward.save < base.save || ward.maxHp > base.hp, 'Wächter: Panzerungsschritt');
   });
 
   it('Landformer: mit wenigen eigenen Verbänden kopiert er eine gerufene Einheit in seiner Nähe', () => {

@@ -14,17 +14,18 @@ function formerFrom(world: World, level: number) {
   const hall = world.addBuilding(0, BUILDINGS.grove, { x: 3, y: 0, w: 2, h: 2 });
   hall.producer!.level = level;
   hall.producer!.paused = true; // keine weiteren Einheiten aus der Fabrik
-  const f = world.addUnit(0, UNITS.formerForest, { x: 7.5, y: 7.5 }, 'mid');
+  const f = world.addUnit(0, UNITS.terraformer, { x: 7.5, y: 7.5 }, 'mid');
   f.fromBuilding = hall.id;
   f.mover!.speed = 0;
   return f;
 }
 
 describe('Naturspeicher (26.10.)', () => {
-  it('Speicher nach Fabrikstufe: I = 2, II = 3, III = 4; das Upgrade „Naturspeicher“ gibt +1', () => {
-    const store = (level: number, upgrade = false): number => {
-      const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
-      if (upgrade) world.players[0].research.push('wardForest-store');
+  it('Speicher nach Fabrikstufe: I = 2, II = 3, III = 4; Wurzelwerk I gibt +1 (Schalter rootsStoreAtLevel: erst mit Stufe II)', () => {
+    const store = (level: number, upgrade = false, atLevel = false): number => {
+      const rules = atLevel ? { ...smallBases, terraform: { ...RULES.terraform, rootsStoreAtLevel: true } } : smallBases;
+      const world = new World({ map: openMap, seed: 1, rules, ...tf });
+      if (upgrade) world.players[0].research.push('meadowhall-roots-1');
       const f = formerFrom(world, level);
       world.step();
       return f.tf!.store!;
@@ -33,6 +34,8 @@ describe('Naturspeicher (26.10.)', () => {
     assert.equal(store(2), 3);
     assert.equal(store(3), 4);
     assert.equal(store(2, true), 4);
+    assert.equal(store(1, true, true), 2, 'Schalter: Wurzelwerk I zählt auf Stufe I nicht');
+    assert.equal(store(2, false, true), 4, 'Schalter: +1 kommt mit Fabrikstufe II');
   });
 
   it('Speicher 0 (Schalter): der Terraformer formt, ruft aber nie und bleibt bestehen', () => {
@@ -56,7 +59,7 @@ describe('Naturspeicher (26.10.)', () => {
     while (keepers() < 2 && world.tick < 400 * world.tps) world.step();
     assert.equal(keepers(), 2);
     assert.equal(f.alive, false, 'der letzte Ruf: er geht im Wesen auf');
-    assert.equal(world.players[0].stats.lost.formerForest, 0, 'aufgegangen, nicht gefallen');
+    assert.equal(world.players[0].stats.lost.terraformer, 0, 'aufgegangen, nicht gefallen');
     for (let k = 0; k < 120 * world.tps; k++) world.step();
     assert.equal(keepers(), 2, 'es wird nicht mehr gerufen');
   });

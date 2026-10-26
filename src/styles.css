@@ -134,6 +134,7 @@ kbd {
 }
 .timeline-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .clock { font-family: var(--font-data); font-size: var(--step-1); font-variant-numeric: tabular-nums; }
+.gate { font-family: var(--font-data); font-size: var(--step--1); color: var(--brass); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .phase-name { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--brass); font-size: var(--step--1); }
 .phase-hint, .hq-mult { color: var(--muted); font-size: var(--step--1); }
 .hq-mult { font-family: var(--font-data); font-size: 0.75rem; }

@@ -13,7 +13,7 @@ describe('Terra-Former Phase 2 (26.10.): Block, Zeit je Kachel, Boden zuerst', (
   it('Werte: 1,5 s je Kachel, 10 s Pause, Block 2×2, Start-Radius 6', () => {
     assert.equal(RULES.terraform.formSeconds, 1.5);
     assert.equal(RULES.terraform.summonEvery, 10);
-    assert.deepEqual(blockDims(new World({ map: openMap, seed: 1, ...tf }), 0, 'formerForest'), [[2, 2]]);
+    assert.deepEqual(blockDims(new World({ map: openMap, seed: 1, ...tf }), 0, 'terraformer'), [[2, 2]]);
     assert.equal(RULES.terraform.startRadius, 6);
   });
 
@@ -24,7 +24,7 @@ describe('Terra-Former Phase 2 (26.10.): Block, Zeit je Kachel, Boden zuerst', (
         world.grid.setTerrain(world.grid.index(x, y), TERRAIN_INDEX.forest);
         world.formed[world.grid.index(x, y)] = 1;
       }
-      const f = world.addUnit(0, UNITS.formerForest, { x: 9, y: 8 }, 'mid');
+      const f = world.addUnit(0, UNITS.terraformer, { x: 9, y: 8 }, 'mid');
       f.mover!.speed = 0;
       f.tf!.store = 2;
       f.tf!.work = sprint ? 4 : 0;
@@ -42,7 +42,7 @@ describe('Terra-Former Phase 2 (26.10.): Block, Zeit je Kachel, Boden zuerst', (
 
   it('ein neuer Terraformer beginnt bei sich: formt die nächste Kachel in der Umgebung', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
-    const f = world.addUnit(0, UNITS.formerMud, { x: 7.5, y: 7.5 }, 'mid');
+    const f = world.addUnit(0, UNITS.terraformer, { x: 7.5, y: 7.5 }, 'mid');
     f.mover!.speed = 0;
     for (let k = 0; k < 6 * world.tps; k++) world.step();
     assert.ok([...world.formed].some((v) => v === 1), 'nach 6 s steht mindestens eine eigene Kachel');

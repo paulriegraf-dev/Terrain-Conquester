@@ -6,40 +6,40 @@ import { checkResearch, visibleUpgrades } from '../src/sim/systems/factory';
 import { World } from '../src/sim/world';
 import { SITE, cmd, lastBuilding, openMap, smallBases, stepTimes } from './fixtures';
 
-describe('Gabelung auf Waffen III', () => {
-  it('jede Waffen-Kette endet in zwei Wegen: Spezialist oder Lücke schließen', () => {
-    for (const f of Object.values(FACTIONS)) {
-      for (const up of f.upgrades.filter((u) => u.fork)) {
-        const pair = f.upgrades.filter((u) => u.fork === up.fork);
-        assert.equal(pair.length, 2, up.id);
-        assert.ok(pair.every((u) => u.requires === pair[0]!.requires), 'beide brauchen dieselbe Stufe II');
-      }
+/** 26.10. spät: Die Waffen-III-Gabelung des Technoclans ist ein Schlussstein mit zwei Türen. */
+describe('Technoclan: Schlussstein mit zwei Türen', () => {
+  it('jede Einheit des Technoclans hat einen Schlussstein mit genau zwei Türen', () => {
+    const f = FACTIONS.technoclan;
+    for (const unit of ['sniper', 'plasma', 'hoverscout', 'battery', 'gunner', 'colossus', 'nanomedic'] as const) {
+      const pair = f.upgrades.filter((u) => u.keystone && u.unit === unit);
+      assert.equal(pair.length, 2, unit);
+      assert.equal(pair[0]!.fork, pair[1]!.fork);
+      assert.ok(pair.every((u) => !u.requires), 'keine Forschungs-Voraussetzung');
     }
-    assert.ok(FACTIONS.technoclan.upgrades.some((u) => u.id === 'sniper-weapons-3a'));
   });
 
-  it('nur eine Seite: nach der Wahl ist die andere weg', () => {
+  it('nur eine Tür: nach der Wahl ist die andere weg', () => {
     const world = new World({ map: openMap, seed: 1, rules: { startEnergy: 400, maxEnergy: 2000 } });
     world.step([cmd(0, { type: 'build', ...SITE, building: 'barracks' })]);
-    const f = lastBuilding(world);
+    lastBuilding(world);
     const p = world.players[0];
     p.energy = 2000;
-    p.research.push('sniper-weapons-1', 'sniper-weapons-2');
+    p.gate.credits = 2;
+    p.gate.opened = 2;
     const options = visibleUpgrades(p.faction, 'sniper', p.research).filter((u) => u.fork).map((u) => u.id);
-    assert.deepEqual(options, ['sniper-weapons-3a', 'sniper-weapons-3b']);
-    world.step([cmd(0, { type: 'research', entityId: f.id, upgrade: 'sniper-weapons-3a' })]);
-    stepTimes(world, 25 * world.tps);
-    assert.ok(p.research.includes('sniper-weapons-3a'));
-    const other = checkResearch(world, f, 'sniper-weapons-3b');
+    assert.deepEqual(options, ['sniper-keystone-a', 'sniper-keystone-b']);
+    world.step([cmd(0, { type: 'research', upgrade: 'sniper-keystone-a' })]);
+    stepTimes(world, 21 * world.tps);
+    assert.ok(p.research.includes('sniper-keystone-a'));
+    const other = checkResearch(world, 0, 'sniper-keystone-b');
     assert.equal(other.ok, false);
-    if (!other.ok) assert.match(other.reason, /Gabelung/);
-    assert.deepEqual(visibleUpgrades(p.faction, 'sniper', p.research).filter((u) => u.fork).map((u) => u.id), ['sniper-weapons-3a']);
+    assert.deepEqual(visibleUpgrades(p.faction, 'sniper', p.research).filter((u) => u.fork).map((u) => u.id), ['sniper-keystone-a']);
   });
 
   it('Durchschuss trifft auch den nächsten Gegner dahinter', () => {
     const run = (pierce: boolean): number => {
       const world = new World({ map: openMap, seed: 1, rules: smallBases });
-      if (pierce) world.players[0].research.push('sniper-weapons-1', 'sniper-weapons-2', 'sniper-weapons-3b');
+      if (pierce) world.players[0].research.push('sniper-keystone-b');
       const s = world.addUnit(0, UNITS.sniper, { x: 7.5, y: 7.5 }, 'mid');
       s.mover!.speed = 0;
       const front = world.addUnit(1, UNITS.gunner, { x: 11.0, y: 7.5 }, 'mid');

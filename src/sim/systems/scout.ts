@@ -6,6 +6,7 @@ import type { PlayerId, Route } from '../types';
 import { ROUTES } from '../types';
 import type { World } from '../world';
 import { autoScoutSeconds, scoutCost, scoutDelay, scoutNamesUnits } from './hq';
+import { activeBuys } from './purchases';
 
 export type ScoutArmor = 'infantry' | 'light' | 'heavy';
 
@@ -29,6 +30,10 @@ export interface ScoutReport {
   routes: Record<Route, ScoutRoute>;
   /** Schlusssteine des Gegners (26.10.): erforscht oder in Forschung („forscht …“). */
   keystones?: { unit: UnitId; running: boolean }[];
+  /** Laufende Käufe des Gegners (Nachtrag G). */
+  buys?: string[];
+  /** Dauerspähen: nur diese Route ist frisch. */
+  watchRoute?: Route;
 }
 
 export const SCOUT_LEVELS = ['keine', 'wenige', 'einige', 'viele'] as const;
@@ -115,5 +120,5 @@ export function snapshot(world: World, p: PlayerId): ScoutReport {
   const keystones = foe.faction.upgrades
     .filter((u) => u.keystone && (foe.research.includes(u.id) || foe.labs.some((l) => l.upgrade === u.id)))
     .map((u) => ({ unit: u.unit, running: !foe.research.includes(u.id) }));
-  return { tick: world.tick, routes, keystones };
+  return { tick: world.tick, routes, keystones, buys: activeBuys(world, p === 0 ? 1 : 0) };
 }

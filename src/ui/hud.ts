@@ -1,6 +1,6 @@
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import { orderCost, scoutCost, scoutDelay } from '../sim/systems/hq';
-import { DISGUISE, SWAP, WALL } from '../data/abilities';
+import { DISGUISE, SWAP } from '../data/abilities';
 import { BUILDINGS, HQ } from '../data/buildings';
 import type { BuildingId } from '../data/buildings';
 import { MARKET, MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
@@ -15,7 +15,8 @@ import type { Entity } from '../sim/entity';
 import { buildCost } from '../sim/costs';
 import { buildingCount, checkBuild, slotLimit, slotsUsed } from '../sim/placement';
 import type { BuildCheck } from '../sim/placement';
-import { checkSwapArea, checkWall, swapCostAt } from '../sim/systems/abilities';
+import { checkSwapArea, checkWallPreview, swapCostAt, wallTiles } from '../sim/systems/abilities';
+import { wallBudget, wallTileCost } from '../sim/systems/hq';
 import { incomePerSecond, overtimeHint } from '../sim/systems/economy';
 import { STATIONS, pairLabel, stationPool } from '../data/stations';
 import type { StationMode } from '../data/stations';
@@ -101,6 +102,7 @@ export class Hud {
     const q = <T extends HTMLElement = HTMLElement>(id: string): T => byId<T>(doc, id);
     this.el = {
       clock: q('clock'),
+      gate: q('gate'),
       phaseName: q('phase-name'),
       phaseHint: q('phase-hint'),
       hqMult: q('hq-mult'),
@@ -227,6 +229,14 @@ export class Hud {
 
     // Zeitleiste
     this.el.clock.textContent = clock(world.seconds);
+    // Schlussstein-Tor (26.10. spät): „Schlussstein: 1 offen · nächstes 13:30 · Mitte 42/60 s“
+    {
+      const gate = world.players[me].gate;
+      const gr = world.rules.keystoneGate;
+      const hold = gate.holdSince >= 0 ? Math.floor((world.tick - gate.holdSince) / world.tps) : 0;
+      const txt = `Schlussstein: ${gate.credits} offen · nächstes ${clock(gate.next / world.tps)}${gr.center && hold > 0 ? ` · Mitte ${hold}/${gr.centerHold} s` : ''}`;
+      if (this.el.gate.textContent !== txt) this.el.gate.textContent = txt;
+    }
     if (view.prep) {
       const left = world.players[view.human ?? 0].prepLeft;
       this.el.phaseName.textContent = 'Vorbereitung';
@@ -365,7 +375,9 @@ export class Hud {
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
     // Schlusssteine des Gegners (26.10.): erforscht oder in Forschung.
-    const ksRows = (report?.keystones ?? []).map((k) => `<li><span>${k.running ? 'forscht' : 'hat'}</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(UNITS[k.unit].name)}</span></li>`).join('');
+    const ksRows = (report?.keystones ?? []).map((k) => `<li><span>${k.running ? 'forscht' : 'hat'}</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(UNITS[k.unit].name)}</span></li>`).join('') +
+      // Käufe des Gegners (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub („Gegner beschleunigt“).
+      (report?.buys ?? []).map((b) => `<li><span>kauft</span><span class="lvl" data-level="2">${escapeHtml(b)}</span></li>`).join('');
     const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;
     const sig = `${meta}|${rows}${ksRows}|${label}|${check.ok && canAct}`;
     if (sig === this.scoutSig) return;
@@ -461,7 +473,7 @@ export class Hud {
         html = buildingInfo(e, world);
       } else if (e.kind === 'wall') {
         title = `Erdwall${view.human !== null && e.owner !== view.human ? ' (Gegner)' : ''}`;
-        html = `${hpLine(e)}<p class="muted">Dauerhaft. Brechen können ihn nur schwere Einheiten, Artillerie und Sprengetopps – Infanterie und leichte Fahrzeuge laufen außen herum.</p>`;
+        html = `<p class="muted">Gelände, kein Ziel. Alle nehmen den Umweg; nur wenn der Umweg einer Route über ×${world.rules.walls.detour.toFixed(1)} liegt, brechen ihn Belagerung, Schwere mit Durchschlag, Sprengetopps und Frontbrecher (wie ein Bauwerk mit ${world.rules.walls.breakHp} Leben).</p>`;
       } else {
         title = e.name;
         const w = HQ.weapon;
@@ -473,12 +485,10 @@ export class Hud {
       }
     } else if (canAct) {
       const p = world.players[me];
-      const wallLeft = Math.max(0, p.wallReadyTick - world.tick);
       const busy = new Set(world.swaps.filter((s) => s.owner === me).map((s) => s.batch)).size;
       html =
         `<p>Bauplätze <strong>${num(slotsUsed(world, me), Number.isInteger(slotsUsed(world, me)) ? 0 : 1)} / ${slotLimit(world, me)}</strong> (${buildingCount(world, me)} Gebäude) · gebaut wird in Bauzonen: <span class="zone-key" data-zone="base"></span> Basis (befestigt), <span class="zone-key" data-zone="front"></span> Vorfeld.</p>` +
-        `<p>Erdwall: ${wallLeft ? `lädt noch ${Math.ceil(wallLeft / world.tps)} s` : p.energy >= WALL.cost ? 'bereit' : `bereit, braucht ${WALL.cost} Energie`}</p>` +
-        `<div class="cooldown"><i style="width:${(1 - wallLeft / (WALL.cooldown * world.tps)) * 100}%"></i></div>` +
+        `<p>Erdwall: ${wallTiles(world, me)} von ${wallBudget(world, me)} Kacheln · ${wallTileCost(world, me)} Energie je Kachel</p>` +
         (busy ? `<p>Gelände: ${busy} von ${SWAP.maxParallel} Flächen im Umbau</p>` : '') +
         (p.research.length ? `<p class="muted">Erforscht: ${p.research.length}</p>` : '') +
         synergyLine(world, me) +
@@ -543,10 +553,15 @@ export class Hud {
       }
     } else if (canAct && view.wall) {
       if (view.hover) {
-        const check = checkWall(world, me, view.hover.x, view.hover.y, view.wall.vertical);
-        text = check.ok ? 'Erdwall hier möglich – klicken zum Errichten.' : check.reason;
-        warn = !check.ok;
-      } else text = 'Erdwall: Ziel wählen. R oder Rechtsklick dreht.';
+        if (view.wall.fill) {
+          text = 'Zuschütten: eigenen Erdwall anklicken (kostenlos).';
+        } else {
+          const check = checkWallPreview(world, me, view.hover.x, view.hover.y, view.wall.vertical);
+          const worst = check.ratios ? Math.max(...ROUTES.map((r) => check.ratios![r].ratio)) : 1;
+          text = check.ok ? `Erdwall hier möglich (${check.cells.length * wallTileCost(world, me)} Energie) – gegnerischer Umweg höchstens ×${worst.toFixed(2)}. Klicken zum Errichten.` : check.reason;
+          warn = !check.ok;
+        }
+      } else text = 'Erdwall: Ziel wählen. R oder Rechtsklick dreht, Z schüttet eigene Wälle zu.';
     } else if (view.prep && view.swap) {
       if (view.hover) {
         const check = checkPrep(world, me, view.hover.x, view.hover.y, view.swap.terrain);

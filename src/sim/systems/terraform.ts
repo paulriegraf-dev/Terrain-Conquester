@@ -1,16 +1,17 @@
 import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
-import { UNITS, lineUnit } from '../../data/units';
+import { UNITS } from '../../data/units';
 import { combatGroundOk, fireKeystone, hasKeystone, onOwn, rootGrip, setCombatGround, updateKeystones } from './keystone';
 import type { GroundBonus, UnitDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { BUILD_ZONE } from '../map';
 import type { CellRect, PlayerId, Route, Vec2 } from '../types';
-import { PLAYERS } from '../types';
+import { PLAYERS, ROUTES } from '../types';
 import type { World } from '../world';
 import type { BuildingId } from '../../data/buildings';
 import { buildingUpgradeLevel } from './factory';
+import { mudOnHit } from './mud';
 import { controllerAt } from './influence';
 import {
   hasSynergy, laneOfRow, mudClutchRate, mudLeash, synergyCamouflage, synergyPower, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
@@ -42,6 +43,7 @@ export function updateTerraform(world: World): void {
   updateGround(world);
   expireWaste(world);
   updateKeystones(world);
+  updateStripes(world);
   for (const e of world.entities) {
     if (!e.alive || !e.tf) continue;
     const def = UNITS[e.defId as UnitId];
@@ -209,12 +211,115 @@ function initialStore(world: World, e: Entity): number {
   const level = b?.producer?.level ?? 1;
   const base = world.rules.terraform.storeByLevel;
   let store = base[Math.min(Math.max(1, level), base.length) - 1] ?? 0;
-  const line = lineUnit(e.defId as UnitId);
+  // Wurzelwerk I (26.10. spät): Speicher +1 – mit dem Schalter wurzelwerkSpeicherAnStufe kommt das +1 stattdessen mit Stufe II.
+  const roots = rootsLevel(world, e.owner);
+  if (world.rules.terraform.rootsStoreAtLevel ? level >= 2 : roots >= 1) store += 1;
   for (const id of p.research) {
     const u = p.faction.upgrades.find((x) => x.id === id);
-    if (u?.effect.store && lineUnit(u.unit) === line) store += u.effect.store;
+    if (u?.effect.store) store += u.effect.store;
   }
   return store;
+}
+
+/**
+ * Fabrikstufe der Linienfabrik (26.10. spät): Stufe II formt den Streifen ihrer Lane (Wegpunkt-Zeile ± 1) vom Rand der
+ * eigenen Basiszone bis stripeLevel2 Kacheln vor die eigene Gebietsgrenze, Stufe III bis stripeLevel3 – eine Kachel je
+ * stripeSeconds, nur neutralen oder gegnerischen Boden, nie eigene Kacheln (auch nicht anderer Linien).
+ */
+function updateStripes(world: World): void {
+  const every = Math.round(world.rules.terraform.stripeSeconds * world.tps);
+  for (const e of world.entities) {
+    if (!e.alive || e.kind !== 'building' || !e.producer || e.producer.level < 2) continue;
+    const fb = world.players[e.owner].faction.buildings[e.defId as BuildingId];
+    if (!fb?.former) continue;
+    if ((world.tick + e.id) % every !== 0) continue;
+    const ground = TERRAIN_INDEX[UNITS[fb.tiers[0]!].ground!];
+    const reach = e.producer.level >= 3 ? world.rules.terraform.stripeLevel3 : world.rules.terraform.stripeLevel2;
+    const i = stripeCell(world, e.owner, e.producer.route, reach);
+    if (i === null) continue;
+    world.grid.setTerrain(i, ground);
+    world.formed[i] = e.owner + 1;
+    world.boughtTiles.delete(i);
+    world.players[e.owner].vision.learn(i);
+  }
+}
+
+/** Nächste Kachel des Streifens (von der Basis nach vorn), die neutral oder gegnerisch ist. */
+function stripeCell(world: World, p: PlayerId, route: Route, reach: number): number | null {
+  const g = world.grid;
+  const dir = forward(world, p);
+  const wy = Math.floor(world.map.waypoints[route].y);
+  const limits = new Map<number, number | null>();
+  for (const dy of [0, -1, 1]) if (g.inBounds(0, wy + dy)) limits.set(wy + dy, stripeLimit(world, p, wy + dy, reach));
+  for (let step = 0; step < g.width; step++) {
+    const x = dir > 0 ? step : g.width - 1 - step;
+    for (const dy of [0, -1, 1]) {
+      const y = wy + dy;
+      if (!g.inBounds(x, y)) continue;
+      // Grenze dieser Zeile: letzte eigene Kachel vom HQ aus
+      const i = g.index(x, y);
+      if (world.map.buildZone[i] === BUILD_ZONE.base) continue;
+      const lim = limits.get(y);
+      if (lim === null || lim === undefined || (x - lim) * dir > 0) continue;
+      if (world.formed[i] === p + 1 || world.locked[i] || g.structure[i] !== 0) continue;
+      const t = TERRAIN_LIST[g.terrain[i]!]!;
+      if (!t.solid || g.terrain[i] === TERRAIN_INDEX.wall || g.terrain[i] === TERRAIN_INDEX.waste) continue;
+      if (world.swaps.some((s) => s.index === i)) continue;
+      return i;
+    }
+  }
+  return null;
+}
+
+/** x-Grenze des Streifens in Zeile y: eigene Gebietsgrenze + reach (in Richtung Gegner). */
+function stripeLimit(world: World, p: PlayerId, y: number, reach: number): number | null {
+  const g = world.grid;
+  const dir = forward(world, p);
+  let edge: number | null = null;
+  for (let k = 0; k < g.width; k++) {
+    const x = dir > 0 ? k : g.width - 1 - k;
+    if (controllerAt(world, g.index(x, y)) === p) edge = x;
+  }
+  return edge === null ? null : edge + dir * reach;
+}
+
+/** Wurzelwerk-Stufe (fraktionsweit, an jeder Linienfabrik erforscht). */
+function rootsLevel(world: World, p: PlayerId): number {
+  return buildingUpgradeLevel(world, p, 'meadowhall', 'roots');
+}
+
+/** Form-Takt (Wurzelwerk II: 1,5 → 1,2 s) und Arbeit je Ruf (Wurzelwerk III: 4 → 3). */
+function formSecondsOf(world: World, p: PlayerId): number {
+  return rootsLevel(world, p) >= 2 ? world.rules.terraform.formSecondsRoots : world.rules.terraform.formSeconds;
+}
+function workPerSummonOf(world: World, p: PlayerId): number {
+  return rootsLevel(world, p) >= 3 ? world.rules.terraform.workPerSummon - 1 : world.rules.terraform.workPerSummon;
+}
+
+/** Boden-Index → gerufenes Wesen (Wiese → Steppenjäger, …). */
+const SPECIAL_OF: Readonly<Record<number, UnitId>> = Object.fromEntries(
+  (['specialMeadow', 'specialForest', 'specialMud', 'specialSnow', 'specialRubble'] as const).map((u) => [TERRAIN_INDEX[UNITS[u].ground!], u]),
+);
+
+/**
+ * Welchen Boden formt dieser Terraformer (26.10. spät)? Die Lane-Farbe seiner Route (vorherrschender eigener Boden ab
+ * 12 Kacheln); ohne Farbe den Boden der Fabrik, die ihn gebaut hat.
+ */
+export function formerGround(world: World, e: Entity, def: UnitDef = UNITS[e.defId as UnitId]): number {
+  const lane = world.synergy[e.owner].lanes[ROUTES.indexOf(e.mover!.route)];
+  if (lane) return TERRAIN_INDEX[lane];
+  const b = e.fromBuilding !== undefined ? world.get(e.fromBuilding) : undefined;
+  const ward = b ? world.players[e.owner].faction.buildings[b.defId as BuildingId]?.tiers[0] : undefined;
+  const g = ward ? UNITS[ward].ground : undefined;
+  return TERRAIN_INDEX[g ?? def.ground!];
+}
+
+/** Welches Wesen ruft er auf diesem Block? Der Boden des Blocks; Mischblock: der Boden unter ihm (sonst sein Boden). */
+function specialFor(world: World, e: Entity, cells: number[], ground: number): UnitId {
+  const t0 = world.grid.terrain[cells[0]!]!;
+  if (cells.every((i) => world.grid.terrain[i] === t0) && SPECIAL_OF[t0]) return SPECIAL_OF[t0]!;
+  const under = world.grid.terrain[world.grid.index(Math.floor(e.pos.x), Math.floor(e.pos.y))]!;
+  return SPECIAL_OF[under] ?? SPECIAL_OF[ground] ?? 'specialMeadow';
 }
 
 /**
@@ -328,7 +433,7 @@ export function formerNeedsBlock(world: World, e: Entity): boolean {
   if (!e.alive || !e.tf || !def.former || e.tf.block) return false;
   const store = e.tf.store ?? initialStore(world, e);
   if (store <= 0 || world.tick < (e.tf.nextSummon ?? 0)) return false;
-  return findReadyBlock(world, e, TERRAIN_INDEX[def.ground!], true) === null;
+  return findReadyBlock(world, e, formerGround(world, e, def), true) === null;
 }
 
 /** Nächste umformbare Kachel im Umkreis: zuerst Kacheln, die noch nicht eigener Boden sind; bei Gleichstand weiter vorn. */
@@ -467,7 +572,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   const tf = e.tf!;
   const m = e.mover!;
   const p = e.owner;
-  const ground = TERRAIN_INDEX[def.ground!];
+  const ground = formerGround(world, e, def);
   const rules = world.rules.terraform;
   const here: Vec2 = { x: e.pos.x, y: e.pos.y };
   // 1. Ritual auf einem fertigen Block
@@ -488,7 +593,9 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       if (tf.workTick === 0) tf.workTick = world.tick + Math.round(rules.ritualSeconds * world.tps);
       if (world.tick < tf.workTick) return;
       // Das Einheitenlimit gilt auch für Gerufene: Ist es voll, wartet der Terraformer auf seinem Block.
-      tf.waiting = !hasRoom(world, p, def.former!.special);
+      const blockCellsNow = blockCells(world, tf.block);
+      const special = specialFor(world, e, blockCellsNow, ground);
+      tf.waiting = !hasRoom(world, p, special);
       if (tf.waiting) return;
       // Ödland (26.10.): die vier Kacheln sind wasteSeconds lang Ödland; der Ruf kostet einen Punkt Naturspeicher.
       const until = world.tick + Math.round(rules.wasteSeconds * world.tps);
@@ -498,7 +605,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
         world.grid.setTerrain(i, TERRAIN_INDEX.waste);
         world.players[p].vision.learn(i);
       }
-      const cells = blockCells(world, tf.block);
+      const cells = blockCellsNow;
       const st = world.players[p].stats;
       st.rituals++;
       if (tf.firstFree) st.sprintRituals++;
@@ -521,7 +628,9 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       }
       tf.stepTo = { x: sx, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 1) };
       tf.stepUntil = world.tick + 10 * world.tps;
-      const made = summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
+      st.summonsByGround[special] = (st.summonsByGround[special] ?? 0) + 1;
+      if (cells.some((i) => world.boughtTiles.has(i))) st.boughtSummons++;
+      const made = summon(world, e, special, center, false);
       tf.store = (tf.store ?? 0) - 1;
       tf.summons = (tf.summons ?? 0) + 1;
       tf.nextSummon = world.tick + Math.round(rules.summonEvery * world.tps);
@@ -547,7 +656,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     // Sprint beim Spawn: Wer Speicher hat, darf sofort rufen (Arbeit = arbeitJeRuf) – einmal je Terraformer.
     tf.sprint = rules.sprintOnSpawn && tf.store > 0;
     tf.firstFree = tf.sprint;
-    tf.work = tf.sprint ? rules.workPerSummon : 0;
+    tf.work = tf.sprint ? workPerSummonOf(world, p) : 0;
     tf.spawnTick = world.tick;
   }
   const canSummon = tf.store > 0 && (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
@@ -575,6 +684,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     } else if (world.tick >= tf.workTick) {
       world.grid.setTerrain(i, ground);
       world.formed[i] = p + 1;
+      world.boughtTiles.delete(i);
       if (!filling) tf.work = (tf.work ?? 0) + 1; // Arbeit: selbst geformte Kacheln seit dem letzten Ruf
       world.combatGround.delete(i);
       if (filling) world.dug[i] = 0;
@@ -608,7 +718,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   // Terraformers darf auf einen fertigen Block bis 16 Kacheln voraus auf der Route (geformt oder gekauft).
   // Die weite Suche (Route, 16 Kacheln) gilt nur kurz nach dem Spawn; die geschenkte Arbeit bleibt bis zum ersten Ruf.
   if (tf.sprint && world.tick - (tf.spawnTick ?? 0) > rules.sprintWindow * world.tps) tf.sprint = false;
-  const ready = canSummon && (tf.work ?? 0) >= rules.workPerSummon;
+  const ready = canSummon && (tf.work ?? 0) >= workPerSummonOf(world, p);
   const block = ready ? findReadyBlock(world, e, ground, !!tf.sprint) : null;
   if (block) {
     tf.block = block;
@@ -622,7 +732,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   if (cell !== null) {
     tf.started = true;
     tf.workCell = cell;
-    tf.workTick = world.tick + Math.round(rules.formSeconds * world.tps);
+    tf.workTick = world.tick + Math.round(formSecondsOf(world, p) * world.tps);
     m.goal = here;
     return;
   }
@@ -647,18 +757,9 @@ function hasRoom(world: World, owner: PlayerId, unit: UnitId): boolean {
   return !world.rules.terraform.summonNeedsRoom || world.unitCount(owner) + (UNITS[unit].supply ?? 1) <= world.rules.unitCap;
 }
 
-/** Gebäude-Ausbau „Starke Gerufene“ der Linie dieses Terraformers (seit 24.10. zentral statt Fabrikstufe III)? */
-function strongSummons(world: World, p: PlayerId, former: UnitId): boolean {
-  const buildings = world.players[p].faction.buildings;
-  for (const id of Object.keys(buildings) as BuildingId[]) {
-    if (buildings[id]?.former === former) return buildingUpgradeLevel(world, p, id, 'summons') > 0;
-  }
-  return false;
-}
-
 /**
  * Kraft-Pool (26.10.): Die ersten `poolFree` lebenden Gerufenen eines Terraformers sind voll stark, jeder weitere hat
- * `poolDecay` weniger Leben und Schaden (mindestens `poolFloor`). „Starke Gerufene“ erhöht die vollen Plätze um `poolStrong`.
+ * `poolDecay` weniger Leben und Schaden (mindestens `poolFloor`). 
  * Der Wert wird beim Rufen festgelegt und bleibt danach; fällt ein Gerufener, ist der Pool beim nächsten Rufen wieder größer.
  */
 export function summonPower(world: World, former: Entity, strong: boolean): number {
@@ -669,7 +770,7 @@ export function summonPower(world: World, former: Entity, strong: boolean): numb
   return over <= 0 ? 1 : Math.max(r.poolFloor, 1 - r.poolDecay * over);
 }
 
-/** Spezialeinheit rufen (mit „Starke Gerufene“: +25 % Leben). */
+/** Spezialeinheit rufen. */
 function summon(world: World, former: Entity, unit: UnitId, at: { x: number; y: number }, strong: boolean): Entity {
   const power = summonPower(world, former, strong);
   const s = world.addUnit(former.owner, UNITS[unit], { x: at.x, y: at.y }, former.mover!.route);
@@ -934,6 +1035,7 @@ export function ambushFactor(world: World, e: Entity): number {
 export function onHit(world: World, shooter: Entity, target: Entity): void {
   if (shooter.tf) shooter.tf.lastShot = world.tick;
   if (target.kind !== 'unit') return;
+  mudOnHit(world, shooter, target); // Verschlammung (26.10. spät)
   const def = UNITS[shooter.defId as UnitId];
   const hs = shooter.tf?.gb?.hitSlow ?? def.hitSlow;
   if (hs) slowDown(world, target, world.tick + Math.round(hs.seconds * world.tps), hs.factor);

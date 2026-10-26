@@ -36,14 +36,17 @@ export interface ViewState {
   /** Mausposition in Kachel-Einheiten (für die Bau-Vorschau, die sich am Zeiger zentriert). */
   hoverPoint: Vec2 | null;
   selected: Selection | null;
-  wall: { vertical: boolean } | null;
+  /** Erdwall-Werkzeug; `fill`: eigene Wälle zuschütten (Nachtrag G.3). */
+  wall: { vertical: boolean; fill?: boolean } | null;
+  /** Stellung setzen (Nachtrag G.3d): Klick auf eine Kachel setzt die Stellung dieser Fabrik. */
+  rally: { entityId: number } | null;
   /** Bau-Modus: dieses Gebäude hängt am Mauszeiger, Klick setzt es. */
   build: { building: BuildingId } | null;
   /** Werkzeug „Feld tauschen“ aktiv: diese Bodenart wird gesetzt. */
   /** Gelände-Werkzeug; `vertical`: Schlucht hochkant (2×4) oder quer (4×2). */
   swap: { terrain: TerrainId; vertical?: boolean } | null;
   /** Untermenü im Befehlsraster (wie bei klassischen Echtzeit-Strategiespielen). */
-  menu: 'main' | 'terrain' | 'disguise' | 'front' | 'research' | 'hero' | 'convert';
+  menu: 'main' | 'terrain' | 'disguise' | 'front' | 'research' | 'hero' | 'convert' | 'watch' | 'stock';
   /** Vorbereitungsphase läuft (Gelände formen vor Rundenbeginn). */
   prep: boolean;
   /** Täuschung vorbereiten: angezeigter Typ und angezeigte Route. */
@@ -64,6 +67,7 @@ export function createView(mode: Mode, human: PlayerId = 0): ViewState {
     hoverPoint: null,
     selected: null,
     wall: null,
+    rally: null,
     build: null,
     swap: null,
     prep: false,

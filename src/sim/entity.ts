@@ -91,6 +91,10 @@ export interface ProducerState {
   produced: number;
   /** Ab diesem Tick ist wieder ein Eilauftrag möglich. */
   rushReadyTick: number;
+  /** Aufgebot (Nachtrag G): Ticks der Käufe an dieser Fabrik (Preis steigt innerhalb von 3 min). */
+  rushUses?: number[];
+  /** Stellung (Nachtrag G.3d): Sammelpunkt für haltende Verbände dieser Fabrik (null = Grenze der Route). */
+  rally?: { x: number; y: number } | null;
   /** Einspielen (24.10.): seit diesem Tick baut die Fabrik ihre jetzige Einheit (Umrüsten setzt es neu). */
   unitSince: number;
   /** Gelege (Myriaden-Brut): fertige, noch nicht geschlüpfte Verbände (zählen aufs Einheitenlimit). */
@@ -159,6 +163,8 @@ export interface Entity {
   weaken?: { until: number; speed: number; damage: number };
   /** Schaden über Zeit bis Tick (Lebenspunkte je Sekunde; Terra-Former-Synergien). */
   dot?: { until: number; dps: number; owner: PlayerId };
+  /** Verschlammung (26.10. spät): Stufen (gebrochen = erwartete Treffer), letzter Treffer, Verursacher, Stärke fürs Verwunden. */
+  mud?: { n: number; last: number; owner: PlayerId; strength: number };
   /** Schneesturm (Terra-Former-Synergie): so viele Sekunden steht die Einheit schon im Sturm. */
   storm?: number;
   /**

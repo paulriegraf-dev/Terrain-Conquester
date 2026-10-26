@@ -16,22 +16,24 @@ import { OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memo
 import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
-import { checkLevelUp, checkResearch, checkRushOrder, requirementMet, researching, unlockedUnits } from '../sim/systems/factory';
+import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
 import { checkEmergency } from '../sim/systems/emergency';
 import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
 import { dist, rectCenter } from '../sim/math';
 import { Rng } from '../sim/rng';
-import { checkSwapArea, checkWall, gorgeCells, swapArea, swapCostAt } from '../sim/systems/abilities';
+import { checkSwapArea, checkWall, gorgeCells, swapArea, swapCostAt, wallCoords, wallTiles } from '../sim/systems/abilities';
+import { checkBuy } from '../sim/systems/purchases';
+import { detourRatios } from '../sim/systems/walls';
 import { BUILD_ZONE } from '../sim/map';
-import { checkHqUpgrade, gorgeLimit } from '../sim/systems/hq';
+import { checkHqUpgrade, gorgeLimit, wallBudget, wallTileCost } from '../sim/systems/hq';
 import type { HqPathId } from '../data/hq';
 import type { FactionId } from '../data/factions';
 import { controllerAt } from '../sim/systems/influence';
-import { formerNeedsBlock } from '../sim/systems/terraform';
+import { formerGround, formerNeedsBlock } from '../sim/systems/terraform';
 import { laneOfRow, synergyHint } from '../sim/systems/synergy';
 import type { TerrainId } from '../data/terrain';
-import { TERRAIN_INDEX } from '../data/terrain';
+import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { checkBuyHero } from '../sim/systems/hero';
 import { holdAnchor } from '../sim/systems/formation';
 import { checkPrep } from '../sim/systems/prep';
@@ -163,12 +165,15 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean; tfStrictBuys: boolean; targetResearch: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number;
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean;
+  /** Nachtrag G (26.10. spät): Dauerspähen, Aufgebot, Nachschub, Vorratskauf, Trichter, Belagerung an die Spitze. */
+  buys: { watch: boolean; rush: boolean; surge: boolean; stock: boolean; funnel: boolean; siegeLead: boolean };
   plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
   counterLine: { on: boolean; hysteresis: number; share: number; budget: number };
   marketWar: { on: boolean; takt: number; gap: number; selfLimit: number; ausweichenAb: number };
   intel: { on: boolean; maxAge: number; deceive: boolean };
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, targetResearch: true, tfSpawnBuy: true, tfSpawnBuyEvery: 20,
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true,
+  buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
@@ -191,10 +196,7 @@ export class SimpleAi {
   private readonly lastRetool = new Map<number, number>();
   /** Wann die KI zuletzt Gelände geformt hat (Tick). */
   private lastShape = -1e9;
-  private lastKeystone = -1e9;
   private lastSpawnBuy = -1e9;
-  /** Weg zum Schlussstein (26.10. abends): Ziel-Art, ihre Höchstzahl und seit wann sie unter der Hälfte liegt. */
-  private target: { unit: UnitId; max: number; below: number } | null = null;
   private lastHq = -1e9;
   /** Terra-Former (AI_TUNING.tfPrep): Linien, deren Boden in der Vorbereitung geformt wurde – zuerst bauen. */
   private openingLines: BuildingId[] = [];
@@ -202,6 +204,13 @@ export class SimpleAi {
   private enemyEstimate = 0;
   /** Gegner, die gerade in der eigenen Basis stehen – je Kartenband (abklingend). */
   private readonly baseThreat: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+  /** Nachtrag G: Anlass je Route seit Tick (−1 = keiner), geplanter Druck, Vorratswunsch, Trichter. */
+  private readonly causeSince: Record<Route, number> = { top: -1, mid: -1, bottom: -1 };
+  private pushPlannedAt = -1;
+  private stockWish: PartId | null = null;
+  private funnels = 0;
+  private lastWall = -1e9;
+  private funnelStep: { walls: { x: number; y: number; vertical: boolean }[]; rally: number | null; x: number; y: number; dir: number; ground: TerrainId } | null = null;
   /** Gewünschter erster Marschbefehl je gebautem Standort ("x,y"). */
   private readonly wantedRoute = new Map<string, Route>();
   /** Gesehene gegnerische Bauteile und Bewegungsprofile (abklingend) – für Markt und Gelände. */
@@ -394,7 +403,9 @@ export class SimpleAi {
       const shape = this.decideTerrain(world);
       if (shape) commands.push(shape);
       // Nebenmittel: Spähen, Markt, Täuschung (je nach Profil)
-      const scout = this.decideScout(world);
+      const purchase = this.decideBuys(world);
+      if (purchase) commands.push(purchase);
+      const scout = purchase?.type === 'buy' && purchase.kind === 'watch' ? null : this.decideScout(world);
       if (scout) commands.push(scout);
       const order = this.decideMarket(world);
       if (order) commands.push(order);
@@ -794,9 +805,6 @@ export class SimpleAi {
         if (c.ok && me.energy >= c.cost + keep) return { type: 'upgradeFactory', entityId: f.id };
       }
     }
-    const tr = this.targetResearch(world, factories, keep);
-    if (tr === 'wait') return null;
-    if (tr) return tr;
     const ks = this.pickKeystone(world, factories, keep);
     if (ks) return ks;
     const smart = AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden');
@@ -818,93 +826,42 @@ export class SimpleAi {
     return null;
   }
 
-  /**
-   * Schlussstein (26.10.): erst ab vier Fabriken; Ziel ist die Einheitenart mit den meisten lebenden Verbänden;
-   * höchstens zwei je Partie, der zweite frühestens 3 Minuten nach dem ersten (AI_TUNING.keystones).
-   */
-  /**
-   * Weg zum Schlussstein (26.10. abends, AI_TUNING.targetResearch): Ab vier Fabriken eine Ziel-Art (meiste lebende
-   * Verbände, Gerufene zählen, Terraformer nicht). Ihre Kette hat Vorrang: Waffen I → II → III → Panzerung I → II →
-   * Schlussstein – ein Forschungsplatz, der zweite bleibt frei. Reicht die Energie für den nächsten Schritt nicht,
-   * wird für andere Arten nichts ausgegeben ('wait'). Wechsel nur, wenn die Ziel-Art 90 s unter der Hälfte ihrer
-   * Höchstzahl liegt.
-   */
-  private targetResearch(world: World, factories: Entity[], keep: number): Command | 'wait' | null {
-    if (!AI_TUNING.targetResearch || !world.rules.keystone.enabled || factories.length < 4) return null;
-    const me = world.players[this.player];
-    const ksUnits = new Set(me.faction.upgrades.filter((u) => u.keystone).map((u) => u.unit));
-    if (ksUnits.size === 0) return null;
-    const count = new Map<UnitId, number>();
-    for (const e of world.entities) {
-      if (!e.alive || e.owner !== this.player || e.kind !== 'unit') continue;
-      const id = e.defId as UnitId;
-      if (!ksUnits.has(id)) continue;
-      count.set(id, (count.get(id) ?? 0) + 1);
-    }
-    const top = (): UnitId | null => {
-      let best: UnitId | null = null;
-      for (const [id, n] of count) if (!best || n > count.get(best)! || (n === count.get(best)! && id < best)) best = id;
-      return best;
-    };
-    if (!this.target) {
-      const t = top();
-      if (!t) return null;
-      this.target = { unit: t, max: count.get(t)!, below: -1 };
-    } else {
-      const n = count.get(this.target.unit) ?? 0;
-      this.target.max = Math.max(this.target.max, n);
-      if (n < this.target.max / 2) {
-        if (this.target.below < 0) this.target.below = world.tick;
-        if (world.tick - this.target.below >= 90 * world.tps) {
-          const t = top();
-          if (t && t !== this.target.unit) this.target = { unit: t, max: count.get(t)!, below: -1 };
-          else this.target.below = -1;
-        }
-      } else {
-        this.target.below = -1;
-      }
-    }
-    const unit = this.target.unit;
-    const line = lineUnit(unit);
-    const healer = !!UNITS[line].support;
-    const key = healer ? 'heal' : 'weapons';
-    const specialist = this.counterScore(line, world) >= 1.1;
-    const w3 = me.faction.upgrades.some((u) => u.id === `${line}-${key}-3a`) ? `${line}-${key}-3${specialist ? 'a' : 'b'}` : `${line}-${key}-3`;
-    const steps = [`${line}-${key}-1`, `${line}-${key}-2`, w3, `${line}-armor-1`, `${line}-armor-2`, `${unit}-keystone`];
-    const done = (id: string): boolean => me.research.includes(id) || (id === w3 && requirementMet(me.research, `${line}-${key}-3`));
-    if (steps.some((id) => researching(world, this.player, id))) return null; // ein Platz für die Ziel-Art, der zweite bleibt frei
-    const next = steps.find((id) => !done(id));
-    if (!next) return null;
-    if (next.endsWith('-keystone') && !this.keystoneAllowed(world, factories)) return null;
-    const c = checkResearch(world, this.player, next);
-    if (!c.ok) return /Energie/.test(c.reason) ? 'wait' : null;
-    if (me.energy < c.cost + keep) return 'wait';
-    if (next.endsWith('-keystone')) this.lastKeystone = world.tick;
-    return { type: 'research', upgrade: next };
-  }
+
 
   /** Darf die KI jetzt einen Schlussstein erforschen (Schalter, vier Fabriken, höchstens zwei, 3 min Abstand)? */
-  private keystoneAllowed(world: World, factories: Entity[]): boolean {
-    if (!AI_TUNING.keystones || !world.rules.keystone.enabled || factories.length < 4) return false;
-    const me = world.players[this.player];
-    const had = me.faction.upgrades.filter((u) => u.keystone && (me.research.includes(u.id) || researching(world, this.player, u.id))).length;
-    return had < 2 && world.tick - this.lastKeystone >= 180 * world.tps;
+  /** Darf die KI jetzt einen Schlussstein kaufen (Schalter, offenes Tor – 26.10. spät)? */
+  private keystoneAllowed(world: World, _factories: Entity[]): boolean {
+    return AI_TUNING.keystones && world.rules.keystone.enabled && world.players[this.player].gate.credits > 0;
   }
 
+  /**
+   * Schlussstein-Wahl (26.10. spät): bei offenem Tor und Energie ≥ Puffer + Preis der Schlussstein der Einheitenart mit den
+   * meisten lebenden Verbänden (Terra-Former: die Linie mit den meisten Wächtern + Gerufenen). Technoclan wählt die Tür
+   * nach gesehener Panzerung: Schwer → Durchschuss/Bündelung, Masse → Überladung/Streuung.
+   */
   private pickKeystone(world: World, factories: Entity[], keep: number): Command | null {
     if (!this.keystoneAllowed(world, factories)) return null;
     const me = world.players[this.player];
-    // Myriaden mit smartResearch: der Schlussstein konkurriert dort im Nutzen mit Waffen und Panzerung.
-    if (AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden')) return null;
-    const all = me.faction.upgrades.filter((u) => u.keystone);
+    const all = me.faction.upgrades.filter((u) => u.keystone && !me.research.includes(u.id));
     if (all.length === 0) return null;
-    const only = world.rules.keystone.only;
     const alive = new Map<string, number>();
-    for (const e of world.entities) if (e.alive && e.owner === this.player && e.kind === 'unit') alive.set(e.defId, (alive.get(e.defId) ?? 0) + 1);
+    for (const e of world.entities) {
+      if (!e.alive || e.owner !== this.player || e.kind !== 'unit') continue;
+      const d = UNITS[e.defId as UnitId];
+      if (!d || d.former || d.leash || d.hero) continue;
+      const key = lineUnit(e.defId as UnitId); // Terra-Former: Gerufene zählen zu ihrer Linie
+      alive.set(key, (alive.get(key) ?? 0) + 1);
+    }
+    const heavy = this.seen.heavy;
+    const mass = this.seen.infantry + this.seen.light;
     let best: { id: string; n: number } | null = null;
     for (const u of all) {
-      const summoned = !!UNITS[u.unit].summoned;
-      if ((only === 'wards' && summoned) || (only === 'summons' && !summoned)) continue;
+      if (u.fork && me.faction.upgrades.some((x) => x.fork === u.fork && x.id !== u.id && me.research.includes(x.id))) continue;
+      if (u.fork) {
+        // Tür: Scharfschützen a Überladung / b Durchschuss; Plasmawerfer a Bündelung / b Streuung.
+        const wantB = u.unit === 'plasma' ? mass >= heavy : heavy > mass;
+        if (u.id.endsWith(wantB ? '-a' : '-b')) continue;
+      }
       const n = alive.get(u.unit) ?? 0;
       if (n <= 0) continue;
       const c = checkResearch(world, this.player, u.id);
@@ -912,13 +869,13 @@ export class SimpleAi {
       if (!best || n > best.n || (n === best.n && u.id < best.id)) best = { id: u.id, n };
     }
     if (!best) return null;
-    this.lastKeystone = world.tick;
     return { type: 'research', upgrade: best.id };
   }
 
+
   /**
    * Gebäude-Ausbau (24.10.): der Ausbau für die Gebäudeart, von der die KI am meisten hat (gilt für alle zugleich).
-   * „Starke Gerufene“ etwas nach „Mehr Terraformer“. Gleichstand nach ID (spiegelbildlich, kein Zufall).
+   * Ausrüstung vor Wurzelwerk vor Naturkraft (fraktionsweite Ketten zählen alle Linienfabriken). Gleichstand nach ID (spiegelbildlich, kein Zufall).
    */
   private pickBuildingUpgrade(world: World, keep: number): Command | null {
     const me = world.players[this.player];
@@ -926,8 +883,9 @@ export class SimpleAi {
     for (const u of me.faction.buildingUpgrades) {
       const c = checkResearch(world, this.player, u.id);
       if (!c.ok || me.energy < c.cost + keep) continue;
-      const count = this.ownBuildings(world).filter((b) => b.defId === u.building).length;
-      const value = count * (u.kind === 'summons' ? 0.8 : u.kind === 'tempo' ? 0.9 : 1);
+      // Fraktionsweite Ketten (Naturkraft, Wurzelwerk) zählen alle Linienfabriken.
+      const count = this.ownBuildings(world).filter((b) => (u.anyBuilding ? !!me.faction.buildings[b.defId as BuildingId]?.former : b.defId === u.building)).length;
+      const value = count * (u.kind === 'gear' ? 1.15 : u.kind === 'nature' ? 0.9 : u.kind === 'roots' ? 1.05 : u.kind === 'tempo' ? 0.9 : 1);
       if (value <= 0) continue;
       if (!best || value > best.value + 1e-9 || (Math.abs(value - best.value) <= 1e-9 && u.id < best.id)) best = { id: u.id, value };
     }
@@ -946,7 +904,7 @@ export class SimpleAi {
       const mixUnit = mix && f.producer!.level >= mix.level ? mix.unit : null;
       for (const u of me.faction.upgrades) {
         if ((u.unit !== f.producer!.unit && u.unit !== mixUnit) || me.research.includes(u.id) || researching(world, this.player, u.id)) continue;
-        if (u.keystone && !this.keystoneAllowed(world, factories)) continue;
+        if (u.keystone) continue; // Schlusssteine über pickKeystone (Tor)
         if (u.fork) {
           const specialist = this.counterScore(u.unit, world) >= 1.1;
           if (u.id.endsWith(specialist ? 'b' : 'a')) continue;
@@ -954,8 +912,7 @@ export class SimpleAi {
         const c = checkResearch(world, f, u.id);
         if (!c.ok || me.energy < c.cost + reserve) continue;
         // Schlussstein (26.10.): Nutzen = eigene Verbände der Art × 2 / Kosten – konkurriert so mit Waffen und Panzerung.
-        const focus = this.target && lineUnit(this.target.unit) === lineUnit(u.unit) ? 2 : 1; // Ziel-Art ×2
-        const value = focus * (u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost);
+        const value = (u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost);
         // Gleichstand spiegelbildlich auflösen (nicht nach Entity-Reihenfolge): Upgrade-ID, dann gespiegelte Lage.
         const mx = (e: Entity): number => (this.player === 0 ? e.pos.x : world.map.width - e.pos.x);
         const better = !best || value > best.value + 1e-9 ||
@@ -965,7 +922,6 @@ export class SimpleAi {
     }
     // Lohnt sich kaum (unter 1 % Mehrwirkung je 10 Energie und Verband): Energie lieber behalten.
     if (!best || best.value < 0.001) return null;
-    if (best.id.endsWith('-keystone')) this.lastKeystone = world.tick;
     return { type: 'research', entityId: best.f.id, upgrade: best.id };
   }
 
@@ -1190,14 +1146,26 @@ export class SimpleAi {
         if (empty && ROUTES.some((r) => rep.routes[r].level === 3)) return { type: 'setStance', route: empty, stance: 'push' };
       }
     }
+    // Zentrumsanreiz (26.10. spät, AI_TUNING.aiCenter): Hält die KI die Kartenmitte seit 30 s ohne Gegner und ist das nächste
+    // Tor über 60 s entfernt, bleibt die Haltung der Mitte, wie sie ist (die Truppen sollen dort stehen bleiben).
+    const gate = me.gate;
+    const keepMid = AI_TUNING.aiCenter && gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps && gate.next - world.tick > 60 * world.tps;
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
+      if (keepMid && r === 'mid') continue;
       // Sammel-Signal des Gegners gesehen: 60 s kein eigener Druck.
       if (AI_TUNING.intel.on && world.tick < this.noPushUntil && me.stance[r] !== 'push') continue;
       const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);
       const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
       const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
       if (holding && mine[r] >= minUnits && (aging || mine[r] >= ratio * enemy)) {
+        this.pushPlannedAt = world.tick;
+        return { type: 'setStance', route: r, stance: 'push' };
+      }
+      // Nachtrag G.3f: Umweg durch gegnerische Wälle ×1,5–2,0 → mit Belagerung an der Spitze vorrücken (sie beschießt die Wälle).
+      const wr = world.wallRatio[this.player][r];
+      if (AI_TUNING.buys.siegeLead && holding && wr >= 1.5 && wr <= world.rules.walls.detour && mine[r] >= minUnits * 0.6 && this.hasSiegeOn(world, r)) {
+        this.pushPlannedAt = world.tick;
         return { type: 'setStance', route: r, stance: 'push' };
       }
       // Stationen (25.10. abends): eine Lane mit Station sichern, wenn sie nicht schon wirkt und man dort nicht unterlegen ist;
@@ -1236,7 +1204,9 @@ export class SimpleAi {
     const threat = Math.max(1.5, 3 * armyScale(world));
     const pressed = ROUTES.filter((r) => this.baseThreat[r] >= threat);
     if (pressed.length === 0) return null;
-    const reserve = 40;
+    // Aufgebot (Nachtrag G.4): nur mit Energie über Puffer + 90.
+    if (!AI_TUNING.buys.rush) return null;
+    const reserve = 40 + 90;
     const buildings = this.ownBuildings(world);
     for (const b of buildings) {
       const pr = b.producer!;
@@ -1265,7 +1235,10 @@ export class SimpleAi {
   private decideWall(world: World): Command | null {
     const me = world.players[this.player];
     const f = this.profile.walls;
-    if (f <= 0 || world.tick < me.wallReadyTick || me.energy < WALL.cost + 20) return null;
+    const funnel = this.decideFunnel(world);
+    if (funnel) return funnel;
+    // Seit Nachtrag G hat der Wall keine Abklingzeit mehr – die KI hält von sich aus 20 s Abstand (wie früher die Ladezeit).
+    if (f <= 0 || world.tick - this.lastWall < 20 * world.tps || me.energy < WALL.length * wallTileCost(world, this.player) + 20) return null;
     const hq = world.hq(this.player);
     if (!hq) return null;
     const attackers = this.visibleEnemyUnits(world).filter((e) => dist(e.pos, hq.pos) <= 12 * Math.min(1.5, Math.max(1, f)));
@@ -1288,7 +1261,10 @@ export class SimpleAi {
       for (const dy of [0, -1, 1, -2, 2]) {
         const x = baseX + dx * towardHq;
         const y = baseY + dy;
-        if (checkWall(world, this.player, x, y, true).ok) return { type: 'castWall', x, y, vertical: true };
+        if (checkWall(world, this.player, x, y, true).ok) {
+          this.lastWall = world.tick;
+          return { type: 'castWall', x, y, vertical: true };
+        }
       }
     }
     return null;
@@ -1315,7 +1291,7 @@ export class SimpleAi {
       const dirS = this.player === 0 ? 1 : -1;
       const storer = world.entities.find((e) => e.owner === this.player && formerNeedsBlock(world, e));
       if (storer) {
-        const ground = UNITS[storer.defId as UnitId].ground!;
+        const ground = TERRAIN_LIST[formerGround(world, storer)]!.id;
         for (const ahead of [2, 3, 1, 4]) {
           for (const dy of [0, -1, 1, -2, 2]) {
             const x = Math.floor(storer.pos.x) + dirS * ahead;
@@ -1460,7 +1436,7 @@ export class SimpleAi {
     if (!AI_TUNING.tfSpawnBuy || me.faction.id !== 'terraformer' || world.tick - this.lastSpawnBuy < AI_TUNING.tfSpawnBuyEvery * world.tps) return null;
     const fresh = world.entities.find((e) => e.owner === this.player && e.tf?.firstFree && world.tick - (e.tf.spawnTick ?? 0) <= 2 * world.tps && formerNeedsBlock(world, e));
     if (!fresh) return null;
-    const ground = UNITS[fresh.defId as UnitId].ground!;
+    const ground = TERRAIN_LIST[formerGround(world, fresh)]!.id;
     const g = world.grid;
     const dir = this.player === 0 ? 1 : -1;
     const wy = Math.floor(fresh.pos.y);
@@ -1582,6 +1558,101 @@ export class SimpleAi {
   // ------------------------------------------------------------ Nebenmittel: Spähen, Markt, Täuschung
 
   /** Spähbericht: regelmäßig, häufiger je nach Profil. */
+  /**
+   * Käufe (Nachtrag G.4): Dauerspähen statt Einzelberichten, wenn eine Route 2 min lang Anlass hatte; Nachschub kurz
+   * vor eigenem Druck (ab Minute 8); Vorratskauf bei Markteingriff. Aufgebot: decideRush.
+   */
+  private decideBuys(world: World): Command | null {
+    const me = world.players[this.player];
+    // Anlass je Route: sichtbare Gegner dort mindestens 80 % der eigenen oder Druck auf die Basis.
+    for (const r of ROUTES) {
+      const cause = this.seenByRoute[r] >= 2 || this.baseThreat[r] > 0.5;
+      if (!cause) this.causeSince[r] = -1;
+      else if (this.causeSince[r] < 0) this.causeSince[r] = world.tick;
+    }
+    if (AI_TUNING.buys.surge && this.pushPlannedAt >= 0 && world.tick - this.pushPlannedAt <= 20 * world.tps) {
+      const c = checkBuy(world, this.player, 'surge');
+      if (c.ok && this.spare(world) >= c.cost + 40) {
+        this.pushPlannedAt = -1;
+        return { type: 'buy', kind: 'surge' };
+      }
+    }
+    if (AI_TUNING.buys.stock && this.stockWish) {
+      const part = this.stockWish;
+      this.stockWish = null;
+      const c = checkBuy(world, this.player, 'stock', undefined, part);
+      if (c.ok && this.spare(world) >= c.cost + 40) return { type: 'buy', kind: 'stock', part };
+    }
+    if (AI_TUNING.buys.watch && me.hq.intel >= 4) {
+      const r = ROUTES.find((x) => this.causeSince[x] >= 0 && world.tick - this.causeSince[x] >= 120 * world.tps);
+      if (r) {
+        const c = checkBuy(world, this.player, 'watch', r);
+        if (c.ok && this.spare(world) >= c.cost + 40) {
+          this.causeSince[r] = world.tick; // nächster Anlass frühestens in 2 min
+          return { type: 'buy', kind: 'watch', route: r };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Hat die KI Belagerung (Bauwerk-Schaden ≥ 2) auf dieser Route? */
+  private hasSiegeOn(world: World, r: Route): boolean {
+    return world.entities.some((e) => e.alive && e.owner === this.player && e.kind === 'unit' && e.mover?.route === r && (UNITS[e.defId as UnitId].weapon?.structureDamage ?? 1) >= 2);
+  }
+
+  /**
+   * Trichter (Nachtrag G.3f): zwei Wälle in V-Form vor der Stellung einer Lane, Matsch/Schnee im Trichter – wenn die
+   * Lane-Synergie Matsch/Schnee hat oder die Ausrüstung der Matsch-/Schnee-Linie steht und der Umwegfaktor der
+   * gegnerischen Route ≤ 1,6 bleibt. Höchstens zwei je Partie. Die Stellung setzt die KI an die Spitze des Trichters.
+   */
+  private decideFunnel(world: World): Command | null {
+    if (!AI_TUNING.buys.funnel || this.funnels >= 2 || world.seconds < 240) return null;
+    const me = world.players[this.player];
+    if (this.funnelStep) {
+      const s = this.funnelStep;
+      if (s.walls.length > 0) {
+        const w = s.walls.shift()!;
+        if (checkWall(world, this.player, w.x, w.y, w.vertical).ok) return { type: 'castWall', x: w.x, y: w.y, vertical: w.vertical };
+        return null;
+      }
+      if (s.rally !== null) {
+        const b = s.rally;
+        s.rally = null;
+        return { type: 'setRally', entityId: b, x: s.x, y: s.y };
+      }
+      this.funnelStep = null;
+      const c = checkSwapArea(world, this.player, s.x + s.dir * 2, s.y, s.ground);
+      if (c.ok) return { type: 'swapTerrain', x: s.x + s.dir * 2, y: s.y, terrain: s.ground };
+      return null;
+    }
+    if (world.tick % (10 * world.tps) !== 0) return null;
+    const syn = world.synergy[this.player].lanes;
+    const gearOk = (b: BuildingId): boolean => me.research.includes(`${b}-gear-1`);
+    for (const r of ROUTES) {
+      const lane = syn[ROUTES.indexOf(r)];
+      const ground: TerrainId | null = lane === 'mud' || lane === 'snow' ? lane : gearOk('mudpit') ? 'mud' : gearOk('frosthall') ? 'snow' : null;
+      if (!ground) continue;
+      const anchor = holdAnchor(world, this.player, r);
+      if (!anchor) continue;
+      const dir = this.player === 0 ? 1 : -1;
+      const ax = Math.floor(anchor.pos.x);
+      const ay = Math.floor(anchor.pos.y);
+      // V-Form: zwei senkrechte Wälle schräg vor der Stellung, Öffnung zum Gegner hin breiter.
+      const walls = [{ x: ax + dir * 3, y: ay - 3, vertical: true }, { x: ax + dir * 3, y: ay + 3, vertical: true }];
+      const cells = walls.flatMap((w) => wallCoords(w.x, w.y, w.vertical)).filter(([x, y]) => world.grid.inBounds(x, y)).map(([x, y]) => world.grid.index(x, y));
+      if (cells.length < 6 || wallTiles(world, this.player) + cells.length > wallBudget(world, this.player)) continue;
+      if (me.energy < cells.length * wallTileCost(world, this.player) + 60) return null;
+      const ratios = detourRatios(world, (1 - this.player) as PlayerId, cells);
+      if (ROUTES.some((x) => ratios[x].ratio > 1.6)) continue;
+      const f = this.ownBuildings(world).find((b) => b.producer?.route === r);
+      this.funnels++;
+      this.funnelStep = { walls, rally: f ? f.id : null, x: ax, y: ay, dir, ground };
+      return this.decideFunnel(world);
+    }
+    return null;
+  }
+
   private decideScout(world: World): Command | null {
     const f = this.profile.scout;
     if (f <= 0 || world.seconds < 60) return null;
@@ -1937,6 +2008,7 @@ export class SimpleAi {
     const old = this.priceHist.find((h) => h.tick <= world.tick - 60 * world.tps);
     if (core && old && world.market.prices[core] >= old.prices[core] * AI_TUNING.marketWar.ausweichenAb && own[core] <= old.own[core] * 1.1 + 0.5) {
       const hqMarket = world.players[this.player].hq.market;
+      if (AI_TUNING.buys.stock && hqMarket >= 4) this.stockWish = core; // Vorratskauf (Nachtrag G.4)
       if (hqMarket >= 3) return; // Durchhalten: Lieferverträge
       if (this.profileId === 'trader') {
         this.lastOrder = -1e9; // Gegenschlag: nächster Denkschritt darf bestellen

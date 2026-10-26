@@ -4,14 +4,16 @@ import { UNITS } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import { BUILD_ZONE } from '../map';
-import { enemyReach, gorgeLimit, gorgeSeconds, shapingFactor, wallHpFactor, wallLimit } from './hq';
+import { enemyReach, gorgeLimit, gorgeSeconds, shapingFactor, swapBrush, wallBudget, wallTileCost } from './hq';
+import { detourRatios } from './walls';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
 import type { CommandResult } from '../commands';
 import { pathsStayOpen } from '../connectivity';
 import { controllerAt } from './influence';
 import { inOwnHalf } from './prep';
-import type { PlayerId } from '../types';
+import type { PlayerId, Route } from '../types';
+import { ROUTES } from '../types';
 import type { World } from '../world';
 
 /**
@@ -101,7 +103,8 @@ export function displaceUnits(world: World, cells: ReadonlySet<number>): void {
   }
 }
 
-export type WallCheck = { ok: true; cells: number[] } | { ok: false; reason: string; cells: number[] };
+export type WallRatios = Record<Route, { ratio: number; path: number[] }>;
+export type WallCheck = { ok: true; cells: number[]; ratios?: WallRatios } | { ok: false; reason: string; cells: number[]; ratios?: WallRatios };
 
 /** Kacheln eines Walls um (x, y) – senkrecht oder waagerecht. */
 export function wallCoords(x: number, y: number, vertical: boolean): [number, number][] {
@@ -149,64 +152,104 @@ function staysOpenWith(world: World, cells: readonly number[], as: number): bool
   return open;
 }
 
-/** Prüft, ob Spieler p hier einen Erdwall setzen darf (auch für die Vorschau im HUD). */
-export function checkWall(world: World, p: PlayerId, x: number, y: number, vertical: boolean): WallCheck {
+/**
+ * Prüft, ob Spieler p hier einen Erdwall setzen darf (auch für die Vorschau im HUD).
+ * Nachtrag G.3 (26.10. spät): Gelände statt Bauwerk – im eigenen Kartendrittel immer, sonst in der eigenen
+ * Einflusszone; Budget in Kacheln, Preis je Kachel; jede gegnerische Route bleibt ≤ rules.walls.detour × ihre Kosten
+ * ohne Wälle (`ratios` für die Vorschau).
+ */
+export function checkWall(world: World, p: PlayerId, x: number, y: number, vertical: boolean, withRatios = false): WallCheck {
   const grid = world.grid;
   const player = world.players[p];
   const coords = wallCoords(x, y, vertical);
   const cells = coords.filter(([cx, cy]) => grid.inBounds(cx, cy)).map(([cx, cy]) => grid.index(cx, cy));
-  const fail = (reason: string): WallCheck => ({ ok: false, reason, cells });
-
+  const fail = (reason: string, ratios?: WallRatios): WallCheck => ({ ok: false, reason, cells, ratios });
   if (cells.length !== coords.length) return fail('Außerhalb der Karte');
-  if (world.tick < player.wallReadyTick) {
-    const seconds = Math.ceil((player.wallReadyTick - world.tick) / world.tps);
-    return fail(`${WALL.name} lädt noch (${seconds} s)`);
-  }
-  const limit = wallLimit(world, p, WALL.maxActive);
-  if (wallCount(world, p) >= limit) return fail(`Höchstens ${limit} Erdwälle gleichzeitig`);
-  if (player.energy < WALL.cost) return fail(`Zu wenig Energie (${WALL.cost} nötig)`);
   const taken = reserved(world);
   for (const [cx, cy] of coords) {
-    const blocked = shapingBlocked(world, p, cx, cy);
-    if (blocked) return fail(blocked);
-    if (!grid.isFreeGround(cx, cy)) return fail('Nur auf freiem, festem Boden');
-    if (grid.terrain[grid.index(cx, cy)] === TERRAIN_INDEX.waste) return fail('Ödland – erst wenn es abgelaufen ist');
-    if (taken.has(grid.index(cx, cy))) return fail('Dort wird schon gebaut');
+    const i = grid.index(cx, cy);
+    if (!inOwnThird(world, p, cx) && controllerAt(world, i) !== p) return fail('Nur im eigenen Kartendrittel oder in der eigenen Einflusszone');
+    if (!grid.isFreeGround(cx, cy) || grid.terrain[i] === TERRAIN_INDEX.wall) return fail('Nur auf freiem, festem Boden');
+    if (grid.terrain[i] === TERRAIN_INDEX.waste) return fail('Ödland – erst wenn es abgelaufen ist');
+    if (taken.has(i)) return fail('Dort wird schon gebaut');
   }
-  // Truppen auf den Feldern sind kein Hindernis mehr – sie weichen beim Aufsteigen aus.
+  const budget = wallBudget(world, p);
+  if (wallTiles(world, p) + cells.length > budget) return fail(`Wall-Budget erschöpft (${wallTiles(world, p)} von ${budget} Kacheln) – schütte eigene Wälle zu`);
+  const cost = cells.length * wallTileCost(world, p);
+  if (player.energy < cost) return fail(`Zu wenig Energie (${cost} nötig)`);
   if (!staysOpenWith(world, cells, TERRAIN_INDEX.wall)) return fail('Eine Route von HQ zu HQ muss offen bleiben');
-  return { ok: true, cells };
+  const pending = world.walls.flatMap((w) => w.cells.map((c) => c.index));
+  const ratios = detourRatios(world, (1 - p) as PlayerId, [...pending, ...cells], [], withRatios);
+  const worst = Math.max(...ROUTES.map((r) => ratios[r].ratio));
+  if (worst > world.rules.walls.detour + 1e-9) return fail(`Umweg zu groß (×${worst.toFixed(2)} – höchstens ×${world.rules.walls.detour.toFixed(1)})`, ratios);
+  return { ok: true, cells, ratios: withRatios ? ratios : undefined };
+}
+
+/** Vorschau (HUD und Bild): dieselbe Prüfung mit Umwegfaktoren, je Mausposition und Sekunde nur einmal gerechnet. */
+let previewCache: { key: string; check: WallCheck } | null = null;
+export function checkWallPreview(world: World, p: PlayerId, x: number, y: number, vertical: boolean): WallCheck {
+  const key = `${p},${x},${y},${vertical},${world.grid.version},${world.walls.length},${Math.floor(world.tick / world.tps)},${Math.floor(world.players[p].energy)}`;
+  if (previewCache?.key !== key) previewCache = { key, check: checkWall(world, p, x, y, vertical, true) };
+  return previewCache.check;
+}
+
+/** Eigene Wall-Kacheln: stehende und angekündigte. */
+export function wallTiles(world: World, p: PlayerId): number {
+  let n = 0;
+  for (const w of world.walls) if (w.owner === p) n += w.cells.length;
+  for (const e of world.entities) if (e.alive && e.kind === 'wall' && e.owner === p) n += e.wallCells?.length ?? 0;
+  return n;
 }
 
 export function castWall(world: World, p: PlayerId, x: number, y: number, vertical: boolean): CommandResult {
   const check = checkWall(world, p, x, y, vertical);
   if (!check.ok) return check;
   const player = world.players[p];
-  player.energy -= WALL.cost;
-  player.stats.energySpent += WALL.cost;
+  const cost = check.cells.length * wallTileCost(world, p);
+  player.energy -= cost;
+  player.stats.energySpent += cost;
   player.stats.walls++;
-  player.wallReadyTick = world.tick + Math.round(WALL.cooldown * world.tps);
   world.walls.push({
     owner: p,
     cells: check.cells.map((index) => ({ index, original: world.grid.terrain[index]! })),
     raiseTick: world.tick + Math.round(WALL.raiseSeconds * world.tps),
+    cost,
   });
   world.emit({ type: 'wall', owner: p, cells: check.cells });
   return { ok: true };
 }
 
-/** Angekündigte Wälle steigen auf: Truppen weichen aus, dann steht der Wall – bis ihn jemand bricht. */
+/** Eigenen Wall zuschütten (kostenlos, Budget wird frei): die Wall-Linie, zu der die Kachel gehört. */
+export function fillWall(world: World, p: PlayerId, x: number, y: number): CommandResult {
+  if (!world.grid.inBounds(x, y)) return { ok: false, reason: 'Außerhalb der Karte' };
+  const i = world.grid.index(x, y);
+  const pending = world.walls.findIndex((w) => w.owner === p && w.cells.some((c) => c.index === i));
+  if (pending >= 0) {
+    const w = world.walls[pending]!;
+    world.players[p].energy += w.cost ?? 0;
+    world.walls.splice(pending, 1);
+    return { ok: true };
+  }
+  const e = world.entities.find((x) => x.alive && x.kind === 'wall' && x.owner === p && x.wallCells?.some((c) => c.index === i));
+  if (!e) return { ok: false, reason: 'Hier steht kein eigener Erdwall' };
+  e.hp = 0;
+  world.destroy(e, null);
+  return { ok: true };
+}
+
+/** Angekündigte Wälle steigen auf: Truppen weichen aus, dann steht der Wall (Gelände) – gebrochen wird nur bei zu großem Umweg. */
 export function updateWalls(world: World): void {
   if (world.walls.length === 0) return;
   const due = world.walls.filter((w) => world.tick >= w.raiseTick);
   if (due.length === 0) return;
   world.walls = world.walls.filter((w) => world.tick < w.raiseTick);
+  const r = world.rules.walls;
   for (const wall of due) {
     const cells = wall.cells.map((c) => c.index);
     const free = cells.every((i) => world.grid.structure[i] === 0 && TERRAIN_LIST[world.grid.terrain[i]!]!.solid && world.grid.terrain[i] !== TERRAIN_INDEX.wall && world.grid.terrain[i] !== TERRAIN_INDEX.waste);
     if (!free || !staysOpenWith(world, cells, TERRAIN_INDEX.wall)) {
       // Inzwischen verbaut oder würde den letzten Weg schließen: Energie zurück.
-      world.players[wall.owner].energy += WALL.cost;
+      world.players[wall.owner].energy += wall.cost ?? 0;
       world.emit({ type: 'rejected', owner: wall.owner, reason: 'Erdwall konnte nicht aufsteigen – Energie zurück' });
       continue;
     }
@@ -216,8 +259,21 @@ export function updateWalls(world: World): void {
       world.grid.setTerrain(i, TERRAIN_INDEX.wall);
       world.players[wall.owner].vision.learn(i);
     }
-    world.addWall(wall.owner, originals, WALL.hp * wallHpFactor(world, wall.owner), WALL.toughness, WALL.save);
+    world.addWall(wall.owner, originals, r.breakHp, r.toughness, r.save);
   }
+}
+
+/**
+ * Darf diese Einheit diesen Wall angreifen (Nachtrag G.3c)? Nur wer Bauwerke beschädigen kann (Belagerung, Schwer mit
+ * Durchschlag, Sprengetopp, Frontbrecher) – und nur, wenn der billigste Weg ihrer Route mehr als `detour` × die Kosten
+ * ohne Wälle beträgt. Belagerung (Bauwerk-Schaden ≥ 2) darf Wälle in Reichweite auch sonst beschießen, wenn sie kein
+ * anderes Ziel hat (die Zielwahl nimmt Wälle zuletzt).
+ */
+export function mayBreakWall(world: World, e: Entity): boolean {
+  if (!breaksWalls(e)) return false;
+  const route = e.mover?.route;
+  if (route && world.wallRatio[e.owner][route] > world.rules.walls.detour + 1e-9) return true;
+  return (UNITS[e.defId as UnitId].weapon?.structureDamage ?? 1) >= 2;
 }
 
 /** Ein Erdwall fällt: der Boden darunter kehrt zurück. */
@@ -260,11 +316,11 @@ export function checkSwap(world: World, p: PlayerId, x: number, y: number, terra
 }
 
 /** Kacheln der Fläche um (x, y) – Seitenlänge SWAP.brush. */
-export function swapArea(x: number, y: number): [number, number][] {
-  // Gerade Seitenlänge (2×2): (x, y) ist die linke obere Kachel; ungerade (3×3): die Mitte.
-  const r = Math.floor((SWAP.brush - 1) / 2);
+export function swapArea(x: number, y: number, brush: number = SWAP.brush): [number, number][] {
+  // Gerade Seitenlänge (2×2): (x, y) ist die linke obere Kachel; ungerade (3×3, HQ-Gelände 4): die Mitte.
+  const r = Math.floor((brush - 1) / 2);
   const out: [number, number][] = [];
-  for (let dy = 0; dy < SWAP.brush; dy++) for (let dx = 0; dx < SWAP.brush; dx++) out.push([x - r + dx, y - r + dy]);
+  for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) out.push([x - r + dx, y - r + dy]);
   return out;
 }
 
@@ -280,8 +336,8 @@ export function gorgeArea(x: number, y: number, vertical: boolean): [number, num
 }
 
 /** Fläche eines Kaufs: 3×3 für Bodenarten, 2×4 für die Schlucht. */
-export function shapeArea(x: number, y: number, terrain: TerrainId, vertical = true): [number, number][] {
-  return terrain === 'gorge' ? gorgeArea(x, y, vertical) : swapArea(x, y);
+export function shapeArea(x: number, y: number, terrain: TerrainId, vertical = true, brush: number = SWAP.brush): [number, number][] {
+  return terrain === 'gorge' ? gorgeArea(x, y, vertical) : swapArea(x, y, brush);
 }
 
 const GORGE_CELLS = GORGE_SHAPE.long * GORGE_SHAPE.short;
@@ -293,7 +349,7 @@ export function checkSwapArea(world: World, p: PlayerId, x: number, y: number, t
   const player = world.players[p];
   const cells: number[] = [];
   let firstReason = '';
-  const area = shapeArea(x, y, terrain, vertical);
+  const area = shapeArea(x, y, terrain, vertical, swapBrush(world, p, SWAP.brush));
   for (const [cx, cy] of area) {
     const c = checkSwap(world, p, cx, cy, terrain);
     if (c.ok) cells.push(c.index);
@@ -396,6 +452,8 @@ export function updateSwaps(world: World): void {
     grid.setTerrain(s.index, s.target);
     world.dug[s.index] = s.target === GORGE ? s.owner + 1 : 0; // wer gegraben hat (für die Obergrenze)
     world.formed[s.index] = s.target === GORGE ? 0 : s.owner + 1;
+    if (s.target !== GORGE) world.boughtTiles.add(s.index);
+    else world.boughtTiles.delete(s.index);
     world.combatGround.delete(s.index); // umgeformt von diesem Spieler (Terra-Former: eigener Boden)
     world.players[s.owner].vision.learn(s.index); // den eigenen Umbau kennt man
     return false;
