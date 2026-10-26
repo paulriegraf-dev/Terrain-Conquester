@@ -21,7 +21,7 @@ function formerFrom(world: World, level: number) {
 }
 
 describe('Naturspeicher (26.10.)', () => {
-  it('Speicher nach Fabrikstufe: I = 1, II = 2, III = 3; das Upgrade „Naturspeicher“ gibt +1', () => {
+  it('Speicher nach Fabrikstufe: I = 2, II = 3, III = 4; das Upgrade „Naturspeicher“ gibt +1', () => {
     const store = (level: number, upgrade = false): number => {
       const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
       if (upgrade) world.players[0].research.push('wardForest-store');
@@ -29,10 +29,10 @@ describe('Naturspeicher (26.10.)', () => {
       world.step();
       return f.tf!.store!;
     };
-    assert.equal(store(1), 1);
-    assert.equal(store(2), 2);
-    assert.equal(store(3), 3);
-    assert.equal(store(2, true), 3);
+    assert.equal(store(1), 2);
+    assert.equal(store(2), 3);
+    assert.equal(store(3), 4);
+    assert.equal(store(2, true), 4);
   });
 
   it('Speicher 0 (Schalter): der Terraformer formt, ruft aber nie und bleibt bestehen', () => {
@@ -46,7 +46,7 @@ describe('Naturspeicher (26.10.)', () => {
 
   it('Speicher 2: zwei Rufe, beim letzten geht der Terraformer in das Wesen über; kein Nachfüllen', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
-    const f = formerFrom(world, 2);
+    const f = formerFrom(world, 1); // Stufe I: Speicher 2
     f.mover!.speed = 2;
     f.hp = f.maxHp = 1e6; // kleine Testkarte: das gegnerische HQ ist nah
     const keepers = (): number => world.entities.filter((e) => e.alive && e.defId === 'specialForest').length;

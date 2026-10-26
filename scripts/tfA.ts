@@ -18,7 +18,7 @@ import { World } from '../src/sim/world';
 const [label, mode, partS, l1 = '0', waste = '150', strict = '0', first = '0'] = process.argv.slice(2);
 const part = Number(partS);
 (RULES.keystone as { enabled: boolean }).enabled = false;
-(RULES.terraform as { storeByLevel: readonly number[] }).storeByLevel = [Number(l1), 2, 3];
+if (l1 !== '-') (RULES.terraform as { storeByLevel: readonly number[] }).storeByLevel = [Number(l1), 2, 3];
 RULES.terraform.wasteSeconds = Number(waste);
 AI_TUNING.tfStrictBuys = strict === '1';
 RULES.terraform.ritualFirst = first === '1';

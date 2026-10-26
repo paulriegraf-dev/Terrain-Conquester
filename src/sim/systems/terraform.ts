@@ -308,7 +308,8 @@ function findReadyBlock(world: World, e: Entity, ground: number, far = true): Ce
         if (distant && (Math.abs(my - routeY) > 6 || (mx - e.pos.x) * dir < -1)) continue; // weit weg nur voraus auf der Route
         const r = { x, y, w, h };
         if (!readyBlock(world, r, p, ground)) continue;
-        if (!push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
+        // 26.10. (2a): Rituale überall außer in den Basiszonen – auch im gegnerischen Gebiet (readyBlock prüft die Zonen).
+        if (!world.rules.terraform.anyLineBlock && !push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
         const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
         const score = 0.4 * (mx - e.pos.x) * dir - d;
         if (score > bestScore + 1e-9) {
@@ -412,6 +413,52 @@ function advanceLimit(world: World, e: Entity): number | null {
   return edge + 0.5 + dir * world.rules.terraform.frontOffset;
 }
 
+/** Wächter-Verband (keine Gerufenen, Terraformer, Schlammmonster oder Held)? */
+function isWardUnit(e: Entity): boolean {
+  const d = UNITS[e.defId as UnitId];
+  return !!d && !!d.ground && !d.summoned && !d.former && !d.landformer && !d.leash;
+}
+
+/**
+ * Frontabstand (26.10., nach dem Erntehelfer-Lauf): Bis wohin darf der Terraformer nach dem Sprint vor (x)?
+ * Mindestens frontGap Kacheln hinter dem vordersten eigenen Wächter-Verband seiner Route; ohne Wächter dort
+ * höchstens bis an den Rand des eigenen Gebiets.
+ */
+function frontLimit(world: World, e: Entity): number {
+  const p = e.owner;
+  const dir = forward(world, p);
+  let front: number | null = null;
+  for (const o of world.entities) {
+    if (!o.alive || o.owner !== p || o.kind !== 'unit' || o.mover?.route !== e.mover!.route || !isWardUnit(o)) continue;
+    if (front === null || (o.pos.x - front) * dir > 0) front = o.pos.x;
+  }
+  if (front !== null) return front - dir * world.rules.terraform.frontGap;
+  const g = world.grid;
+  const y = Math.min(g.height - 1, Math.max(0, Math.floor(e.pos.y)));
+  let edge = dir > 0 ? 0 : g.width - 1;
+  for (let k = 0; k < g.width; k++) {
+    const x = dir > 0 ? k : g.width - 1 - k;
+    if (controllerAt(world, g.index(x, y)) === p) edge = x;
+  }
+  return edge + 0.5;
+}
+
+/** Gegner in retreatRadius ohne eigenen Wächter dazwischen? Dann weicht der Terraformer zurück. */
+function exposed(world: World, e: Entity): boolean {
+  const r = world.rules.terraform.retreatRadius;
+  const p = e.owner;
+  for (const o of world.entities) {
+    if (!o.alive || o.owner === p || o.kind !== 'unit') continue;
+    const dx = o.pos.x - e.pos.x;
+    const dy = o.pos.y - e.pos.y;
+    if (dx * dx + dy * dy > r * r) continue;
+    const covered = world.entities.some((w) => w.alive && w.owner === p && w.kind === 'unit' && isWardUnit(w) &&
+      (w.pos.x - e.pos.x) * Math.sign(dx || 1) > 0 && (o.pos.x - w.pos.x) * Math.sign(dx || 1) >= -0.5 && Math.abs(w.pos.y - (e.pos.y + o.pos.y) / 2) <= 2);
+    if (!covered) return true;
+  }
+  return false;
+}
+
 /**
  * Terraformer (Umbau 23.10.): Ritual auf einem fertigen Block → sonst die nächste Kachel in der Umgebung umformen
  * (er bleibt dafür stehen) → sonst ein Stück vorrücken (beim Halten nicht über die Grenze hinaus).
@@ -456,10 +503,9 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       st.rituals++;
       if (tf.firstFree) st.sprintRituals++;
       if (cells.some((i) => world.grid.terrain[i] !== ground)) st.otherLineBlocks++;
-      if (world.tick >= 300 * world.tps) {
-        if ((center.x - world.map.width / 2) * forward(world, p) > 0) st.ritualsAhead++;
-        else st.ritualsHome++;
-      }
+      // „vorn“ = jenseits der eigenen Gebietsgrenze (26.10.), nicht Kartenhälfte
+      if (controllerAt(world, world.grid.index(Math.floor(center.x), Math.floor(center.y))) !== p) st.ritualsAhead++;
+      else st.ritualsHome++;
       if (tf.lastRitual !== undefined) st.ritualGaps.push((world.tick - tf.lastRitual) / world.tps);
       tf.lastRitual = world.tick;
       tf.work = 0;
@@ -467,7 +513,13 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       tf.firstFree = false;
       // Fester Schritt nach dem Ruf (schrittNachRuf) – Ödland wandert nach vorn.
       const routeY = world.map.waypoints[m.route].y;
-      tf.stepTo = { x: e.pos.x + forward(world, p) * rules.stepAfterSummon, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 1) };
+      const dirF = forward(world, p);
+      let sx = e.pos.x + dirF * rules.stepAfterSummon;
+      if (rules.frontGap > 0) {
+        const lim = frontLimit(world, e);
+        if ((sx - lim) * dirF > 0) sx = (e.pos.x - lim) * dirF > 0 ? e.pos.x : lim; // nicht über den Frontabstand hinaus
+      }
+      tf.stepTo = { x: sx, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 1) };
       tf.stepUntil = world.tick + 10 * world.tps;
       const made = summon(world, e, def.former!.special, center, strongSummons(world, p, e.defId as UnitId));
       tf.store = (tf.store ?? 0) - 1;
@@ -499,6 +551,12 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     tf.spawnTick = world.tick;
   }
   const canSummon = tf.store > 0 && (rules.maxSummons <= 0 || (tf.summons ?? 0) < rules.maxSummons) && world.tick >= (tf.nextSummon ?? 0);
+  // Frontabstand: nach dem Sprint – Gegner in retreatRadius ohne Wächter dazwischen → 3 Kacheln zurück (alle 10 Ticks geprüft).
+  if (rules.frontGap > 0 && !tf.firstFree && !tf.block && (world.tick + e.id) % 10 === 0 && exposed(world, e)) {
+    tf.stepTo = { x: e.pos.x - forward(world, p) * 3, y: e.pos.y };
+    tf.stepUntil = world.tick + 6 * world.tps;
+    tf.workCell = -1;
+  }
   // Schritt nach dem Ruf: erst ankommen, dann weiter nach Prüfreihenfolge.
   if (tf.stepTo) {
     const d2 = (e.pos.x - tf.stepTo.x) ** 2 + (e.pos.y - tf.stepTo.y) ** 2;
@@ -571,7 +629,8 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   tf.workCell = -1;
   // 3. Vorrücken – stets ein Stück nach vorn, beim Halten nicht über die Grenze hinaus
   const dir = forward(world, p);
-  const limit = advanceLimit(world, e);
+  // Nach dem Sprint gilt der Frontabstand (hinter dem vordersten Wächter seiner Route), sonst die alte Grenze.
+  const limit = rules.frontGap > 0 && !tf.firstFree ? frontLimit(world, e) : advanceLimit(world, e);
   const routeY = world.map.waypoints[m.route].y;
   const ahead = { x: e.pos.x + dir * rules.advanceStep, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 0.5) };
   if (limit !== null && (ahead.x - limit) * dir > 0) {
