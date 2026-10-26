@@ -1,8 +1,6 @@
-# Terrain-Conquester
+# Terrain-Conquester – Technik und Steuerung
 
-**▶ Jetzt spielen:** <https://paulriegraf-dev.github.io/Terrain-Conquester/> – im Browser, ohne Installation, immer die neueste Version (wird bei jedem Push auf `main` automatisch gebaut).
-
-> Neu hier? **[WILLKOMMEN.md](WILLKOMMEN.md)** stellt das Spiel kurz vor: worum es geht, was es anders macht, die drei Fraktionen. Alles darunter ist die technische Anleitung für Entwickler.
+**Spielen:** <https://paulriegraf-dev.github.io/Terrain-Conquester/> · Spielvorstellung: [README](README.md). Diese Datei ist die Anleitung zum Entwickeln und die vollständige Tastenübersicht.
 
 *Prototyp, Meilenstein 2 in Arbeit.*
 

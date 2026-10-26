@@ -1,4 +1,4 @@
-# Willkommen bei Terrain-Conquester
+# Terrain-Conquester
 
 **▶ Sofort spielen (im Browser, nichts installieren):** <https://paulriegraf-dev.github.io/Terrain-Conquester/>
 
@@ -28,6 +28,6 @@ Im Startbildschirm **Multiplayer** wählen, Raum erstellen, Link schicken. Beide
 
 Das Spiel ist ein Hobby-Prototyp in aktiver Entwicklung: Die Grafik ist bewusst einfach (Formen und erste Pixel-Figuren), die Balance wird laufend über tausende KI-gegen-KI-Partien nachjustiert. Jede Änderung landet automatisch auf der Spielseite oben – was du dort siehst, ist immer der neueste Stand.
 
-Wenn du mitentwickeln, Werte ändern oder die Simulation laufen lassen willst: Die technische Anleitung steht in der [README](README.md), das vollständige Designdokument in [DESIGN.md](DESIGN.md).
+Wenn du mitentwickeln, Werte ändern oder die Simulation laufen lassen willst: Die technische Anleitung und alle Tasten stehen in [ENTWICKLUNG.md](ENTWICKLUNG.md), das vollständige Designdokument in [DESIGN.md](DESIGN.md).
 
 Viel Spaß – und formt das Gelände, bevor es der Gegner tut.
