@@ -10,14 +10,16 @@ import type { UnitId } from '../src/data/units';
 
 interface PlayerRec {
   faction: FactionId; strategy: string; spawned: Record<string, number>; lost: Record<string, number>; damageBy: Record<string, number>;
-  damageSplit: Record<string, number>; cmds: Record<string, number>; terrain: Record<string, number>; hq: Record<string, number>;
+  damageSplit: Record<string, number>; damageTo?: Record<string, number>; cmds: Record<string, number>; terrain: Record<string, number>; hq: Record<string, number>;
   research: number; elites: number; shaped: number; walls: number; learnNote: string;
 }
 interface Rec { n: number; map: string; left: FactionId; right: FactionId; winner: 0 | 1 | null; seconds: number; players: [PlayerRec, PlayerRec] }
 
 const dir = 'auswertung/daten';
+/** Optional: nur Partien mit Nummer < Grenze (z. B. 84 = Welle 1). */
+const limit = Number(process.argv[3] ?? Infinity);
 const games: Rec[] = readdirSync(dir).filter((f) => f.endsWith('.jsonl')).flatMap((f) =>
-  readFileSync(`${dir}/${f}`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec));
+  readFileSync(`${dir}/${f}`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec)).filter((g) => g.n < limit);
 const FIDS: FactionId[] = ['technoclan', 'myriaden', 'terraformer'];
 const fn = (f: FactionId): string => FACTIONS[f].name;
 const un = (u: string): string => UNITS[u as UnitId]?.name ?? u;
@@ -87,7 +89,7 @@ table(['Karte', 'Partien', 'links', 'rechts', 'offen', 'Ø Dauer'],
 for (const f of FIDS) {
   const dmg: Record<string, number> = {}, built: Record<string, number> = {}, tank: Record<string, number> = {}, lost: Record<string, number> = {};
   const dmgTo: Record<string, number> = {};
-  let n = 0;
+  let n = 0, nTank = 0;
   for (const g of games) for (const side of [0, 1] as const) {
     const p = g.players[side], q = g.players[1 - side as 0 | 1];
     if (p.faction !== f) continue;
@@ -96,10 +98,13 @@ for (const f of FIDS) {
     for (const [k, v] of Object.entries(p.spawned)) if (v) sum(built, k, v);
     for (const [k, v] of Object.entries(p.lost)) if (v) sum(lost, k, v);
     // Getankt = Schaden, den der Gegner auf unsere Einheiten gemacht hat
-    for (const [k, v] of Object.entries(q.damageSplit)) {
-      const target = k.split('>')[1]!;
-      sum(tank, target, v);
-      if (!(target in UNITS)) sum(dmgTo, target, v);
+    // (damageTo erst ab Welle 2 gespeichert – Tank-Zahlen beruhen nur auf diesen Partien)
+    if (q.damageTo) {
+      nTank++;
+      for (const [k, v] of Object.entries(q.damageTo)) {
+        sum(tank, k, v);
+        if (!(k in UNITS)) sum(dmgTo, k, v);
+      }
     }
   }
   if (!n) continue;
@@ -107,15 +112,15 @@ for (const f of FIDS) {
   const tTot = Object.values(tank).reduce((a, b) => a + b, 0);
   P(`## ${fn(f)} (${n} Partien)`);
   P();
-  P(`**Meister Damage:** ${top(dmg, 1).map(([k, v]) => `${un(k)} (${pct(v, dTot)} des Schadens)`).join('')}. **Meister Tank:** ${top(tank, 1).map(([k, v]) => `${un(k)} (${pct(v, tTot)} des eingesteckten Schadens)`).join('')}. **Meist gebaut:** ${top(built, 1).map(([k, v]) => `${un(k)} (Ø ${(v / n).toFixed(1)} je Partie)`).join('')}.`);
+  P(`**Meister Damage:** ${top(dmg, 1).map(([k, v]) => `${un(k)} (${pct(v, dTot)} des Schadens)`).join('')}. **Meister Tank:** ${nTank ? top(Object.fromEntries(Object.entries(tank).filter(([k]) => k in UNITS)), 1).map(([k, v]) => `${un(k)} (${pct(v, tTot)} des eingesteckten Schadens, aus ${nTank} Partien)`).join('') : 'noch keine Daten (wird ab Welle 2 mitgeschrieben)'}. **Meist gebaut:** ${top(built, 1).map(([k, v]) => `${un(k)} (Ø ${(v / n).toFixed(1)} je Partie)`).join('')}.`);
   P();
   const ids = [...new Set([...Object.keys(dmg), ...Object.keys(built)])].filter((k) => k in UNITS || k === 'hq');
   table(['Einheit', 'Schaden/Partie', 'Anteil', 'gebaut/Partie', 'verloren/Partie', 'Schaden je gebauter', 'getankt/Partie', 'Anteil getankt'],
     ids.sort((a, b) => (dmg[b] ?? 0) - (dmg[a] ?? 0)).slice(0, 14).map((k) => [
       un(k), Math.round((dmg[k] ?? 0) / n), pct(dmg[k] ?? 0, dTot), ((built[k] ?? 0) / n).toFixed(1), ((lost[k] ?? 0) / n).toFixed(1),
-      built[k] ? Math.round((dmg[k] ?? 0) / built[k]!) : '–', Math.round((tank[k] ?? 0) / n), pct(tank[k] ?? 0, tTot),
+      built[k] ? Math.round((dmg[k] ?? 0) / built[k]!) : '–', nTank ? Math.round((tank[k] ?? 0) / nTank) : '–', nTank ? pct(tank[k] ?? 0, tTot) : '–',
     ]));
-  P(`Eingesteckt auf Nicht-Einheiten je Partie: ${top(dmgTo, 4).map(([k, v]) => `${k === 'wall' ? 'Erdwall' : k === 'hq' ? 'HQ' : k === 'building' ? 'Gebäude' : k} ${Math.round(v / n)}`).join(' · ')}.`);
+  P(`Eingesteckt auf Nicht-Einheiten je Partie: ${top(dmgTo, 4).map(([k, v]) => `${k === 'wall' ? 'Erdwall' : k === 'hq' ? 'HQ' : k === 'building' ? 'Gebäude' : k} ${Math.round(v / Math.max(1, nTank))}`).join(' · ')}.`);
   P();
 
   // Gelände / HQ / Forschung

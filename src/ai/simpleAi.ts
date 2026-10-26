@@ -156,8 +156,8 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean;
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true };
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number;
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
@@ -364,7 +364,12 @@ export class SimpleAi {
     if (!AI_TUNING.liveAdapt || this.level !== 'normal' || world.seconds < 240 || world.tick - this.lastLive < 60 * world.tps) return;
     this.lastLive = world.tick;
     const rel = relativeEfficiency(lineStats(world.players[this.player].stats), 3);
-    for (const [line, { rel: r }] of rel) this.liveBias[line] = Math.max(0.75, Math.min(1.35, 1 + 0.35 * (r - 1)));
+    // Im Rückstand (der Gegner hat mehr Abschüsse) wird stärker angepasst (AI_TUNING.liveLossBoost).
+    const me = world.players[this.player].stats;
+    const behind = world.players[1 - this.player].stats.kills > me.kills * 1.2 + 3;
+    const k = 0.35 * (behind ? AI_TUNING.liveLossBoost : 1);
+    const span = behind ? AI_TUNING.liveLossBoost : 1;
+    for (const [line, { rel: r }] of rel) this.liveBias[line] = Math.max(1 - 0.25 * span, Math.min(1 + 0.35 * span, 1 + k * (r - 1)));
   }
 
   // ------------------------------------------------------------ Wahrnehmung

@@ -79,6 +79,8 @@ const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.m
 
 export class AiMemory {
   readonly matchups = new Map<string, MatchupMemory>();
+  /** Wie viel stärker nach einer Niederlage angepasst wird (1 = wie bei Sieg/offen; Wunsch 26.10.: stärker). */
+  lossBoost = 1;
 
   get(key: string, own: FactionId): MatchupMemory {
     let m = this.matchups.get(key);
@@ -103,15 +105,20 @@ export class AiMemory {
     for (const [line, { rel: r, share }] of rel) {
       const before = m.unitBias[line] ?? 1;
       const delta = clamp(r - 1, -0.7, 1.2);
-      let next = before * (1 + (result > 0 ? 0.14 : 0.1) * delta);
+      let next = before * (1 + (result > 0 ? 0.14 : 0.1 * (result < 0 ? this.lossBoost : 1)) * delta);
       // Niederlage: viel gebaut, aber schwach → zusätzlich zurückfahren. Sieg: was viel trug, bleibt.
-      if (result < 0 && share > 0.25 && r < 0.8) next *= 0.92;
+      if (result < 0 && share > 0.25 && r < 0.8) next *= 1 - 0.08 * this.lossBoost;
       if (result > 0 && share > 0.2) next *= 1.03;
       next = clamp(next, BIAS_MIN, BIAS_MAX);
       m.unitBias[line] = next;
       if (Math.abs(next - before) >= 0.03) changes.push(`${UNITS[line].name} ${next > before ? '+' : '−'}${Math.round(Math.abs(next - before) * 100)} %`);
     }
     return changes.join(', ');
+  }
+
+  /** Gespeichertes Gedächtnis zurückladen (Lernläufe in mehreren Wellen). */
+  load(data: Record<string, MatchupMemory>): void {
+    for (const [k, v] of Object.entries(data)) this.matchups.set(k, { games: v.games, wins: v.wins, losses: v.losses, unitBias: { ...v.unitBias } });
   }
 
   toJSON(): Record<string, MatchupMemory> {
