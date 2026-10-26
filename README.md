@@ -1,6 +1,10 @@
-# Terrain-Conquester (Prototyp, Meilenstein 2 in Arbeit)
+# Terrain-Conquester
 
-**Spielen:** <https://paulriegraf-dev.github.io/Terrain-Conquester/> – immer die neueste Version (wird bei jedem Push auf `main` automatisch gebaut).
+**▶ Jetzt spielen:** <https://paulriegraf-dev.github.io/Terrain-Conquester/> – im Browser, ohne Installation, immer die neueste Version (wird bei jedem Push auf `main` automatisch gebaut).
+
+> Neu hier? **[WILLKOMMEN.md](WILLKOMMEN.md)** stellt das Spiel kurz vor: worum es geht, was es anders macht, die drei Fraktionen. Alles darunter ist die technische Anleitung für Entwickler.
+
+*Prototyp, Meilenstein 2 in Arbeit.*
 
 Echtzeit-Strategie-Runden (Ziel 13–20 Minuten) mit kostenloser automatischer Truppenproduktion (bewusst gedrosselt: wenige, gewichtige Verbände), Einflussgebieten, Nebel des Krieges und veränderbarem Gelände. Gespielt wird gegen eine KI, mit drei Fraktionen: Technoclan, Myriaden und – neu, erste spielbare Fassung – Terra-Former. Gekämpft wird nach Tabletop-Vorbild (Treffen → Verwunden → Rüstung), aber ohne Würfel: Einheiten sind Verbände aus mehreren Modellen. Die Grafik ist bewusst eine einfache Debug-Ansicht: Formen statt Sprites. Das Designdokument steht in [DESIGN.md](DESIGN.md). (Der Projektordner heißt noch `vorposten` – der Arbeitstitel.)
 
