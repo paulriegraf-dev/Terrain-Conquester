@@ -1893,3 +1893,7 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - **Lernlauf** (`scripts/lernlauf.ts`, `scripts/lernauswertung.ts`): 9 Paarungen × 2 Karten (Felsenpass, Schluchttal groß) × 84 Partien, Stationen aus, Bericht `auswertung/2026-10-26-lernlauf.md`.
 - **Befunde:** Terra-Former gewinnen 98 % gegen die beiden anderen (Steppenjäger 46 % des Schadens). Technoclan/Myriaden ~25 %. Nach Welle 2 (stärker nach Niederlage) verschwindet der Vorteil der rechten Seite in den Paarungen Technoclan–Myriaden (links 27 → 45 %), die Fraktionsstärken bleiben. Die Vorlieben laufen oft an die Grenzen; die Bewertung zählt nur eigenen Schaden (Tank-, Geschoss- und Unterstützer-Nutzen fehlt).
 - **Absturz behoben:** gebrochene Sichtradien (HQ-Gebiet 14,5 + Feldstecher) hängten `losTable` auf großen Karten auf; `Vision.reveal` rundet den Radius.
+
+## Terra-Former: Wächter-Bauzeit 6,5 s (26.10.)
+
+Befund aus 1512 Lernpartien: Terra-Former gewinnen 98 %, weil sie rund dreimal so viele Einheiten bauen wie der Technoclan (≈20 gegen 7 je Minute), obwohl der Technoclan die Gefechte gewinnt (Abschüsse 158 : 67). Änderung (Wunsch des Nutzers): Bauzeit der Wächter und Terraformer 4 → 6,5 s (−38 % Ausstoß); Steinbruch bleibt +20 % = 7,8 s. Verringerung später über Gebäude-Ausbau (offen, Brainstorming). Identität „Masse“ gehört den Myriaden; Terra-Former: schwacher Anfang, starkes Ende durch Boden (offen).

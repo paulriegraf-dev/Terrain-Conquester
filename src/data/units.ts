@@ -492,7 +492,7 @@ const RAW: Record<UnitId, UnitInput> = {
   // jeder fünfte Verband ist ein Terraformer, der Boden formt und nach 4 Kacheln eine Spezialeinheit ruft.
   wardMeadow: {
     id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
-    speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 4,
+    speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 6.5,
     weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle' },
     ground: 'meadow', groundBonus: { speed: 1.3 },
     shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
@@ -500,7 +500,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerMeadow: {
     id: 'formerMeadow', name: 'Säer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'wheels', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'wheels', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 6.5,
     ground: 'meadow', former: { special: 'specialMeadow' },
     shape: 'cross', letter: 'ś', role: 'Terraformer: formt die Umgebung zu Wiese, ruft auf 4 Kacheln einen Steppenjäger',
   },
@@ -515,7 +515,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardForest: {
     id: 'wardForest', name: 'Borkenschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
-    speed: 1.0, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 4,
+    speed: 1.0, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 6.5,
     weapon: { shots: 1, cooldown: 1.4, range: 5, skill: 3, strength: 5, ap: 1, damage: 8, type: 'rifle' },
     ground: 'forest', groundBonus: { camouflage: 2 },
     shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im Wald getarnt (erst aus 2 Kacheln zu sehen)',
@@ -523,7 +523,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerForest: {
     id: 'formerForest', name: 'Pflanzer', armor: 'infantry', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'foot', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 6.5,
     ground: 'forest', former: { special: 'specialForest' },
     shape: 'cross', letter: 'p', role: 'Terraformer: lässt die Umgebung zu Wald wachsen, ruft auf 4 Kacheln einen Hainhüter',
   },
@@ -539,7 +539,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardMud: {
     id: 'wardMud', name: 'Schlammwerfer', armor: 'infantry', hp: 90, models: 3, toughness: 4, save: 5,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 4,
+    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 6.5,
     weapon: { shots: 1, cooldown: 1.8, range: 5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'splinter', anti: { infantry: 4 }, splash: 1.2 },
     ground: 'mud', groundBonus: { slowAura: { radius: 2, factor: 0.7 } },
     shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im Matsch bremst er Gegner in 2 Kacheln',
@@ -547,7 +547,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerMud: {
     id: 'formerMud', name: 'Wässerer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 6.5,
     ground: 'mud', former: { special: 'specialMud' },
     shape: 'cross', letter: 'ẃ', role: 'Terraformer: weicht die Umgebung zu Matsch auf, ruft auf 4 Kacheln eine Schlammschleuder',
   },
@@ -564,7 +564,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardSnow: {
     id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 4,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 4,
+    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 6.5,
     weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
     hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
     ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },
@@ -573,7 +573,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerSnow: {
     id: 'formerSnow', name: 'Frostbringer', armor: 'light', hp: 120, toughness: 4, save: 5,
-    speed: 0.6, move: 'hover', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 4,
+    speed: 0.6, move: 'hover', part: 'wheels', radius: 0.35, vision: 6, spawnInterval: 6.5,
     ground: 'snow', former: { special: 'specialSnow' },
     shape: 'cross', letter: 'ƒ', role: 'Terraformer: lässt es in der Umgebung schneien, ruft auf 4 Kacheln einen Lawinenrufer',
   },
@@ -588,7 +588,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardRubble: {
     id: 'wardRubble', name: 'Steinwächter', armor: 'heavy', hp: 240, models: 2, toughness: 6, save: 3,
-    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 6,
+    speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 7.8,
     weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 } },
     ground: 'rubble', groundBonus: { save: 1 },
     shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf Geröll Rüstung +1',
@@ -596,7 +596,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   formerRubble: {
     id: 'formerRubble', name: 'Brecher', armor: 'light', hp: 140, toughness: 5, save: 5,
-    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 6,
+    speed: 0.6, move: 'tracks', part: 'wheels', radius: 0.38, vision: 6, spawnInterval: 7.8,
     ground: 'rubble', former: { special: 'specialRubble' },
     shape: 'cross', letter: 'ǵ', role: 'Terraformer: bricht die Umgebung zu Geröll, ruft auf 4 Kacheln einen Frontbrecher',
   },
