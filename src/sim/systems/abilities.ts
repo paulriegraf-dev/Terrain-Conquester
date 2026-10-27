@@ -266,14 +266,13 @@ export function updateWalls(world: World): void {
 /**
  * Darf diese Einheit diesen Wall angreifen (Nachtrag G.3c)? Nur wer Bauwerke beschädigen kann (Belagerung, Schwer mit
  * Durchschlag, Sprengetopp, Frontbrecher) – und nur, wenn der billigste Weg ihrer Route mehr als `detour` × die Kosten
- * ohne Wälle beträgt. Belagerung (Bauwerk-Schaden ≥ 2) darf Wälle in Reichweite auch sonst beschießen, wenn sie kein
- * anderes Ziel hat (die Zielwahl nimmt Wälle zuletzt).
+ * ohne Wälle beträgt (seit 27.10. auch für Belagerung: kein Beschuss von Wällen, die nicht im Weg stehen).
  */
 export function mayBreakWall(world: World, e: Entity): boolean {
   if (!breaksWalls(e)) return false;
   const route = e.mover?.route;
-  if (route && world.wallRatio[e.owner][route] > world.rules.walls.detour + 1e-9) return true;
-  return (UNITS[e.defId as UnitId].weapon?.structureDamage ?? 1) >= 2;
+  // 27.10.: nur wenn der Wall den Weg wirklich versperrt (Umweg über der Grenze) – auch Artillerie schießt sonst nicht auf Wälle.
+  return !!route && world.wallRatio[e.owner][route] > world.rules.walls.detour + 1e-9;
 }
 
 /** Ein Erdwall fällt: der Boden darunter kehrt zurück. */

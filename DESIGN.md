@@ -2060,3 +2060,10 @@ Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
 - Jeder 4. Verband ist ein Beschwörer (vorher jeder 5.). Wiesenhof und Schlammgrube produzieren +20 %.
 - Rückzug: bedrohter Beschwörer (Gegner ≤ 6 Kacheln ohne eigenen Wächter dazwischen) läuft mit Tempo ×1,6 bis zum nächsten eigenen Gebäude oder Wächter-Verband (≥ 3 Einheiten), auch über die Wegmitte, bleibt dann 8 s stehen. Beschwörer jagen keinen Gegnern mehr nach. Frontabstand 4 Kacheln.
 - Belagerungsdruck (Bonusschaden an HQ und Gebäuden bei Gebietsvorsprung) entfernt (siegeFactor 0). Offen: Belagerungsturm (Station) ×1,5.
+
+## Fix 27.10. abends (Partien-Analyse: Front-Befehl, Wälle, Batterien)
+- **Stehenbleiben trotz Front (Ursache, mein Fehler im Nach-Patch):** Die Regel „Beschwörer jagen keinem Gegner nach“ galt über `e.tf` für *alle* Terra-Former-Einheiten (auch Wächter und Gerufene). Wer ein Ziel außer Reichweite sah, stand still. Jetzt nur noch der Beschwörer selbst (`terraformer`).
+- **Jagd gegen Gelände:** Läuft eine Einheit auf ein Ziel außer Reichweite zu, das hinter Gelände liegt (Schlucht, Wall, andere Lane), läuft sie nicht mehr geradeaus dagegen und steht dann still, sondern folgt dem Befehl ihrer Route (Front/Halten/Verteidigen). Gebäude als Ziel: wie bisher geradeaus.
+- **Wälle:** Auch Artillerie (Batterie, Katapult) beschießt Wälle nur noch, wenn der Wall den Weg wirklich versperrt (Umweg > 2,0). Vorher durfte jede Belagerung Wälle in Reichweite beschießen.
+- **Batterie-Fokus:** Belagerung nimmt jede gegnerische Einheit in Reichweite zuerst, erst ohne Einheit in Reichweite HQ und Gebäude (vorher nur Einheiten näher als 3 Kacheln, sonst HQ/Gebäude zuerst).
+- Hinweis: Die 15 Schlammlinge (`mudling`) sind an ihre eigene Matschfläche gebunden und bleiben beim Front-Befehl bewusst nahe dem HQ.

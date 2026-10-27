@@ -90,11 +90,15 @@ export function updateMovement(world: World): void {
       const snap = startOfTick(target);
       const aim = aimPoint(e, snap);
       if (rangeTo(e, snap) > e.weapon!.def.range) {
-        if (e.tf) {
+        if (e.defId === 'terraformer') {
           dir = m.goal ? (lineClear(world, e.pos, m.goal, profile, e.owner) ? steer(e, m.goal) : flowDirection(world, e, profile, slots.get(e.id), near)) : { x: 0, y: 0 };
-        } else {
+        } else if (target.rect || lineClear(world, e.pos, aim, profile, e.owner)) {
           dir = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
           chasing = true;
+        } else {
+          // 27.10.: Ziel liegt hinter Gelände (Schlucht, Wall, andere Lane)? Dann nicht dagegen laufen und stehen bleiben –
+          // der Befehl der Route (Front, Halten, Verteidigen …) gilt weiter.
+          dir = flowDirection(world, e, profile, slots.get(e.id), near);
         }
       } else {
         const look = normalize(aim.x - e.pos.x, aim.y - e.pos.y);

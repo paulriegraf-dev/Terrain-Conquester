@@ -20,16 +20,21 @@ function siegeWorld(): { world: World; barracks: number } {
 }
 
 describe('Artillerie belagert automatisch', () => {
-  it('beschießt Bauwerke in Reichweite vor Einheiten', () => {
+  it('beschießt Bauwerke nur, wenn keine Einheit in Reichweite ist (27.10.: Einheiten zuerst)', () => {
     const { world } = siegeWorld();
     const battery = world.addUnit(1, UNITS.battery, { x: 8.5, y: 1.0 }, 'top');
     battery.mover!.speed = 0;
-    const guard = world.addUnit(0, UNITS.sniper, { x: 5.5, y: 5.0 }, 'mid'); // 5 Kacheln: in Reichweite
+    const guard = world.addUnit(0, UNITS.plasma, { x: 5.5, y: 2.0 }, 'mid'); // gut 3 Kacheln: sichtbar, in Reichweite, außerhalb der alten Nahabwehr
     guard.mover!.speed = 0;
     guard.weapon = undefined;
-    stepTimes(world, world.rules.visionEvery + 1);
+    stepTimes(world, 3 * world.rules.visionEvery);
     const target = world.get(battery.weapon!.targetId);
-    assert.ok(target && target.kind !== 'unit', `Ziel: ${target?.name ?? 'keins'}`);
+    assert.ok(target && target.kind === 'unit', `Ziel: ${target?.name ?? 'keins'}`);
+    guard.pos.x = 1.5; // aus der Reichweite: jetzt Bauwerk
+    guard.prev.x = 1.5;
+    stepTimes(world, world.rules.visionEvery + 1);
+    const next = world.get(battery.weapon!.targetId);
+    assert.ok(!next || next.kind !== 'unit', 'ohne Einheit in Reichweite: Bauwerk oder nichts');
   });
 
   it('wehrt sich, wenn ein Gegner ganz nah kommt', () => {

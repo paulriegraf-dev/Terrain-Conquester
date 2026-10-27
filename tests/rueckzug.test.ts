@@ -6,6 +6,7 @@ import { UNITS } from '../src/data/units';
 import { World } from '../src/sim/world';
 import { factorySpeed } from '../src/sim/systems/production';
 import { openMap, smallBases } from './fixtures';
+import { mayBreakWall } from '../src/sim/systems/abilities';
 
 const tf = { factions: ['terraformer', 'technoclan'] as ['terraformer', 'technoclan'] };
 
@@ -35,5 +36,23 @@ describe('Nach-Patch 27.10.: Terra-Former', () => {
     const start = f.pos.x;
     for (let k = 0; k < 20 * world.tps; k++) world.step();
     assert.ok(start - f.pos.x > 4, `zurückgewichen: ${start} → ${f.pos.x}`);
+  });
+
+  it('Terra-Former-Einheiten (außer dem Beschwörer) jagen sichtbaren Zielen außer Reichweite nach – kein Stehenbleiben', () => {
+    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+    const w = world.addUnit(0, UNITS.wardMud, { x: 8.5, y: 7.5 }, 'mid');
+    world.players[0].stance.mid = 'push';
+    const e = world.addUnit(1, UNITS.wardForest, { x: 8.5 + UNITS.wardMud.weapon!.range + 2, y: 7.5 }, 'mid');
+    e.mover!.speed = 0;
+    e.weapon = undefined;
+    const start = w.pos.x;
+    for (let k = 0; k < 4 * world.tps; k++) world.step();
+    assert.ok(w.pos.x - start > 1, `vorgerückt: ${start} → ${w.pos.x}`);
+  });
+
+  it('Wälle: Artillerie beschießt Wälle nicht, solange sie den Weg nicht versperren', () => {
+    const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
+    const bat = world.addUnit(1, UNITS.battery, { x: 12.5, y: 7.5 }, 'mid');
+    assert.equal(mayBreakWall(world, bat), false);
   });
 });

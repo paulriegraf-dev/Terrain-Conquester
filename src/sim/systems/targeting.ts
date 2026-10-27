@@ -228,7 +228,7 @@ export function updateTargeting(world: World): void {
      */
     const priority = (t: Entity, d: number): number => {
       if (!siege) return PRIORITY[t.kind];
-      if (t.kind === 'unit') return d <= SIEGE_SELF_DEFENSE ? -3 : d <= range ? 0 : 2;
+      if (t.kind === 'unit') return d <= Math.max(SIEGE_SELF_DEFENSE, range) ? -3 : 2; // 27.10.: jede Einheit in Reichweite zuerst, erst dann Bauwerke
       const hq = t.kind === 'hq' ? 0 : 0.5;
       return (d <= range ? -2 : 1) + hq;
     };
