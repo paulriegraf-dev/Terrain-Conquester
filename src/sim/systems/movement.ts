@@ -91,7 +91,12 @@ export function updateMovement(world: World): void {
       const aim = aimPoint(e, snap);
       if (rangeTo(e, snap) > e.weapon!.def.range) {
         if (e.tf) {
-          dir = m.goal ? (lineClear(world, e.pos, m.goal, profile, e.owner) ? steer(e, m.goal) : flowDirection(world, e, profile, slots.get(e.id), near)) : { x: 0, y: 0 };
+          // Terra-Former jagen keinem Gegner nach (28.10.): Ziel in Sicht, aber außer Reichweite → die Route weiterlaufen,
+          // wenn die Haltung der Linie vorrückt. Vorher standen sie mit jedem entfernten Ziel still, und eine Front-Haltung
+          // kam in der Mitte nie voran (Replay 27.10.: 59 % der Einheiten im Vorstoß standen mit Ziel außer Reichweite).
+          dir = m.goal
+            ? (lineClear(world, e.pos, m.goal, profile, e.owner) ? steer(e, m.goal) : flowDirection(world, e, profile, slots.get(e.id), near))
+            : unitOrder(world, e) === 'push' ? flowDirection(world, e, profile, slots.get(e.id), near) : { x: 0, y: 0 };
         } else {
           dir = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
           chasing = true;

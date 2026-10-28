@@ -47,6 +47,23 @@ describe('Erdwall als Gelände (Nachtrag G.3)', () => {
     assert.ok(world.players[0].energy >= energy, 'kostenlos');
   });
 
+  it('auch auf Ödland (27.10.); läuft das Ödland unter dem Wall ab, kehrt beim Zuschütten der Kartenboden zurück', () => {
+    const world = new World({ map: openMap, seed: 1, rules: calm });
+    const cells = [6, 7, 8].map((y) => world.grid.index(4, y));
+    for (const i of cells) {
+      world.grid.setTerrain(i, TERRAIN_INDEX.waste);
+      world.wasteUntil[i] = world.tick + 20 * world.tps;
+    }
+    assert.ok(checkWall(world, 0, 4, 7, true).ok, 'Ödland ist baubar');
+    world.step([cmd(0, { type: 'castWall', x: 4, y: 7, vertical: true })]);
+    stepTimes(world, WALL.raiseSeconds * world.tps + 1);
+    for (const i of cells) assert.equal(world.grid.terrain[i], TERRAIN_INDEX.wall, 'Wall steht auf dem Ödland');
+    stepTimes(world, 25 * world.tps);
+    for (const i of cells) assert.equal(world.grid.terrain[i], TERRAIN_INDEX.wall, 'Ablauf des Ödlands lässt den Wall stehen');
+    world.step([cmd(0, { type: 'fillWall', x: 4, y: 7 })]);
+    for (const i of cells) assert.equal(world.grid.terrain[i], world.map.terrain[i], 'natürlicher Boden statt ewigem Ödland');
+  });
+
   it('Budget 24 Kacheln je Spieler', () => {
     const world = new World({ map: felsenpass, seed: 1, rules: { startEnergy: 400, maxEnergy: 2000 } });
     world.players[0].energy = 2000;
