@@ -558,7 +558,9 @@ export class Hud {
         } else {
           const check = checkWallPreview(world, me, view.hover.x, view.hover.y, view.wall.vertical);
           const worst = check.ratios ? Math.max(...ROUTES.map((r) => check.ratios![r].ratio)) : 1;
-          text = check.ok ? `Erdwall hier möglich (${check.cells.length * wallTileCost(world, me)} Energie) – gegnerischer Umweg höchstens ×${worst.toFixed(2)}. Klicken zum Errichten.` : check.reason;
+          // Trichter (28.10.): Matsch auf den gegnerischen Wegen – dort bremst und bündelt der Wall.
+          const mud = check.ratios ? ROUTES.reduce((n, r) => n + check.ratios![r].path.filter((c) => world.grid.terrain[c] === TERRAIN_INDEX.mud).length, 0) : 0;
+          text = check.ok ? `Erdwall hier möglich (${check.cells.length * wallTileCost(world, me)} Energie) – gegnerischer Umweg höchstens ×${worst.toFixed(2)}${mud > 0 ? `, Weg durch ${mud} Matsch-Kacheln` : ''}. Klicken zum Errichten.` : check.reason;
           warn = !check.ok;
         }
       } else text = 'Erdwall: Ziel wählen. R oder Rechtsklick dreht, Z schüttet eigene Wälle zu.';

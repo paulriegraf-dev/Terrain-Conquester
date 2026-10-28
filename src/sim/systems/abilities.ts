@@ -154,7 +154,7 @@ function staysOpenWith(world: World, cells: readonly number[], as: number): bool
 
 /**
  * Prüft, ob Spieler p hier einen Erdwall setzen darf (auch für die Vorschau im HUD).
- * Nachtrag G.3 (26.10. spät): Gelände statt Bauwerk – im eigenen Kartendrittel immer, sonst in der eigenen
+ * Nachtrag G.3 (26.10. spät): Gelände statt Bauwerk – in der eigenen Kartenhälfte immer (seit 28.10., vorher Drittel), sonst in der eigenen
  * Einflusszone; Budget in Kacheln, Preis je Kachel; jede gegnerische Route bleibt ≤ rules.walls.detour × ihre Kosten
  * ohne Wälle (`ratios` für die Vorschau).
  */
@@ -168,7 +168,8 @@ export function checkWall(world: World, p: PlayerId, x: number, y: number, verti
   const taken = reserved(world);
   for (const [cx, cy] of coords) {
     const i = grid.index(cx, cy);
-    if (!inOwnThird(world, p, cx) && controllerAt(world, i) !== p) return fail('Nur im eigenen Kartendrittel oder in der eigenen Einflusszone');
+    // 28.10.: die ganze eigene Kartenhälfte (vorher eigenes Drittel), dazu weiter die eigene Einflusszone – ohne weitere Sperren.
+    if (!inOwnHalf(world, p, cx) && controllerAt(world, i) !== p) return fail('Nur in der eigenen Kartenhälfte oder in der eigenen Einflusszone');
     if (!grid.isFreeGround(cx, cy) || grid.terrain[i] === TERRAIN_INDEX.wall) return fail('Nur auf freiem, festem Boden');
     if (taken.has(i)) return fail('Dort wird schon gebaut');
   }
@@ -277,6 +278,8 @@ export function mayBreakWall(world: World, e: Entity): boolean {
 /** Ein Erdwall fällt: der Boden darunter kehrt zurück. */
 export function removeWall(world: World, e: Entity): void {
   for (const c of e.wallCells ?? []) {
+    if (world.wallOwner[c.index] !== 0) world.wallCellCount--;
+    world.wallOwner[c.index] = 0;
     if (world.grid.terrain[c.index] !== TERRAIN_INDEX.wall) continue;
     // Erdwall auf Ödland (27.10., aus Branch vorstoss-fix-und-oedland-waelle): Lief das Ödland unter dem Wall ab, kehrt der natürliche Boden zurück.
     const wasteOver = c.original === TERRAIN_INDEX.waste && (world.wasteUntil[c.index] ?? 0) <= world.tick;

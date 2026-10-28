@@ -1709,10 +1709,14 @@ export class Renderer {
           });
           ctx.stroke();
           const wp = world.map.waypoints[r];
+          // Trichter-Anzeige (28.10.): wie viele Matsch-Kacheln liegen auf dem Weg des Gegners?
+          const mud = d.path.reduce((n, c) => n + (world.grid.terrain[c] === TERRAIN_INDEX.mud ? 1 : 0), 0);
+          const label = mud > 0 ? `×${d.ratio.toFixed(2)} · Matsch ${mud}` : `×${d.ratio.toFixed(2)}`;
+          const bw = mud > 0 ? 4.6 : 2.6;
           ctx.fillStyle = 'rgba(10,15,12,0.8)';
-          ctx.fillRect(wp.x * t - t * 1.3, wp.y * t - t * 0.4, t * 2.6, t * 0.8);
+          ctx.fillRect(wp.x * t - t * bw / 2, wp.y * t - t * 0.4, t * bw, t * 0.8);
           ctx.fillStyle = bad ? '#f08a70' : '#f2f0e6';
-          ctx.fillText(`×${d.ratio.toFixed(2)}`, wp.x * t, wp.y * t);
+          ctx.fillText(label, wp.x * t, wp.y * t);
         }
         ctx.restore();
       }

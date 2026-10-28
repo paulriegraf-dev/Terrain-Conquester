@@ -1,3 +1,4 @@
+import { SLIT } from './visibility';
 import { siteOfRoute } from './sites';
 import type { Entity, EntityKind } from '../entity';
 import { closestPointInRect, dist, distToRect } from '../math';
@@ -68,11 +69,47 @@ function canAttack(world: World, e: Entity, t: Entity): boolean {
   if (t.shieldUntil !== undefined && world.tick < t.shieldUntil) return false;
   // Manche Waffen greifen keine Gebäude an (z. B. das HQ).
   if (t.kind !== 'unit' && (e.weapon!.def.structureDamage ?? 1) <= 0) return false;
-  return (
-    t.alive &&
-    t.owner !== e.owner &&
-    (world.isVisibleTo(e.owner, t) || treeShot(world, e, t)) // Nebel: nur Sichtbares ist angreifbar
-  );
+  if (!t.alive || t.owner === e.owner) return false;
+  if (treeShot(world, e, t)) return true; // Wipfelschuss: über Erdwälle hinweg
+  return world.isVisibleTo(e.owner, t) && !fireBlocked(world, e, t); // Nebel: nur Sichtbares ist angreifbar
+}
+
+/** Indirektes Feuer (28.10.): Belagerung (Batterie, Katapult, Myr-Kanone) und Schlammwürfe gehen im Bogen über Wälle. */
+const LOBBED = new Set<string>(['wardMud', 'specialMud']);
+export function indirectFire(e: Entity): boolean {
+  const w = e.weapon?.def;
+  return !!w && (w.type === 'siege' || LOBBED.has(e.defId));
+}
+
+/**
+ * Schusslinie (28.10.): Direkte Waffen schießen nicht durch Erdwälle. Ausnahme Schießscharte: über den *eigenen*
+ * Wall, wenn der Schütze direkt daran steht (bis SLIT Kacheln); Gebäude und HQ über alle eigenen Wälle.
+ */
+export function fireBlocked(world: World, e: Entity, t: Entity): boolean {
+  if (world.wallCellCount === 0 || t.kind === 'wall' || indirectFire(e)) return false;
+  const g = world.grid;
+  const aim = aimPoint(e, t);
+  let x0 = Math.floor(e.pos.x);
+  let y0 = Math.floor(e.pos.y);
+  const x1 = Math.min(g.width - 1, Math.max(0, Math.floor(aim.x)));
+  const y1 = Math.min(g.height - 1, Math.max(0, Math.floor(aim.y)));
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let guard = 0; guard < 64; guard++) {
+    if (x0 === x1 && y0 === y1) return false;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+    if (x0 === x1 && y0 === y1) return false;
+    const owner = world.wallOwner[g.index(x0, y0)];
+    if (!owner) continue;
+    if (owner === e.owner + 1 && (e.kind !== 'unit' || (x0 + 0.5 - e.pos.x) ** 2 + (y0 + 0.5 - e.pos.y) ** 2 <= SLIT * SLIT)) continue;
+    return true;
+  }
+  return false;
 }
 
 /** Wipfelschuss (Schlussstein Borkenschützen): aus eigenem Wald über Erdwälle hinweg – Ziel in eigener Sichtweite. */

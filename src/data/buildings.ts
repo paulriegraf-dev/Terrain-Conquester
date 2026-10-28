@@ -10,6 +10,7 @@ import type { WeaponDef } from './units';
 /**
  * Technoclan und Myriaden bauen Kaserne/Werkstatt/Schwerwerk-Linien (barracks, workshop, foundry);
  * die Terra-Former haben eine Fabrik je Bodenart (Wiesenhof, Hain, Schlammgrube, Frosthalle, Steinbruch).
+ * 28.10.: Bauteile verteilt – Wiese/Wald Schusswaffen, Matsch/Schnee Radteile, Geröll Panzerplatten (vorher vier Linien Schusswaffen).
  */
 export type BuildingId = 'barracks' | 'workshop' | 'foundry' | 'meadowhall' | 'grove' | 'mudpit' | 'frosthall' | 'quarry';
 
@@ -36,8 +37,8 @@ export const BUILDINGS: Readonly<Record<BuildingId, BuildingDef>> = {
   // Terra-Former (22.10.): eine Fabrik je Bodenart
   meadowhall: { id: 'meadowhall', key: '1', part: 'arms', lineName: 'Wiesenlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
   grove: { id: 'grove', key: '2', part: 'arms', lineName: 'Waldlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  mudpit: { id: 'mudpit', key: '3', part: 'arms', lineName: 'Matschlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  frosthall: { id: 'frosthall', key: '4', part: 'arms', lineName: 'Schneelinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  mudpit: { id: 'mudpit', key: '3', part: 'wheels', lineName: 'Matschlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
+  frosthall: { id: 'frosthall', key: '4', part: 'wheels', lineName: 'Schneelinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
   quarry: { id: 'quarry', key: '5', part: 'plates', lineName: 'Geröll-Linie', buildCost: 60, hp: 1500, toughness: 10, save: 4, vision: 5 },
 };
 

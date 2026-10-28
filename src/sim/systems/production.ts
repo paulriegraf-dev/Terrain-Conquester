@@ -129,8 +129,10 @@ function producePlayer(world: World, owner: PlayerId): void {
     // Beimischung: Terraformer (jeder fünfte Verband) oder Unterstützer.
     const mix = mixOf(world, building);
     const mix2 = mix2Of(world, building);
+    // 28.10.: Terraformer kommen ZUSÄTZLICH zum Verband (jeder 4. Verband bringt einen Beschwörer mit), nicht statt seiner.
+    const extraFormer = !!mix && !!UNITS[mix.unit].former && pr.produced % mix.every === mix.every - 1;
     const def =
-      mix && pr.produced % mix.every === mix.every - 1 ? UNITS[mix.unit]
+      mix && !extraFormer && pr.produced % mix.every === mix.every - 1 ? UNITS[mix.unit]
       : mix2 && pr.produced % mix2.every === Math.floor(mix2.every / 2) ? UNITS[mix2.unit]
       : UNITS[pr.unit];
     if (units >= world.rules.unitCap) {
@@ -148,6 +150,15 @@ function producePlayer(world: World, owner: PlayerId): void {
       if (def.former) world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
       const birth = verbundOf(world, u);
       if (birth) u.verbundPrint = birth;
+      if (extraFormer) {
+        const fpos = spawnPoint(world, building, pr.route, MOVE_PROFILES[UNITS[mix!.unit].move]);
+        if (fpos) {
+          const f = world.addUnit(owner, UNITS[mix!.unit], fpos, pr.route);
+          f.fromBuilding = building.id;
+          world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
+          units++;
+        }
+      }
     }
     pr.progress -= pr.intervalTicks;
     pr.produced++;

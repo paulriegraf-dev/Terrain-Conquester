@@ -1213,6 +1213,11 @@ export class Game {
         break;
       case 'none':
         break;
+      case 'laneGround':
+        if (this.session.mode === 'play' && data.route) {
+          this.session.issue({ type: 'setLaneGround', route: data.route as Route, ground: (data.ground || null) as 'meadow' | 'forest' | 'mud' | 'snow' | 'rubble' | null });
+        }
+        break;
       case 'stance':
         if (this.session.mode === 'play' && data.route && data.stance) {
           this.session.issue({ type: 'setStance', route: data.route as Route, stance: data.stance as Stance });

@@ -537,7 +537,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardMud: {
     id: 'wardMud', name: 'Schlammwerfer', armor: 'infantry', hp: 90, models: 3, toughness: 4, save: 5,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 7, spawnInterval: 5.5,
+    speed: 0.9, move: 'foot', part: 'wheels', radius: 0.32, vision: 7, spawnInterval: 5.5,
     weapon: { shots: 1, cooldown: 1.8, range: 5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'splinter', anti: { infantry: 4 }, splash: 1.2 },
     ground: 'mud', groundBonus: { slowAura: { radius: 2, factor: 0.7 } },
     shape: 'circle', letter: 'm', role: 'Flächenschaden auf Reichweite – im Matsch bremst er Gegner in 2 Kacheln',
@@ -556,7 +556,7 @@ const RAW: Record<UnitId, UnitInput> = {
 
   wardSnow: {
     id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 4,
-    speed: 0.9, move: 'foot', part: 'arms', radius: 0.32, vision: 6, spawnInterval: 5.5,
+    speed: 0.9, move: 'foot', part: 'wheels', radius: 0.32, vision: 6, spawnInterval: 5.5,
     weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
     hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
     ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },

@@ -2078,3 +2078,13 @@ Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
 - **Gerufene binden keine Markt-Bauteile** (kommen aus dem Boden, nicht aus der Fabrik).
 - **KI:** Späher höchstens alle 30 s (mit Anlass) bzw. 40 s (Verstärkung) statt alle 20 s (44 Späher × 25 Energie je Partie); dieselbe Fläche frühestens nach 120 s erneut umbauen (bis 9 Käufe auf einer Kachel, Wald ↔ Matsch im Sekundentakt).
 - **Befund Produktionstempo Terra-Former:** Fabriken liefen im Mittel mit 0,63–0,72 Tempo, fast nur wegen des Markts (Ø 0,52–0,62; Myriaden 0,93): Vier der fünf Wächter-Linien binden Schusswaffen, die Terra-Former halten damit fast den ganzen Bedarf und tragen die doppelte Marktbremse. Offen zur Entscheidung: Linien auf Bauteile verteilen oder Wächter binden nur ein halbes Bauteil.
+
+## Nach-Patch 28.10. nachmittags (Entscheidungen des Nutzers)
+- **Späher der KI:** Änderung zurückgenommen (altes Verhalten bleibt).
+- **Erdwall-Platzierung:** ganze eigene Kartenhälfte (vorher eigenes Drittel), weiter auch die eigene Einflusszone; keine zusätzlichen Sperren, Budget unverändert.
+- **Schusslinie:** Erdwälle halten direkte Schüsse auf. Bogenfeuer (Belagerung: Batterie, Katapult, Myr-Kanone; Schlammwerfer und Schlammschleuder) geht drüber. Wipfelschuss bleibt Ausnahme.
+- **Schießscharte:** Eigene Einheiten direkt am eigenen Wall (bis 1,6 Kacheln) sehen und schießen drüber; Gebäude/HQ über alle eigenen Wälle. Schweber sehen über jeden Wall. Gegnerische Wälle bleiben blickdicht und schussfest.
+- **Trichter-Anzeige:** Wall-Vorschau zählt Matsch-Kacheln auf dem neuen gegnerischen Weg.
+- **Lane-Umschalter (Terra-Former):** Menü „Boden“ (Taste B): je Lane Auto oder Wiese/Wald/Matsch/Schnee/Geröll, ohne Abklingzeit. Terraformer der Lane formen den gewählten Boden, auch über eigenen Boden anderer Art; Rufe folgen dem Boden unter dem Block; Fabrik-Streifen ebenfalls. Die Synergie entsteht erst, wenn der Boden liegt.
+- **Bauteile Terra-Former:** Wiese/Wald Schusswaffen, Matsch/Schnee Radteile (Fabrik und Wächter), Geröll Panzerplatten.
+- **Beschwörer zusätzlich:** Jeder 4. Verband bringt einen Terraformer *zusätzlich* mit (vorher statt des Verbands); höchstens 2 lebende je Fabrik.

@@ -9,13 +9,32 @@ import type { World } from '../world';
 import { controllerAt } from './influence';
 import { factorySpeed, productionSpeed } from './production';
 
+/**
+ * Erdwall und Sicht (28.10.): Schweber sehen über jeden Wall. Alle anderen sehen über einen *eigenen* Wall, wenn sie
+ * direkt daran stehen (Schießscharte, höchstens SLIT Kacheln); Gebäude und HQ über alle eigenen Wälle.
+ * Gegnerische Wälle bleiben blickdicht.
+ */
+export const SLIT = 1.6;
+export function wallPass(world: World, e: Entity): ((x: number, y: number) => boolean) | undefined {
+  const hover = e.kind === 'unit' && UNITS[e.defId as UnitId]?.move === 'hover';
+  const g = world.grid;
+  return (x, y) => {
+    const owner = world.wallOwner[g.index(x, y)];
+    if (!owner) return false;
+    if (hover) return true;
+    if (owner !== e.owner + 1) return false;
+    if (e.kind !== 'unit') return true;
+    return (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2 <= SLIT * SLIT;
+  };
+}
+
 /** Berechnet den Nebel neu: Jede eigene Entity deckt ihren Sichtradius auf, dazu das eigene Gebiet. */
 export function updateVision(world: World): void {
   for (const p of world.players) p.vision.clear();
   for (const e of world.entities) {
     if (!e.alive || e.kind === 'wall') continue;
     const bonus = e.kind === 'unit' ? 0 : structureVisionBonus(world, e.owner); // Feldstecher (HQ-Zweig Aufklärung)
-    world.players[e.owner].vision.reveal(Math.floor(e.pos.x), Math.floor(e.pos.y), e.vision + bonus);
+    world.players[e.owner].vision.reveal(Math.floor(e.pos.x), Math.floor(e.pos.y), e.vision + bonus, world.wallCellCount > 0 ? wallPass(world, e) : undefined);
   }
   // Sensorstation (wirksam): Sicht über den Lane-Abschnitt in der Mitte (Kreise entlang der Lane).
   const band = world.rules.sites.sensorBand;

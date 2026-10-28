@@ -235,6 +235,8 @@ export interface PlayerState {
   stance: Record<Route, Stance>;
   /** Neue Haltung, die erst zum Tick `tick` greift (null = keine Umstellung). */
   pendingStance: Record<Route, { stance: Stance; tick: number } | null>;
+  /** Terra-Former (28.10.): gewählter Boden je Lane (null = automatisch: Lane-Farbe bzw. Fabrikboden). */
+  laneGround: Record<Route, import('../data/terrain').TerrainId | null>;
   /** Ab diesem Tick ist der Erdwall wieder einsatzbereit. */
   wallReadyTick: number;
   /** Wiederaufbau (24.10.): Nach dem Verkauf einer hochgestuften Fabrik bekommt die nächste neue Fabrik bis zum Tick `until` so viele Bonus-Stufen. */
@@ -408,6 +410,10 @@ export class World {
   readonly wasteUntil: Uint32Array;
   /** Ödland aus eigenem Ruf (28.10.): Besitzer + 1 und der Boden davor (Terrain-Index + 1) – zählt für die Lane-Synergie weiter. */
   readonly wasteOwner: Uint8Array;
+  /** Erdwall-Kacheln (28.10.): Besitzer + 1 (0 = kein Wall) – für Schusslinie und Schießscharte. */
+  readonly wallOwner: Uint8Array;
+  /** Anzahl stehender Wallkacheln (0 = Schusslinien-Prüfung überspringen). */
+  wallCellCount = 0;
   readonly wasteGround: Uint8Array;
   /** Terra-Former: Lane-Synergie je Spieler (alle 5 s neu bestimmt, siehe systems/synergy.ts). */
   synergy: [SynergyState, SynergyState] = [NO_SYNERGY, NO_SYNERGY];
@@ -472,6 +478,7 @@ export class World {
     this.tileCooldown = new Uint32Array(cells * 2);
     this.wasteUntil = new Uint32Array(cells);
     this.wasteOwner = new Uint8Array(cells);
+    this.wallOwner = new Uint8Array(cells);
     this.wasteGround = new Uint8Array(cells);
 
     const factions = config.factions ?? ['technoclan', 'technoclan'];
@@ -757,6 +764,10 @@ export class World {
       rect,
       wallCells: cells,
     };
+    for (const c of cells) {
+      if (this.wallOwner[c.index] === 0) this.wallCellCount++;
+      this.wallOwner[c.index] = owner + 1;
+    }
     this.insert(e);
     return e;
   }
@@ -1014,6 +1025,7 @@ export class World {
       energy: this.rules.startEnergy,
       stance: { top: 'hold', mid: 'hold', bottom: 'hold' },
       pendingStance: { top: null, mid: null, bottom: null },
+      laneGround: { top: null, mid: null, bottom: null },
       wallReadyTick: 0,
       rebuild: null,
       rushReadyTick: 0,

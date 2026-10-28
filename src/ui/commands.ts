@@ -87,6 +87,7 @@ export function commandsFor(ctx: CommandContext): CommandSet {
   }
   if (view.prep) return prepCommands(ctx);
   if (view.menu === 'front') return frontCommands(ctx);
+  if (view.menu === 'ground') return groundCommands(ctx);
   if (view.menu === 'hero') return heroCommands(ctx);
   return view.menu === 'terrain' ? terrainCommands(ctx) : mainCommands(ctx);
 }
@@ -133,7 +134,7 @@ function mainCommands(ctx: CommandContext): CommandSet {
     cost: WALL.length * tileCost,
     disabled: !canAct,
     pressed: !!view.wall && !view.wall.fill,
-    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg und Sicht, kein Ziel, keine Lebensdauer. Im eigenen Kartendrittel immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher).`,
+    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg, Sicht und direkte Schüsse (Bogenfeuer – Batterie, Katapult, Myr-Kanone, Schlammwürfe – geht drüber), kein Ziel, keine Lebensdauer. Eigene Einheiten direkt am eigenen Wall sehen und schießen drüber (Schießscharte), Schweber sehen über jeden Wall. In der eigenen Kartenhälfte immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher). Die Vorschau zählt Matsch auf dem gegnerischen Weg (Trichter).`,
     action: 'wall',
   });
   if (view.wall) {
@@ -151,6 +152,14 @@ function mainCommands(ctx: CommandContext): CommandSet {
     tip: 'Fronten: pro Route Verteidigen (Basis), Halten (Grenze) oder Front (Angriff). Wer im Angriff die Mitte überquert, bleibt dabei. Umstellen dauert etwas.',
     action: 'menu', data: { menu: 'front' },
   });
+  if (p.faction.id === 'terraformer') {
+    const set = ROUTES.filter((r) => p.laneGround[r]).length;
+    buttons.push({
+      id: 'lane-ground', glyph: '◫', label: set ? `Boden ${set}/3` : 'Boden', key: 'b', disabled: !canAct,
+      tip: 'Boden je Lane: wähle, welchen Boden die Terraformer auf jeder Lane formen. Sie formen dann auch eigenen Boden anderer Art um und rufen das Wesen des neuen Bodens. Die Synergie entsteht erst, wenn der Boden liegt.',
+      action: 'menu', data: { menu: 'ground' },
+    });
+  }
   const hero = p.faction.hero;
   const heroName = hero ? UNITS[hero.unit].name : 'Commander';
   buttons.push({
@@ -251,6 +260,33 @@ function frontCommands(ctx: CommandContext): CommandSet {
     }
   });
   return { title: 'Fronten', buttons, columns: 5 };
+}
+
+/** Lane-Umschalter (28.10.): je Route Automatisch oder eine der fünf Bodenarten – kein Cooldown. */
+const LANE_GROUNDS = ['meadow', 'forest', 'mud', 'snow', 'rubble'] as const;
+function groundCommands(ctx: CommandContext): CommandSet {
+  const { world, view, canAct } = ctx;
+  const p = world.players[view.human ?? 0];
+  const buttons: CommandButton[] = [];
+  ROUTES.forEach((r, row) => {
+    const keys = ['123456', 'qwertz', 'asdfgh'][row]!;
+    const cur = p.laneGround[r];
+    buttons.push({
+      id: `lg-${r}-auto`, glyph: `${ROUTE_GLYPH[r]}∗`, label: 'Auto', key: keys[0]!, disabled: !canAct, pressed: cur === null,
+      tip: `${ROUTE_NAMES[r]}: automatisch – die Terraformer formen die Lane-Farbe (vorherrschender eigener Boden) oder den Boden ihrer Fabrik.`,
+      action: 'laneGround', data: { route: r, ground: '' },
+    });
+    LANE_GROUNDS.forEach((g, k) => {
+      const t = TERRAIN_LIST[TERRAIN_INDEX[g]]!;
+      buttons.push({
+        id: `lg-${r}-${g}`, glyph: `${ROUTE_GLYPH[r]}${t.char === '.' ? '·' : t.char}`, label: t.name, key: keys[k + 1]!, disabled: !canAct, pressed: cur === g,
+        tip: `${ROUTE_NAMES[r]}: Terraformer formen ${t.name} – auch über eigenen Boden anderer Art – und rufen das ${t.name}-Wesen, sobald ein 2×2-Block liegt.`,
+        action: 'laneGround', data: { route: r, ground: g },
+      });
+    });
+    if (row === 0) buttons.push(backButton());
+  });
+  return { title: 'Boden je Lane', buttons, columns: 7 };
 }
 
 /** Vorbereitungsphase: Bodenart wählen (1–5) und „Bereit“. */

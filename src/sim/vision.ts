@@ -49,7 +49,7 @@ export class Vision {
   }
 
   /** Deckt alles auf, was von Kachel (cx, cy) im Radius sichtbar ist. */
-  reveal(cx: number, cy: number, radius: number): void {
+  reveal(cx: number, cy: number, radius: number, passWall?: (x: number, y: number) => boolean): void {
     // Gebrochene Radien (HQ-Gebiet wächst in halben Kacheln, + Feldstecher) hängten die Sichtlinien-Tabelle auf (26.10.).
     radius = Math.round(radius);
     const grid = this.grid;
@@ -60,7 +60,7 @@ export class Vision {
       const path = entry.path;
       let clear = true;
       for (let k = 0; k < path.length; k += 2) {
-        if (grid.blocksVision(cx + path[k]!, cy + path[k + 1]!)) {
+        if (grid.blocksVision(cx + path[k]!, cy + path[k + 1]!) && !(passWall && passWall(cx + path[k]!, cy + path[k + 1]!))) {
           clear = false;
           break;
         }

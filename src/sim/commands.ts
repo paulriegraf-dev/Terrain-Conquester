@@ -38,6 +38,8 @@ export type Command =
   | { type: 'hqUpgrade'; path: HqPathId }
   /** Haltung einer Route: halten (an der Gebietsgrenze) oder vorstoßen (bis zum gegnerischen HQ). Greift verzögert. */
   | { type: 'setStance'; route: Route; stance: 'defend' | 'hold' | 'secure' | 'push' }
+  /** Terra-Former (28.10.): Boden, den die Terraformer dieser Lane formen (null = automatisch). */
+  | { type: 'setLaneGround'; route: Route; ground: 'meadow' | 'forest' | 'mud' | 'snow' | 'rubble' | null }
   | { type: 'castWall'; x: number; y: number; vertical: boolean }
   /** Scheinbestellung am Markt: treibt den Preis eines Bauteils für eine Weile hoch. */
   | { type: 'order'; part: PartId }

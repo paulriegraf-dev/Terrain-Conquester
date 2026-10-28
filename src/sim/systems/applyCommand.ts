@@ -127,6 +127,14 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
     case 'hqUpgrade':
       if (!HQ_PATH_IDS.includes(cmd.path)) return fail('Unbekannter HQ-Zweig');
       return buyHqUpgrade(world, player, cmd.path);
+    case 'setLaneGround': {
+      if (!ROUTES.includes(cmd.route)) return fail('Ungültige Route');
+      const p = world.players[player];
+      if (p.faction.id !== 'terraformer') return fail('Nur für die Terra-Former');
+      if (cmd.ground !== null && !['meadow', 'forest', 'mud', 'snow', 'rubble'].includes(cmd.ground)) return fail('Ungültiger Boden');
+      p.laneGround[cmd.route] = cmd.ground;
+      return OK;
+    }
     case 'setStance': {
       if (!ROUTES.includes(cmd.route) || !STANCES.includes(cmd.stance)) return fail('Ungültige Haltung');
       const p = world.players[player];

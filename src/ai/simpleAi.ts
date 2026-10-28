@@ -1671,9 +1671,7 @@ export class SimpleAi {
     // Bericht); nach einem Planwechsel 2 min lang alle 20 s; sonst im Grundtakt.
     const reason = AI_TUNING.intel.on && this.scoutOccasion > this.lastScout;
     const boost = AI_TUNING.intel.on && world.tick < this.scoutBoostUntil;
-    // 28.10.: Die Spähkosten fraßen der KI rund ein Viertel ihrer Energie (Partien 27.10.: 44 Späher je Partie, alle 21 s) –
-    // jetzt auch mit Anlass höchstens alle 30 s, im Verstärkungsfenster alle 40 s.
-    const every = reason ? 30 : boost ? 40 : 45 / f;
+    const every = reason ? 0 : boost ? 20 : 45 / f;
     if (world.tick - this.lastScout < every * world.tps) return null;
     if (this.spare(world) < scoutCost(world, this.player) + 40 || !checkScout(world, this.player).ok) return null;
     this.lastScout = world.tick;

@@ -235,7 +235,8 @@ function updateStripes(world: World): void {
     const fb = world.players[e.owner].faction.buildings[e.defId as BuildingId];
     if (!fb?.former) continue;
     if ((world.tick + e.id) % every !== 0) continue;
-    const ground = TERRAIN_INDEX[UNITS[fb.tiers[0]!].ground!];
+    const chosen = world.players[e.owner].laneGround?.[e.producer.route];
+    const ground = chosen ? TERRAIN_INDEX[chosen] : TERRAIN_INDEX[UNITS[fb.tiers[0]!].ground!]; // Lane-Umschalter (28.10.)
     const reach = e.producer.level >= 3 ? world.rules.terraform.stripeLevel3 : world.rules.terraform.stripeLevel2;
     const i = stripeCell(world, e.owner, e.producer.route, reach);
     if (i === null) continue;
@@ -308,6 +309,9 @@ const SPECIAL_OF: Readonly<Record<number, UnitId>> = Object.fromEntries(
  * 12 Kacheln); ohne Farbe den Boden der Fabrik, die ihn gebaut hat.
  */
 export function formerGround(world: World, e: Entity, def: UnitDef = UNITS[e.defId as UnitId]): number {
+  // 28.10.: vom Spieler gewählter Boden der Lane hat Vorrang (Lane-Umschalter).
+  const chosen = world.players[e.owner].laneGround?.[e.mover!.route];
+  if (chosen) return TERRAIN_INDEX[chosen];
   const lane = world.synergy[e.owner].lanes[ROUTES.indexOf(e.mover!.route)];
   if (lane) return TERRAIN_INDEX[lane];
   const b = e.fromBuilding !== undefined ? world.get(e.fromBuilding) : undefined;
@@ -342,11 +346,20 @@ export function convertible(world: World, i: number, p: PlayerId, ground: number
   if (ownGroundTile(world, i, p, ground) || world.locked[i] || g.structure[i] !== 0) return false;
   if (g.terrain[i] === TERRAIN_INDEX.waste) return false;
   // Erntehelfer (26.10. abends): nur neutraler und gegnerischer Boden – eigene Kacheln anderer Linien bleiben stehen.
-  if (world.rules.terraform.anyLineBlock && world.formed[i] === p + 1) return false;
+  if (world.rules.terraform.anyLineBlock && world.formed[i] === p + 1 && !rechoose(world, i, p, ground)) return false;
   if (!TERRAIN_LIST[g.terrain[i]!]!.solid || g.terrain[i] === TERRAIN_INDEX.wall) return false;
   if (world.map.buildZone[i] === BUILD_ZONE.base) return false;
   if (cooling(world, i, p)) return false;
   return !world.swaps.some((s) => s.index === i);
+}
+
+/**
+ * Lane-Umschalter (28.10.): Hat der Spieler für die Lane dieser Kachel einen Boden gewählt und formt der Terraformer
+ * genau diesen, darf er auch eigene Kacheln anderer Art umformen – der alte Boden bleibt sonst liegen.
+ */
+function rechoose(world: World, i: number, p: PlayerId, ground: number): boolean {
+  const chosen = world.players[p].laneGround?.[laneOfRow(world, Math.floor(i / world.grid.width))];
+  return !!chosen && TERRAIN_INDEX[chosen] === ground;
 }
 
 function blockCells(world: World, r: CellRect): number[] {
