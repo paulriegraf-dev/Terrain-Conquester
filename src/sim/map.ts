@@ -27,6 +27,8 @@ import { ROUTES } from './types';
  */
 export interface MapDef {
   id: string;
+  /** Keine Außenposten (28.10.: auf den kleinen Karten entfernt) – die Plätze werden normale Wiese. */
+  noOutposts?: boolean;
   name: string;
   description: string;
   /** y-Position der drei Routen-Wegpunkte; x liegt immer in der Kartenmitte. */
@@ -157,7 +159,7 @@ export function parseMap(def: MapDef): ParsedMap {
         hqCells[x < half ? 0 : 1].push(i);
         terrain[i] = TERRAIN_INDEX.meadow;
       } else if (ch === OUTPOST_CHAR) {
-        isPad[i] = 1;
+        if (!def.noOutposts) isPad[i] = 1;
         terrain[i] = TERRAIN_INDEX.meadow;
       } else {
         const t = charToTerrain.get(ch);

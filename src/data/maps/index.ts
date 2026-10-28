@@ -16,7 +16,8 @@ export const RESERVE_COLUMNS = 10;
  */
 /** Strategische Orte (mittlere Zeitebene), sofern eine Karte keine eigenen festlegt: oben Sensorstation, unten Verkehrsknoten. */
 export const MAPS: readonly MapDef[] = [felsenpass, schluchttal, felsenpassGross, schluchttalGross, steilkueste, schluchtenland].map(
-  (m) => ({ ...m, reserve: RESERVE_COLUMNS }),
+  // 28.10.: Auf den kleinen Karten (68×27) gibt es keine Außenposten mehr – nur die großen behalten sie.
+  (m) => ({ ...m, reserve: RESERVE_COLUMNS, noOutposts: m.noOutposts ?? !m.id.endsWith('-gross') }),
 );
 
 export function getMap(id: string): MapDef {

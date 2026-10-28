@@ -137,6 +137,13 @@ export function laneCounts(world: World, p: PlayerId): number[][] {
   const idx = new Map(SYNERGY_GROUNDS.map((id, k) => [TERRAIN_INDEX[id], k]));
   const young = world.tick - Math.round(world.rules.keystone.laneDelay * world.tps);
   for (let i = 0; i < world.formed.length; i++) {
+    // 28.10.: Ödland aus einem eigenen Ruf zählt weiter als der Boden, der es vorher war (bis es abläuft) – sonst
+    // kostet jeder Ruf der Lane vier Kacheln und die Synergie bricht in umkämpften Lanes dauernd weg.
+    if (g.terrain[i] === TERRAIN_INDEX.waste && world.wasteOwner[i] === p + 1) {
+      const kw = idx.get(world.wasteGround[i]! - 1);
+      if (kw !== undefined) out[ROUTES.indexOf(laneOfRow(world, Math.floor(i / g.width)))]![kw]!++;
+      continue;
+    }
     if (world.formed[i] !== p + 1) continue;
     const born = world.combatGround.get(i);
     if (born !== undefined && born > young) continue; // im Kampf geformt: zählt erst nach laneDelay

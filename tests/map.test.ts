@@ -38,7 +38,11 @@ describe('Karten', () => {
         assert.equal(map.hq[0].x + map.hq[0].w, map.width - map.hq[1].x);
       });
 
-      it(isAsymmetric(def) ? 'hat Außenposten auf beiden Seiten' : 'hat 6 Außenposten (2 pro Zone), gespiegelt', () => {
+      it(def.noOutposts ? 'kleine Karte: keine Außenposten (28.10.)' : isAsymmetric(def) ? 'hat Außenposten auf beiden Seiten' : 'hat 6 Außenposten (2 pro Zone), gespiegelt', () => {
+        if (def.noOutposts) {
+          assert.equal(map.pads.length, 0);
+          return;
+        }
         if (isAsymmetric(def)) {
           const left = map.pads.filter((p) => p.rect.x + p.rect.w / 2 < map.width / 2).length;
           assert.ok(left >= 2 && map.pads.length - left >= 2, `links ${left}, rechts ${map.pads.length - left}`);

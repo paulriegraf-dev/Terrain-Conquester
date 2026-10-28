@@ -199,6 +199,8 @@ function expireWaste(world: World): void {
     const until = world.wasteUntil[i]!;
     if (until === 0 || world.tick < until) continue;
     world.wasteUntil[i] = 0;
+    world.wasteOwner[i] = 0;
+    world.wasteGround[i] = 0;
     if (world.grid.terrain[i] === TERRAIN_INDEX.waste) world.grid.setTerrain(i, world.map.terrain[i]!);
     world.combatGround.delete(i);
   }
@@ -642,6 +644,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
       const until = world.tick + Math.round(rules.wasteSeconds * world.tps);
       for (const i of blockCells(world, tf.block)) {
         world.wasteUntil[i] = until;
+        if (world.formed[i] === p + 1 && world.grid.terrain[i] !== TERRAIN_INDEX.waste) { world.wasteOwner[i] = p + 1; world.wasteGround[i] = world.grid.terrain[i]! + 1; } else if (world.grid.terrain[i] !== TERRAIN_INDEX.waste) { world.wasteOwner[i] = 0; world.wasteGround[i] = 0; }
         world.formed[i] = 0;
         world.grid.setTerrain(i, TERRAIN_INDEX.waste);
         world.players[p].vision.learn(i);

@@ -901,7 +901,11 @@ function synergyLine(world: World, me: PlayerId): string {
     } else {
       text = `${ROUTE_NAMES[r]} · ${name(top.id)} ${Math.round((top.n / Math.max(1, total)) * 100)} %`;
     }
-    return `<p class="muted syn-lane" title="${escapeHtml(tip)}">${escapeHtml(text + held)}</p>${bar}`;
+    // 28.10.: Eine Lane zählt für die Synergie schon ab laneMin Kacheln des Synergie-Bodens, auch wenn ein anderer Boden
+    // dort vorherrscht – das zeigt die Zeile jetzt mit an (sonst wirkt „Matsch verstärkt“ bei „Geröll 64 %“ falsch).
+    const baseK = s.base ? SYNERGY_GROUNDS.indexOf(s.base) : -1;
+    const counted = s.base && top.id !== s.base && c[baseK]! >= min ? ` · zählt: ${name(s.base)} ${c[baseK]} ✓` : '';
+    return `<p class="muted syn-lane" title="${escapeHtml(tip)}">${escapeHtml(text + counted + held)}</p>${bar}`;
   }).join('');
   const label = synergyLabel(s);
   const fade = synergyFadeLeft(world, me);

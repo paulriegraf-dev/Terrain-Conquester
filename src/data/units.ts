@@ -621,6 +621,9 @@ export const UNIT_IDS: readonly UnitId[] = Object.keys(RAW) as UnitId[];
 
 /** Wie viel von welchem Bauteil eine Einheit bindet. */
 export function bindsOf(def: UnitDef): Partial<Record<PartId, number>> {
+  // 28.10.: Gerufene (Terra-Former-Wesen, Schlammlinge) kommen aus dem Boden, nicht aus der Fabrik – sie binden keine
+  // Bauteile. Vorher bremste die eigene Gerufenen-Masse die Terra-Former-Fabriken auf rund halbes Tempo (Markt Ø 0,52).
+  if (def.summoned) return {};
   return def.binds ?? { [def.part]: 1 };
 }
 

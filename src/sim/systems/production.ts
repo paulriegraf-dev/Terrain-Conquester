@@ -68,6 +68,14 @@ export function mixOf(world: World, building: Entity): { unit: UnitId; every: nu
   const pr = building.producer;
   if (!fb || !pr) return null;
   if (fb.former) {
+    // 28.10.: höchstens maxPerFactory lebende Terraformer je Fabrik – sonst kommt statt des Terraformers ein Wächter
+    // (Terraformer mit vollem Speicher stauten sich, der Linie fehlten die Kämpfer).
+    const cap = world.rules.terraform.maxPerFactory;
+    if (cap > 0) {
+      let alive = 0;
+      for (const o of world.entities) if (o.alive && o.fromBuilding === building.id && o.defId === fb.former) alive++;
+      if (alive >= cap) return null;
+    }
     return { unit: fb.former, every: world.rules.terraform.every };
   }
   if (fb.mix && pr.level >= fb.mix.level) {

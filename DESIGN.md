@@ -2067,3 +2067,14 @@ Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
 - **Wälle:** Auch Artillerie (Batterie, Katapult) beschießt Wälle nur noch, wenn der Wall den Weg wirklich versperrt (Umweg > 2,0). Vorher durfte jede Belagerung Wälle in Reichweite beschießen.
 - **Batterie-Fokus:** Belagerung nimmt jede gegnerische Einheit in Reichweite zuerst, erst ohne Einheit in Reichweite HQ und Gebäude (vorher nur Einheiten näher als 3 Kacheln, sonst HQ/Gebäude zuerst).
 - Hinweis: Die 15 Schlammlinge (`mudling`) sind an ihre eigene Matschfläche gebunden und bleiben beim Front-Befehl bewusst nahe dem HQ.
+
+## Nach-Patch 28.10. (Partien 27.10. abends: Analyse und kleine Fixes)
+- **Ödland-Wälle** (aus Branch `claude/vorstoss-fix-und-oedland-waelle`, nur `abilities.ts`-Teile und Tests): Erdwälle dürfen auf Ödland stehen; läuft das Ödland unter dem Wall ab und wird der Wall zugeschüttet, kehrt der Kartenboden zurück. `movement.ts` aus dem Branch nicht übernommen (main gilt).
+- **Terraformer je Fabrik höchstens 2 lebend** (`terraform.maxPerFactory`): sonst kommt an der Stelle ein Wächter. Ursache für „15 Terraformer, kaum Kämpfer“: doppelter Speicher + jeder 4. Verband, während ein Terraformer nur etwa 1,5 Rufe je Minute schafft (⅓ der Zeit mit voller Arbeit, aber ohne fertigen Block; 10-s-Pause je Ruf).
+- **Ödland zählt für die Lane-Synergie** als der Boden, der es vor dem Ruf war (bis es abläuft). Vorher kostete jeder Ruf der Lane vier Kacheln.
+- **Synergie-Anzeige:** Lane-Zeile zeigt „zählt: Matsch 14 ✓“, wenn die Lane den Synergie-Boden ab 12 Kacheln hat, obwohl ein anderer Boden vorherrscht (Regel seit 24.10.).
+- **Schlucht teilweise:** mindestens die Hälfte der 2×4-Kacheln muss passen (vorher alle).
+- **Außenposten** auf den kleinen Karten (68×27) entfernt; die großen behalten sie.
+- **Gerufene binden keine Markt-Bauteile** (kommen aus dem Boden, nicht aus der Fabrik).
+- **KI:** Späher höchstens alle 30 s (mit Anlass) bzw. 40 s (Verstärkung) statt alle 20 s (44 Späher × 25 Energie je Partie); dieselbe Fläche frühestens nach 120 s erneut umbauen (bis 9 Käufe auf einer Kachel, Wald ↔ Matsch im Sekundentakt).
+- **Befund Produktionstempo Terra-Former:** Fabriken liefen im Mittel mit 0,63–0,72 Tempo, fast nur wegen des Markts (Ø 0,52–0,62; Myriaden 0,93): Vier der fünf Wächter-Linien binden Schusswaffen, die Terra-Former halten damit fast den ganzen Bedarf und tragen die doppelte Marktbremse. Offen zur Entscheidung: Linien auf Bauteile verteilen oder Wächter binden nur ein halbes Bauteil.

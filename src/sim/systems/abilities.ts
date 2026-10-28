@@ -170,7 +170,6 @@ export function checkWall(world: World, p: PlayerId, x: number, y: number, verti
     const i = grid.index(cx, cy);
     if (!inOwnThird(world, p, cx) && controllerAt(world, i) !== p) return fail('Nur im eigenen Kartendrittel oder in der eigenen Einflusszone');
     if (!grid.isFreeGround(cx, cy) || grid.terrain[i] === TERRAIN_INDEX.wall) return fail('Nur auf freiem, festem Boden');
-    if (grid.terrain[i] === TERRAIN_INDEX.waste) return fail('Ödland – erst wenn es abgelaufen ist');
     if (taken.has(i)) return fail('Dort wird schon gebaut');
   }
   const budget = wallBudget(world, p);
@@ -246,7 +245,7 @@ export function updateWalls(world: World): void {
   const r = world.rules.walls;
   for (const wall of due) {
     const cells = wall.cells.map((c) => c.index);
-    const free = cells.every((i) => world.grid.structure[i] === 0 && TERRAIN_LIST[world.grid.terrain[i]!]!.solid && world.grid.terrain[i] !== TERRAIN_INDEX.wall && world.grid.terrain[i] !== TERRAIN_INDEX.waste);
+    const free = cells.every((i) => world.grid.structure[i] === 0 && TERRAIN_LIST[world.grid.terrain[i]!]!.solid && world.grid.terrain[i] !== TERRAIN_INDEX.wall);
     if (!free || !staysOpenWith(world, cells, TERRAIN_INDEX.wall)) {
       // Inzwischen verbaut oder würde den letzten Weg schließen: Energie zurück.
       world.players[wall.owner].energy += wall.cost ?? 0;
@@ -278,7 +277,11 @@ export function mayBreakWall(world: World, e: Entity): boolean {
 /** Ein Erdwall fällt: der Boden darunter kehrt zurück. */
 export function removeWall(world: World, e: Entity): void {
   for (const c of e.wallCells ?? []) {
-    if (world.grid.terrain[c.index] === TERRAIN_INDEX.wall) world.grid.setTerrain(c.index, c.original);
+    if (world.grid.terrain[c.index] !== TERRAIN_INDEX.wall) continue;
+    // Erdwall auf Ödland (27.10., aus Branch vorstoss-fix-und-oedland-waelle): Lief das Ödland unter dem Wall ab, kehrt der natürliche Boden zurück.
+    const wasteOver = c.original === TERRAIN_INDEX.waste && (world.wasteUntil[c.index] ?? 0) <= world.tick;
+    if (wasteOver) world.wasteUntil[c.index] = 0;
+    world.grid.setTerrain(c.index, wasteOver ? world.map.terrain[c.index]! : c.original);
   }
   world.emit({ type: 'wallBroken', owner: e.owner, cells: (e.wallCells ?? []).map((c) => c.index) });
 }
@@ -357,8 +360,9 @@ export function checkSwapArea(world: World, p: PlayerId, x: number, y: number, t
   if (terrain === 'gorge') {
     const limit = gorgeLimit(world, p);
     if (limit === 0) return { ok: false, reason: 'Schluchten erst mit dem HQ-Zweig Gelände (Schluchtgräber)', cells };
-    // Eine Schlucht gibt es nur ganz – sonst entstünden Lücken, durch die doch jemand läuft.
-    if (cells.length < area.length) return { ok: false, reason: firstReason || 'Hier passt keine Schlucht', cells };
+    // 28.10. (Wunsch des Nutzers): Eine Schlucht darf auch nur teilweise entstehen (Bauwerke, Außenposten, Ödland im Weg) –
+    // mindestens die Hälfte ihrer Kacheln muss passen.
+    if (cells.length * 2 < area.length) return { ok: false, reason: firstReason || 'Hier passt keine Schlucht', cells };
     if (gorgeCells(world, p) + cells.length > limit * GORGE_CELLS) {
       return { ok: false, reason: `Höchstens ${limit} Schluchten gleichzeitig – schütte erst eine eigene zu`, cells };
     }

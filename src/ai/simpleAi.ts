@@ -252,6 +252,8 @@ export class SimpleAi {
   /** Statistik für die Messung: Planwechsel (Tick) und Konter-Linienwechsel. */
   readonly planChanges: number[] = [];
   private scoutBoostUntil = -1e9;
+  /** Zuletzt selbst umgebaute Flächen (Mitte) → Tick – gegen Hin-und-her-Käufe. */
+  private readonly shapedAt = new Map<number, number>();
   private lastPlanBuy = -1e9;
   /** Gesehene Klassen je Route (abklingend, Halbwertszeit 45 s) und letzte Messung (alle 30 s) für die Hysterese. */
   private readonly seenLane: Record<Route, Record<SeenClass, number>> = {
@@ -401,7 +403,16 @@ export class SimpleAi {
       const wall = this.decideWall(world);
       if (wall) commands.push(wall);
       const shape = this.decideTerrain(world);
-      if (shape) commands.push(shape);
+      // 28.10.: Dieselbe Stelle nicht im Minutentakt hin und her umbauen (Partien 27.10.: bis zu 9 Käufe auf einer Kachel,
+      // Wald ↔ Matsch im Abstand von Sekunden) – eine Fläche frühestens nach 120 s erneut.
+      if (shape && shape.type === 'swapTerrain' && shape.terrain !== 'gorge') {
+        const key = shape.y * world.grid.width + shape.x;
+        const last = this.shapedAt.get(key);
+        if (last === undefined || world.tick - last >= 120 * world.tps) {
+          this.shapedAt.set(key, world.tick);
+          commands.push(shape);
+        }
+      } else if (shape) commands.push(shape);
       // Nebenmittel: Spähen, Markt, Täuschung (je nach Profil)
       const purchase = this.decideBuys(world);
       if (purchase) commands.push(purchase);
@@ -1660,7 +1671,9 @@ export class SimpleAi {
     // Bericht); nach einem Planwechsel 2 min lang alle 20 s; sonst im Grundtakt.
     const reason = AI_TUNING.intel.on && this.scoutOccasion > this.lastScout;
     const boost = AI_TUNING.intel.on && world.tick < this.scoutBoostUntil;
-    const every = reason ? 0 : boost ? 20 : 45 / f;
+    // 28.10.: Die Spähkosten fraßen der KI rund ein Viertel ihrer Energie (Partien 27.10.: 44 Späher je Partie, alle 21 s) –
+    // jetzt auch mit Anlass höchstens alle 30 s, im Verstärkungsfenster alle 40 s.
+    const every = reason ? 30 : boost ? 40 : 45 / f;
     if (world.tick - this.lastScout < every * world.tps) return null;
     if (this.spare(world) < scoutCost(world, this.player) + 40 || !checkScout(world, this.player).ok) return null;
     this.lastScout = world.tick;

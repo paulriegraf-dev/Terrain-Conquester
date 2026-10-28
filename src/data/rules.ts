@@ -321,7 +321,7 @@ export interface Rules {
    * sie mit ihrem Boden zu – das dauert `gorgeFactor`-mal so lange wie eine Kachel.
    */
   terraform: {
-    formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; ritualFirst: boolean; anyLineBlock: boolean; workPerSummon: number; stepAfterSummon: number; sprintOnSpawn: boolean; sprintWindow: number; formSecondsRoots: number; rootsStoreAtLevel: boolean; stripeSeconds: number; stripeLevel2: number; stripeLevel3: number; frontGap: number; retreatRadius: number; retreatSeconds: number; retreatGroup: number; retreatSpeed: number; lineSpeed: Record<string, number>; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number;
+    formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; ritualFirst: boolean; anyLineBlock: boolean; workPerSummon: number; stepAfterSummon: number; sprintOnSpawn: boolean; sprintWindow: number; formSecondsRoots: number; rootsStoreAtLevel: boolean; stripeSeconds: number; stripeLevel2: number; stripeLevel3: number; frontGap: number; retreatRadius: number; retreatSeconds: number; retreatGroup: number; retreatSpeed: number; maxPerFactory: number; lineSpeed: Record<string, number>; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number;
     preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; tempoStep: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
   };
   /**
@@ -510,7 +510,7 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [4, 6, 8], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [4, 6, 8], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 2, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
     preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 4, everyLevel2: 3, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },
