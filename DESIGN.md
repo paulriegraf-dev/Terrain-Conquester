@@ -2090,3 +2090,7 @@ Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
 - **Beschwörer zusätzlich:** Jeder 4. Verband bringt einen Terraformer *zusätzlich* mit (vorher statt des Verbands); höchstens 2 lebende je Fabrik.
 - **Scharten-Automatik (bei „Halten“):** Fernkämpfer mit direkter Waffe ab Reichweite 4 (z. B. Railgun-Scharfschütze 4,5) rücken bis 4 Kacheln an eine freie Kachel direkt am eigenen Wall, wenn sie von dort einen Gegner dahinter treffen; ohne Gegner zurück in die Reihe. Verteidigen/Sichern/Front ändern daran nichts – die Haltung ist der Schalter. Je Scharte ein Schütze.
 - **Stellung** (Rally je Fabrik): jetzt in der ganzen eigenen Kartenhälfte oder der eigenen Einflusszone (vorher Drittel).
+
+## Spielweise Terra-Former und Endscreen (28.10. abends)
+- Spielweise-Analyse einer Terra-Former-Partie des Nutzers mit Vergleich zur Terra-Former-KI: `auswertung/2026-10-28-spielweise-terra-former.md`. Kernpunkte für die KI: Lane-Boden früh festlegen und bei zwei Böden bleiben, Stufen vor Forschung und beides früher, Probe-Vorstoß und Schlussschlag schon bei gut doppelter Übermacht, weniger Routen/Umwidmen/Gelände, Forschung auf die tragende Linie bündeln. Umsetzung im KI-Chat.
+- **Endscreen:** Die Schadenslisten („Meister Schaden durch/an“) zeigen beim Hovern den vollen Namen, den Schaden und den Anteil (gekürzte Namen wie „St…“).

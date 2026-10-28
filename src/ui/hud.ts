@@ -974,7 +974,7 @@ function damageName(id: string): string {
 }
 
 /**
- * Schadens-Übersicht nach der Runde (Wunsch 24.10.): je Seite der Gesamtschaden, welche eigenen Einheiten am meisten
+ * Schadens-Übersicht nach der Runde (Wunsch 24.10.; 28.10.: Hover zeigt den vollen Namen, Schaden und Anteil): je Seite der Gesamtschaden, welche eigenen Einheiten am meisten
  * Schaden gemacht haben und woran er ging – als kleine Balken.
  */
 function damageOverview(stats: [PlayerStats, PlayerStats], names: [string, string]): string {
@@ -986,7 +986,7 @@ function damageOverview(stats: [PlayerStats, PlayerStats], names: [string, strin
   const list = (rows: [string, number][], total: number): string =>
     rows.length === 0
       ? '<li class="muted">–</li>'
-      : rows.map(([name, v]) => `<li><span class="dmg-name">${escapeHtml(name)}</span><span class="dmg-bar"><i style="width:${Math.max(3, Math.round((v / Math.max(1, total)) * 100))}%"></i></span><span class="dmg-num">${num(v)}</span></li>`).join('');
+      : rows.map(([name, v]) => `<li title="${escapeHtml(`${name}: ${num(v)} Schaden (${Math.round((v / Math.max(1, total)) * 100)} %)`)}"><span class="dmg-name">${escapeHtml(name)}</span><span class="dmg-bar"><i style="width:${Math.max(3, Math.round((v / Math.max(1, total)) * 100))}%"></i></span><span class="dmg-num">${num(v)}</span></li>`).join('');
   const side = (st: PlayerStats, name: string, k: number): string => {
     const total = Object.values(st.damageBy ?? {}).reduce((a, b) => a + b, 0);
     return `<section class="dmg-side" data-side="${k}">

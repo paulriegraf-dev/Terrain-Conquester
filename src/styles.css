@@ -758,6 +758,7 @@ body.start-mode .sp-fields { gap: 7px; }
 .dmg-label { margin: 6px 0 2px; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .dmg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .dmg-list li { display: grid; grid-template-columns: minmax(0, 1fr) 54px auto; gap: 6px; align-items: center; font-size: 0.76rem; }
+.dmg-list li[title] { cursor: help; }
 .dmg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dmg-bar { height: 5px; background: var(--raise); border-radius: 2px; overflow: hidden; }
 .dmg-bar i { display: block; height: 100%; background: var(--brass); }
