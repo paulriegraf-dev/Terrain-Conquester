@@ -1005,6 +1005,7 @@ body.start-mode .sp-fields { gap: 7px; }
 .tp-btn kbd { font-family: var(--font-data); font-size: 0.66rem; color: #a9b7cc; border: 1px solid #3d5f92; border-radius: 3px; padding: 0 4px; }
 .tp-back { background: linear-gradient(180deg, #2b2f36, #1a1d22); box-shadow: inset 0 0 0 1px #4b535c, 0 2px 0 #000; }
 .tp-vol { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: #d9e3dc; font-size: 0.86rem; padding: 4px 2px; }
+.tp-record { margin: 0.4rem 0 0; text-align: center; color: #d9e3dc; font-size: 0.85rem; letter-spacing: 0.04em; }
 .tp-credits { margin: 0; color: #d9e3dc; font-size: 0.9rem; line-height: 1.5; }
 .tp-foot { margin-top: clamp(16px, 6vh, 60px); padding: 14px 24px; }
 .ts-switch { position: absolute; left: 14px; bottom: 12px; z-index: 4; display: flex; gap: 4px; align-items: center; font-family: var(--font-data); font-size: 0.72rem; color: var(--muted); background: rgba(0, 0, 0, 0.45); padding: 4px 6px; border-radius: 4px; }

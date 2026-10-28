@@ -1966,6 +1966,19 @@ export class Game {
   /** Zahl der gespeicherten Partien auf dem Knopf im Titelbild. */
   private syncSavedCount(): void {
     void allMatches().then((all) => {
+      const rec = this.doc.getElementById('tp-record');
+      if (rec) {
+        let wins = 0;
+        let losses = 0;
+        for (const m of all) {
+          const w = m.result.winner;
+          if (w === null || w === undefined) continue;
+          if (w === m.human) wins++;
+          else losses++;
+        }
+        rec.textContent = `Bilanz: ${wins} ${wins === 1 ? 'Sieg' : 'Siege'} · ${losses} ${losses === 1 ? 'Niederlage' : 'Niederlagen'}`;
+        rec.hidden = wins + losses === 0;
+      }
       const b = this.doc.getElementById('btn-export-matches');
       if (!b) return;
       b.textContent = `Gespeicherte Partien (${all.length}) herunterladen`;
