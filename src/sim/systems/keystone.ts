@@ -360,6 +360,9 @@ export function centerHolder(world: World): PlayerId | null {
 /** Ein Fenster gutschreiben: Guthaben bis maxCredits, darüber wartet es (pending). */
 function grantWindow(world: World, p: PlayerId, early: boolean): void {
   const gate = world.players[p].gate;
+  // Alles gewählt (oder schon genug Guthaben dafür): kein Fenster mehr – sonst mahnen Chip und Soldat ins Leere.
+  const left = keystoneCardsOf(world, p).filter((c) => !keystoneTaken(world, p, c.upgrades)).length;
+  if (gate.credits + gate.pending >= left) return;
   gate.opened++;
   if (early) gate.early++;
   if (gate.credits < world.rules.keystoneGate.maxCredits) gate.credits++;

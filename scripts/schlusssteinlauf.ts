@@ -93,5 +93,5 @@ if (mode === 'run') {
     }
     return o;
   };
-  console.log([...report(label), '', ...(b !== '0' ? report(b) : [])].join('\n'));
+  console.log([...report(label), '', ...(a !== '0' ? report(a) : [])].join('\n'));
 }

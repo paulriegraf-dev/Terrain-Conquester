@@ -121,6 +121,22 @@ describe('Schlussstein-Fenster (28.10. abends)', () => {
     assert.equal(g.pending, 0);
   });
 
+  it('sind alle Schlusssteine gewählt (oder Guthaben für alle da), öffnet kein Fenster mehr', () => {
+    const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
+    const p = world.players[0];
+    for (const u of p.faction.upgrades) if (u.keystone && u.unit !== 'wardSnow') p.research.push(u.id);
+    world.tick = 600 * world.tps;
+    updateGates(world);
+    assert.equal(p.gate.credits, 1, 'einer ist noch übrig');
+    world.tick = 750 * world.tps;
+    updateGates(world);
+    assert.equal(p.gate.credits + p.gate.pending, 1, 'kein zweites Guthaben für nur einen Schlussstein');
+    chooseKeystone(world, 0, 'wardSnow-keystone');
+    world.tick = 900 * world.tps;
+    updateGates(world);
+    assert.equal(p.gate.credits, 0);
+  });
+
   it('Wahl: kostenlos und sofort wirksam, verbraucht ein Guthaben; Befehl „research“ führt ebenfalls zur Wahl', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
     const p = world.players[0];
