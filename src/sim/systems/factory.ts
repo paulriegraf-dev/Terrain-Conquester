@@ -3,7 +3,7 @@ import type { BuildingUpgradeDef, BuildingUpgradeKind, FactionDef, UpgradeDef } 
 import { BUILDINGS } from '../../data/buildings';
 import type { BuildingId } from '../../data/buildings';
 import { UNITS, lineUnit } from '../../data/units';
-import { keystonePrice } from './keystone';
+import { checkKeystone, chooseKeystone } from './keystone';
 import type { UnitId } from '../../data/units';
 import type { CommandResult } from '../commands';
 import type { Entity } from '../entity';
@@ -104,19 +104,16 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
   if (bu) return checkBuildingUpgrade(world, owner, bu);
   const u = p.faction.upgrades.find((x) => x.id === upgradeId);
   if (!u) return { ok: false, reason: 'Unbekanntes Upgrade' };
+  // Schlussstein-Fenster (28.10. abends): kostenlos und sofort, über die Karten (chooseKeystone) – hier nur die Prüfung.
+  if (u.keystone) {
+    const k = checkKeystone(world, owner, u.id);
+    return k.ok ? { ok: true, cost: k.cost, seconds: 0 } : k;
+  }
   if (!researchableUnits(world, owner).includes(lineUnit(u.unit))) return { ok: false, reason: `Erst eine Fabrik, die ${UNITS[u.unit].name} bauen kann` };
   if (p.research.includes(u.id)) return { ok: false, reason: 'Schon erforscht' };
   if (u.requires && !requirementMet(p.research, u.requires)) {
     const prev = p.faction.upgrades.find((x) => x.id === u.requires || x.id === `${u.requires}a`);
     return { ok: false, reason: `Erst ${prev?.name.replace(/:.*$/, '') ?? 'die vorige Stufe'} erforschen` };
-  }
-  // Schlussstein-Tor (26.10. spät): nur mit offenem Tor; Preis nach Reihenfolge, 20 s.
-  if (u.keystone) {
-    if (p.gate.credits <= 0) {
-      const next = Math.max(0, Math.ceil((p.gate.next - world.tick) / world.tps));
-      return { ok: false, reason: `Kein Schlussstein-Tor offen – das nächste in ${Math.floor(next / 60)}:${String(next % 60).padStart(2, '0')}` };
-    }
-    if (p.labs.some((l) => p.faction.upgrades.find((x) => x.id === l.upgrade)?.keystone)) return { ok: false, reason: 'Es wird schon ein Schlussstein erforscht' };
   }
   if (researching(world, owner, u.id)) return { ok: false, reason: 'Wird schon erforscht' };
   if (u.fork) {
@@ -124,9 +121,9 @@ export function checkResearch(world: World, who: PlayerId | Entity, upgradeId: s
     if (other) return { ok: false, reason: `Gabelung: schon ${other.name} gewählt` };
   }
   if (p.labs.length >= world.rules.researchSlots) return { ok: false, reason: `Höchstens ${world.rules.researchSlots} Forschungen gleichzeitig` };
-  const cost = upgradePrice(world, u.keystone ? keystonePrice(world, owner) : u.cost, researchPriceFactor(world, u.unit));
+  const cost = upgradePrice(world, u.cost, researchPriceFactor(world, u.unit));
   if (p.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
-  return { ok: true, cost, seconds: u.keystone ? world.rules.keystoneGate.seconds : u.seconds };
+  return { ok: true, cost, seconds: u.seconds };
 }
 
 /** Besitzt Spieler p ein (fertiges oder entstehendes) Gebäude dieser Art? */
@@ -168,16 +165,11 @@ export function researching(world: World, owner: PlayerId, upgradeId: string): b
 
 /** Forschung starten (zentral, parallel zur Produktion). */
 export function startResearch(world: World, owner: PlayerId, upgradeId: string): CommandResult {
+  // Schlusssteine (28.10. abends): kein Forschungsplatz, keine Zeit – sofort gewählt.
+  if (world.players[owner].faction.upgrades.find((x) => x.id === upgradeId)?.keystone) return chooseKeystone(world, owner, upgradeId);
   const c = checkResearch(world, owner, upgradeId);
   if (!c.ok) return c;
   pay(world, owner, c.cost);
-  const ks = world.players[owner].faction.upgrades.find((x) => x.id === upgradeId)?.keystone;
-  if (ks) {
-    const gate = world.players[owner].gate;
-    gate.credits--;
-    gate.bought++;
-    gate.byKeystone[upgradeId] = gate.opened - gate.credits; // Nummer des Tors, mit dem er gekauft wurde
-  }
   world.players[owner].stats.decisions++;
   world.players[owner].labs.push({ upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) });
   return { ok: true };

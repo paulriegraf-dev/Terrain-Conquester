@@ -213,6 +213,12 @@ export interface Entity {
   };
   /** Bluff (Schlussstein Katapult): von diesem Katapult geworfen. */
   thrownBy?: number;
+  /** Myr-Brechstange (28.10. abends): geschluckte Modelle, ihr Alter (Ticks) bei der Fusion, Ende der eigenen Uhr. */
+  breaker?: { models: number; ages: number[]; until: number; formed: number };
+  /** Drohnen-Verband in einer Fusion (Nummer der Fusion). */
+  fuse?: number;
+  /** Seit wann der Verband stillsteht (Brechstange) und wo er da stand. */
+  still?: { since: number; x: number; y: number };
   /** Letzter Tick mit Bewegung (Grasnarbe: Stillstand). */
   movedTick?: number;
   /** Weißer Tod: erstarrt auf eigenem Schnee des Gegners – nimmt bis `until` × factor Schaden. */

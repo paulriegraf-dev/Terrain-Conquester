@@ -35,6 +35,8 @@ export interface MapDef {
   waypointsY: Readonly<Record<Route, number>>;
   /** Umkämpfte Kartenmitte (Zentrumsanreiz, 26.10. spät) – Standard: der mittlere Wegpunkt (auf allen sechs Karten geprüft). */
   center?: { x: number; y: number };
+  /** Kantenlänge des Mittelfelds für den Zeitvorteil (Standard rules.keystoneGate.centerSize = 5). */
+  centerSize?: number;
   /** Linke Kartenhälfte, eine Zeichenkette pro Zeile (gespiegelte Karten). */
   halfRows?: readonly string[];
   /** Bauzonen der linken Hälfte, gleiche Größe wie halfRows. */

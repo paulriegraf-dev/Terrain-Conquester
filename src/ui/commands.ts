@@ -587,7 +587,7 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
       disabled: !canAct || done || !c.ok,
       pressed: done,
       pending: lab ? `${Math.max(0, Math.ceil((lab.doneTick - world.tick) / world.tps))}s` : running ? 'läuft' : undefined,
-      tip: `${u.name}: ${u.keystone ? `${u.description}. Gilt` : `${u.description}`} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.` : c.reason}`,
+      tip: `${u.name}: ${u.keystone ? `${u.description}. Gilt` : `${u.description}`} für alle ${UNITS[u.unit].name}. ${done ? 'Erforscht.' : c.ok ? (u.keystone ? 'Schlussstein-Fenster offen: sofort wirksam (auch über die Karten, Taste K).' : `${c.cost} Energie, ${c.seconds} s – die Fabriken bauen weiter.`) : c.reason}`,
       action: 'research',
       data: { upgrade: u.id },
     };

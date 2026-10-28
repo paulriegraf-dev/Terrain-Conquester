@@ -188,7 +188,13 @@ export interface Rules {
     surge: { prices: readonly number[]; seconds: number; factor: number; from: number };
   };
   mudStacks: { enabled: boolean; perHit: number; max: number; dps: number; decayAfter: number; decay: number; slingStacks: number; slowFactor: number; toughness: boolean };
-  keystoneGate: { first: number; every: number; prices: readonly number[]; step: number; seconds: number; center: boolean; centerHold: number; centerSize: number };
+  /**
+   * Schlussstein-Fenster (28.10. abends): kostenlos (cost 0 = Versuch; > 0 = Energiepreis je Wahl), sofort wirksam. Erstes Fenster
+   * `first` s, danach alle `every` s; Guthaben höchstens `maxCredits`, weitere Fenster warten. Mitte `centerHold` s halten → das
+   * nächste Fenster öffnet sofort; ohne Kontrolle leert sich der Fortschritt in `centerDecay` s. Gegnerische Wahl ohne
+   * Spähbericht erst nach `revealDelay` s sichtbar.
+   */
+  keystoneGate: { first: number; every: number; maxCredits: number; cost: number; center: boolean; centerHold: number; centerDecay: number; centerSize: number; revealDelay: number };
   keystone: {
     enabled: boolean; only: 'all' | 'wards' | 'summons';
     homeThreshold: number; homeHeal: number; homeRadius: number;
@@ -200,13 +206,27 @@ export interface Rules {
     mudStun: number; mudEvery: number;
     iceShield: number; iceHits: number;
     rockSave: number; laneDelay: number;
-    /** Myriaden: Doppelwurf, Bluff, Letzter Flug, Nachzünder, Rudel, Hochdruck, Teilung. */
+    /** Myriaden: Doppelwurf, Bluff, Nachzünder, Rudel, Hochdruck, Teilung (Brechstange: rules.breaker). */
     dwMax: number; dwRegen: number; dwMinDist: number; bluffCooldown: number;
-    flightRadius: number; flightDamage: number;
     afterShare: number; afterRadius: number;
     packSpeed: number; packClutch: number; packLinger: number;
     pressureSeconds: number; pressureCooldown: number; pressureRate: number;
     splitAt: number; splitHp: number;
+  };
+  /**
+   * Myr-Brechstange (28.10. abends, Drohnen-Schlussstein statt „Letzter Flug“): minSquads Drohnen-Verbände mit zusammen
+   * minModels Modellen stehen stillSeconds in gatherRadius still → Fusion fuseSeconds → Brechstange (hpPerModel Leben je
+   * Modell, höchstens maxModels). Springt leapDistance vor dem gegnerischen Drittel leapRange Kacheln weit (oder nach
+   * loiterSeconds), Einschlag leapRadius mit leapDamagePerModel je Modell (Gebäude buildingShare), dann erscheinen
+   * max(leapMinShare, Leben-Anteil) der Modelle als Drohnen. Tod vor dem Sprung: deathRadius/deathDamagePerModel, deathShare.
+   */
+  breaker: {
+    minSquads: number; minModels: number; stillSeconds: number; fuseSeconds: number; gatherRadius: number; maxModels: number;
+    hpPerModel: number; toughness: number; save: number; speed: number; loiterSeconds: number;
+    leapDistance: number; leapRange: number; leapSeconds: number; leapRadius: number; leapDamagePerModel: number; buildingShare: number; leapMinShare: number;
+    deathRadius: number; deathDamagePerModel: number; deathShare: number; deathMinShare: number;
+    /** Einheiten mit Flächenschaden beschießen bevorzugt fusionierende Drohnen in Reichweite. */
+    splashFocus: boolean;
   };
   /** Terra-Former (26.10.): Lane-Farbe und aktive Synergie bleiben so viele Sekunden, nachdem ihre Bedingung weggefallen ist. */
   laneHysteresis: number;
@@ -401,7 +421,7 @@ export const RULES: Rules = {
     surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 480 },
   },
   mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: false },
-  keystoneGate: { first: 660, every: 150, prices: [200, 260, 340, 420], step: 80, seconds: 20, center: true, centerHold: 60, centerSize: 5 },
+  keystoneGate: { first: 600, every: 150, maxCredits: 2, cost: 0, center: true, centerHold: 60, centerDecay: 10, centerSize: 5, revealDelay: 30 },
   keystone: {
     enabled: true, only: 'all',
     homeThreshold: 0.5, homeHeal: 5, homeRadius: 12,
@@ -414,11 +434,17 @@ export const RULES: Rules = {
     iceShield: 0.7, iceHits: 1,
     rockSave: 1, laneDelay: 30,
     dwMax: 2, dwRegen: 60, dwMinDist: 4, bluffCooldown: 30,
-    flightRadius: 1, flightDamage: 20,
     afterShare: 0.5, afterRadius: 3,
     packSpeed: 0.1, packClutch: 0.2, packLinger: 5,
     pressureSeconds: 20, pressureCooldown: 45, pressureRate: 4,
     splitAt: 0.5, splitHp: 0.4,
+  },
+  breaker: {
+    minSquads: 3, minModels: 16, stillSeconds: 8, fuseSeconds: 6, gatherRadius: 2.5, maxModels: 24,
+    hpPerModel: 25, toughness: 5, save: 5, speed: 0.7, loiterSeconds: 90,
+    leapDistance: 4.5, leapRange: 5, leapSeconds: 1.2, leapRadius: 1.5, leapDamagePerModel: 18, buildingShare: 0.25, leapMinShare: 0.4,
+    deathRadius: 1, deathDamagePerModel: 8, deathShare: 0.4, deathMinShare: 0.25,
+    splashFocus: true,
   },
   laneHysteresis: 30,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,

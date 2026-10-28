@@ -5,7 +5,9 @@ import { BUILDINGS, HQ } from '../data/buildings';
 import type { BuildingId } from '../data/buildings';
 import { MARKET, MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
 import { OVERTIME_VARIANTS, OVERTIME_VARIANT_IDS } from '../data/rules';
-import type { OvertimeVariant, Rules } from '../data/rules';
+import type { OvertimeVariant } from '../data/rules';
+import { keystoneKnown } from '../sim/systems/keystone';
+import { keystoneUpgradeName } from './keystoneZone';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingIds } from '../data/factions';
 import type { BuildingUpgradeDef, FactionDef, FactionId } from '../data/factions';
@@ -106,8 +108,6 @@ export class Hud {
       phaseName: q('phase-name'),
       phaseHint: q('phase-hint'),
       hqMult: q('hq-mult'),
-      track: q('timeline-track'),
-      marker: q('timeline-marker'),
       hqLabel: [q('hq-label-0'), q('hq-label-1')],
       hqFill: [q('hq-fill-0'), q('hq-fill-1')],
       hqNum: [q('hq-num-0'), q('hq-num-1')],
@@ -201,23 +201,6 @@ export class Hud {
 
   // ------------------------------------------------------------------ Einmalig
 
-  setupTimeline(rules: Rules): void {
-    const phases = rules.phases;
-    const horizon = this.timelineHorizon(rules);
-    this.el.track.innerHTML = phases
-      .map((p, i) => {
-        const end = i + 1 < phases.length ? phases[i + 1]!.at : horizon;
-        const open = i + 1 === phases.length;
-        return `<div class="seg${open ? ' seg-open' : ''}" data-phase="${i}" style="flex:${end - p.at}">
-          <span class="seg-name">${escapeHtml(p.name)}</span><span class="seg-time">${clock(p.at)}</span></div>`;
-      })
-      .join('');
-  }
-
-  timelineHorizon(rules: Rules): number {
-    return rules.phases.at(-1)!.at + 420;
-  }
-
   // ------------------------------------------------------------------ Laufend
 
   update(input: HudInput, now: number): void {
@@ -233,8 +216,8 @@ export class Hud {
     {
       const gate = world.players[me].gate;
       const gr = world.rules.keystoneGate;
-      const hold = gate.holdSince >= 0 ? Math.floor((world.tick - gate.holdSince) / world.tps) : 0;
-      const txt = `Schlussstein: ${gate.credits} offen · nächstes ${clock(gate.next / world.tps)}${gr.center && hold > 0 ? ` · Mitte ${hold}/${gr.centerHold} s` : ''}`;
+      const hold = Math.floor(gate.hold);
+      const txt = `Schlussstein: ${gate.credits} offen${gate.pending > 0 ? ` (+${gate.pending} wartet)` : ''} · nächstes ${clock(gate.next / world.tps)}${gr.center && hold > 0 ? ` · Mitte ${hold}/${gr.centerHold} s` : ''}`;
       if (this.el.gate.textContent !== txt) this.el.gate.textContent = txt;
     }
     if (view.prep) {
@@ -246,11 +229,6 @@ export class Hud {
       this.el.phaseHint.textContent = world.overtime ? `${world.phase.hint} Verlängerung: ${overtimeHint(world)}.` : world.phase.hint;
     }
     this.el.hqMult.textContent = `Schaden am HQ ×${num(world.hqDamageMult, 1)}`;
-    const progress = Math.min(1, world.seconds / this.timelineHorizon(world.rules));
-    this.el.marker.style.left = `${progress * 100}%`;
-    for (const seg of this.el.track.children) {
-      (seg as HTMLElement).classList.toggle('seg-active', Number((seg as HTMLElement).dataset.phase) === world.phaseIndex);
-    }
 
     // HQs
     for (const p of [0, 1] as const) {
@@ -374,8 +352,10 @@ export class Hud {
           return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}${vb}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
-    // Schlusssteine des Gegners (26.10.): erforscht oder in Forschung.
-    const ksRows = (report?.keystones ?? []).map((k) => `<li><span>${k.running ? 'forscht' : 'hat'}</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(UNITS[k.unit].name)}</span></li>`).join('') +
+    // Schlusssteine des Gegners (28.10. abends): mit Spähbericht sofort, sonst 30 s nach der Wahl.
+    const foe: PlayerId = me === 0 ? 1 : 0;
+    const known = world.players[foe].gate.chosen.filter((c) => keystoneKnown(world, me, foe, c.upgrade));
+    const ksRows = known.map((c) => `<li><span>hat</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(keystoneUpgradeName(world, foe, c.upgrade))}</span></li>`).join('') +
       // Käufe des Gegners (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub („Gegner beschleunigt“).
       (report?.buys ?? []).map((b) => `<li><span>kauft</span><span class="lvl" data-level="2">${escapeHtml(b)}</span></li>`).join('');
     const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;

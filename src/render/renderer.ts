@@ -1,4 +1,5 @@
 import { KEYSTONE_OF } from '../data/keystones';
+import { centerSize, keystoneKnown, keystoneUpgradeOf, mapCenter } from '../sim/systems/keystone';
 import { STATIONS } from '../data/stations';
 import { buildingIds } from '../data/factions';
 import { MOVE_PROFILES } from '../data/movement';
@@ -132,7 +133,11 @@ export class Renderer {
     };
   }
 
+  /** Wer schaut (für verdeckte Schlusssteine); null = alles zeigen. */
+  private viewer: PlayerId | null = null;
+
   draw(world: World, alpha: number, view: ViewState): void {
+    this.viewer = view.fog ? view.human : null;
     const ctx = this.ctx;
     const t = this.tile;
     // Gesperrter Rückraum liegt links außerhalb des Bildes: alles um viewX0 Spalten verschieben.
@@ -148,6 +153,7 @@ export class Renderer {
     this.drawWaypoints(world, view);
     this.drawPads(world, view);
     this.drawSites(world);
+    this.drawCenter(world);
     if (view.flow) this.drawFlow(world, view.flow.profile, view.flow.towardHq);
     this.drawPathPreview(world, view);
 
@@ -163,6 +169,7 @@ export class Renderer {
     }
     this.drawNetBadges(world, alpha, visibleTo);
     this.drawShields(world, alpha, visibleTo);
+    this.drawFusions(world, view);
     this.drawFlights(world, alpha, view);
     this.drawSwaps(world, view);
     this.drawEffects(world, view);
@@ -437,6 +444,59 @@ export class Renderer {
   }
 
   /**
+   * Kartenmitte (28.10. abends): für beide Seiten sichtbar, auch im Nebel. Dünner Rahmen des Mittelfelds; hält jemand
+   * die Mitte, füllt sich ein Ring in seiner Farbe über centerHold s und leert sich ohne Kontrolle in centerDecay s.
+   */
+  private drawCenter(world: World): void {
+    const g = world.rules.keystoneGate;
+    if (!g.center) return;
+    const ctx = this.ctx;
+    const t = this.tile;
+    const c = mapCenter(world);
+    const h = centerSize(world) / 2;
+    ctx.strokeStyle = 'rgba(200, 240, 255, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.strokeRect((c.x - h) * t, (c.y - h) * t, 2 * h * t, 2 * h * t);
+    ctx.setLineDash([]);
+    for (const p of [0, 1] as const) {
+      const hold = world.players[p].gate.hold;
+      if (hold <= 0) continue;
+      const k = Math.min(1, hold / g.centerHold);
+      const r = (h + 0.4) * t + p * Math.max(3, t * 0.22);
+      ctx.strokeStyle = withAlpha(PALETTE.player[p], 0.22);
+      ctx.lineWidth = Math.max(2, t * 0.14);
+      ctx.beginPath();
+      ctx.arc(c.x * t, c.y * t, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(PALETTE.player[p], 0.9);
+      ctx.beginPath();
+      ctx.arc(c.x * t, c.y * t, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  /** Fusion zur Myr-Brechstange: Fortschrittsring um die Mitte der Fusion (für beide Seiten, mit Sicht). */
+  private drawFusions(world: World, view: ViewState): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    for (const f of world.fusions) {
+      if (view.fog && view.human !== null && !world.players[view.human].vision.isVisible(Math.floor(f.center.x), Math.floor(f.center.y))) continue;
+      const k = Math.min(1, (world.tick - f.start) / Math.max(1, f.end - f.start));
+      const r = world.rules.breaker.gatherRadius * t * (1 - 0.5 * k);
+      ctx.strokeStyle = withAlpha(PALETTE.player[f.owner], 0.25);
+      ctx.lineWidth = Math.max(2, t * 0.16);
+      ctx.beginPath();
+      ctx.arc(f.center.x * t, f.center.y * t, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(PALETTE.player[f.owner], 0.95);
+      ctx.beginPath();
+      ctx.arc(f.center.x * t, f.center.y * t, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  /**
    * Myriaden-Würfe in der Luft: Bogen vom Werfer zum Ziel, darauf der Verband (Punkte) bzw. der
    * Verspotter (großer Punkt), am Boden der Schatten und der Landepunkt.
    */
@@ -467,7 +527,7 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
       ctx.beginPath();
-      ctx.arc(f.to.x * t, f.to.y * t, (f.impact?.radius ?? 0.6) * t, 0, Math.PI * 2);
+      ctx.arc(f.to.x * t, f.to.y * t, (f.leap ? world.rules.breaker.leapRadius : f.impact?.radius ?? 0.6) * t, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       // Schatten
@@ -487,6 +547,18 @@ export class Renderer {
         ctx.fill();
         ctx.fillStyle = '#e0a040';
         ctx.fillRect(gx - 1, gy - lift - Math.max(2, t * 0.14) - 2, 2, 2);
+      } else if (f.leap) {
+        // Myr-Brechstange im Sprung: großer Körper mit Modell-Zähler
+        const R = Math.max(5, t * 0.62);
+        ctx.beginPath();
+        ctx.arc(gx, gy - lift, R, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = PALETTE.outline;
+        ctx.font = `${Math.max(8, Math.round(t * 0.4))}px ${MONO}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(f.leap.models), gx, gy - lift + 1);
       } else if (f.unit === 'taunter') {
         ctx.beginPath();
         ctx.arc(gx, gy - lift, Math.max(3, t * 0.42), 0, Math.PI * 2);
@@ -1090,13 +1162,27 @@ export class Renderer {
     const x = (e.prev.x + (e.pos.x - e.prev.x) * alpha) * t;
     const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
     const r = Math.max(2.5, e.radius * t);
-    // Schlussstein (26.10.): kleines Symbol über dem Verband.
+    // Schlussstein (26.10.): kleines Symbol über dem Verband – beim Gegner erst, wenn er bekannt ist (30 s / Spähbericht).
     const ks = KEYSTONE_OF[e.defId as UnitId];
-    if (ks && world.players[e.owner].research.includes(`${e.defId}-keystone`)) {
+    const ksId = ks ? keystoneUpgradeOf(world, e.owner, e.defId as UnitId) : null;
+    if (ks && ksId && (this.viewer === null || keystoneKnown(world, this.viewer, e.owner, ksId))) {
       ctx.fillStyle = withAlpha(PALETTE.player[e.owner], 0.95);
       ctx.font = `${Math.max(8, Math.round(t * 0.38))}px ${MONO}`;
       ctx.textAlign = 'center';
       ctx.fillText(e.ks?.retreat ? '↩' : ks.icon, x, y - r * 1.9);
+    }
+    // Myr-Brechstange: Modell-Zähler und Ring ihrer Uhr.
+    if (e.breaker) {
+      ctx.fillStyle = withAlpha(PALETTE.player[e.owner], 0.95);
+      ctx.font = `bold ${Math.max(9, Math.round(t * 0.42))}px ${MONO}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`×${e.breaker.models}`, x, y + r * 2.2);
+      const left = Math.max(0, Math.min(1, (e.breaker.until - tick) / (world.rules.breaker.loiterSeconds * world.tps)));
+      ctx.strokeStyle = withAlpha(PALETTE.player[e.owner], 0.6);
+      ctx.lineWidth = Math.max(1, t * 0.06);
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.35, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
+      ctx.stroke();
     }
     if (e.stunnedUntil !== undefined && tick < e.stunnedUntil) {
       // Betäubt (Notfallverlegung): gelber Zickzack-Ring
@@ -1378,6 +1464,16 @@ export class Renderer {
         ctx.arc(ev.pos.x * t, ev.pos.y * t, t * (0.6 + k * 2.4), 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+      } else if (ev.type === 'breaker' && (ev.what === 'land' || ev.what === 'burst') && age <= 18) {
+        // Myr-Brechstange: Einschlag (bzw. Tod) – großer Ring
+        if (!seen(ev.pos)) continue;
+        const k = age / 18;
+        const r = ev.what === 'land' ? world.rules.breaker.leapRadius : world.rules.breaker.deathRadius;
+        ctx.strokeStyle = withAlpha(PALETTE.player[ev.owner], 0.95 * (1 - k));
+        ctx.lineWidth = Math.max(2, t * 0.18);
+        ctx.beginPath();
+        ctx.arc(ev.pos.x * t, ev.pos.y * t, t * r * (0.4 + k * 0.8), 0, Math.PI * 2);
+        ctx.stroke();
       } else if ((ev.type === 'land' || ev.type === 'mudlings') && age <= 12) {
         if (!seen(ev.pos)) continue;
         const k = age / 12;

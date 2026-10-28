@@ -1927,7 +1927,7 @@ Je Einheitenart der Terra-Former und Myriaden eine letzte Forschung, die eine **
 
 - **Kosten:** vierte Stufe der Waffen-Kette (Hund: Heilung), Voraussetzung Stufe III **und** Panzerung II (`needArmor`, Schalter), 200 Energie, 30 s, ein Forschungsplatz. Gilt für alle Einheiten der Art, auch lebende. Gerufene: an der Linienfabrik; Hund: an der Brut (Beimischung ab Stufe III – dadurch sind die Hund-Ketten jetzt überhaupt erforschbar).
 - **Terra-Former:** Heimkehr (Steppenjäger), Wurzelgriff (Hainhüter), Schlammbett (Schlammschleuder), Weißer Tod (Lawinenrufer), Spalt (Frontbrecher), Grasnarbe (Halmläufer), Wipfelschuss (Borkenschützen), Schlammgrund (Schlammwerfer), Eispanzer (Frostwächter), Fels in der Brandung (Steinwächter).
-- **Myriaden:** Doppelwurf + Bluff (Katapult/Verspotter), Letzter Flug (Drohnen), Nachzünder (Sprengetopp), Rudel (Hund), Hochdruck (Myr-Kanone), Teilung (Battlesphäre). Superbrut unberührt.
+- **Myriaden:** Doppelwurf + Bluff (Katapult/Verspotter), Letzter Flug (Drohnen; seit 28.10. abends ersetzt durch die Brechstange), Nachzünder (Sprengetopp), Rudel (Hund), Hochdruck (Myr-Kanone), Teilung (Battlesphäre). Superbrut unberührt.
 - **Reibung:** Im Kampf geformter Boden (Schlammbett, Weißer Tod) zählt erst nach 30 s für die Lanes und nie für Rufe. Spalt formt nicht, er macht eine 20-s-Gerölltreppe.
 - **Umsetzungsentscheidungen:** Heimkehr-Markierung = Gegner treffen ihn besser (+1) und Fernkampf ab 5 Reichweite nimmt ihn bevorzugt; Rückzug höchstens 25 s. Weißer Tod: +25 % Schaden für Gegner, die auf eigenem Schnee des Lawinenrufers erstarren; Schnee auf seiner eigenen Kachel. Spalt: Treppe auf den eigenen Geröllkacheln um den Einschlag (3×3). Wipfelschuss „über Erdwälle“: Ziele in eigener Sichtweite auch ohne freie Sicht (nicht Getarnte). Hochdruck: Würfe ohne Vorrat, Feuer- und Wurftakt ×4. Teilung: beide Hälften 40 % Leben als neues Maximum.
 - **KI:** Schlussstein erst ab vier Fabriken, Ziel = Art mit den meisten lebenden Verbänden, höchstens zwei je Partie, der zweite frühestens nach 3 min (`AI_TUNING.keystones`). Myriaden mit smartResearch: Nutzen = Verbände × 2 / Kosten. Terra-Former mit Heimkehr: Wiese 4–6 Kacheln hinter der Front (`AI_TUNING.homeMeadow`).
@@ -2094,3 +2094,35 @@ Fehlinterpretation). Labor: Koloss nach den Kämpfen 348–365 statt 399 Leben.
 ## Spielweise Terra-Former und Endscreen (28.10. abends)
 - Spielweise-Analyse einer Terra-Former-Partie des Nutzers mit Vergleich zur Terra-Former-KI: `auswertung/2026-10-28-spielweise-terra-former.md`. Kernpunkte für die KI: Lane-Boden früh festlegen und bei zwei Böden bleiben, Stufen vor Forschung und beides früher, Probe-Vorstoß und Schlussschlag schon bei gut doppelter Übermacht, weniger Routen/Umwidmen/Gelände, Forschung auf die tragende Linie bündeln. Umsetzung im KI-Chat.
 - **Endscreen:** Die Schadenslisten („Meister Schaden durch/an“) zeigen beim Hovern den vollen Namen, den Schaden und den Anteil (gekürzte Namen wie „St…“).
+
+## Schlussstein-Fenster, Zentrum, Soldat, Karten, Myr-Brechstange (Patch 28.10. abends)
+Ersetzt Abschnitt C (Tor mit Preis) und C.3 (Zentrum) des Umbau-Patches vom 26.10. Ausrüstung, Terraformer, Erdwall und KI-Pläne unverändert.
+
+**A. Fenster-Rhythmus** (`rules.keystoneGate`)
+- Schlusssteine kosten **keine Energie und keine Forschungszeit** (Versuch; Schalter `cost`, Standard 0) und wirken sofort. Kein Forschungsplatz, keine Fabrik-Voraussetzung.
+- Fenster bei **10:00**, danach alle **2,5 min** (12:30, 15:00 …), aus Ticks. Je Fenster ein Guthaben; höchstens **2** (`maxCredits`), ein weiteres Fenster wartet (`gate.pending`) und wird nach der nächsten Wahl sofort gutgeschrieben. Nichts verfällt, nichts pausiert.
+- Wahl = Befehl (`research` mit Schlussstein-ID → `chooseKeystone`), lockstep-fest. Nach einer Wahl sind die Karten 2 s gesperrt (UI, gegen Doppelklick).
+- Wählbar: alle noch nicht gewählten Schlusssteine der Fraktion. Reihenfolge (`keystoneChoices`): Einheiten auf dem Feld (meiste lebende Verbände zuerst; Terra-Former: Wächter + Gerufene der Linie), dann mit vorhandener Fabrik, dann der Rest. Technoclan eine Karte je Einheit mit zwei Türen, Terra-Former fünf Linien-Karten, Myriaden sechs.
+- Gegner: Spähbericht nennt gewählte Schlusssteine sofort; ohne Bericht erscheint die Wahl erst nach **30 s** (`revealDelay`) im Lagebericht und als Symbol über seinen Verbänden.
+
+**B. Zentrum als Zeitvorteil**
+- Mittelfeld 5×5 um den Kartenmittelpunkt (Kartendaten `center`, `centerSize` überschreibbar). Mindestens ein eigener Verband darin, kein gegnerischer → Fortschritt +1 je Sekunde; bei **60 s** öffnet das nächste Fenster sofort, der 2,5-min-Takt läuft von dort weiter. Ohne Kontrolle leert sich der Ring in **10 s** (`centerDecay`). Kein weiterer Vorteil, dem Gegner geht nichts verloren.
+- Ring um die Mitte für beide Seiten, auch im Nebel (Farbe des Halters).
+
+**C. Der Soldat** (Porträt „Sonde 7“ aus dem Tutorial, Hinweiszone der Konsole, höchstens zwei Zeilen – längere Sätze rollen weiter, Klick blendet aus)
+- Zeilen genau nach Vorgabe: 9:30-Vorläufer (6 s), erstes Fenster (15 s), weitere Fenster (drei Zeilen, je einmal, dann die erste; 6 s), Mitte eigene/Gegner seit 20 s (6 s), vorgezogenes Fenster (6 s), Erinnerung nach 60 s (4 s), zwei Guthaben offen (4 s), Gegnerwahl sichtbar (4 s). Warteschlange, Erinnerungen verfallen bei Wichtigerem. Nur der eigene Soldat, gegen die KI nur zum Menschen.
+- Tutorial: Schritt „Schlussstein wählen“ vor dem Abschluss, wartet auf das erste Fenster (Countdown im Hinweis).
+
+**D. Karten** (unter dem Soldaten): bis zu drei Karten + „mehr …“ (alle übrigen, höchstens zwei Reihen), holoblau (Fraktionsdesign als Platzhalter in `KEYSTONE_CARD_STYLE`), Symbol + Name, Hover = Regel + Zügel. Klick: Karte fliegt zur Einheit/Fabrik, die anderen verblassen. Nach 60 s leicht abgedunkelt, nie weg. **Taste K** öffnet/schließt (solange eine Wahl offen ist, vor „Umwidmen“), Chip „Schlussstein ◆“ neben der Uhr pulsiert. Solange Soldat/Karten aktiv sind, ruhen Hinweiszeile und Ansicht-Leiste in dieser Spalte – das Spielfeld bleibt bei 1280×650 gleich groß.
+
+**E. Phasenleiste oben entfernt** (Regeln dahinter unverändert; Uhr, Schlussstein-Zeile, Phasenname und HQ-Leben bleiben).
+
+**F. Myr-Brechstange** (statt „Letzter Flug“; `rules.breaker`, `src/sim/systems/breaker.ts`)
+- Auslösung: ≥ 3 Drohnen-Verbände mit zusammen ≥ 16 Modellen stehen 8 s in 2,5 Kacheln still → **Fusion 6 s** (Ring für beide Seiten mit Sicht; Drohnen laufen in die Mitte, normal verwundbar; fällt die Summe unter die Schwelle, Abbruch). Eine je Spieler, höchstens 24 Modelle (Rest bleibt Drohnen).
+- Brechstange: Infanterie, zu Fuß, Tempo 0,7, kein Angriff, 25 Leben je Modell, Widerstand 5, Rüstung 5+; folgt der Haltung der Route des ersten Verbands, bricht keine Wälle. Alter der geschluckten Drohnen steht; eigene Uhr **90 s**.
+- Sprung **4,5 Kacheln vor dem gegnerischen Drittel** (oder bei Ablauf der Uhr): 5 Kacheln geradeaus auf die nächste begehbare Kachel – über Wälle und Schluchten, nie auf ein Gebäude, nie in eine Basiszone. Einschlag Fläche 1,5, je Modell 18 an Einheiten (Gebäude 25 %), Zersetzung wie Drohnen. Danach erscheinen `ceil(Modelle × max(0,4; Leben-Anteil))` Drohnen in Verbänden zu 8, im Angriff.
+- Tod vor dem Sprung: Fläche 1,0 mit 8 je Modell; frei kommen `max(25 %; 40 % × verbleibende Lebensuhr der geschluckten Drohnen)` (Auslegung: die Brechstange selbst hat beim Tod kein Leben mehr).
+- Gegenspiel: Einheiten mit Flächenschaden beschießen fusionierende Drohnen in Reichweite bevorzugt (für alle, `splashFocus`); Kanone/Katapult/Hochdruck ziehen keine fusionierenden Drohnen ab.
+- Anzeige: Fusionsring, großer Körper mit Modell-Zähler und Uhr-Ring, Sprung als Bogen mit Schatten und Landepunkt, Einschlag-Ring. Rules `flightRadius`/`flightDamage` entfallen.
+
+**G. KI**: wählt bei offenem Guthaben sofort (meiste lebende Verbände; Technoclan-Tür nach gesehener Panzerung; Myriaden mit ≥ 4 Drohnen-Verbänden zuerst die Brechstange; sonst erste Karte). Myriaden mit Brechstange halten ab 10:00 die Lane mit dem meisten Druck, sobald dort 3 Drohnen-Verbände frei sind (60 s Versuch, dann 90 s Pause), danach Front auf der Lane der Brechstange (`aiBreaker`). Gegner-KI setzt eine Schlucht 6 Kacheln vor das eigene Drittel auf Höhe einer gesehenen Brechstange (`aiBreakerDefense`). Mitte halten wie bisher (`aiCenter`).

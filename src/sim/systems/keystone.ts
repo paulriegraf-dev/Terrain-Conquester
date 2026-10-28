@@ -14,6 +14,8 @@ import { controllerAt } from './influence';
 import { applyHits } from './combat';
 import type { Hit } from './combat';
 import { defenseOf, woundsPerShot } from './hitmath';
+import { researchableUnits } from './factory';
+import { breakerDeath } from './breaker';
 
 /** Hat Spieler p den Schlussstein dieser Einheitenart? */
 export function hasKeystone(world: World, p: PlayerId, unit: string): boolean {
@@ -176,6 +178,7 @@ export function rootGrip(world: World, e: Entity): void {
 
 /** Beim Tod einer Einheit (mit Täter): Bluff (Verspotter des Katapults), Nachzünder (Sprengetopp). */
 export function keystoneDeath(world: World, e: Entity, killer: PlayerId): void {
+  if (e.breaker) breakerDeath(world, e, killer); // Myr-Brechstange fällt vor dem Sprung
   if (killer === e.owner) return; // Selbstopfer (Kamikaze) zählt nicht
   const r = world.rules.keystone;
   // Bluff: Stirbt ein geworfener Verspotter vor Ablauf seiner Zeit, wirft das Katapult sofort gratis nach.
@@ -255,20 +258,6 @@ export function secondThrow(world: World, c: Entity, t: Entity): void {
   fireKeystone(world, c.owner, 'catapult');
 }
 
-/** Letzter Flug: Läuft die Lebensuhr der Drohnen ab, explodiert jedes Modell. */
-export function lastFlight(world: World, e: Entity, models: number): void {
-  if (e.defId !== 'drone' || !hasKeystone(world, e.owner, 'drone') || models <= 0) return;
-  const r = world.rules.keystone;
-  const hits: Hit[] = [];
-  for (const o of world.entities) {
-    if (!o.alive || o.owner === e.owner || o.kind !== 'unit') continue;
-    if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 > (r.flightRadius + o.radius) ** 2) continue;
-    hits.push({ target: o, wounds: models, damage: r.flightDamage, attacker: e.owner, src: 'drone' });
-  }
-  if (hits.length > 0) applyHits(world, hits);
-  fireKeystone(world, e.owner, 'drone');
-}
-
 /** Rudel: je Sekunde – drei Hunde mit Schlussstein auf einer Lane heulen (hält packLinger s nach). */
 export function updatePack(world: World): void {
   if (world.tick % world.tps !== 0) return;
@@ -319,7 +308,7 @@ export function tryPressure(world: World, e: Entity, consumed: Map<Entity, numbe
   if (world.tick < (ks.pressureUntil ?? 0) || world.tick < (ks.nextPressure ?? 0)) return;
   const take = UNITS.myrcannon.launch!.take!;
   const squads = world.entities
-    .filter((o) => o.alive && o.owner === e.owner && o.defId === 'drone' && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= 9)
+    .filter((o) => o.alive && o.owner === e.owner && o.defId === 'drone' && o.fuse === undefined && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= 9)
     .filter((o) => Math.ceil(o.hp / o.modelWounds - 1e-9) - (consumed.get(o) ?? 0) >= 1)
     .sort((a, b) => a.id - b.id)
     .slice(0, 2);
@@ -336,35 +325,54 @@ export function underPressure(world: World, e: Entity): boolean {
   return (e.ks?.pressureUntil ?? 0) > world.tick;
 }
 
-// ------------------------------------------------------------------ Schlussstein-Tor (26.10. spät)
-
-/** Preis des nächsten Schlussteins nach Reihenfolge (200 · 260 · 340 · 420, dann +80). */
-export function keystonePrice(world: World, p: PlayerId): number {
-  const g = world.rules.keystoneGate;
-  const n = world.players[p].gate.bought;
-  return n < g.prices.length ? g.prices[n]! : g.prices[g.prices.length - 1]! + g.step * (n - g.prices.length + 1);
-}
+// ------------------------------------------------------------------ Schlussstein-Fenster (28.10. abends)
 
 /** Kartenmitte (Kartendatum, sonst der mittlere Wegpunkt). */
 export function mapCenter(world: World): { x: number; y: number } {
   return world.map.def.center ?? world.map.waypoints.mid;
 }
 
-/** Wer hält gerade die Kartenmitte (mindestens ein eigener Verband darin, kein gegnerischer)? null = niemand. */
-export function centerHolder(world: World): PlayerId | null {
+/** Kantenlänge des Mittelfelds (Kartendatum, sonst Regel). */
+export function centerSize(world: World): number {
+  return world.map.def.centerSize ?? world.rules.keystoneGate.centerSize;
+}
+
+/** Wer ist gerade im Mittelfeld? [Spieler 0, Spieler 1] */
+export function centerPresence(world: World): [boolean, boolean] {
   const c = mapCenter(world);
-  const h = world.rules.keystoneGate.centerSize / 2;
-  const inside = [false, false];
+  const h = centerSize(world) / 2;
+  const inside: [boolean, boolean] = [false, false];
   for (const e of world.entities) {
     if (!e.alive || e.kind !== 'unit') continue;
     if (Math.abs(e.pos.x - c.x) <= h && Math.abs(e.pos.y - c.y) <= h) inside[e.owner] = true;
   }
+  return inside;
+}
+
+/** Wer hält gerade die Kartenmitte (mindestens ein eigener Verband darin, kein gegnerischer)? null = niemand. */
+export function centerHolder(world: World): PlayerId | null {
+  const inside = centerPresence(world);
   if (inside[0] && !inside[1]) return 0;
   if (inside[1] && !inside[0]) return 1;
   return null;
 }
 
-/** Tore öffnen (im Takt und vorzeitig über die gehaltene Mitte), einmal je Sekunde. */
+/** Ein Fenster gutschreiben: Guthaben bis maxCredits, darüber wartet es (pending). */
+function grantWindow(world: World, p: PlayerId, early: boolean): void {
+  const gate = world.players[p].gate;
+  gate.opened++;
+  if (early) gate.early++;
+  if (gate.credits < world.rules.keystoneGate.maxCredits) gate.credits++;
+  else gate.pending++;
+  if (gate.openSince < 0 && gate.credits > 0) gate.openSince = world.tick;
+  world.emit({ type: 'gate', owner: p, early });
+}
+
+/**
+ * Fenster öffnen (im 2,5-Minuten-Takt ab 10:00 und vorzeitig über die gehaltene Mitte), einmal je Sekunde. Alle Zeiten
+ * aus Ticks (Lockstep). Der Mitte-Fortschritt steigt je gehaltener Sekunde um 1 und fällt ohne Kontrolle so, dass ein
+ * voller Ring in centerDecay s leer ist.
+ */
 export function updateGates(world: World): void {
   if (world.tick % world.tps !== 0) return;
   const g = world.rules.keystoneGate;
@@ -372,24 +380,124 @@ export function updateGates(world: World): void {
   for (const p of [0, 1] as PlayerId[]) {
     const gate = world.players[p].gate;
     if (world.tick >= gate.next) {
-      gate.credits++;
-      gate.opened++;
+      grantWindow(world, p, false);
       gate.next += Math.round(g.every * world.tps);
-      world.emit({ type: 'gate', owner: p, early: false });
     }
     if (holder === p) {
       if (gate.holdSince < 0) gate.holdSince = world.tick;
-      if (world.tick - gate.holdSince >= g.centerHold * world.tps) {
-        // Vorzeitig: das nächste Tor öffnet jetzt, der Takt läuft von hier weiter; die Mitte muss neu gehalten werden.
-        gate.credits++;
-        gate.opened++;
-        gate.early++;
+      const before = gate.hold;
+      gate.hold = Math.min(g.centerHold, gate.hold + 1);
+      if (before < 20 && gate.hold >= 20) world.emit({ type: 'center', owner: p, held: 20 });
+      if (gate.hold >= g.centerHold) {
+        // Vorzeitig: das nächste Fenster öffnet jetzt, der Takt läuft ab hier weiter; die Mitte muss neu gehalten werden.
+        grantWindow(world, p, true);
         gate.next = world.tick + Math.round(g.every * world.tps);
+        gate.hold = 0;
         gate.holdSince = world.tick;
-        world.emit({ type: 'gate', owner: p, early: true });
       }
     } else {
       gate.holdSince = -1;
+      gate.hold = Math.max(0, gate.hold - g.centerHold / Math.max(1, g.centerDecay));
     }
   }
+}
+
+/** Alle Schlussstein-Upgrades der Fraktion, nach Karte gruppiert (Türen des Technoclans auf einer Karte). */
+export function keystoneCardsOf(world: World, p: PlayerId): { unit: UnitId; upgrades: string[] }[] {
+  const cards = new Map<UnitId, string[]>();
+  for (const u of world.players[p].faction.upgrades) {
+    if (!u.keystone) continue;
+    const list = cards.get(u.unit) ?? [];
+    list.push(u.id);
+    cards.set(u.unit, list);
+  }
+  return [...cards].map(([unit, upgrades]) => ({ unit, upgrades }));
+}
+
+/** Ist dieser Schlussstein (oder seine andere Tür) schon gewählt? */
+export function keystoneTaken(world: World, p: PlayerId, upgrades: readonly string[]): boolean {
+  const r = world.players[p].research;
+  return upgrades.some((id) => r.includes(id));
+}
+
+/**
+ * Wählbare Karten in Anzeige-Reihenfolge: zuerst Einheiten auf dem Feld (meiste lebende Verbände zuerst; Terra-Former:
+ * Wächter + Gerufene ihrer Linie), dann mit vorhandener Fabrik, dann der Rest; Gleichstand nach Datenreihenfolge.
+ */
+export function keystoneChoices(world: World, p: PlayerId): { unit: UnitId; upgrades: string[]; alive: number; factory: boolean }[] {
+  const alive = new Map<string, number>();
+  for (const e of world.entities) {
+    if (!e.alive || e.owner !== p || e.kind !== 'unit') continue;
+    const id = e.defId as UnitId;
+    const key = lineUnit(id);
+    alive.set(key, (alive.get(key) ?? 0) + 1);
+    if (key !== id) alive.set(id, (alive.get(id) ?? 0) + 1);
+  }
+  const buildable = new Set<string>(researchableUnits(world, p).map((u) => lineUnit(u)));
+  return keystoneCardsOf(world, p)
+    .filter((c) => !keystoneTaken(world, p, c.upgrades))
+    .map((c, order) => ({ ...c, alive: alive.get(c.unit) ?? 0, factory: buildable.has(c.unit), order }))
+    .sort((a, b) => (b.alive > 0 ? 1 : 0) - (a.alive > 0 ? 1 : 0) || b.alive - a.alive || Number(b.factory) - Number(a.factory) || a.order - b.order)
+    .map(({ order: _o, ...c }) => c);
+}
+
+/** Darf Spieler p diesen Schlussstein jetzt wählen? */
+export function checkKeystone(world: World, p: PlayerId, upgradeId: string): { ok: true; cost: number } | { ok: false; reason: string } {
+  const pl = world.players[p];
+  const u = pl.faction.upgrades.find((x) => x.id === upgradeId);
+  if (!u || !u.keystone) return { ok: false, reason: 'Kein Schlussstein' };
+  if (pl.research.includes(u.id)) return { ok: false, reason: 'Schon gewählt' };
+  if (u.fork && pl.faction.upgrades.some((x) => x.fork === u.fork && x.id !== u.id && pl.research.includes(x.id))) return { ok: false, reason: 'Die andere Tür ist schon gewählt' };
+  if (pl.gate.credits <= 0) {
+    const next = Math.max(0, Math.ceil((pl.gate.next - world.tick) / world.tps));
+    return { ok: false, reason: `Kein Schlussstein-Fenster offen – das nächste in ${Math.floor(next / 60)}:${String(next % 60).padStart(2, '0')}` };
+  }
+  const cost = world.rules.keystoneGate.cost;
+  if (pl.energy < cost) return { ok: false, reason: `Zu wenig Energie (${cost} nötig)` };
+  return { ok: true, cost };
+}
+
+/** Schlussstein wählen: sofort wirksam, verbraucht ein Guthaben; ein wartendes Fenster rückt nach. */
+export function chooseKeystone(world: World, p: PlayerId, upgradeId: string): { ok: true } | { ok: false; reason: string } {
+  const c = checkKeystone(world, p, upgradeId);
+  if (!c.ok) return c;
+  const pl = world.players[p];
+  const gate = pl.gate;
+  pl.energy -= c.cost;
+  gate.credits--;
+  gate.bought++;
+  gate.byKeystone[upgradeId] = gate.bought;
+  gate.chosen.push({ upgrade: upgradeId, tick: world.tick });
+  if (gate.pending > 0) {
+    gate.pending--;
+    gate.credits++;
+  }
+  gate.openSince = gate.credits > 0 ? world.tick : -1;
+  pl.research.push(upgradeId);
+  pl.stats.research++;
+  pl.stats.decisions++;
+  pl.stats.keystoneAt.push(world.tick / world.tps / 60);
+  world.emit({ type: 'keystone', owner: p, upgrade: upgradeId });
+  return { ok: true };
+}
+
+/** Welcher Schlussstein gilt für diese Einheitenart (eigene Wahl, Tür oder Linie)? null = keiner. */
+export function keystoneUpgradeOf(world: World, p: PlayerId, unit: UnitId): string | null {
+  const r = world.players[p].research;
+  const own = keystoneId(unit);
+  const line = keystoneId(lineUnit(unit));
+  return r.find((id) => id === own || id === line || id.startsWith(`${own}-`)) ?? null;
+}
+
+/**
+ * Kennt `viewer` den Schlussstein von `owner`? Eigene immer; gegnerische nach revealDelay s oder, wenn ein Spähbericht
+ * nach der Wahl angekommen ist, sofort.
+ */
+export function keystoneKnown(world: World, viewer: PlayerId, owner: PlayerId, upgradeId: string): boolean {
+  if (viewer === owner) return true;
+  const c = world.players[owner].gate.chosen.find((x) => x.upgrade === upgradeId);
+  if (!c) return world.players[owner].research.includes(upgradeId); // ältere Partien / Tests ohne Wahl-Eintrag
+  if (world.tick - c.tick >= world.rules.keystoneGate.revealDelay * world.tps) return true;
+  const rep = world.players[viewer].scout.last;
+  return !!rep && rep.tick >= c.tick;
 }

@@ -65,6 +65,12 @@ export type SimEventData =
   /** Forschung abgeschlossen (zentral, seit 24.10.). */
   | { type: 'research'; owner: PlayerId; upgrade: string; name: string }
   | { type: 'gate'; owner: PlayerId; early: boolean }
+  /** Schlussstein gewählt (28.10. abends). */
+  | { type: 'keystone'; owner: PlayerId; upgrade: string }
+  /** Mitte seit `held` s gehalten (Soldat). */
+  | { type: 'center'; owner: PlayerId; held: number }
+  /** Myr-Brechstange: Fusion beginnt / bricht ab / Brechstange entsteht / springt / landet / fällt. */
+  | { type: 'breaker'; owner: PlayerId; what: 'fuse' | 'abort' | 'formed' | 'leap' | 'land' | 'burst'; pos: Vec2; models: number }
   /** Erdwall gefallen (zerstört). */
   | { type: 'wallBroken'; owner: PlayerId; cells: number[] }
   /** Ein Spähbericht ist angekommen. */

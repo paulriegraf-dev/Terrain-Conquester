@@ -68,8 +68,8 @@ describe('Forschung (24.10.): zentral, parallel zur Produktion', () => {
   it('nur für Einheiten, die eine eigene Fabrik bauen kann', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     world.addBuilding(0, BUILDINGS.barracks, { x: 1, y: 0, w: 2, h: 2 });
-    world.players[0].gate.credits = 1;
-    const c = checkResearch(world, 0, 'colossus-keystone-a');
+    const id = world.players[0].faction.upgrades.find((u) => u.unit === 'colossus' && !u.keystone)!.id;
+    const c = checkResearch(world, 0, id);
     assert.equal(c.ok, false);
     assert.match(c.ok ? '' : c.reason, /Koloss/);
   });

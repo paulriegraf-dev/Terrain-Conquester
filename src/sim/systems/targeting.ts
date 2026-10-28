@@ -324,6 +324,8 @@ export function updateTargeting(world: World): void {
       if (charging) score = rank * 1000; // Losstürmen: genau dieser Gegner zuerst
       // Heimkehr: der Steppenjäger auf dem Rückzug ist markiert – Fernkampf (ab 5 Reichweite) nimmt ihn bevorzugt.
       if (t.ks?.retreat && range >= 5) score = rank * 1000 + (score - rank * 1000) * 0.4;
+      // Myr-Brechstange (28.10. abends): Flächenschaden nimmt fusionierende Drohnen in Reichweite bevorzugt.
+      if (t.fuse !== undefined && w.def.splash && world.rules.breaker.splashFocus && d <= range) score = rank * 1000 + (score - rank * 1000) * 0.3;
       // Gleichstand: kleinere ID gewinnt – unabhängig von der Suchreihenfolge.
       if (score < bestScore || (score === bestScore && best && t.id < best.id)) {
         bestScore = score;

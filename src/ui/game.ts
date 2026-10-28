@@ -58,6 +58,8 @@ import { TitleFx } from './titleFx';
 import { TitleHero } from './titleHero';
 import type { TitleVariant } from './titleHero';
 import { Tutorial } from './tutorial';
+import { KeystoneZone, keystoneUpgradeName } from './keystoneZone';
+import { lineUnit } from '../data/units';
 import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
 import type { SavedMatch, Snapshot } from './replays';
 import type { StationMode } from '../data/stations';
@@ -111,6 +113,7 @@ export class Game {
   private titleOpen = true;
   /** Laufendes Tutorial (oder null). */
   private tutorial: Tutorial | null = null;
+  private readonly keystones: KeystoneZone;
   /** Übersicht (Einheiten, Konter, Gelände) offen – über Titelbild und Menü. */
   private codexOpen = false;
   private codex: CodexState = { tab: 'units', faction: 'technoclan', enemy: 'myriaden' };
@@ -153,6 +156,19 @@ export class Game {
     this.renderer = new Renderer(canvas);
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
+    // Schlussstein-Fenster (28.10. abends): Soldat und Karten in der Hinweiszone.
+    this.keystones = new KeystoneZone({
+      doc,
+      choose: (upgrade) => this.session.issue({ type: 'research', upgrade }),
+      locate: (unit) => {
+        const world = this.session.world;
+        const me = this.view.human;
+        if (me === null) return null;
+        const own = world.entities.filter((e) => e.alive && e.owner === me);
+        const hit = own.find((e) => e.kind === 'unit' && lineUnit(e.defId as never) === unit) ?? own.find((e) => e.producer?.unit !== undefined && lineUnit(e.producer.unit) === unit);
+        return hit ? this.renderer.clientOf(hit.pos.x, hit.pos.y, world) : null;
+      },
+    });
     // Klick-Geräusch für Knöpfe (Menü und Befehle)
     doc.addEventListener('pointerdown', (ev) => {
       const b = (ev.target as HTMLElement | null)?.closest?.('button, .tp-btn, .seg-radio, .chip');
@@ -206,7 +222,6 @@ export class Game {
   start(): void {
     this.bindTitle();
     this.startDemo();
-    this.hud.setupTimeline(this.session.world.rules);
     // Einladungslink (…?raum=CODE): gleich in die Lobby und beitreten.
     const params = new URLSearchParams(location.search);
     const code = normalizeCode(params.get('raum') ?? '');
@@ -414,6 +429,7 @@ export class Game {
     if (this.renderer.needsLayout(world)) this.resize();
     this.renderer.draw(world, alpha, this.view);
     this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused || sharedPause, sellArmed: this.hudSellArmed, online: this.session.lockstep ? { host: !!this.mp?.host } : null }, now);
+    this.keystones.update(world, this.view.human, this.session.mode === 'play' && !this.session.prepActive, now);
     if (this.tutorial && !this.menuOpen) this.tutorial.update(now);
     this.updateStatusLine(world);
     this.updateNetUi(now);
@@ -537,9 +553,27 @@ export class Game {
           if (ev.owner === human) this.hud.log(s, `Erforscht: ${ev.name}`, 'good');
           break;
         case 'gate':
-          if (ev.owner === human) this.hud.log(s, ev.early ? 'Kartenmitte gehalten: ein Schlussstein-Tor öffnet vorzeitig' : 'Ein Schlussstein-Tor ist offen', 'good');
-          else if (ev.early && human !== null) this.hud.log(s, 'Der Gegner hält die Kartenmitte – sein Schlussstein-Tor öffnet vorzeitig', 'warn');
+          if (ev.owner === human) this.hud.log(s, ev.early ? 'Kartenmitte gehalten: das nächste Schlussstein-Fenster ist sofort offen' : 'Schlussstein-Fenster offen – Karte wählen (K)', 'good');
+          else if (ev.early && human !== null) this.hud.log(s, 'Der Gegner hält die Kartenmitte – sein Schlussstein-Fenster öffnet vorzeitig', 'warn');
           break;
+        case 'keystone':
+          if (ev.owner === human) this.hud.log(s, `Schlussstein gesetzt: ${keystoneUpgradeName(world, ev.owner, ev.upgrade)}`, 'good');
+          break;
+        case 'breaker': {
+          if (human === null) break;
+          const mine = ev.owner === human;
+          const vis = mine || world.players[human].vision.isVisible(Math.floor(ev.pos.x), Math.floor(ev.pos.y));
+          if (!vis) break;
+          const text =
+            ev.what === 'fuse' ? (mine ? 'Drohnen verschmelzen zur Brechstange (6 s)' : 'Gegnerische Drohnen verschmelzen – jetzt Flächenschaden!') :
+            ev.what === 'formed' ? (mine ? `Brechstange steht (${ev.models} Modelle)` : `Gegnerische Brechstange (${ev.models} Modelle)`) :
+            ev.what === 'abort' ? (mine ? 'Fusion abgebrochen' : 'Gegnerische Fusion abgebrochen') :
+            ev.what === 'leap' ? (mine ? 'Die Brechstange springt!' : 'Die gegnerische Brechstange springt!') :
+            ev.what === 'land' ? (mine ? `Einschlag: ${ev.models} Drohnen greifen an` : `Brechstange schlägt ein – ${ev.models} Drohnen`) :
+            mine ? `Brechstange gefallen – ${ev.models} Drohnen frei` : 'Gegnerische Brechstange zerstört';
+          this.hud.log(s, text, mine === (ev.what !== 'abort' && ev.what !== 'burst') ? 'good' : 'warn');
+          break;
+        }
         case 'wallBroken':
           if (ev.owner === human) this.hud.log(s, 'Ein Erdwall ist gebrochen', 'bad');
           else if (human !== null) this.hud.log(s, 'Gegnerischer Erdwall gebrochen', 'good');
@@ -824,6 +858,12 @@ export class Game {
       return;
     }
     if (this.lobbyOpen) return;
+    // Taste K (28.10. abends): Schlussstein-Karten öffnen/schließen – solange eine Wahl offen ist, vor dem Befehlsraster
+    // (sonst „Umwidmen“ an der Fabrik).
+    if (key === 'k' && this.session.mode === 'play' && this.keystones.toggle()) {
+      ev.preventDefault();
+      return;
+    }
     const handled = ((): boolean => {
       // Tasten des aktuellen Befehlsrasters gehen vor (Fronten: Q–R und A–F liegen auf Ansichtstasten).
       if (key !== 'escape' && key !== ' ') {

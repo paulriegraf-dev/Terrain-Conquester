@@ -121,6 +121,8 @@ export interface Flight {
   charge?: { target: number; damage: number; radius: number; weapon: WeaponDef };
   /** Bluff (Schlussstein Katapult): wer geworfen hat. */
   thrower?: number;
+  /** Sprung der Myr-Brechstange: geschluckte Modelle, ihr Alter und der Leben-Anteil beim Absprung. */
+  leap?: { models: number; ages: number[]; share: number };
 }
 
 /** Technoclan-Verbund einer Lane. */
@@ -158,6 +160,8 @@ export interface PlayerStats {
   synergyBuys: number;
   /** Schlusssteine (26.10.): Auslösungen je Schlussstein-Einheit, Minute der fertigen Forschung, im Kampf geformte Kacheln. */
   keystoneFires: Record<string, number>;
+  /** Myr-Brechstange (28.10. abends): Fusionen, Abbrüche, Sprünge, Tode, Modelle, Schaden, freigelassene Drohnen. */
+  breaker: Record<string, number>;
   keystoneAt: number[];
   combatTiles: number;
   /** Terra-Former-Diagnose (26.10. abends): Gelände-Käufe für Terraformer mit Speicher; Terraformer je Fabrikstufe (Index 0 = Stufe I). */
@@ -258,7 +262,17 @@ export interface PlayerState {
    * Schlusssteine (für den Preis), seit wann die Kartenmitte gehalten wird (−1 = nicht), vorgezogene Tore, Tor-Nummer je
    * gekauftem Schlussstein.
    */
-  gate: { credits: number; next: number; opened: number; bought: number; holdSince: number; early: number; byKeystone: Record<string, number> };
+  gate: {
+    credits: number; next: number; opened: number; bought: number; holdSince: number; early: number; byKeystone: Record<string, number>;
+    /** 28.10. abends: Fenster, die bei vollem Guthaben warten (werden nach der nächsten Wahl gutgeschrieben). */
+    pending: number;
+    /** Fortschritt der gehaltenen Mitte in Sekunden (0 … centerHold; leert sich ohne Kontrolle in centerDecay s). */
+    hold: number;
+    /** Gewählte Schlusssteine mit Tick (für die verzögerte Sichtbarkeit beim Gegner). */
+    chosen: { upgrade: string; tick: number }[];
+    /** Tick, seit dem Guthaben offen ist (−1 = keins) – Erinnerung des Soldaten. */
+    openSince: number;
+  };
   /** Übrige Gelände-Platzierungen der Vorbereitungsphase. */
   prepLeft: number;
   /** Held (über das HQ geholt): null = noch keiner. respawnTick −1 = lebt. */
@@ -424,6 +438,9 @@ export class World {
   readonly mudNests: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
   /** Myriaden: geworfene Myrs im Flug (Kanone, Katapult). */
   flights: Flight[] = [];
+  /** Laufende Fusionen zur Myr-Brechstange (28.10. abends). */
+  fusions: { id: number; owner: PlayerId; center: Vec2; squads: number[]; start: number; end: number; route: Route }[] = [];
+  fusionSeq = 0;
   /** Eingegrabene Drohnen-Einschläge der Myr-Kanone (Sammelangriff, 25.10.). */
   burrows: Burrow[] = [];
   /**
@@ -625,7 +642,7 @@ export class World {
     let n = 0;
     for (const e of this.entities) {
       if (!e.alive || e.owner !== p) continue;
-      if (e.kind === 'unit') n += UNITS[e.defId as UnitId].supply ?? 1;
+      if (e.kind === 'unit') n += e.breaker ? (e.breaker.models / UNITS.drone.models) * (UNITS.drone.supply ?? 1) : UNITS[e.defId as UnitId].supply ?? 1;
       else if (e.producer?.clutch) for (const u of e.producer.clutch) n += UNITS[u].supply ?? 1; // Gelege zählt mit
     }
     return n;
@@ -1034,7 +1051,7 @@ export class World {
       emergency: { pressure: 0, section: -1, used: [], bonusUntil: 0, open: false },
       scout: { readyTick: 0, pending: null, last: null },
       buys: newBuyState(),
-      gate: { credits: 0, next: Math.round(this.rules.keystoneGate.first * this.tps), opened: 0, bought: 0, holdSince: -1, early: 0, byKeystone: {} },
+      gate: { credits: 0, next: Math.round(this.rules.keystoneGate.first * this.tps), opened: 0, bought: 0, holdSince: -1, early: 0, byKeystone: {}, pending: 0, hold: 0, chosen: [], openSince: -1 },
       prepLeft: FACTIONS[faction].prepPlacements + this.rules.shaping.prepExtra,
       hero: null,
       vision: new Vision(this.grid),
@@ -1059,6 +1076,7 @@ export class World {
         shaped: 0,
         synergyBuys: 0,
         keystoneFires: {},
+        breaker: {},
         keystoneAt: [],
         combatTiles: 0,
         storerBuys: 0,

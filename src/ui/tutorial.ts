@@ -236,6 +236,18 @@ function steps(doc: Document): Step[] {
       done: (c) => (['top', 'mid', 'bottom'] as Route[]).some((r) => c.world.players[0].stance[r] === 'push' || c.world.players[0].pendingStance[r]?.stance === 'push'),
     },
     {
+      // 28.10. abends: Schlussstein-Fenster – der Schritt wartet auf das erste Fenster (10:00).
+      text: 'Ab Minute 10 öffnet sich alle zweieinhalb Minuten ein Schlussstein-Fenster: Unten erscheinen Karten – ein Klick setzt den Schlussstein, kostenlos und sofort. Wähle deinen ersten, sobald es so weit ist.',
+      hint: (c) => {
+        const g = c.world.players[0].gate;
+        if (g.credits > 0) return 'Karte anklicken · Taste K öffnet und schließt die Karten';
+        const left = Math.max(0, Math.ceil((g.next - c.world.tick) / c.world.tps));
+        return `Erstes Fenster in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} – mit 2× oder 4× geht es schneller`;
+      },
+      target: (c) => (c.world.players[0].gate.credits > 0 ? { el: '.ks-cards' } : null),
+      done: (c) => c.world.players[0].gate.bought > 0,
+    },
+    {
       text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du im Befehlsraster, alles zum Nachlesen – Wirtschaft, Markt, Gebiet – in der Übersicht (F1) unter Grundlagen. Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
     },
   ];

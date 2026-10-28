@@ -1075,3 +1075,56 @@ body.start-mode .sp-fields { gap: 7px; }
 .ts-f .title-logo .title-name { justify-content: flex-end; }
 
 .ts-switch button { padding: 1px 8px; }
+
+/* ------------------------------------------------------------ Schlussstein-Zone (28.10. abends): Soldat + Karten */
+
+.ks-zone { display: grid; gap: 6px; min-width: 0; }
+.ks-zone[hidden] { display: none; }
+/* Solange Soldat oder Karten sprechen, macht die Hinweiszone Platz (Ansicht und Hover-Zeile ruhen). */
+.console-tip.ks-busy > .tip-text, .console-tip.ks-busy > .tip-hover, .console-tip.ks-busy > .view-docked { display: none; }
+.ks-soldier { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
+.ks-soldier[hidden] { display: none; }
+.ks-face { width: 44px; height: 44px; display: grid; place-items: center; }
+.ks-portrait { width: 44px; height: 44px; image-rendering: pixelated; filter: sepia(1) hue-rotate(150deg) saturate(2.4) brightness(1.15) drop-shadow(0 0 5px rgba(110, 230, 255, 0.7)); opacity: 0.9; }
+.ks-say {
+  margin: 0; cursor: pointer; font-size: 0.8rem; line-height: 1.3; color: #c8f4ff; text-shadow: 0 0 6px rgba(110, 230, 255, 0.45);
+  max-height: 2.6em; overflow: hidden; /* höchstens zwei Zeilen – längere Sätze rollen langsam weiter */
+}
+.ks-cards { --ks-accent: #7fe3ff; --ks-glow: rgba(110, 230, 255, 0.55); display: grid; grid-template-columns: repeat(4, minmax(0, 92px)); gap: 6px; justify-content: start; }
+.ks-cards[hidden] { display: none; }
+.ks-card {
+  position: relative; display: grid; grid-template-rows: auto auto 1fr; justify-items: center; align-content: start; gap: 2px;
+  min-height: 84px; padding: 7px 5px 6px; border-radius: 5px; cursor: pointer; text-align: center; color: #dff8ff; font: inherit;
+  background: linear-gradient(170deg, rgba(40, 110, 140, 0.55), rgba(10, 30, 44, 0.9) 60%), repeating-linear-gradient(0deg, rgba(127, 227, 255, 0.05) 0 1px, transparent 1px 3px);
+  border: 1px solid var(--ks-accent); box-shadow: 0 0 8px var(--ks-glow), inset 0 0 10px rgba(127, 227, 255, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.3s ease;
+}
+/* SD-Karte: Kerbe oben rechts, Kontaktstreifen unten */
+.ks-card::before { content: ''; position: absolute; top: -1px; right: -1px; width: 12px; height: 12px; background: var(--panel); border-left: 1px solid var(--ks-accent); border-bottom: 1px solid var(--ks-accent); transform: skew(-0deg); clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.ks-card::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: 4px; height: 3px; background: repeating-linear-gradient(90deg, var(--ks-accent) 0 3px, transparent 3px 6px); opacity: 0.5; }
+.ks-card:hover:not(:disabled), .ks-card:focus-visible { transform: translateY(-2px); box-shadow: 0 0 14px var(--ks-glow), inset 0 0 12px rgba(127, 227, 255, 0.2); }
+.ks-icon { font-size: 1.15rem; line-height: 1; color: var(--ks-accent); text-shadow: 0 0 8px var(--ks-glow); }
+.ks-name { font-family: var(--font-body); font-weight: 700; font-size: 0.74rem; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.15; hyphens: auto; overflow-wrap: break-word; max-width: 100%; }
+.ks-sub { font-size: 0.66rem; color: #9fdcf0; line-height: 1.2; hyphens: auto; overflow-wrap: break-word; max-width: 100%; }
+.ks-doors { display: grid; gap: 3px; width: 100%; margin-top: 2px; }
+.ks-door { font: inherit; font-size: 0.66rem; padding: 3px 2px; border-radius: 3px; cursor: pointer; color: #dff8ff; background: rgba(127, 227, 255, 0.1); border: 1px solid rgba(127, 227, 255, 0.45); }
+.ks-door:hover:not(:disabled) { background: rgba(127, 227, 255, 0.25); }
+.ks-more { background: rgba(10, 30, 44, 0.6); border-style: dashed; }
+.ks-cards.ks-dim .ks-card { opacity: 0.72; }
+.ks-cards.ks-locked .ks-card { cursor: wait; }
+.ks-card.ks-fade { opacity: 0; pointer-events: none; }
+.ks-card.ks-fly { transition: transform 0.6s cubic-bezier(0.5, 0, 0.7, 0.4), opacity 0.6s ease-in; transform: translate(var(--ks-dx, 0), var(--ks-dy, -40px)) scale(0.25); opacity: 0; pointer-events: none; z-index: 5; }
+.ks-chip {
+  font-family: var(--font-data); font-size: 0.72rem; padding: 1px 8px; border-radius: 10px; cursor: pointer;
+  color: #c8f4ff; background: rgba(40, 110, 140, 0.35); border: 1px solid #7fe3ff; animation: ks-pulse 1.6s ease-in-out infinite;
+}
+.ks-chip[hidden] { display: none; }
+@keyframes ks-pulse { 0%, 100% { box-shadow: 0 0 0 rgba(110, 230, 255, 0); } 50% { box-shadow: 0 0 10px rgba(110, 230, 255, 0.75); } }
+@media (prefers-reduced-motion: reduce) { .ks-chip { animation: none; } .ks-card, .ks-card.ks-fly { transition: none; } }
+.ks-cards > * { min-width: 0; width: 100%; box-sizing: border-box; overflow: hidden; }
+.ks-door { min-width: 0; font-size: 0.62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ks-has-doors .ks-name { font-size: 0.66rem; }
+.ks-doors { grid-template-columns: minmax(0, 1fr); }
+.ks-door { width: 100%; }
+.ks-has-doors .ks-name { text-transform: none; font-size: 0.7rem; }
+.ks-door { font-size: 0.58rem; padding: 3px 1px; letter-spacing: -0.01em; }

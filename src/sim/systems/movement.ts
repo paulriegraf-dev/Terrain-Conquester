@@ -84,7 +84,11 @@ export function updateMovement(world: World): void {
     let chasing = false;
     // 27.10.: Ein Terraformer auf dem Rückzug rennt nicht dem Ziel nach – und jagt auch sonst keinem Gegner hinterher.
     const retreating = !!e.tf && !!e.tf.retreat && world.tick < e.tf.retreat.until;
-    if (target && target.alive && !retreating) {
+    // Myr-Brechstange (28.10. abends): fusionierende Drohnen laufen in die Mitte der Fusion (schießen weiter, jagen nicht).
+    const fusion = e.fuse !== undefined ? world.fusions.find((f) => f.id === e.fuse) : undefined;
+    if (fusion) {
+      dir = dist(e.pos, fusion.center) > 0.35 ? steer(e, fusion.center) : { x: 0, y: 0 };
+    } else if (target && target.alive && !retreating) {
       // Mit den Positionen vom Tick-Anfang rechnen (prev) – sonst hätte die Seite, die später
       // drankommt, einen Vorteil, weil sie schon die neuen Positionen der anderen sieht.
       const snap = startOfTick(target);

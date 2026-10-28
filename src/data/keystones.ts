@@ -4,7 +4,7 @@
  * Namen sind Arbeitstitel. Die Zahlen (Schrauben) stehen in rules.keystone.
  */
 import type { UnitId } from './units';
-import type { UpgradeEffect } from './factions';
+import type { FactionId, UpgradeEffect } from './factions';
 
 export interface KeystoneDef {
   unit: UnitId;
@@ -68,7 +68,7 @@ export const KEYSTONES: readonly KeystoneDef[] = [
     { name: 'Feldnetz', description: 'Heilradius +1', effect: { range: 1 } }] },
   // Myriaden
   { unit: 'catapult', line: 'catapult', name: 'Doppelwurf', icon: '⇉', rule: 'Trägt zwei Verspotter und wirft sie nacheinander auf zwei Ziele, die mindestens 4 Kacheln auseinander liegen. Dazu Bluff: Stirbt ein geworfener Verspotter vor seiner Zeit, wirft das Katapult sofort gratis nach.', rein: 'Ladung zwei Verspotter je 60 s; nur ein Ziel: wirft einen, behält den zweiten. Bluff einmal je 30 s, nur in Reichweite.' },
-  { unit: 'drone', line: 'drone', name: 'Letzter Flug', icon: '✸', rule: 'Läuft die Lebensuhr ab, explodiert jedes Modell (Fläche 1, Schaden 20) statt zu zerfallen.', rein: 'Nur bei Ablauf der Uhr, nicht beim Tod im Kampf.' },
+  { unit: 'drone', line: 'drone', name: 'Brechstange', icon: '✸', rule: 'Stehen 3 Drohnen-Verbände (zusammen 16 Modelle) 8 s still beieinander, verschmelzen sie in 6 s zur Brechstange: kein Angriff, langsam, 25 Leben je Modell. 4–5 Kacheln vor dem gegnerischen Drittel springt sie 5 Kacheln über Wälle und Schluchten, trifft beim Einschlag alles in 1,5 Kacheln (18 je Modell) und entlässt die Drohnen.', rein: 'Eine je Spieler, höchstens 24 Modelle; während der Fusion verwundbar; eigene Uhr 90 s; fällt sie vorher, kommt nur ein Teil der Drohnen frei.' },
   { unit: 'bomber', line: 'bomber', name: 'Nachzünder', icon: '✹', rule: 'Stirbt er vor dem Einschlag, explodiert er trotzdem mit halber Wirkung an Ort und Stelle.', rein: 'Nur innerhalb von 3 Kacheln zum Ziel.' },
   { unit: 'hound', line: 'hound', name: 'Rudel', icon: '⚑', rule: 'Stehen drei Hunde auf einer Lane, heulen sie: alle Myriaden der Lane +10 % Tempo, die Bruten der Lane füllen ihr Gelege 20 % schneller.', rein: 'Genau ab drei; fällt einer, endet es nach 5 s.' },
   { unit: 'myrcannon', line: 'myrcannon', name: 'Hochdruck', icon: '⇶', rule: 'Zieht zwei Drohnen-Trupps auf einmal ein und feuert dann 20 s lang ohne Pause.', rein: 'Nur wenn zwei Drohnen-Verbände in 3 Kacheln stehen; alle 45 s.' },
@@ -78,3 +78,13 @@ export const KEYSTONES: readonly KeystoneDef[] = [
 export const KEYSTONE_OF: Readonly<Partial<Record<UnitId, KeystoneDef>>> = Object.fromEntries(KEYSTONES.map((k) => [k.unit, k]));
 
 export const keystoneId = (unit: UnitId): string => `${unit}-keystone`;
+
+/**
+ * Karten-Optik je Fraktion (28.10. abends): jetzt alle holoblau. Vorgemerkt fürs Fraktionsdesign: Technoclan holoblau,
+ * Myriaden bernstein-organisch (#e0a040 / rgba(224,160,64,0.55)), Terra-Former grün-hölzern (#8fc46a / rgba(143,196,106,0.5)).
+ */
+export const KEYSTONE_CARD_STYLE: Record<FactionId, { accent: string; glow: string }> = {
+  technoclan: { accent: '#7fe3ff', glow: 'rgba(110, 230, 255, 0.55)' },
+  myriaden: { accent: '#7fe3ff', glow: 'rgba(110, 230, 255, 0.55)' },
+  terraformer: { accent: '#7fe3ff', glow: 'rgba(110, 230, 255, 0.55)' },
+};

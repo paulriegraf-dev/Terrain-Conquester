@@ -1,4 +1,5 @@
 import { hasKeystone, secondThrow, underPressure, updatePack } from './keystone';
+import { landLeap, updateBreakers } from './breaker';
 import type { BuildingId } from '../../data/buildings';
 import { MOVE_PROFILES } from '../../data/movement';
 import { UNITS } from '../../data/units';
@@ -39,6 +40,7 @@ export function updateMyr(world: World): void {
   }
   updatePack(world); // Rudel (Schlussstein Hund)
   if (world.flights.length > 0) landFlights(world);
+  updateBreakers(world); // Myr-Brechstange (Schlussstein Drohnen)
   if (world.burrows.length > 0) breakBurrows(world);
   if (world.tick % tps === 0) {
     damageFields(world);
@@ -198,7 +200,7 @@ function nearestSquad(world: World, e: Entity, unit: UnitId, radius: number, con
   let best: Entity | null = null;
   let bestD = radius * radius;
   for (const o of world.entities) {
-    if (!o.alive || o.owner !== e.owner || o.defId !== unit) continue;
+    if (!o.alive || o.owner !== e.owner || o.defId !== unit || o.fuse !== undefined) continue; // Fusion: nicht abziehen
     if ((consumed.get(o) ?? 0) >= aliveModels(o)) continue;
     const dx = o.pos.x - e.pos.x;
     const dy = o.pos.y - e.pos.y;
@@ -219,6 +221,10 @@ function landFlights(world: World): void {
   for (const f of landed) {
     if (f.charge) {
       landCharge(world, f);
+      continue;
+    }
+    if (f.leap) {
+      landLeap(world, f);
       continue;
     }
     const def = UNITS[f.unit];
@@ -404,7 +410,7 @@ export function rushFactor(world: World, e: Entity): number {
 function mergeSquads(world: World): void {
   const R = world.rules.mergeRadius;
   const r2 = R * R;
-  const squads = world.entities.filter((e) => e.alive && e.kind === 'unit' && e.models > 1 && UNITS[e.defId as UnitId].swarm && e.defId === 'drone');
+  const squads = world.entities.filter((e) => e.alive && e.kind === 'unit' && e.models > 1 && UNITS[e.defId as UnitId].swarm && e.defId === 'drone' && e.fuse === undefined);
   for (const a of squads) {
     if (!a.alive) continue;
     const capA = room(world, a);

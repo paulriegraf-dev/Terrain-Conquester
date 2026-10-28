@@ -17,6 +17,7 @@ import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
 import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
+import { checkKeystone, hasKeystone, keystoneChoices } from '../sim/systems/keystone';
 import { checkEmergency } from '../sim/systems/emergency';
 import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
@@ -165,14 +166,14 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean;
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean;
   /** Nachtrag G (26.10. spät): Dauerspähen, Aufgebot, Nachschub, Vorratskauf, Trichter, Belagerung an die Spitze. */
   buys: { watch: boolean; rush: boolean; surge: boolean; stock: boolean; funnel: boolean; siegeLead: boolean };
   plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
   counterLine: { on: boolean; hysteresis: number; share: number; budget: number };
   marketWar: { on: boolean; takt: number; gap: number; selfLimit: number; ausweichenAb: number };
   intel: { on: boolean; maxAge: number; deceive: boolean };
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true,
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
@@ -191,6 +192,11 @@ export class SimpleAi {
   /** Erinnerung an gesehene Gegner (verblasst mit der Zeit). */
   private readonly seen: Record<SeenArmor, number> = { infantry: 0, light: 0, heavy: 0 };
   private readonly seenByRoute: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+  /** Myr-Brechstange: Lane, auf der Drohnen gesammelt werden, und Pause nach einem Fehlschlag. */
+  private breakerGather: { route: Route; since: number } | null = null;
+  private breakerPauseUntil = 0;
+  /** Gegnerische Brechstangen, gegen die schon eine Schlucht versucht wurde. */
+  private readonly breakerSeen = new Set<number>();
   private lastRouteChange = 0;
   /** Letzter Umrüst-Tick je Fabrik (gegen Hin-und-her-Schalten). */
   private readonly lastRetool = new Map<number, number>();
@@ -383,13 +389,17 @@ export class SimpleAi {
     const commands: Command[] = [];
     // Notfallverlegung, sobald sie bereit ist: der bedrängte Bauabschnitt zieht in den Rückraum.
     if (checkEmergency(world, this.player).ok) commands.push({ type: 'emergency' });
+    // Schlussstein-Fenster (28.10. abends): kostenlos – sofort wählen.
+    const ks = this.pickKeystone(world);
+    if (ks) commands.push(ks);
     const plan = this.decidePlan(world);
     if (plan) commands.push(plan);
     const build = this.decideBuild(world);
     if (build) commands.push(build);
     const route = this.decideRoute(world);
     if (route) commands.push(route);
-    const stance = this.decideStance(world);
+    const breaker = this.decideBreaker(world);
+    const stance = breaker ?? this.decideStance(world);
     if (stance) commands.push(stance);
     const factory = this.decideFactory(world);
     if (factory) commands.push(factory);
@@ -402,7 +412,8 @@ export class SimpleAi {
       if (rush) commands.push(rush);
       const wall = this.decideWall(world);
       if (wall) commands.push(wall);
-      const shape = this.decideTerrain(world);
+      const defense = this.decideBreakerDefense(world);
+      const shape = defense ?? this.decideTerrain(world);
       // 28.10.: Dieselbe Stelle nicht im Minutentakt hin und her umbauen (Partien 27.10.: bis zu 9 Käufe auf einer Kachel,
       // Wald ↔ Matsch im Abstand von Sekunden) – eine Fläche frühestens nach 120 s erneut.
       if (shape && shape.type === 'swapTerrain' && shape.terrain !== 'gorge') {
@@ -816,8 +827,6 @@ export class SimpleAi {
         if (c.ok && me.energy >= c.cost + keep) return { type: 'upgradeFactory', entityId: f.id };
       }
     }
-    const ks = this.pickKeystone(world, factories, keep);
-    if (ks) return ks;
     const smart = AI_TUNING.smartResearch === 'all' || (AI_TUNING.smartResearch === 'myr' && me.faction.id === 'myriaden');
     if (smart) return this.smartResearch(world, factories, keep);
     for (const f of this.rng.shuffled(factories)) {
@@ -839,50 +848,94 @@ export class SimpleAi {
 
 
 
-  /** Darf die KI jetzt einen Schlussstein erforschen (Schalter, vier Fabriken, höchstens zwei, 3 min Abstand)? */
-  /** Darf die KI jetzt einen Schlussstein kaufen (Schalter, offenes Tor – 26.10. spät)? */
-  private keystoneAllowed(world: World, _factories: Entity[]): boolean {
-    return AI_TUNING.keystones && world.rules.keystone.enabled && world.players[this.player].gate.credits > 0;
+  /**
+   * Schlussstein-Wahl (28.10. abends): Fenster sind kostenlos – bei offenem Guthaben sofort der Schlussstein der Einheitenart
+   * mit den meisten lebenden Verbänden (Terra-Former: Linie mit den meisten Wächtern + Gerufenen). Technoclan wählt die Tür
+   * nach gesehener Panzerung (Schwer → Durchschuss/Bündelung, Masse → Überladung/Streuung). Myriaden mit ≥ 4 Drohnen-Verbänden
+   * nehmen zuerst die Brechstange. Steht von keiner Art etwas auf dem Feld, die erste Karte der Anzeige-Reihenfolge.
+   */
+  private pickKeystone(world: World): Command | null {
+    if (!AI_TUNING.keystones || !world.rules.keystone.enabled) return null;
+    const me = world.players[this.player];
+    if (me.gate.credits <= 0) return null;
+    const choices = keystoneChoices(world, this.player);
+    if (choices.length === 0) return null;
+    const heavy = this.seen.heavy;
+    const mass = this.seen.infantry + this.seen.light;
+    const door = (c: (typeof choices)[number]): string => {
+      if (c.upgrades.length < 2) return c.upgrades[0]!;
+      const wantB = c.unit === 'plasma' ? mass >= heavy : heavy > mass;
+      return c.upgrades.find((id) => id.endsWith(wantB ? '-b' : '-a')) ?? c.upgrades[0]!;
+    };
+    const drones = world.entities.filter((e) => e.alive && e.owner === this.player && e.defId === 'drone').length;
+    const breaker = choices.find((c) => c.unit === 'drone');
+    const pick = breaker && drones >= 4 ? breaker : choices[0]!; // choices: meiste lebende Verbände zuerst
+    const id = door(pick);
+    return checkKeystone(world, this.player, id).ok ? { type: 'research', upgrade: id } : null;
   }
 
   /**
-   * Schlussstein-Wahl (26.10. spät): bei offenem Tor und Energie ≥ Puffer + Preis der Schlussstein der Einheitenart mit den
-   * meisten lebenden Verbänden (Terra-Former: die Linie mit den meisten Wächtern + Gerufenen). Technoclan wählt die Tür
-   * nach gesehener Panzerung: Schwer → Durchschuss/Bündelung, Masse → Überladung/Streuung.
+   * Myr-Brechstange (28.10. abends, AI_TUNING.aiBreaker): ab Minute 10 mit dem Schlussstein die Lane mit dem meisten Druck
+   * halten, sobald dort 3 Drohnen-Verbände frei sind – die Drohnen sammeln sich an der Grenze und verschmelzen. Steht die
+   * Brechstange, Front auf ihrer Lane. Gelingt 60 s lang keine Fusion, 90 s Pause.
    */
-  private pickKeystone(world: World, factories: Entity[], keep: number): Command | null {
-    if (!this.keystoneAllowed(world, factories)) return null;
+  private decideBreaker(world: World): Command | null {
+    if (!AI_TUNING.aiBreaker || world.seconds < 600 || !hasKeystone(world, this.player, 'drone')) return null;
     const me = world.players[this.player];
-    const all = me.faction.upgrades.filter((u) => u.keystone && !me.research.includes(u.id));
-    if (all.length === 0) return null;
-    const alive = new Map<string, number>();
-    for (const e of world.entities) {
-      if (!e.alive || e.owner !== this.player || e.kind !== 'unit') continue;
-      const d = UNITS[e.defId as UnitId];
-      if (!d || d.former || d.leash || d.hero) continue;
-      const key = lineUnit(e.defId as UnitId); // Terra-Former: Gerufene zählen zu ihrer Linie
-      alive.set(key, (alive.get(key) ?? 0) + 1);
+    const own = world.entities.find((e) => e.alive && e.owner === this.player && e.breaker);
+    const target = (r: Route): string => me.pendingStance[r]?.stance ?? me.stance[r];
+    if (own) {
+      this.breakerGather = null;
+      const r = own.mover!.route;
+      return target(r) !== 'push' ? { type: 'setStance', route: r, stance: 'push' } : null;
     }
-    const heavy = this.seen.heavy;
-    const mass = this.seen.infantry + this.seen.light;
-    let best: { id: string; n: number } | null = null;
-    for (const u of all) {
-      if (u.fork && me.faction.upgrades.some((x) => x.fork === u.fork && x.id !== u.id && me.research.includes(x.id))) continue;
-      if (u.fork) {
-        // Tür: Scharfschützen a Überladung / b Durchschuss; Plasmawerfer a Bündelung / b Streuung.
-        const wantB = u.unit === 'plasma' ? mass >= heavy : heavy > mass;
-        if (u.id.endsWith(wantB ? '-a' : '-b')) continue;
+    if (world.fusions.some((f) => f.owner === this.player)) return null;
+    if (this.breakerGather) {
+      if (world.tick - this.breakerGather.since > 60 * world.tps) {
+        this.breakerPauseUntil = world.tick + 90 * world.tps;
+        this.breakerGather = null;
+        return null;
       }
-      const n = alive.get(u.unit) ?? 0;
-      if (n <= 0) continue;
-      const c = checkResearch(world, this.player, u.id);
-      if (!c.ok || me.energy < c.cost + keep) continue;
-      if (!best || n > best.n || (n === best.n && u.id < best.id)) best = { id: u.id, n };
+      const r = this.breakerGather.route;
+      return target(r) !== 'hold' && target(r) !== 'defend' ? { type: 'setStance', route: r, stance: 'hold' } : null;
     }
-    if (!best) return null;
-    return { type: 'research', upgrade: best.id };
+    if (world.tick < this.breakerPauseUntil) return null;
+    const free: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+    for (const e of world.entities) if (e.alive && e.owner === this.player && e.defId === 'drone' && !e.mover!.committed) free[e.mover!.route]++;
+    const lane = [...ROUTES].filter((r) => free[r] >= world.rules.breaker.minSquads).sort((a, b) => this.seenByRoute[b] - this.seenByRoute[a] || free[b] - free[a])[0];
+    if (!lane) return null;
+    this.breakerGather = { route: lane, since: world.tick };
+    return target(lane) !== 'hold' && target(lane) !== 'defend' ? { type: 'setStance', route: lane, stance: 'hold' } : null;
   }
 
+  /** Lane, auf der die KI gerade Drohnen für die Brechstange sammelt (Haltung nicht anfassen). */
+  private breakerLane(): Route | null {
+    return this.breakerGather?.route ?? null;
+  }
+
+  /**
+   * Abwehr der Brechstange (AI_TUNING.aiBreakerDefense): Sieht die KI eine gegnerische Brechstange, setzt sie (wenn die
+   * Energie reicht) eine Schlucht 6 Kacheln vor dem eigenen Drittel auf deren Höhe – sie springt nur die letzten 5 Kacheln.
+   */
+  private decideBreakerDefense(world: World): Command | null {
+    if (!AI_TUNING.aiBreakerDefense) return null;
+    const enemy = this.player === 0 ? 1 : 0;
+    const b = world.entities.find((e) => e.alive && e.owner === enemy && e.breaker && world.isVisibleTo(this.player, e) && !this.breakerSeen.has(e.id));
+    if (!b) return null;
+    this.breakerSeen.add(b.id);
+    const dir = world.map.hq[this.player].x < world.map.width / 2 ? 1 : -1;
+    const third = dir > 0 ? world.map.width / 3 : (world.map.width * 2) / 3;
+    const x = Math.floor(third + 6 * dir);
+    // Nur, wenn sie noch vor der Schlucht steht.
+    if ((b.pos.x - x) * dir <= 0) return null;
+    for (const dy of [0, -1, 1, -2, 2]) {
+      const y = Math.floor(b.pos.y) + dy;
+      if (!world.grid.inBounds(x, y)) continue;
+      const c = checkSwapArea(world, this.player, x, y, 'gorge', true);
+      if (c.ok && world.players[this.player].energy >= swapCostAt(world, this.player, x, 'gorge').cost) return { type: 'swapTerrain', x, y, terrain: 'gorge', vertical: true };
+    }
+    return null;
+  }
 
   /**
    * Gebäude-Ausbau (24.10.): der Ausbau für die Gebäudeart, von der die KI am meisten hat (gilt für alle zugleich).
@@ -1164,6 +1217,7 @@ export class SimpleAi {
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
       if (keepMid && r === 'mid') continue;
+      if (r === this.breakerLane()) continue; // Myr-Brechstange: Drohnen sammeln sich hier
       // Sammel-Signal des Gegners gesehen: 60 s kein eigener Druck.
       if (AI_TUNING.intel.on && world.tick < this.noPushUntil && me.stance[r] !== 'push') continue;
       const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);

@@ -414,7 +414,7 @@ function basicsTab(): string {
   ])}
   ${section('Forschung, HQ und Held', [
     `Forschung (bis ${r.researchSlots} gleichzeitig): <b>Ausrüstung I–III</b> je Fabrikart (Angriff und Panzerung aller Einheiten dieser Fabrik, Heiler: Heilung) und einzelne Sonder-Upgrades. Terra-Former zusätzlich <b>Naturkraft</b> (Gerufene) und <b>Wurzelwerk</b> (Terraformer). Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
-    `<b>Schlusssteine</b> öffnet ein Tor: das erste in Minute ${Math.round(r.keystoneGate.first / 60)}, danach alle ${r.keystoneGate.every / 60} Minuten; je Tor ein Schlussstein (Preis steigt mit der Reihenfolge). Wer die Kartenmitte ${r.keystoneGate.centerHold} s allein hält, öffnet das nächste Tor früher.`,
+    `<b>Schlusssteine</b> kommen in Fenstern: das erste bei ${Math.round(r.keystoneGate.first / 60)}:00, danach alle ${r.keystoneGate.every / 60} Minuten; je Fenster eine Karte wählen (Taste K) – kostenlos und sofort wirksam, höchstens ${r.keystoneGate.maxCredits} Wahlen auf Vorrat. Wer die Kartenmitte ${r.keystoneGate.centerHold} s allein hält, bekommt sein nächstes Fenster sofort.`,
     'Jede Fraktion hat einen Helden, der über das HQ kommt und nach seinem Tod zurückkehrt.',
   ])}
   ${section('Stationen', ['Oben und unten je eine Station mit einem Vorteil nur für ihre Lane – Tabelle und Pool je Karte im Tab Gelände.'])}`;
@@ -476,7 +476,7 @@ function keystoneList(f: FactionId, bought: Record<string, number>): string {
   const g = RULES.keystoneGate;
   const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
   return `<h3 class="cx-h3">Schlusssteine</h3>
-    <p class="cx-lede">Ändern eine Regel, keine Zahl. Freigegeben über das Schlussstein-Tor: erstes Tor bei ${clock(g.first)}, danach alle ${clock(g.every)}; je Tor ein Schlussstein (ungenutzte Tore bleiben). Preis nach Reihenfolge ${g.prices.join(' · ')} (dann +${g.step}), ${g.seconds} s an einer Fabrik, die die Einheit baut. Wer die Kartenmitte (${g.centerSize}×${g.centerSize}) ${g.centerHold} s ununterbrochen hält, öffnet das nächste Tor sofort.</p>
+    <p class="cx-lede">Ändern eine Regel, keine Zahl. Sie kommen in Fenstern: erstes bei ${clock(g.first)}, danach alle ${clock(g.every)}; je Fenster eine Wahl (Karten unten, Taste K), ${g.cost > 0 ? `${g.cost} Energie` : 'kostenlos'} und sofort wirksam. Höchstens ${g.maxCredits} Wahlen auf Vorrat – weitere Fenster warten, nichts verfällt. Wer die Kartenmitte (${g.centerSize}×${g.centerSize}) ${g.centerHold} s allein hält, bekommt sein nächstes Fenster sofort (der Ring leert sich ohne Kontrolle in ${g.centerDecay} s). Der Gegner sieht deine Wahl erst nach ${g.revealDelay} s – mit Spähbericht sofort.</p>
     <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit / Linie</th><th>Regel</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

@@ -18,7 +18,7 @@ export type UnitId =
   // Technoclan
   | 'sniper' | 'plasma' | 'nanomedic' | 'hoverscout' | 'battery' | 'gunner' | 'colossus' | 'commander'
   // Myriaden
-  | 'drone' | 'bomber' | 'hound' | 'myrcannon' | 'catapult' | 'sphere' | 'swarmmind' | 'taunter'
+  | 'drone' | 'bomber' | 'hound' | 'myrcannon' | 'catapult' | 'sphere' | 'swarmmind' | 'taunter' | 'breaker'
   // Terra-Former: je Bodenart Wächter, Terraformer und gerufene Spezialeinheit, dazu der Held
   | 'terraformer'
   | 'wardMeadow' | 'specialMeadow'
@@ -485,6 +485,13 @@ const RAW: Record<UnitId, UnitInput> = {
     // 25.10.: Einschlag 25 Schaden (Katapult), danach ein Schadensfeld um ihn – das ihn selbst langsam aufzehrt
     field: { radius: 2, dps: 4, selfDps: 1 },
     shape: 'square', letter: 'V', role: 'Geworfen vom Katapult: Einschlag, dann Schadensfeld um ihn; zieht das Feuer auf sich (Verspotten), nach 60 s tot',
+  },
+  // Myr-Brechstange (28.10. abends, Drohnen-Schlussstein): entsteht aus 3+ stillstehenden Drohnen-Verbänden, kein Angriff,
+  // springt vor dem gegnerischen Drittel 5 Kacheln weit und entlässt die Drohnen am Einschlag. Leben je Modell: rules.breaker.
+  breaker: {
+    id: 'breaker', name: 'Myr-Brechstange', armor: 'infantry', hp: 400, toughness: 5, save: 5,
+    speed: 0.7, move: 'foot', part: 'arms', binds: {}, radius: 0.6, vision: 5, spawnInterval: 0, supply: 0,
+    shape: 'circle', letter: 'B', role: 'Aus verschmolzenen Drohnen: marschiert ohne Angriff, springt vor dem gegnerischen Drittel über Wälle und Schluchten und entlässt die Drohnen am Einschlag',
   },
 
 
