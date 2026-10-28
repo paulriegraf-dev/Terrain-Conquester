@@ -7,14 +7,15 @@ import { MOVE_PROFILES } from '../../data/movement';
 import type { CommandResult } from '../commands';
 import type { Entity } from '../entity';
 import type { World } from '../world';
-import { inOwnThird } from './abilities';
+import { inOwnHalf } from './prep';
 import { controllerAt } from './influence';
 
 export function checkRally(world: World, b: Entity, x: number, y: number): string | null {
   const g = world.grid;
   if (!g.inBounds(x, y)) return 'Außerhalb der Karte';
   if (!g.isPassable(x, y, MOVE_PROFILES.foot)) return 'Nur auf begehbarem Boden';
-  if (!inOwnThird(world, b.owner, x) && controllerAt(world, g.index(x, y)) !== b.owner) return 'Nur im eigenen Kartendrittel oder in der eigenen Einflusszone';
+  // 28.10.: ganze eigene Kartenhälfte (vorher Drittel), wie die Erdwälle.
+  if (!inOwnHalf(world, b.owner, x) && controllerAt(world, g.index(x, y)) !== b.owner) return 'Nur in der eigenen Kartenhälfte oder in der eigenen Einflusszone';
   return null;
 }
 

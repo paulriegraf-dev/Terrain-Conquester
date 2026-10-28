@@ -72,4 +72,19 @@ describe('Nach-Patch 28.10.', () => {
     assert.equal(formerGround(world, f), f.mover!.route === laneOfRow(world, 7) ? snow : formerGround(world, f));
     assert.equal(convertible(world, i, 0, snow), true, 'mit Wahl Schnee: eigener Matsch wird umgeformt');
   });
+
+  it('Scharte: haltender Scharfschütze rückt an den eigenen Wall, wenn dahinter ein Gegner steht', () => {
+    const world = new World({ map: openMap, seed: 1, rules: smallBases, factions: ['technoclan', 'technoclan'] });
+    const cells = [5, 6, 7, 8, 9].map((y) => ({ index: world.grid.index(8, y), original: world.grid.terrain[world.grid.index(8, y)]! }));
+    for (const c of cells) world.grid.setTerrain(c.index, TERRAIN_INDEX.wall);
+    world.addWall(0, cells, 200, 10, 4);
+    const sniper = world.addUnit(0, UNITS.sniper, { x: 5.5, y: 7.5 }, 'mid');
+    const foe = world.addUnit(1, UNITS.plasma, { x: 11.5, y: 7.5 }, 'mid');
+    foe.mover!.speed = 0;
+    foe.weapon = undefined;
+    assert.equal(world.players[0].stance.mid, 'hold');
+    for (let k = 0; k < 6 * world.tps; k++) world.step();
+    assert.ok(sniper.pos.x > 6.5 && sniper.pos.x < 8, `steht an der Scharte: x ${sniper.pos.x.toFixed(2)}`);
+    assert.equal(fireBlocked(world, sniper, foe), false);
+  });
 });

@@ -52,6 +52,8 @@ export interface MoverState {
   stuckTicks: number;
   /** Bis zu diesem Tick nur Ziele in Waffenreichweite angreifen (nach Steckenbleiben). */
   chaseBlockedUntil: number;
+  /** Scharte (28.10.): Platz direkt am eigenen Erdwall, den ein haltender Fernkämpfer gerade einnimmt (null = keiner). */
+  slit?: Vec2 | null;
   /** Letzte Blickrichtung (nur für die Darstellung). */
   heading: Vec2;
   /** Tempo-Aura (Myriaden-Hund): in diesem Tick um `boost` schneller. */

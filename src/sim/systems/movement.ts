@@ -250,6 +250,8 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     else if (d < rally - 1) next = world.fields.get(waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
     else return { x: 0, y: 0 };
   } else if (order === 'hold') {
+    // Scharte (28.10.): Fernkämpfer rückt an den eigenen Wall, wenn er von dort einen Gegner dahinter treffen kann.
+    if (m.slit) return dist(e.pos, m.slit) > 0.3 ? steer(e, m.slit) : { x: 0, y: 0 };
     // Halten: über die Route bis an die Grenze des eigenen Gebiets – dort stehen bleiben.
     // Die eigene Präsenz schiebt die Grenze langsam vor (bis zum Niemandsland).
     // Dringt der Gegner ins eigene Gebiet ein, eilen haltende Truppen in der Nähe zur Hilfe.

@@ -134,7 +134,7 @@ function mainCommands(ctx: CommandContext): CommandSet {
     cost: WALL.length * tileCost,
     disabled: !canAct,
     pressed: !!view.wall && !view.wall.fill,
-    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg, Sicht und direkte Schüsse (Bogenfeuer – Batterie, Katapult, Myr-Kanone, Schlammwürfe – geht drüber), kein Ziel, keine Lebensdauer. Eigene Einheiten direkt am eigenen Wall sehen und schießen drüber (Schießscharte), Schweber sehen über jeden Wall. In der eigenen Kartenhälfte immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher). Die Vorschau zählt Matsch auf dem gegnerischen Weg (Trichter).`,
+    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg, Sicht und direkte Schüsse (Bogenfeuer – Batterie, Katapult, Myr-Kanone, Schlammwürfe – geht drüber), kein Ziel, keine Lebensdauer. Eigene Einheiten direkt am eigenen Wall sehen und schießen drüber (Schießscharte); haltende Fernkämpfer (ab Reichweite 4) rücken von selbst an die Scharte, wenn dahinter ein Gegner steht. Schweber sehen über jeden Wall. In der eigenen Kartenhälfte immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher). Die Vorschau zählt Matsch auf dem gegnerischen Weg (Trichter).`,
     action: 'wall',
   });
   if (view.wall) {
@@ -519,7 +519,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
   buttons.push({
     id: 'rally', glyph: '⚑', label: pr.rally ? 'Stellung ✓' : 'Stellung', key: 'y', disabled: !canAct,
     pressed: view.rally?.entityId === e.id,
-    tip: `Stellung: Kachel im eigenen Kartendrittel oder in der eigenen Einflusszone anklicken. Verbände dieser Fabrik mit Haltung „Halten“ sammeln sich dort und halten; „Vorrücken“ ignoriert sie. Der Gegner sieht die Stellung wie ein Bauwerk.${pr.rally ? ' Erneut drücken und auf die Fabrik klicken hebt sie auf.' : ''}`,
+    tip: `Stellung: Kachel in der eigenen Kartenhälfte oder in der eigenen Einflusszone anklicken. Verbände dieser Fabrik mit Haltung „Halten“ sammeln sich dort und halten; „Vorrücken“ ignoriert sie. Der Gegner sieht die Stellung wie ein Bauwerk.${pr.rally ? ' Erneut drücken und auf die Fabrik klicken hebt sie auf.' : ''}`,
     action: 'rally-tool',
   });
   // Myriaden: zwei Bruten auf höchster Stufe → Superbrut (eigene Zeile, nur wenn es passt).

@@ -1,3 +1,4 @@
+import { updateSlits } from './systems/slits';
 import { HQ } from '../data/buildings';
 import { updateFlank } from './systems/flank';
 import type { BuildingDef, BuildingId } from '../data/buildings';
@@ -546,6 +547,7 @@ export class World {
     updateVerbund(this);
     updateTerraform(this);
     updateMyr(this);
+    updateSlits(this);
     updateTargeting(this);
     updateMovement(this);
     updateFlank(this);
