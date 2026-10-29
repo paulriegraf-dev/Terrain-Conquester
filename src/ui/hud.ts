@@ -9,9 +9,9 @@ import type { OvertimeVariant } from '../data/rules';
 import { keystoneKnown } from '../sim/systems/keystone';
 import { keystoneUpgradeName } from './keystoneZone';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
-import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingIds } from '../data/factions';
-import type { BuildingUpgradeDef, FactionDef, FactionId } from '../data/factions';
-import { UNITS, UNIT_IDS, emptyUnitCounts } from '../data/units';
+import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingFor, buildingIds } from '../data/factions';
+import type { FactionId } from '../data/factions';
+import { UNITS, UNIT_IDS, emptyUnitCounts, lineUnit } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
 import { buildCost } from '../sim/costs';
@@ -26,7 +26,7 @@ import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
 import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/production';
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
-import { checkResearch, ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
 import { SYNERGY_GROUNDS, laneCounts, synergyFadeLeft, synergyHint, synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
@@ -39,7 +39,7 @@ import { counterInfo } from '../sim/counters';
 import type { PlayerStats, World } from '../sim/world';
 import { commandsFor } from './commands';
 import type { CommandButton } from './commands';
-import { clock, escapeHtml, num, shortUpgradeLabel } from './format';
+import { clock, escapeHtml, num } from './format';
 import type { Session } from './session';
 import { buildPreview } from './view';
 import type { ViewState } from './view';
@@ -126,8 +126,9 @@ export class Hud {
       scoutList: q('scout-list'),
       scoutMeta: q('scout-meta'),
       scoutBtn: q<HTMLButtonElement>('scout-btn'),
-      researchList: q('research-list'),
-      researchMeta: q('research-meta'),
+      researchRow: q('research-row'),
+      keystoneList: q('keystone-list'),
+      keystoneMeta: q('keystone-meta'),
       infoTitle: q('info-title'),
       infoBody: q('info-body'),
       tipText: q('tip-text'),
@@ -294,7 +295,8 @@ export class Hud {
     const canAct = session.mode === 'play' && !world.result;
     this.updateMarket(world, canAct, me);
     this.updateScout(world, canAct, me);
-    this.updateResearchPanel(world, canAct, me);
+    this.updateResearchRow(world, canAct, me);
+    this.updateKeystonePanel(world, me);
     this.updateInfo(input, canAct);
     this.updateGrid(input, canAct);
     this.updateTip(input, canAct);
@@ -352,10 +354,8 @@ export class Hud {
           return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}${vb}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
-    // Schlusssteine des Gegners (28.10. abends): mit Spähbericht sofort, sonst 30 s nach der Wahl.
-    const foe: PlayerId = me === 0 ? 1 : 0;
-    const known = world.players[foe].gate.chosen.filter((c) => keystoneKnown(world, me, foe, c.upgrade));
-    const ksRows = known.map((c) => `<li><span>hat</span><span class="lvl" data-level="2">Schlussstein: ${escapeHtml(keystoneUpgradeName(world, foe, c.upgrade))}</span></li>`).join('') +
+    // Schlusssteine stehen seit 29.10. im eigenen Panel; hier nur noch die Käufe des Gegners (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub.
+    const ksRows =
       // Käufe des Gegners (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub („Gegner beschleunigt“).
       (report?.buys ?? []).map((b) => `<li><span>kauft</span><span class="lvl" data-level="2">${escapeHtml(b)}</span></li>`).join('');
     const label = check.ok || !canAct ? `Späher losschicken · ${scoutCost(world, me)}` : check.reason;
@@ -369,52 +369,61 @@ export class Hud {
     this.el.scoutBtn.title = `Spähbericht (${scoutCost(world, me)} Energie, alle ${rules.cooldownSeconds} s): grobe Stärke des Gegners je Route – keine, wenige, einige, viele – und die vorherrschende Panzerung. Kommt nach ${scoutDelay(world, me)} s an (Stand beim Losschicken). Taste L.`;
   }
 
-  // ------------------------------------------------------------------ Forschung (zentral, seit 24.10.)
+  // ------------------------------------------------------------------ Forschung: Kurzwahl (seit 29.10.)
 
   private researchSig = '';
 
   /**
-   * Alle Einheiten, die die eigenen Fabriken bauen können, mit ihren nächsten Upgrades als Knöpfe – ein Klick
-   * startet die Forschung. Laufende Forschung oben mit Fortschritt.
+   * Schmale Reihe mit einem Knopf je Einheit (Terra-Former: je Linienfabrik), die eine eigene Fabrik bauen kann, plus
+   * „Ausbau“. Zahl = offene Upgrades, grün = Forschung läuft. Ein Klick wählt eine passende Fabrik und öffnet ihr
+   * Forschungsmenü – wie die Taste R.
    */
-  private updateResearchPanel(world: World, canAct: boolean, me: PlayerId): void {
+  private updateResearchRow(world: World, canAct: boolean, me: PlayerId): void {
     const p = world.players[me];
-    const labs = p.labs.map((l) => {
-      const u = p.faction.upgrades.find((x) => x.id === l.upgrade);
-      const bu = p.faction.buildingUpgrades.find((x) => x.id === l.upgrade);
-      const share = (world.tick - l.startTick) / Math.max(1, l.doneTick - l.startTick);
-      const left = Math.max(0, Math.ceil((l.doneTick - world.tick) / world.tps));
-      const name = u ? `${UNITS[u.unit].name}: ${shortUpgradeLabel(u.description)}` : bu ? `${p.faction.buildings[bu.building]?.name ?? ''}: ${buildingUpgradeLabel(p.faction, bu)}` : l.upgrade;
-      return `<li class="lab"><span>${escapeHtml(name)}</span><span class="num">${left} s</span><span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span></li>`;
-    }).join('');
-    const rows = researchableUnits(world, me).map((unit) => {
+    const labOf = (id: string): number | null => {
+      const l = p.labs.find((x) => x.upgrade === id);
+      return l ? Math.max(0, Math.ceil((l.doneTick - world.tick) / world.tps)) : null;
+    };
+    const tf = p.faction.id === 'terraformer';
+    const cell = (cls: string, attrs: string, letter: string, name: string, open: number, run: number | null, tip: string): string =>
+      `<button type="button" class="rs-btn${run !== null ? ' rs-run' : ''}${open === 0 && run === null ? ' rs-dim' : ''} ${cls}" data-action="research-shortcut" ${attrs} title="${escapeHtml(tip)}" ${canAct ? '' : 'disabled'}>` +
+      (open > 0 ? `<span class="rs-n">${open}</span>` : '') + `<i>${escapeHtml(letter)}</i><span class="rs-name">${escapeHtml(name)}</span>${run !== null ? `<small>⚙ ${run} s</small>` : ''}</button>`;
+    const units = researchableUnits(world, me).map((unit) => {
       const ups = visibleUpgrades(p.faction, unit, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id));
-      if (ups.length === 0) return '';
-      const buttons = ups.map((u) => {
-        const c = checkResearch(world, me, u.id);
-        const label = shortUpgradeLabel(u.description);
-        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description} – gilt für alle ${UNITS[unit].name}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(label)}${c.ok ? ` ${c.cost}` : ''}</button>`;
-      }).join('');
-      return `<li><span class="unit">${escapeHtml(UNITS[unit].name)}</span><span class="ups">${buttons}</span></li>`;
-    }).join('');
-    // Gebäude-Ausbau (24.10.): zentral je Gebäudeart, die der Spieler besitzt.
-    const bRows = buildingIds(p.faction).filter((b) => ownsBuilding(world, me, b)).map((b) => {
-      const ups = visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id));
-      if (ups.length === 0) return '';
-      const fbName = p.faction.buildings[b]!.name;
-      const buttons = ups.map((u) => {
-        const c = checkResearch(world, me, u.id);
-        return `<button type="button" class="btn-mini" data-action="research" data-upgrade="${u.id}" title="${escapeHtml(`${u.name}: ${u.description} – gilt für alle ${fbName}. ${c.ok ? `${c.cost} Energie, ${c.seconds} s` : c.reason}`)}" ${canAct && c.ok ? '' : 'disabled'}>${escapeHtml(buildingUpgradeLabel(p.faction, u))}${c.ok ? ` ${c.cost}` : ''}</button>`;
-      }).join('');
-      return `<li><span class="unit">${escapeHtml(fbName)} (alle)</span><span class="ups">${buttons}</span></li>`;
-    }).join('');
-    const html = labs + ((rows + bRows) || '<li class="unit">Erst Fabriken bauen – dann gibt es hier Upgrades.</li>');
-    const meta = `${p.labs.length}/${world.rules.researchSlots} läuft`;
-    const sig = html + meta;
+      const running = p.labs.map((l) => ({ l, u: p.faction.upgrades.find((x) => x.id === l.upgrade) })).filter((x) => x.u && (x.u.unit === unit || (x.u.keystone && lineUnit(x.u.unit) === unit)));
+      const run = running.length ? labOf(running[0]!.l.upgrade) : null;
+      const fbId = buildingFor(p.faction, unit);
+      const name = tf && fbId ? p.faction.buildings[fbId]!.name : UNITS[unit].name;
+      return cell('', `data-unit="${unit}"`, UNITS[unit].letter, name, ups.length, run, `Forschung ${UNITS[unit].name}: ${ups.length} Upgrade(s) offen – gilt für alle ${UNITS[unit].name}. Klick = Forschungsmenü einer passenden Fabrik (wie R).`);
+    });
+    const owned = buildingIds(p.faction).filter((b) => ownsBuilding(world, me, b));
+    const bOpen = owned.reduce((n, b) => n + visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => !p.research.includes(u.id) && !researching(world, me, u.id)).length, 0);
+    const bRun = p.labs.find((l) => p.faction.buildingUpgrades.some((x) => x.id === l.upgrade));
+    const html = units.join('') + (owned.length ? cell('rs-build', 'data-building="1"', '▣', 'Ausbau', bOpen, bRun ? labOf(bRun.upgrade) : null, `Gebäude-Ausbau: ${bOpen} Upgrade(s) offen – gilt für alle Fabriken dieser Art. Klick = Ausbau-Menü (wie R).`) : '');
+    const sig = html + canAct;
     if (sig === this.researchSig) return;
     this.researchSig = sig;
-    this.el.researchList.innerHTML = html;
-    this.el.researchMeta.textContent = meta;
+    this.el.researchRow.innerHTML = html || '<span class="rs-empty">Erst Fabriken bauen – dann gibt es hier Upgrades.</span>';
+  }
+
+  // ------------------------------------------------------------------ Schlusssteine (Panel, seit 29.10.)
+
+  private keystoneSig = '';
+
+  private updateKeystonePanel(world: World, me: PlayerId): void {
+    const foe: PlayerId = me === 0 ? 1 : 0;
+    const g = world.players[me].gate;
+    const mine = g.chosen.map((c) => `<li><span>Du</span><span class="lvl" data-level="1">${escapeHtml(keystoneUpgradeName(world, me, c.upgrade))}</span></li>`);
+    const theirs = world.players[foe].gate.chosen
+      .filter((c) => keystoneKnown(world, me, foe, c.upgrade))
+      .map((c) => `<li><span>Gegner</span><span class="lvl" data-level="2">${escapeHtml(keystoneUpgradeName(world, foe, c.upgrade))}</span></li>`);
+    const meta = g.credits > 0 ? `${g.credits} offen · Taste K` : `${g.chosen.length} gewählt`;
+    const html = mine.join('') + theirs.join('') || '<li><span>–</span><span class="lvl" data-level="0">Noch keiner gewählt</span></li>';
+    const sig = meta + html;
+    if (sig === this.keystoneSig) return;
+    this.keystoneSig = sig;
+    this.el.keystoneList.innerHTML = html;
+    this.el.keystoneMeta.textContent = meta;
   }
 
   // ------------------------------------------------------------------ Konsole: Auswahl
@@ -931,17 +940,6 @@ function costText(c: BuildCheck, outpostSpeed: number): string {
 
 /** Panzerung im Spähbericht. */
 const ARMOR_NAMES: Readonly<Record<'infantry' | 'light' | 'heavy', string>> = { infantry: 'Infanterie', light: 'Leicht', heavy: 'Schwer' };
-
-/** Kurzname eines Gebäude-Ausbaus fürs Panel: „Gelege 8“ statt „Gelege II“. */
-function buildingUpgradeLabel(faction: FactionDef, u: BuildingUpgradeDef): string {
-  if (u.kind === 'clutch') {
-    const sizes = faction.buildings[u.building]?.clutch ?? [];
-    const k = faction.buildingUpgrades.filter((x) => x.building === u.building && x.kind === 'clutch').indexOf(u);
-    const size = sizes[Math.min(sizes.length - 1, k + 1)];
-    if (size) return `Gelege ${size}`;
-  }
-  return u.name;
-}
 
 /** Name einer Schadensquelle oder eines Ziels in der Statistik (Einheitenart, HQ, Gebäude, Erdwall). */
 function damageName(id: string): string {

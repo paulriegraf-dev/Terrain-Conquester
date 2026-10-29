@@ -9,6 +9,7 @@ import type { CellRect, PlayerId, Route, Vec2 } from '../sim/types';
 import { otherPlayer } from '../sim/types';
 import { hqKey, waypointKey } from '../sim/keys';
 import type { World } from '../sim/world';
+import type { UnitId } from '../data/units';
 
 /** Was die Ansicht gerade zeigt – gehört NICHT zum Spielzustand. */
 export type Mode = 'demo' | 'play' | 'replay';
@@ -46,6 +47,8 @@ export interface ViewState {
   /** Gelände-Werkzeug; `vertical`: Schlucht hochkant (2×4) oder quer (4×2). */
   swap: { terrain: TerrainId; vertical?: boolean } | null;
   /** Untermenü im Befehlsraster (wie bei klassischen Echtzeit-Strategiespielen). */
+  /** Kurzwahl Forschung (29.10.): zeigt im Forschungsmenü eine Einheit oder nur den Gebäude-Ausbau statt der Fabrikeinheit. */
+  researchFocus: { unit?: UnitId; building?: boolean } | null;
   menu: 'main' | 'terrain' | 'disguise' | 'front' | 'ground' | 'research' | 'hero' | 'convert' | 'watch' | 'stock';
   /** Vorbereitungsphase läuft (Gelände formen vor Rundenbeginn). */
   prep: boolean;
@@ -72,6 +75,7 @@ export function createView(mode: Mode, human: PlayerId = 0): ViewState {
     swap: null,
     prep: false,
     menu: 'main',
+    researchFocus: null,
     disguiseAs: 'foundry',
     disguiseRoute: 'top',
   };

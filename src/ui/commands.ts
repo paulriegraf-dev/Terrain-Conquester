@@ -450,7 +450,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
     pending: levelJob ? `Stufe ${secs(job.doneTick)}s` : undefined,
     tip: maxed
       ? (fb.levels ?? fb.tiers.length) <= 1
-        ? 'Diese Fabrik hat keine Stufen. Ihr Ausbau gilt zentral für alle Gebäude dieser Art – unter Forschung (R) oder im Panel „Forschung“.'
+        ? 'Diese Fabrik hat keine Stufen. Ihr Ausbau gilt zentral für alle Gebäude dieser Art – unter Forschung (R) oder über die Kurzwahl „Ausbau“ im Hinweisfeld.'
         : 'Diese Fabrik hat ihre höchste Stufe.'
       : `Hochstufen auf Stufe ${pr.level + 1}: ${levelText(fb, pr.level + 1)}. Gilt nur für diese Fabrik. ${level.ok ? `${level.cost} Energie, ${level.seconds} s ohne Produktion.` : level.reason}`,
     action: 'upgrade',
@@ -489,7 +489,7 @@ function buildingCommands(ctx: CommandContext, e: Entity): CommandSet {
   buttons.push({
     id: 'research-menu', glyph: '⚙', label: open ? `Forschung (${open})` : 'Forschung', key: 'r', disabled: !canAct,
     pending: lab ? `Forschung ${secs(lab.doneTick)}s` : undefined,
-    tip: `Upgrades für ${UNITS[pr.unit].name} – gelten für alle ${UNITS[pr.unit].name} von dir, laufen neben der Produktion. Alle Einheiten auf einen Blick: Panel „Forschung“ rechts.`,
+    tip: `Upgrades für ${UNITS[pr.unit].name} – gelten für alle ${UNITS[pr.unit].name} von dir, laufen neben der Produktion. Alle Einheiten auf einen Blick: die Kurzwahl-Reihe oben im Hinweisfeld.`,
     action: 'menu', data: { menu: 'research' },
   });
   const refund = sellValue(world, e);
@@ -567,12 +567,14 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const pr = e.producer!;
   const player = world.players[e.owner];
   const mixDef = player.faction.buildings[e.defId as BuildingId]?.mix;
-  const ups = [
+  const focus = ctx.view.researchFocus; // Kurzwahl (29.10.): eine Einheit oder nur der Ausbau
+  const focusUnit = focus?.unit;
+  const ups = focus?.building ? [] : focusUnit ? visibleUpgrades(player.faction, focusUnit, player.research, player.gate.opened > 0) : [
     ...visibleUpgrades(player.faction, pr.unit, player.research, player.gate.opened > 0),
     // Beimischung (Hund an der Brut ab Stufe III): seine Ketten und sein Schlussstein (26.10.)
     ...(mixDef && pr.level >= mixDef.level ? visibleUpgrades(player.faction, mixDef.unit, player.research, player.gate.opened > 0) : []),
   ];
-  const buildingUps = visibleBuildingUpgrades(player.faction, e.defId as BuildingId, player.research);
+  const buildingUps = focusUnit ? [] : visibleBuildingUpgrades(player.faction, e.defId as BuildingId, player.research);
   const buttons: CommandButton[] = ups.map((u, k) => {
     const done = player.research.includes(u.id);
     const running = researching(world, e.owner, u.id);
@@ -612,7 +614,7 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
     });
   });
   buttons.push(backButton());
-  return { title: `Forschung · ${UNITS[pr.unit].name}`, buttons };
+  return { title: focus?.building ? `Ausbau · ${player.faction.buildings[e.defId as BuildingId]?.name ?? ''}` : `Forschung · ${UNITS[focusUnit ?? pr.unit].name}`, buttons };
 }
 
 /** Was eine Fabrikstufe bringt (seit 24.10. nur Linien: neue Einheit oder Beimischung). */

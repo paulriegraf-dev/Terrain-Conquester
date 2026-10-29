@@ -373,18 +373,19 @@ const RAW: Record<UnitId, UnitInput> = {
   },
   gunner: {
     id: 'gunner', protocol: 'pierce', name: 'Technogunner', armor: 'heavy', hp: 300, models: 2, toughness: 7, save: 3,
-    speed: 0.9, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.45, vision: 6, spawnInterval: 8,
+    speed: 0.9, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.45, vision: 6, spawnInterval: 5.6,
     weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 3, strength: 5, ap: 4, damage: 36, type: 'pierce', anti: { heavy: 3 } },
     shape: 'square', letter: 'T', role: 'Linienbrecher: zäh, knackt Panzer',
   },
   // 24.10. abends (Entscheidung des Nutzers): alle 12 statt 10 s. Erste Schadensdaten: Der Koloss machte je
   // Fabrik-Sekunde so viel Schaden wie die Scharfschützen (gegen Myriaden) bzw. am meisten von allen (gegen
   // Terra-Former). Der Technogunner bleibt unverändert.
+  // 29.10. nachts (Nutzer): Produktionszeit Koloss −15 % (12 → 10,2 s), Technogunner −30 % (8 → 5,6 s).
   // 25.10. Balance-Patch 1 (Nutzer): Koloss Range 3,1, 400 Leben, schneller; Gunner 2 Modelle à 150, je 1 Schuss à 36, Range 2,5;
   // Hover 3 Modelle à 35, 1 Schuss alle 0,65 s, Range 3,5; Plasma Range 3,5, 120 Leben, −10 % Schaden. Stand davor: Branch claude/stand-vor-balance-patch-1.
   colossus: {
     id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 400, toughness: 9, save: 3,
-    speed: 1.15, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 12,
+    speed: 1.15, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 10.2,
     weapon: { shots: 3, cooldown: 2, range: 3.1, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
     shape: 'square', letter: 'K', role: 'Schwerer Kampfpanzer: stark gegen leichte Fahrzeuge und Gebäude',
   },

@@ -1129,3 +1129,17 @@ body.start-mode .sp-fields { gap: 7px; }
 .ks-door { width: 100%; }
 .ks-has-doors .ks-name { text-transform: none; font-size: 0.7rem; }
 .ks-door { font-size: 0.58rem; padding: 3px 1px; letter-spacing: -0.01em; }
+
+/* 29.10.: Forschung als Kurzwahl-Reihe im Hinweisfeld der Konsole (statt Panel rechts) – flache Knöpfe, damit Hinweis und Ansicht Platz behalten */
+.rs-row { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.rs-btn { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid var(--line); background: var(--panel-2, #10283a); color: inherit; border-radius: 12px; font: inherit; font-size: 0.7rem; white-space: nowrap; cursor: pointer; }
+.rs-btn:hover:not(:disabled) { border-color: var(--brass); }
+.rs-btn i { display: none; }
+.rs-btn .rs-name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+.rs-btn small { font-size: 0.62rem; color: var(--good); }
+.rs-btn .rs-n { order: 2; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; text-align: center; background: var(--brass); color: #111; font-size: 0.62rem; font-weight: 700; }
+.rs-btn.rs-run { border-color: var(--good); }
+.rs-btn.rs-dim { opacity: 0.5; }
+.rs-btn.rs-build { border-style: dashed; }
+.rs-empty { color: var(--muted); font-size: 0.75rem; }
+.console-tip.ks-busy > .rs-row { display: none; }

@@ -60,6 +60,7 @@ import type { TitleVariant } from './titleHero';
 import { Tutorial } from './tutorial';
 import { KeystoneZone, keystoneUpgradeName } from './keystoneZone';
 import { lineUnit } from '../data/units';
+import { researching, unlockedUnits, visibleBuildingUpgrades } from '../sim/systems/factory';
 import { allMatches, downloadJson, saveMatch, snapshotOf } from './replays';
 import type { SavedMatch, Snapshot } from './replays';
 import type { StationMode } from '../data/stations';
@@ -1197,7 +1198,27 @@ export class Game {
       case 'replay':
         this.startReplay();
         break;
+      case 'research-shortcut': {
+        // Kurzwahl (29.10.): wie R an einer passenden Fabrik.
+        const human = this.view.human;
+        if (this.session.mode !== 'play' || human === null) break;
+        const unit = data.unit as UnitId | undefined;
+        const own2 = world.entities.filter((x) => x.alive && x.owner === human && x.producer);
+        const mix = (x: Entity): UnitId | undefined => world.players[human].faction.buildings[x.defId as BuildingId]?.mix?.unit;
+        const target = unit
+          ? own2.find((x) => x.producer!.unit === unit) ?? own2.find((x) => unlockedUnits(world, x).includes(unit) || mix(x) === unit)
+          : own2.find((x) => visibleBuildingUpgrades(world.players[human].faction, x.defId as BuildingId, world.players[human].research).some((u) => !world.players[human].research.includes(u.id) && !researching(world, human, u.id)));
+        if (!target) break;
+        this.view.selected = { kind: 'entity', id: target.id };
+        this.view.build = null;
+        this.view.wall = null;
+        this.view.swap = null;
+        this.view.menu = 'research';
+        this.view.researchFocus = unit ? { unit } : { building: true };
+        break;
+      }
       case 'menu':
+        this.view.researchFocus = null;
         this.view.menu = (data.menu as ViewState['menu']) ?? 'main';
         this.view.build = null;
         this.view.wall = null;
