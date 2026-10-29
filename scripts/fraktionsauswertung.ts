@@ -1,7 +1,7 @@
 /** Auswertung des Fraktions-Laufs: npx tsx scripts/fraktionsauswertung.ts <Name> */
 import { readdirSync, readFileSync } from 'node:fs';
 const label = process.argv[2] ?? 'lauf';
-type Rec = { g: number; pair: number; map: string; seconds: number; winner: 0 | 1 | null; factions: [string, string]; units: number[][]; walls: number[][]; players: { built: number; lost: number; kills: number; wallsBuilt: number }[] };
+type Rec = { g: number; pair: number; map: string; seconds: number; winner: 0 | 1 | null; factions: [string, string]; units: number[][]; walls: number[][]; models?: number[][]; squads?: number[][]; players: { built: number; lost: number; kills: number; wallsBuilt: number }[] };
 const recs = readdirSync('auswertung/daten').filter((f) => f.startsWith(`fr-${label}-`)).flatMap((f) => readFileSync(`auswertung/daten/${f}`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec));
 const NAME: Record<string, string> = { technoclan: 'Technoclan', myriaden: 'Myriaden', terraformer: 'Terra-Former' };
 const avg = (a: number[]): number => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -29,6 +29,15 @@ out.push('', '## Truppenzahl (Ø, nur Partien, die noch laufen) je Zeitpunkt', '
 for (const f of Object.keys(NAME)) {
   const row = MINS.map((m) => { const v = views.filter((x) => x.f === f).map((x) => at(x.r.units[x.me]!, m)).filter((x): x is number => x !== null); return v.length >= 5 ? avg(v).toFixed(0) : '–'; });
   out.push(`| ${NAME[f]} | ${row.join(' | ')} |`);
+}
+// Echte Anzahl (29.10.): Modelle und Verbände statt Versorgungspunkte (eine Drohne = 8 Modelle, aber nur 0,5 Versorgung).
+for (const [title, key] of [['Echte Anzahl: Modelle (Figuren auf dem Feld, inkl. Gelege)', 'models'], ['Echte Anzahl: Verbände (Einheiten, Drohnen je 1)', 'squads']] as const) {
+  if (!views.some((x) => x.r[key])) continue;
+  out.push('', `### ${title} – Ø, nur laufende Partien`, '', `| Fraktion | ${MINS.map((m) => m + ' min').join(' | ')} |`, `|---|${MINS.map(() => '---').join('|')}|`);
+  for (const f of Object.keys(NAME)) {
+    const row = MINS.map((m) => { const v = views.filter((x) => x.f === f && x.r[key]).map((x) => at(x.r[key]![x.me]!, m)).filter((q): q is number => q !== null); return v.length >= 5 ? avg(v).toFixed(0) : '–'; });
+    out.push(`| ${NAME[f]} | ${row.join(' | ')} |`);
+  }
 }
 out.push('', '### Truppenzahl je Fraktion gegen welchen Gegner (Ø bei 6 / 10 / 15 min)', '');
 for (const f of Object.keys(NAME)) for (const o of Object.keys(NAME)) if (f !== o) {

@@ -173,12 +173,15 @@ export const AI_TUNING: {
   counterLine: { on: boolean; hysteresis: number; share: number; budget: number };
   marketWar: { on: boolean; takt: number; gap: number; selfLimit: number; ausweichenAb: number };
   intel: { on: boolean; maxAge: number; deceive: boolean };
+  /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
+  ownPlan: { on: boolean; factories: number };
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
+  ownPlan: { on: true, factories: 3 },
 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
@@ -579,12 +582,13 @@ export class SimpleAi {
     const me = world.players[this.player];
     const planned = this.plannedBuild(world);
     // Konter-Antwort mit neuer Fabrik nur mit Energie ≥ Puffer + counterLine.budget.
-    const type = planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
+    const heavy = this.needHeavy(world);
+    const type = heavy ? 'foundry' : planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
     const def = BUILDINGS[type];
     // Etwas Energie für den Erdwall zurückhalten (nur auf „Normal“).
     const reserve = this.level === 'normal' ? WALL.cost : 0;
     if (me.energy < def.buildCost * (me.faction.buildings[type]!.costFactor ?? 1) + reserve) return null;
-    const order = planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
+    const order = !heavy && planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
     const site = this.chooseSite(world, type, me.energy - reserve, order);
     if (!site) return null;
     this.wantedRoute.set(`${site.x},${site.y}`, order[0]!);
@@ -643,6 +647,13 @@ export class SimpleAi {
     return [...ROUTES].sort((a, b) => perZone[a] - perZone[b]);
   }
 
+  /** Eigener Plan (29.10.): Fehlt das Schwerwerk, wenn die dritte Fabrik ansteht? Dann kommt es jetzt – egal, was der Gegner zeigt. */
+  private needHeavy(world: World): boolean {
+    if (!AI_TUNING.ownPlan.on || !buildingIds(world.players[this.player].faction).includes('foundry')) return false;
+    const mine = this.ownBuildings(world).filter((b) => b.producer);
+    return mine.length >= AI_TUNING.ownPlan.factories - 1 && !mine.some((b) => b.defId === 'foundry');
+  }
+
   private chooseType(world: World): BuildingId {
     const owned = Object.fromEntries(BUILDING_IDS.map((id) => [id, 0])) as Record<BuildingId, number>;
     for (const b of this.ownBuildings(world)) owned[b.defId as BuildingId]++;
@@ -652,13 +663,19 @@ export class SimpleAi {
     const ids = buildingIds(faction);
     let best: BuildingId = ids[0]!;
     let bestScore = -Infinity;
+    // Eigener Plan (29.10.): Die ersten Fabriken richten sich nach der Strategie, nicht nach dem Gegner; das Schwerwerk
+    // (Technoclan, Myriaden) steht spätestens als dritte Fabrik. Erst danach zählt, was gesehen wurde.
+    const built = ids.reduce((n, id) => n + owned[id], 0);
+    const ownPlan = AI_TUNING.ownPlan.on && built < AI_TUNING.ownPlan.factories;
+    const needHeavy = ownPlan && ids.includes('foundry') && owned.foundry === 0 && built >= AI_TUNING.ownPlan.factories - 1;
     for (const id of ids) {
       if ((faction.buildings[id]!.slots ?? 1) > free + 1e-9) continue;
       // Linie bewerten: Strategie-Gewicht × wie gut ihre Start-Einheit kontert, was man gesehen hat.
-      const counter = this.level === 'normal' ? this.counterScore(faction.buildings[id]!.tiers[0]!, world) : 1;
+      const counter = this.level === 'normal' && !ownPlan ? this.counterScore(faction.buildings[id]!.tiers[0]!, world) : 1;
       let score = (((this.strategy.mix[id] ?? 2) * counter) / (owned[id] + 1)) * (0.85 + this.rng.next() * 0.3);
       score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
+      if (needHeavy && id === 'foundry') score *= 100;
       // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
       const part = BUILDINGS[id].part;
       if (AI_TUNING.marketWar.on && this.avoidPart === part && world.tick < this.avoidUntil) score *= 0.4;
