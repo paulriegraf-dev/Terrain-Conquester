@@ -65,7 +65,7 @@ for (let g = have; g < Number(b); g++) {
     g, pair: idx, map: MAPS[g % 2], seconds: world.tick / world.tps, winner: world.result?.winner ?? null, factions, units, walls, models, squads,
     players: world.players.map((p) => ({
       built: Object.values(p.stats.spawned).reduce((x, y) => x + y, 0), lost: Object.values(p.stats.lost).reduce((x, y) => x + y, 0),
-      kills: p.stats.kills, wallsBuilt: p.stats.walls,
+      kills: p.stats.kills, wallsBuilt: p.stats.walls, damageBy: p.stats.damageBy, damageTo: p.stats.damageTo, damageSplit: p.stats.damageSplit, spawned: p.stats.spawned,
     })),
   };
   appendFileSync(file(idx), JSON.stringify(rec) + '\n');
