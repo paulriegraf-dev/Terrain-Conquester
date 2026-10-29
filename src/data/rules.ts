@@ -520,8 +520,9 @@ export const RULES: Rules = {
   // 24.10.: 25 statt 20 Energie (mit dem HQ-Zweig Aufklärung 15)
   scout: { cost: 25, cooldownSeconds: 20, delaySeconds: 10, some: 3, many: 6 },
   // 25.10. (Nutzer): auch gleiche Typen verbinden sich (höchstens 4 Arten, 6 Mitglieder, mit Commander 8). Der kurze
-  // Aufstieg (ascendAt) ist abgelöst: Wer `eliteAt` Bausteine trägt, wird Elite (+25 % Leben, Elite-Wirkungen).
-  network: { joinRadius: 4, breakRadius: 8, maxMembers: 6, maxWithNode: 8, ascendAt: 99, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3, maxTypes: 4, eliteAt: 4, eliteHp: 1.25 },
+  // Aufstieg (ascendAt) ist abgelöst: Wer `eliteAt` Bausteine trägt, wird Elite (Elite-Wirkungen, Leben ×`eliteHp`).
+  // 29.10. (Nutzer): Elite = +100 % Leben (vorher +25 %) und beim Aufstieg volle Heilung auf das neue Maximum.
+  network: { joinRadius: 4, breakRadius: 8, maxMembers: 6, maxWithNode: 8, ascendAt: 99, ascendSeconds: 15, ascendFireRate: 1.15, repairPerSecond: 3, maxTypes: 4, eliteAt: 4, eliteHp: 2 },
   verbund: { switchSeconds: 20 },
   sites: {
     radius: 3, captureSeconds: 15, neutralizeSeconds: 10, fortifySeconds: 30, sensorVision: 12, junctionRouteSeconds: 8,
@@ -536,7 +537,7 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [4, 6, 8], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 2, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [4, 6, 8], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 2, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 / 1.15 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
     preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 4, everyLevel2: 3, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },

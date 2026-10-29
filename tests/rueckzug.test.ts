@@ -16,12 +16,12 @@ describe('Nach-Patch 27.10.: Terra-Former', () => {
     for (const id of ids) assert.equal(BUILDINGS[id].buildCost, 60, id);
   });
 
-  it('Wiesenhof und Schlammgrube produzieren 20 % schneller, Hain nicht', () => {
+  it('Wiesenhof produziert 20 % schneller, die Schlammgrube nur ca. 4 % (29.10.: 15 % längere Bauzeit statt +20 %), Hain nicht', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, ...tf });
     const speed = (id: 'meadowhall' | 'grove' | 'mudpit') => factorySpeed(world, world.addBuilding(0, BUILDINGS[id], { x: 3, y: id === 'grove' ? 3 : id === 'mudpit' ? 6 : 0, w: 2, h: 2 }));
     const g = speed('grove');
     assert.ok(Math.abs(speed('meadowhall') / g - 1.2) < 1e-9);
-    assert.ok(Math.abs(speed('mudpit') / g - 1.2) < 1e-9);
+    assert.ok(Math.abs(speed('mudpit') / g - 1.2 / 1.15) < 1e-9);
   });
 
   it('Rückzug: bedrohter Terraformer läuft weit zurück zum eigenen Gebäude, nicht nur 3 Kacheln', () => {

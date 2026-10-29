@@ -17,7 +17,7 @@ import { withProtocols } from './network';
  *   Einheiten, die sie gerade bauen. Ein neuer oder geänderter Verbund gilt erst nach der Einspielzeit; fällt eine der
  *   beiden Fabriken weg, wechselt sie Lane oder Einheit, endet er sofort. Es profitieren alle Einheiten dieser beiden
  *   Fabriken auf der Lane.
- * - **Elite:** ab `eliteAt` Bausteinen. +25 % Leben, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach
+ * - **Elite:** ab `eliteAt` Bausteinen. +100 % Leben (29.10.) und volle Heilung beim Aufstieg, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach
  *   +75 %), und die Verbund-Wirkung, die sie beim Aufstieg hatte, behält sie (Prägung).
  *
  * Alles läuft einmal je Sekunde; die Wirkung im Kampf lesen combat.ts und hitmath.ts aus `e.tech`.
@@ -94,7 +94,7 @@ export function verbundOf(world: World, e: Entity): string | null {
   return VERBUND[st.active.key]?.mods[e.defId as VerbundUnit] ? st.active.key : null;
 }
 
-/** Aufstieg zur Elite: +25 % Leben (über refreshTech), Prägung = Geburts-Verbund, sonst der gerade aktive. */
+/** Aufstieg zur Elite: Leben ×rules.network.eliteHp (über refreshTech; die Heilung auf volles Leben macht inherit), Prägung = Geburts-Verbund, sonst der gerade aktive. */
 export function becomeElite(world: World, e: Entity): void {
   if (e.elite) return;
   e.elite = { print: e.verbundPrint ?? verbundOf(world, e), since: world.tick };

@@ -146,8 +146,10 @@ function inherit(world: World, e: Entity, p: ProtocolId, from: Entity): void {
   net.protocols.push(p);
   world.players[e.owner].stats.blocks++;
   const elite = net.protocols.length >= world.rules.network.eliteAt;
+  const rising = elite && !e.elite;
   if (elite) becomeElite(world, e);
   refreshTech(world, e);
+  if (rising) e.hp = e.maxHp; // Aufstieg (29.10.): Maximalleben wächst und die Einheit wird voll geheilt (auch gefallene Modelle kehren zurück)
   world.emit({ type: 'protocol', owner: e.owner, protocol: p, from: { x: from.pos.x, y: from.pos.y }, to: { x: e.pos.x, y: e.pos.y }, ascend: elite });
 }
 

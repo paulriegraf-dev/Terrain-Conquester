@@ -62,13 +62,14 @@ describe('Technoclan-Netzwerk', () => {
     assert.ok((s.net?.protocols.length ?? 1) <= 2);
   });
 
-  it('ab vier Bausteinen wird ein Verband Elite: +25 % Leben, Elite-Wirkungen, nimmt nichts mehr auf', () => {
+  it('ab vier Bausteinen wird ein Verband Elite: +100 % Leben, volle Heilung, Elite-Wirkungen, nimmt nichts mehr auf', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases });
     const sniper = unit(world, 0, 'sniper', 5.0, 7.5);
     const plasma = unit(world, 0, 'plasma', 6.5, 7.5);
     const scout = unit(world, 0, 'hoverscout', 3.5, 7.5);
     const gunner = unit(world, 0, 'gunner', 5.0, 6.0);
     const hp = sniper.maxHp;
+    sniper.hp = hp * 0.5; // angeschlagen: der Aufstieg heilt voll
     stepTimes(world, world.tps + 1);
     world.destroy(plasma, 1);
     world.destroy(scout, 1);
@@ -76,7 +77,8 @@ describe('Technoclan-Netzwerk', () => {
     world.destroy(gunner, 1);
     assert.deepEqual(sniper.net!.protocols, ['antiHeavy', 'area', 'mark', 'pierce']);
     assert.ok(sniper.elite, 'Elite');
-    assert.ok(Math.abs(sniper.maxHp - hp * 1.25) < 1e-6, '+25 % Leben');
+    assert.ok(Math.abs(sniper.maxHp - hp * 2) < 1e-6, '+100 % Leben');
+    assert.ok(Math.abs(sniper.hp - sniper.maxHp) < 1e-6, 'volle Heilung beim Aufstieg');
     assert.ok(sniper.tech!.eliteFx!.headshot > 0 && sniper.tech!.eliteFx!.splashFull && sniper.tech!.eliteFx!.mark, 'Kopfschuss, volle Fläche, Markierung');
     assert.ok(sniper.tech!.mods.crack, 'Durchschlag als Elite: Panzerriss');
     assert.equal(world.players[0].stats.elites, 1);
