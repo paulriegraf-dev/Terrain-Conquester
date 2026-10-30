@@ -2140,3 +2140,22 @@ Ersetzt Abschnitt C (Tor mit Preis) und C.3 (Zentrum) des Umbau-Patches vom 26.1
 - **Elite (Nutzer, 29.10. abends):** Beim Aufstieg (vier Bausteine) wächst das Maximalleben um **+100 %** (`rules.network.eliteHp` 1,25 → 2) und die Einheit wird **voll geheilt** (Beispiel: Max 100, aktuell 50 → Max 200, aktuell 200; gefallene Modelle kehren zurück). Heilung in `network.ts` (`inherit`), Aufstieg selbst in `verbund.ts` (`becomeElite`). Anlass: Eliten leben kaum (Ø 0–2 lebende Eliten bei 5–22 erschaffenen je Partie). Danach messen; später ggf. einen Upgrade-Ast streichen, um Elitestärke zu lenken.
 - **Schlammgrube (Nutzer):** 15 % längere Produktionszeit: `rules.terraform.lineSpeed.mudpit` 1,2 → 1,2 / 1,15 (≈ 1,043). Wiesenhof bleibt bei ×1,2.
 - **Stand „jeder 3. Verband ein Terraformer“:** Dieses Upgrade gibt es seit dem 26.10. nicht mehr („Mehr Terraformer“ ist entfallen). `rules.terraform.everyLevel2` (3) wird im Code nirgends mehr gelesen; es gilt für alle `every` = 4. Der gewünschte Ersatz („2 Kacheln gleichzeitig formen“) ist noch offen, bis die Zuordnung zu einem Upgrade geklärt ist.
+
+## Vermerk 30.10.: Regelprofil „pur“ (geplant, NICHT umgesetzt)
+
+Hintergrund: Feature-Stopp. Alle zeit- und uhrgesteuerten Patt-Hebel sollen raus, damit sichtbar wird, was das Spiel von sich aus tut. Aufgeschrieben, damit sich alles später gezielt zurückholen lässt. Werte = heutiger Stand (`src/data/rules.ts`, `src/data/buildings.ts`).
+
+| Hebel | heute | im Profil „pur“ | Stelle |
+|---|---|---|---|
+| HQ-Schadensfaktor je Phase | 0:00 ×0,05 · 8:00 ×0,35 · 11:00 ×1 | ×1 von Anfang an | `rules.phases[].hqDamageMult` |
+| HQ-Schadenswachstum | ab 11:00 +0,5 je Minute | keins | `phases[2].hqDamageGrowth` |
+| Sturm aufs HQ | ab 11:00 ignorieren Truppen Gebäude | aus | `phases[2].stormHq` (targeting.ts) |
+| Zeitlimit | 45 min (Simulation, `match.ts` maxTicks) | 30 min, reines Abbruchkriterium | `match.ts`, Skripte `fraktionslauf.ts`, `schlusssteinlauf.ts`, `tcdiagnose.ts` |
+| HQ-Waffe | 4 Schuss, Reichweite 6, 20 Schaden, Fläche 1,3 | keine (HQ schießt nicht) | `buildings.ts` `HQ.weapon`; Tests (z. B. Brechstange) rechnen mit HQ-Feuer |
+| Heilung im eigenen Gebiet | 2 % Leben/s | aus | `rules.front.regenPerSecond`; Lazarett-Station bleibt eigene Heilung |
+| Befestigte Gebäude | 50 % Schaden in der Basiszone | 100 % | `rules.baseBuildingDamageTaken` |
+| Nachschub-Kauf (surge) | ab 8:00, 120/180/260, 60 s ×1,3 | aus | `rules.purchases.surge`; KI `AI_TUNING.buys.surge` |
+
+Bleibt ausdrücklich drin: Notfallverlegung (Key-Gameplay laut Nutzer), Bauschutz 15 s, Einheitenlimit 150, Marktbremse, Gebietseinkommen, Myriaden-Lebensuhr, Beute, Flanke, Schlussstein-Fenster, Energie-Faktoren der Phasen (noch offen, siehe Diskussion).
+
+Umsetzung geplant als Regelprofil (Schalter im Startmenü / `rules`-Override), damit der heutige Stand erhalten bleibt und beide Fassungen direkt vergleichbar sind.
