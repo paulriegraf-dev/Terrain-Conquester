@@ -2141,9 +2141,9 @@ Ersetzt Abschnitt C (Tor mit Preis) und C.3 (Zentrum) des Umbau-Patches vom 26.1
 - **Schlammgrube (Nutzer):** 15 % längere Produktionszeit: `rules.terraform.lineSpeed.mudpit` 1,2 → 1,2 / 1,15 (≈ 1,043). Wiesenhof bleibt bei ×1,2.
 - **Stand „jeder 3. Verband ein Terraformer“:** Dieses Upgrade gibt es seit dem 26.10. nicht mehr („Mehr Terraformer“ ist entfallen). `rules.terraform.everyLevel2` (3) wird im Code nirgends mehr gelesen; es gilt für alle `every` = 4. Der gewünschte Ersatz („2 Kacheln gleichzeitig formen“) ist noch offen, bis die Zuordnung zu einem Upgrade geklärt ist.
 
-## Vermerk 30.10.: Regelprofil „pur“ (geplant, NICHT umgesetzt)
+## Regelprofil „pur“ – UMGESETZT 30.10. (Vermerk zum Zurückholen)
 
-Hintergrund: Feature-Stopp. Alle zeit- und uhrgesteuerten Patt-Hebel sollen raus, damit sichtbar wird, was das Spiel von sich aus tut. Aufgeschrieben, damit sich alles später gezielt zurückholen lässt. Werte = heutiger Stand (`src/data/rules.ts`, `src/data/buildings.ts`).
+Hintergrund: Feature-Stopp. Alle zeit- und uhrgesteuerten Patt-Hebel sind raus, damit sichtbar wird, was das Spiel von sich aus tut. **Pur = `RULES` (Standard). Die alten Werte liefert `classicRules()` in `src/data/rules.ts` als Override** (Tests, Skripte, später ggf. Schalter im Startmenü). Spalte „heute“ = Stand vor dem 30.10.
 
 | Hebel | heute | im Profil „pur“ | Stelle |
 |---|---|---|---|
@@ -2162,4 +2162,13 @@ Offener Gedanke (Nutzer): Eine zerstörte Fabrik ist für 60 Energie sofort wied
 
 Bleibt ausdrücklich drin: Notfallverlegung (Key-Gameplay laut Nutzer), Bauschutz 15 s, Einheitenlimit 150, Marktbremse, Gebietseinkommen, Myriaden-Lebensuhr, Beute, Flanke, Schlussstein-Fenster, Energie-Faktoren der Phasen (noch offen, siehe Diskussion).
 
-Umsetzung geplant als Regelprofil (Schalter im Startmenü / `rules`-Override), damit der heutige Stand erhalten bleibt und beide Fassungen direkt vergleichbar sind.
+Dazu umgesetzt (30.10., Nutzer-GO):
+- **Gebäude weicher im Widerstand:** Fabriken Widerstand 6, Rüstung 5+ (vorher 10 / 4+); HQ Widerstand 7, Rüstung 4+ (vorher 10 / 3+). Rohwerte, 10 Verbände ohne Modifikatoren: Scharfschützen Kaserne 22 → 11 s, HQ 86 → 36 s; Borkenschützen 57 → 23 s / 252 → 94 s; Batterie 4 → 3 s / 17 → 13 s. Belagerungswaffen behalten die Spitze, verlieren das Monopol; Schlamm-Einheiten bleiben die schlechtesten Gebäudebrecher (eigener `structureDamage`).
+- **Beute 100 %** (`front.buildingBounty` 1).
+- **Bauplatz-Sperre 60 s** (`rules.siteLockSeconds`, `world.lockedSites`): Nach Zerstörung durch den Gegner kann auf den Kacheln (auch überlappend) niemand bauen. Verkaufen/eigenes Abreißen sperrt nicht.
+- **HQ-Waffe** über `rules.hqWeapon` (pur: aus). KI-Spätphase hängt jetzt am Phasenindex (`latePhase`, ab 11:00), nicht mehr an `stormHq`.
+- Phasen bleiben als Zeitmarken (Belagerungsturm ab 8:00, Hinweise), alle Faktoren ×1.
+- Offen (bewusst nicht angefasst): Energie ×1,5 ab 10:00 (später), Sperrdauer-Feintuning, HQ-Leben (6.000, falls es im Pur-Test zu schnell fällt).
+
+Erster Blick (12 KI-Partien, 4 je Paarung, vor dem Veröffentlichen): Median 13 min, kürzeste 7 min, 1 von 12 offen bei 30 min (vorher 19 von 32 bei TC–TF). Technoclan 3 : 1 gegen Myriaden – zu wenig Partien für eine Aussage, aber kein Rush-Kollaps unter 6 min.
+

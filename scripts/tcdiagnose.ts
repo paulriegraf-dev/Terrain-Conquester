@@ -30,7 +30,7 @@ if (mode === 'run') {
     world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
     const series: { t: number; terr: number[]; hq: number[]; elites: number[]; elitesAlive: number[]; blocks: number[]; models: number[] }[] = [];
     const firstHq: (number | null)[] = [null, null];
-    while (!world.result && world.tick < 45 * 60 * world.tps) {
+    while (!world.result && world.tick < 30 * 60 * world.tps) {
       const commands: PlayerCommand[] = [];
       for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });
       world.step(commands);

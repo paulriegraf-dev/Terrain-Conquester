@@ -15,7 +15,7 @@ type View = { f: string; o: string; r: Rec; me: 0 | 1 };
 const views: View[] = recs.flatMap((r) => [{ f: r.factions[0], o: r.factions[1], r, me: 0 as const }, { f: r.factions[1], o: r.factions[0], r, me: 1 as const }]);
 const out: string[] = [`# Fraktions-Lauf „${label}“ (${recs.length} Partien)`, ''];
 
-out.push('## Paarungen (Siege Fraktion A : B, Dauer)', '', '| Paarung | Partien | Siege | Quote A | Ø Dauer | Median | kürzeste–längste | offen (45 min) |', '|---|---|---|---|---|---|---|---|');
+out.push('## Paarungen (Siege Fraktion A : B, Dauer)', '', '| Paarung | Partien | Siege | Quote A | Ø Dauer | Median | kürzeste–längste | offen (30 min) |', '|---|---|---|---|---|---|---|---|');
 for (const [a, b] of [['technoclan', 'myriaden'], ['technoclan', 'terraformer'], ['myriaden', 'terraformer']] as const) {
   const rs = recs.filter((r) => r.factions.includes(a) && r.factions.includes(b));
   const wa = rs.filter((r) => r.winner !== null && r.factions[r.winner] === a).length, wb = rs.filter((r) => r.winner !== null && r.factions[r.winner] === b).length;

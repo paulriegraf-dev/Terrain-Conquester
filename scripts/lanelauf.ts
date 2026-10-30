@@ -31,7 +31,7 @@ for (let pi = 0; pi < 4; pi++) {
     const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), 'normal'));
     world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
     let samples = 0, active = 0, toggles = 0, was = false;
-    while (!world.result && world.tick < 45 * 60 * world.tps) {
+    while (!world.result && world.tick < 30 * 60 * world.tps) {
       const commands: PlayerCommand[] = [];
       for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });
       world.step(commands);

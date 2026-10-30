@@ -29,7 +29,7 @@ for (let g = have; g < Number(b); g++) {
   const world = new World({ map: getMap(MAPS[g % 2]!), seed, factions });
   const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), 'normal'));
   world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
-  const maxTicks = 45 * 60 * world.tps;
+  const maxTicks = 30 * 60 * world.tps;
   const units: number[][] = [[], []], walls: number[][] = [[], []], models: number[][] = [[], []], squads: number[][] = [[], []];
   /** Echte Anzahl (29.10.): Modelle (Drohnen: 8 je Verband) und Verbände – ohne Versorgungs-Halbwerte. Gelege zählen mit. */
   const bodies = (p: 0 | 1): { m: number; s: number } => {

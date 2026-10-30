@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { RULES } from '../src/data/rules';
+import { RULES, classicRules } from '../src/data/rules';
 import { UNITS } from '../src/data/units';
 import { World } from '../src/sim/world';
 import { aliveModels, updateCombat } from '../src/sim/systems/combat';
@@ -96,8 +96,8 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
     assert.equal(b.alive, false);
   });
 
-  it('Das HQ verteilt Flächenschaden auf Pulks', () => {
-    const world = new World({ map: openMap, seed: 1 });
+  it('Das HQ verteilt Flächenschaden auf Pulks (klassisches Profil: HQ-Waffe an)', () => {
+    const world = new World({ map: openMap, seed: 1, rules: classicRules() });
     const pack = [
       world.addUnit(1, UNITS.sniper, { x: 6.0, y: 4.5 }, 'mid'),
       world.addUnit(1, UNITS.sniper, { x: 6.3, y: 3.9 }, 'mid'),
@@ -110,7 +110,7 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
 
   it('Das HQ misst seine Reichweite ab dem Rand – Scharfschützen schießen nicht gefahrlos', () => {
     // Abstand zum HQ-Rand 4,6 (in HQ-Reichweite 6), zur HQ-Mitte aber über 6 Kacheln.
-    const world = new World({ map: openMap, seed: 1, rules: smallBases });
+    const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, ...classicRules() } });
     const sniper = world.addUnit(1, UNITS.sniper, { x: 7.9, y: 5.5 }, 'mid');
     sniper.mover!.speed = 0;
     stepTimes(world, 10 * world.tps);
@@ -163,10 +163,10 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
   });
 });
 
-describe('Heimvorteil', () => {
+describe('Heimvorteil (klassisches Profil: Heilung im eigenen Gebiet)', () => {
   it('im eigenen Einflussgebiet nehmen Einheiten weniger Schaden', () => {
     const lost = (home: boolean): number => {
-      const world = new World({ map: openMap, seed: 1, rules: home ? {} : smallBases });
+      const world = new World({ map: openMap, seed: 1, rules: home ? classicRules() : { ...smallBases, ...classicRules() } });
       const trooper = world.addUnit(0, UNITS.sniper, { x: 8.6, y: 8.5 }, 'bottom');
       trooper.mover!.speed = 0;
       const tank = world.addUnit(1, UNITS.colossus, { x: 11.4, y: 8.5 }, 'bottom');

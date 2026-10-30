@@ -108,6 +108,9 @@ export function checkBuild(
   }
   const vision = world.players[player].vision;
 
+  // Bauplatz-Sperre (30.10.): Kacheln einer gerade zerstörten Fabrik sind für alle gesperrt.
+  const lock = world.lockedSites.find((l) => l.until > world.tick && rectsOverlap(rect, l.rect));
+  if (lock) return fail(`Bauplatz gesperrt – noch ${Math.ceil((lock.until - world.tick) / world.tps)} s`);
   if (outpost) {
     if (world.padBuilding[outpost.id] !== 0) return fail('Außenposten ist schon bebaut');
     if (!cellsAll(rect, (cx, cy) => controllerAt(world, grid.index(cx, cy)) === player)) {
@@ -168,6 +171,10 @@ function grow(r: CellRect, by: number): CellRect {
 function cellsAll(r: CellRect, test: (x: number, y: number) => boolean): boolean {
   for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (!test(x, y)) return false;
   return true;
+}
+
+function rectsOverlap(a: CellRect, b: CellRect): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 function rectHas(r: CellRect, x: number, y: number): boolean {

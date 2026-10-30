@@ -357,6 +357,8 @@ export class World {
   readonly intel: readonly [Map<number, IntelRecord>, Map<number, IntelRecord>] = [new Map(), new Map()];
   /** Kacheln im Umbau (Feld tauschen). */
   swaps: { owner: PlayerId; batch: number; index: number; target: number; startTick: number; doneTick: number }[] = [];
+  /** Bauplatz-Sperre (30.10.): Kacheln zerstörter Fabriken, auf denen bis `until` niemand baut. */
+  lockedSites: { rect: CellRect; until: number; owner: PlayerId }[] = [];
   /** Zähler für Gelände-Käufe (eine Fläche = ein Kauf). */
   swapBatches = 0;
   /** Einfluss je Kachel: +1 = voll Spieler 0, −1 = voll Spieler 1, 0 = neutral. */
@@ -545,6 +547,7 @@ export class World {
     updatePhase(this);
     updateEconomy(this);
     updateWalls(this);
+    if (this.lockedSites.length && this.tick % this.tps === 0) this.lockedSites = this.lockedSites.filter((l) => l.until > this.tick);
     updateSwaps(this);
     updateInfluence(this);
     updateFront(this);
@@ -863,6 +866,10 @@ export class World {
       if (e.producer?.clutch && e.producer.clutch.length > 0) releaseClutch(this, e);
       if (e.padId !== undefined) this.padBuilding[e.padId] = 0;
       else if (e.rect) this.grid.setStructure(e.rect, false); // Außenposten-Plattformen bleiben
+      // Bauplatz-Sperre (30.10.): nach Zerstörung durch den Gegner bleibt der Platz eine Weile frei – kein sofortiger Wiederaufbau.
+      if (killer !== null && killer !== e.owner && e.rect && this.rules.siteLockSeconds > 0) {
+        this.lockedSites.push({ rect: { ...e.rect }, until: this.tick + Math.round(this.rules.siteLockSeconds * this.tps), owner: e.owner });
+      }
     }
     if (killer === null) return;
     const stats = this.players[e.owner].stats;
@@ -1132,7 +1139,7 @@ export class World {
       alive: true,
       bornTick: 0,
       rect: { ...rect },
-      weapon: this.makeWeapon(HQ.weapon),
+      weapon: this.rules.hqWeapon ? this.makeWeapon(HQ.weapon) : undefined,
     };
     this.insert(e);
     this.hqIds[owner] = e.id;

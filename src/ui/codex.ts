@@ -368,7 +368,8 @@ function basicsTab(): string {
   return `<p class="cx-lede">Was das Tutorial zeigt – und was dahintersteckt. Für einen geführten Einstieg: <b>Tutorial</b> im Startbildschirm.</p>
   ${section('Ziel und Phasen', [
     'Wer das gegnerische HQ zerstört, gewinnt. Du steuerst keine einzelnen Einheiten: Fabriken bauen von selbst, du bestimmst <b>was</b> (Einheit), <b>wo</b> (Lane) und <b>wie</b> (Haltung).',
-    ...ph.map((p) => `<b>${escapeHtml(p.name)}</b> ab ${Math.floor(p.at / 60)}:${String(p.at % 60).padStart(2, '0')}: Energie ×${num(p.energyMult, 1)}, HQs nehmen ${pct(p.hqDamageMult)} Schaden${p.hqDamageGrowth ? `, danach jede Minute +${pct(p.hqDamageGrowth)}` : ''}.`),
+    ...ph.map((p) => `<b>${escapeHtml(p.name)}</b> ab ${Math.floor(p.at / 60)}:${String(p.at % 60).padStart(2, '0')}: ${p.energyMult !== 1 || p.hqDamageMult !== 1 || p.hqDamageGrowth ? `Energie ×${num(p.energyMult, 1)}, HQs nehmen ${pct(p.hqDamageMult)} Schaden${p.hqDamageGrowth ? `, danach jede Minute +${pct(p.hqDamageGrowth)}` : ''}.` : escapeHtml(p.hint)}`),
+    ...(r.hqWeapon ? [] : ['Das HQ wehrt sich nicht selbst – seine Verteidigung sind deine Truppen, Erdwälle und die Notfallverlegung. Schaden am HQ zählt von Anfang an voll.']),
   ])}
   ${section('Wirtschaft: Energie', [
     '<b>Energie ist (vorerst) die einzige Ressource.</b> Es gibt nichts abzubauen und keine Arbeiter: Energie fließt von selbst, und alles, was du kaufst, bezahlst du damit. Einheiten kosten keine Energie – sie kommen laufend aus den Fabriken; wie schnell, regelt der Markt der Bauteile (siehe unten).',
@@ -389,14 +390,14 @@ function basicsTab(): string {
   ${section('Gebiet und Einfluss', [
     `Einheiten und Gebäude bauen Einfluss auf; wer allein ist, übernimmt Kacheln nach und nach. Das HQ hält ${r.influence.hqRadius} Kacheln von Anfang an.`,
     'In der Kartenmitte liegt das <b>Niemandsland</b>: dort baut niemand Einfluss auf.',
-    `<b>Heimvorteil:</b> Einheiten im eigenen Gebiet heilen ${pct(r.front.regenPerSecond)} ihrer Leben je Sekunde${r.homeDamageTaken < 1 ? ` und nehmen nur ${pct(r.homeDamageTaken)} Schaden` : ''} (ab ${Math.floor(r.homeLate.at / 60)}:00 nur noch ${pct(r.homeLate.factor)} davon).`,
+    ...(r.front.regenPerSecond > 0 || r.homeDamageTaken < 1 ? [`<b>Heimvorteil:</b> Einheiten im eigenen Gebiet heilen ${pct(r.front.regenPerSecond)} ihrer Leben je Sekunde${r.homeDamageTaken < 1 ? ` und nehmen nur ${pct(r.homeDamageTaken)} Schaden` : ''} (ab ${Math.floor(r.homeLate.at / 60)}:00 nur noch ${pct(r.homeLate.factor)} davon).`] : ['<b>Kein Heimvorteil:</b> Einheiten heilen sich nur durch Heiler oder ein Lazarett, egal wo sie stehen.']),
     ...(r.front.siegeFactor > 0 ? [`<b>Belagerungsdruck:</b> Wer mehr Gebiet hält, trifft HQ und Gebäude des Gegners härter (×(1 + ${num(r.front.siegeFactor, 1)} × Vorsprung)).`] : []),
   ])}
   ${section('Fabriken und Produktion', [
     'Eine Fabrik baut ununterbrochen ihre gewählte Einheit und schickt sie über ihre Lane. Der erste Verband kommt in halber Zeit.',
     `<b>Stufen</b> schalten weitere Einheiten frei. <b>Umrüsten</b> auf eine andere Einheit dauert ${sec(r.retoolSeconds)}; <b>Einspielen</b>: nach ${r.settle.map((s) => `${s.seconds} s +${pct(s.speed - 1)}`).join(', ')} Tempo bei derselben Einheit.`,
     `Neue Marschbefehle greifen nach ${sec(r.routeChangeSeconds)} (sofort gegen ${r.routeRushCost} Energie). Fabriken auf einem <b>Außenposten</b> bauen ×${num(r.building.outpostSpeed, 2)} so schnell, sind aber nicht befestigt.`,
-    `Einheitenlimit ${r.unitCap}. Gebäude in der Basis-Bauzone sind befestigt (${pct(r.baseBuildingDamageTaken)} Schaden).`,
+    `Einheitenlimit ${r.unitCap}. ${r.baseBuildingDamageTaken < 1 ? `Gebäude in der Basis-Bauzone sind befestigt (${pct(r.baseBuildingDamageTaken)} Schaden).` : 'Gebäude nehmen überall vollen Schaden (Widerstand 6, Rüstung 5+); auch Infanterie legt eine Fabrik, nur langsamer als Belagerungswaffen.'}${r.siteLockSeconds > 0 ? ` Auf den Kacheln einer vom Gegner zerstörten Fabrik kann ${sec(r.siteLockSeconds)} lang niemand bauen.` : ''}`,
   ])}
   ${section('Fronten: vier Haltungen je Lane', [
     '<b>Verteidigen</b>: Truppen bleiben an der Basis und fangen Eindringlinge ab. <b>Halten</b>: an der eigenen Grenze, gestaffelt nach Reichweite.',

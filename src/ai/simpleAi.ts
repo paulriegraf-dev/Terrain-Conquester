@@ -186,6 +186,11 @@ export const AI_TUNING: {
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
 
+/** Entscheidungsphase (ab 11:00) – die KI drückt dann stärker und baut Belagerung. Seit dem Pur-Profil (30.10.) am Phasenindex, nicht mehr am Sturm. */
+function latePhase(world: World): boolean {
+  return world.phaseIndex >= 2;
+}
+
 export class SimpleAi {
   readonly strategyId: AiStrategyId;
   /** Bevorzugte Flanke (für die Überfall-Strategie). */
@@ -722,7 +727,7 @@ export class SimpleAi {
     const units = share.infantry * vs('infantry') + share.light * vs('light') + share.heavy * vs('heavy');
     // Belagerung: Ein Teil der Armee soll HQ und Gebäude knacken können – die Belagerungs-Strategie
     // immer, die anderen ab der Entscheidungsphase (sonst baut niemand Artillerie).
-    const late = world ? world.phase.stormHq === true : false;
+    const late = world ? latePhase(world) : false;
     const siege = (this.strategyId === 'siege' ? 0.25 : 0.08) + (late ? 0.12 : 0);
     return (1 - siege) * units + siege * vs('structure');
   }
@@ -1105,7 +1110,7 @@ export class SimpleAi {
     }
 
     // 2. Entscheidungsphase: Schwerpunkt – alle Fabriken auf eine Route (die schwächste gesehene).
-    if (this.level === 'normal' && AI_TUNING.lateFocus && world.phase.stormHq === true) {
+    if (this.level === 'normal' && AI_TUNING.lateFocus && latePhase(world)) {
       if (this.focus === null || world.tick - this.focusSince >= AI_TUNING.focusSeconds * world.tps) {
         this.focus = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
         this.focusSince = world.tick;
@@ -1159,7 +1164,7 @@ export class SimpleAi {
           if (e.mover.route !== me.hero.route || dist(e.pos, lead.pos) > 7) continue;
           near += weight(e);
         }
-        const late = world.phase.stormHq === true;
+        const late = latePhase(world);
         const enough = (late ? 6 : 10) * armyScale(world);
         if (world.seconds >= 150 && near >= Math.max(late ? 2 : 3, enough)) return { type: 'heroMode', mode: 'strike' };
       }
@@ -1204,7 +1209,7 @@ export class SimpleAi {
       if (this.baseThreat[r] >= threat && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
       if (this.baseThreat[r] < 0.5 && target === 'defend') return { type: 'setStance', route: r, stance: 'hold' };
     }
-    const late = world.phase.stormHq === true;
+    const late = latePhase(world);
     if (!late && world.seconds < 150) return null; // erst Grenzen ziehen, dann vorstoßen
     const waves = late && AI_TUNING.lateWaves;
     const ratio = late ? 1.2 : 2.2 - this.strategy.aggression;

@@ -244,6 +244,10 @@ export interface Rules {
   unitSpeed: number;
   /** Anteil der Baukosten, den man beim Verkaufen zurückbekommt. */
   sellRefund: number;
+  /** Schießt das HQ selbst? (Pur-Profil 30.10.: nein.) */
+  hqWeapon: boolean;
+  /** Bauplatz-Sperre (30.10.): So lange (Sekunden) kann nach der Zerstörung einer Fabrik auf ihren Kacheln niemand bauen. */
+  siteLockSeconds: number;
   /** Jede weitere eigene Schlucht kostet so viel mehr (24.10. abends). */
   gorgeCostStep: number;
   /** Flankenangriff: Wer eine gegnerische Schlucht überquert hat, macht so lange mehr Schaden. */
@@ -418,7 +422,7 @@ export const RULES: Rules = {
     counter: { cost: 40, seconds: 60 },
     stock: { seconds: 90, share: 0.2, scale: 10, min: 20 },
     rush: { prices: [40, 60, 90] },
-    surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 480 },
+    surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 1e9 }, // Pur-Profil: Nachschub aus (vorher ab 480 s)
   },
   mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: false },
   keystoneGate: { first: 600, every: 150, maxCredits: 2, cost: 0, center: true, centerHold: 60, centerDecay: 10, centerSize: 5, revealDelay: 30 },
@@ -455,6 +459,8 @@ export const RULES: Rules = {
   unitSpeed: 1,
   // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
   sellRefund: 0.7,
+  hqWeapon: false,
+  siteLockSeconds: 60,
   gorgeCostStep: 30,
   flank: { seconds: 18, damage: 1.3 },
   // Doppelte Produktion zweier Bruten, dazu +15 % (gilt als eingespielt); Gelege +4; mehr Leben – aber ein Ziel statt zwei.
@@ -463,17 +469,12 @@ export const RULES: Rules = {
   convertSeconds: 20,
   firstSpawnFactor: 0.5,
   visionEvery: 4,
+  // Pur-Profil (30.10., Nutzer): keine uhrgesteuerten Hebel mehr – HQ-Schaden ×1 von Anfang an, kein Wachstum, kein Sturm,
+  // Energie ×1 durchgehend. Die Phasen bleiben als Zeitmarken (Belagerungsturm ab 8:00, Hinweise). Alte Werte: classicRules().
   phases: [
-    { at: 0, name: 'Aufbau', energyMult: 1, hqDamageMult: 0.05, hint: 'HQs nehmen nur 5 % Schaden – Grenzen ziehen, Gebiet sichern. Durchbrüche bringen Beute und Gebiet.' },
-    { at: 480, name: 'Eskalation', energyMult: 1.4, hqDamageMult: 0.35, hint: 'Energie ×1,4 · HQs nehmen 35 % Schaden.' },
-    {
-      // Seit 22.10. ab 11:00 (vorher 13:00): Mit dem neuen Kampfmodell, den Formationen und ausgeglicheneren
-      // KI-Armeen zogen sich die Runden (Median über 20 min) – die Entscheidung beginnt deshalb früher.
-      // 22.10. nachmittags: +0,5 statt +0,25 je Minute (wie auf den großen Karten) – im Test 1,5 Minuten kürzer,
-      // ohne die Balance zu verschieben. Die späten Armeen sind klein; wer durchkommt, soll das HQ auch knacken.
-      at: 660, name: 'Entscheidung', energyMult: 1.8, hqDamageMult: 1, hqDamageGrowth: 0.5, stormHq: true,
-      hint: 'Energie ×1,8 · Schaden am HQ ×1 und jede Minute +0,5 · Truppen ziehen an Gebäuden vorbei aufs HQ.',
-    },
+    { at: 0, name: 'Aufbau', energyMult: 1, hqDamageMult: 1, hint: 'Grenzen ziehen, Gebiet sichern. Zerstörte Fabriken bringen ihren vollen Preis als Beute.' },
+    { at: 480, name: 'Eskalation', energyMult: 1, hqDamageMult: 1, hint: 'Belagerungsturm wirkt ab jetzt.' },
+    { at: 660, name: 'Entscheidung', energyMult: 1, hqDamageMult: 1, hint: 'Wer durchkommt, kann das HQ nehmen – es wehrt sich nicht selbst.' },
   ],
   influence: {
     every: 10,
@@ -489,10 +490,10 @@ export const RULES: Rules = {
   building: { size: 2, maxBuildings: 6, gap: 1, outpostSpeed: 1.25 },
   front: {
     stanceChangeSeconds: 10,
-    regenPerSecond: 0.02,
+    regenPerSecond: 0, // Pur-Profil: keine Heilung im eigenen Gebiet (vorher 0.02)
     territoryIncome: 1.5,
     siegeFactor: 0,
-    buildingBounty: 0.5,
+    buildingBounty: 1, // Pur-Profil: volle Beute (vorher 0.5)
     buildShieldSeconds: 15,
   },
   // 24.10.: 3 statt 8 s, und der Fortschritt bleibt erhalten (Wunsch: kleiner Aufschub, keine Strafe).
@@ -553,7 +554,7 @@ export const RULES: Rules = {
     minSeconds: 0,
   },
   // 22.10.: 50 % statt 20 % – befestigte Fabriken fallen schneller; wer bedrängt ist, verlegt (Notfallverlegung).
-  baseBuildingDamageTaken: 0.5,
+  baseBuildingDamageTaken: 1, // Pur-Profil: keine Befestigung (vorher 0.5)
   kamikazeSpread: 0,
   clutchAlarmRadius: 8,
   mergeRadius: 1.5,
@@ -610,4 +611,23 @@ export function overtimeRules(variant: OvertimeVariant): Partial<Rules> {
 /** Ist mindestens ein Patt-Auflöser eingeschaltet? */
 export function overtimeEnabled(o: OvertimeRules): boolean {
   return o.shrinkNoMansLand || o.doubleTerritory || o.fadeHomeAdvantage;
+}
+
+/**
+ * Klassisches Profil (Stand vor dem 30.10.) als Override – für Vergleichsläufe und um einzelne Hebel zurückzuholen.
+ * Pur-Profil = RULES. Siehe DESIGN.md „Vermerk 30.10.: Regelprofil pur“.
+ */
+export function classicRules(): Partial<Rules> {
+  return {
+    phases: [
+      { at: 0, name: 'Aufbau', energyMult: 1, hqDamageMult: 0.05, hint: 'HQs nehmen nur 5 % Schaden – Grenzen ziehen, Gebiet sichern. Durchbrüche bringen Beute und Gebiet.' },
+      { at: 480, name: 'Eskalation', energyMult: 1.4, hqDamageMult: 0.35, hint: 'Energie ×1,4 · HQs nehmen 35 % Schaden.' },
+      { at: 660, name: 'Entscheidung', energyMult: 1.8, hqDamageMult: 1, hqDamageGrowth: 0.5, stormHq: true, hint: 'Energie ×1,8 · Schaden am HQ ×1 und jede Minute +0,5 · Truppen ziehen an Gebäuden vorbei aufs HQ.' },
+    ],
+    front: { ...RULES.front, regenPerSecond: 0.02, buildingBounty: 0.5 },
+    baseBuildingDamageTaken: 0.5,
+    purchases: { ...RULES.purchases, surge: { ...RULES.purchases.surge, from: 480 } },
+    hqWeapon: true,
+    siteLockSeconds: 0,
+  };
 }

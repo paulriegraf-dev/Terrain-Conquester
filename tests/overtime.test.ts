@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { felsenpass } from '../src/data/maps/felsenpass';
-import { RULES } from '../src/data/rules';
+import { RULES, classicRules } from '../src/data/rules';
 import type { OvertimeRules } from '../src/data/rules';
 import { UNITS } from '../src/data/units';
 import { BUILD_ZONE } from '../src/sim/map';
@@ -89,7 +89,7 @@ describe('Patt-Auflöser (Verlängerung)', () => {
 describe('Heimvorteil später im Spiel (homeLate)', () => {
   it('ab dem Zeitpunkt wirken Schutz und Heilung im eigenen Gebiet nur noch anteilig', () => {
     const heal = (factor: number): number => {
-      const world = new World({ map: felsenpass, seed: 1, rules: { homeLate: { at: 1, factor } } });
+      const world = new World({ map: felsenpass, seed: 1, rules: { ...classicRules(), homeLate: { at: 1, factor } } });
       const u = world.addUnit(0, UNITS.gunner, { x: 8.5, y: 13.5 }, 'mid');
       u.mover!.speed = 0;
       u.weapon = undefined;

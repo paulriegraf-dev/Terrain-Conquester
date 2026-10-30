@@ -48,7 +48,7 @@ games.forEach((G, k) => {
   let firstSummon = -1;
   let firstLevel2 = -1;
   let formerSeconds = 0;
-  while (!world.result && world.tick < 45 * 60 * world.tps) {
+  while (!world.result && world.tick < 30 * 60 * world.tps) {
     const commands: PlayerCommand[] = [];
     for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });
     world.step(commands);

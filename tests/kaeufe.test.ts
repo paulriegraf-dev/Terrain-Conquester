@@ -10,6 +10,7 @@ import { swapBrush } from '../src/sim/systems/hq';
 import { assignSlots } from '../src/sim/systems/formation';
 import { UNITS } from '../src/data/units';
 import { World } from '../src/sim/world';
+import { classicRules } from '../src/data/rules';
 import { cmd, openMap, smallBases, stepTimes } from './fixtures';
 
 const rich = { ...smallBases, startEnergy: 400, maxEnergy: 3000 };
@@ -73,8 +74,8 @@ describe('HQ-Zweige 4/5 und Käufe (Nachtrag G)', () => {
     assert.ok(Math.abs(productionFactor(world, 0, 'arms') - frozen) < 1e-9, 'eingefroren');
   });
 
-  it('Nachschub: ab Minute 8, alle Fabriken 60 s lang 30 % schneller, 120 → 180 → 260', () => {
-    const world = new World({ map: openMap, seed: 1, rules: rich });
+  it('Nachschub (klassisches Profil): ab Minute 8, alle Fabriken 60 s lang 30 % schneller, 120 → 180 → 260', () => {
+    const world = new World({ map: openMap, seed: 1, rules: { ...rich, ...classicRules() } });
     const b = world.addBuilding(0, BUILDINGS.barracks, { x: 1, y: 6, w: 2, h: 2 });
     world.players[0].energy = 2000;
     assert.equal(checkBuy(world, 0, 'surge').ok, false);
@@ -90,7 +91,7 @@ describe('HQ-Zweige 4/5 und Käufe (Nachtrag G)', () => {
   });
 
   it('Spähbericht meldet laufende Käufe des Gegners („Gegner beschleunigt“)', () => {
-    const world = new World({ map: openMap, seed: 1, rules: rich });
+    const world = new World({ map: openMap, seed: 1, rules: { ...rich, ...classicRules() } });
     world.players[1].energy = 2000;
     world.tick = 480 * world.tps;
     world.step([cmd(1, { type: 'buy', kind: 'surge' })]);

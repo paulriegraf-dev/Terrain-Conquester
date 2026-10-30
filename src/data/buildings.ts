@@ -30,24 +30,25 @@ export interface BuildingDef {
   vision: number;
 }
 
+// 30.10. (Pur-Profil): Widerstand 6, Rüstung 5+ (vorher 10 / 4+) – Gebäude fallen auch ohne Belagerungswaffen, nur langsamer.
 export const BUILDINGS: Readonly<Record<BuildingId, BuildingDef>> = {
-  barracks: { id: 'barracks', key: '1', part: 'arms', lineName: 'Waffenlinie', buildCost: 60, hp: 1200, toughness: 10, save: 4, vision: 5 },
-  workshop: { id: 'workshop', key: '2', part: 'wheels', lineName: 'Fahrzeuglinie', buildCost: 90, hp: 1400, toughness: 10, save: 4, vision: 5 },
-  foundry: { id: 'foundry', key: '3', part: 'plates', lineName: 'Panzerlinie', buildCost: 120, hp: 1800, toughness: 10, save: 4, vision: 5 },
+  barracks: { id: 'barracks', key: '1', part: 'arms', lineName: 'Waffenlinie', buildCost: 60, hp: 1200, toughness: 6, save: 5, vision: 5 },
+  workshop: { id: 'workshop', key: '2', part: 'wheels', lineName: 'Fahrzeuglinie', buildCost: 90, hp: 1400, toughness: 6, save: 5, vision: 5 },
+  foundry: { id: 'foundry', key: '3', part: 'plates', lineName: 'Panzerlinie', buildCost: 120, hp: 1800, toughness: 6, save: 5, vision: 5 },
   // Terra-Former (22.10.): eine Fabrik je Bodenart
-  meadowhall: { id: 'meadowhall', key: '1', part: 'arms', lineName: 'Wiesenlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  grove: { id: 'grove', key: '2', part: 'arms', lineName: 'Waldlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  mudpit: { id: 'mudpit', key: '3', part: 'wheels', lineName: 'Matschlinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  frosthall: { id: 'frosthall', key: '4', part: 'wheels', lineName: 'Schneelinie', buildCost: 60, hp: 1300, toughness: 10, save: 4, vision: 5 },
-  quarry: { id: 'quarry', key: '5', part: 'plates', lineName: 'Geröll-Linie', buildCost: 60, hp: 1500, toughness: 10, save: 4, vision: 5 },
+  meadowhall: { id: 'meadowhall', key: '1', part: 'arms', lineName: 'Wiesenlinie', buildCost: 60, hp: 1300, toughness: 6, save: 5, vision: 5 },
+  grove: { id: 'grove', key: '2', part: 'arms', lineName: 'Waldlinie', buildCost: 60, hp: 1300, toughness: 6, save: 5, vision: 5 },
+  mudpit: { id: 'mudpit', key: '3', part: 'wheels', lineName: 'Matschlinie', buildCost: 60, hp: 1300, toughness: 6, save: 5, vision: 5 },
+  frosthall: { id: 'frosthall', key: '4', part: 'wheels', lineName: 'Schneelinie', buildCost: 60, hp: 1300, toughness: 6, save: 5, vision: 5 },
+  quarry: { id: 'quarry', key: '5', part: 'plates', lineName: 'Geröll-Linie', buildCost: 60, hp: 1500, toughness: 6, save: 5, vision: 5 },
 };
 
 /** Alle Gebäude-IDs (welche eine Fraktion baut: buildingIds(faction) in factions.ts). */
 export const BUILDING_IDS: readonly BuildingId[] = ['barracks', 'workshop', 'foundry', 'meadowhall', 'grove', 'mudpit', 'frosthall', 'quarry'];
 
 /**
- * Das Hauptquartier: fällt es, ist die Runde verloren. Es verteidigt sich selbst –
- * mit Flächenschaden, damit eine Belagerung durch einen großen Pulk nicht automatisch gewinnt.
+ * Das Hauptquartier: fällt es, ist die Runde verloren. Seine Waffe (Flächenschaden) ist nur mit rules.hqWeapon aktiv
+ * (Pur-Profil 30.10.: aus).
  */
 export interface HqDef {
   name: string;
@@ -61,8 +62,9 @@ export interface HqDef {
 export const HQ: HqDef = {
   name: 'Hauptquartier',
   hp: 4000,
-  toughness: 10,
-  save: 3,
+  // 30.10. (Pur-Profil): Widerstand 7, Rüstung 4+ (vorher 10 / 3+). Waffe nur mit rules.hqWeapon.
+  toughness: 7,
+  save: 4,
   weapon: {
     shots: 4, cooldown: 1.0, range: 6, skill: 3, strength: 7, ap: 2, damage: 20, type: 'cannon',
     structureDamage: 0, splash: 1.3,

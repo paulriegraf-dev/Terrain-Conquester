@@ -130,7 +130,7 @@ function steps(doc: Document): Step[] {
       done: (c) => c.view.build?.building === 'barracks' || own(c, 'building').length > 0,
     },
     {
-      text: 'Jetzt setz sie in deine Bauzone – die umrandete Fläche um dein HQ. Dort ist sie befestigt und nimmt nur halben Schaden.',
+      text: 'Jetzt setz sie in deine Bauzone – die umrandete Fläche um dein HQ. Dort steht sie nah am HQ und bei deinen Truppen.',
       hint: () => 'Linksklick in die Bauzone · Rechtsklick bricht ab',
       target: (c) => ({ tile: buildSpot(c), r: 2.5 }),
       done: (c) => own(c, 'building').length > 0,

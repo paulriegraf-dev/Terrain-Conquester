@@ -229,7 +229,7 @@ export class Hud {
       this.el.phaseName.textContent = world.overtime ? `${world.phase.name} · Verlängerung` : world.phase.name;
       this.el.phaseHint.textContent = world.overtime ? `${world.phase.hint} Verlängerung: ${overtimeHint(world)}.` : world.phase.hint;
     }
-    this.el.hqMult.textContent = `Schaden am HQ ×${num(world.hqDamageMult, 1)}`;
+    this.el.hqMult.textContent = world.hqDamageMult !== 1 || world.rules.phases.some((p) => p.hqDamageGrowth) ? `Schaden am HQ ×${num(world.hqDamageMult, 1)}` : '';
 
     // HQs
     for (const p of [0, 1] as const) {
@@ -470,7 +470,7 @@ export class Hud {
         const branches = own
           ? `<p><strong>Zweige</strong> (einer bis Stufe ${HQ_PATH_LIMITS.main}, einer bis ${HQ_PATH_LIMITS.side}): ${HQ_PATH_IDS.map((id) => `${HQ_PATHS[id].name} ${'●'.repeat(world.players[e.owner].hq[id])}${'○'.repeat(HQ_PATHS[id].tiers.length - world.players[e.owner].hq[id])}`).join(' · ')}</p>`
           : '';
-        html = `${hpLine(e)}${branches}<p class="muted">Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. Widerstand ${e.toughness}, Rüstung ${e.save}+.</p><p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>`;
+        html = `${hpLine(e)}${branches}<p class="muted">${world.rules.hqWeapon ? `Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. ` : 'Wehrt sich nicht selbst – Truppen, Erdwälle und Notfallverlegung schützen es. '}Widerstand ${e.toughness}, Rüstung ${e.save}+.</p>${world.hqDamageMult !== 1 || world.rules.phases.some((p) => p.hqDamageGrowth) ? `<p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>` : ''}`;
       }
     } else if (canAct) {
       const p = world.players[me];
@@ -791,9 +791,9 @@ function buildingInfo(e: Entity, world: World): string {
     : pr.paused ? 'Pausiert' : pr.blockedBy === 'cap' ? 'Einheitenlimit erreicht' : `Nächster ${unit.name} in ${num(left, 1)} s`;
   const where = e.padId !== undefined
     ? `Außenposten: +${Math.round((world.rules.building.outpostSpeed - 1) * 100)} % Tempo, nicht befestigt`
-    : e.fortified
+    : e.fortified && world.rules.baseBuildingDamageTaken < 1
       ? `Basis-Zone: befestigt (${Math.round(world.rules.baseBuildingDamageTaken * 100)} % Schaden)`
-      : 'Vorfeld-Zone: nicht befestigt';
+      : e.fortified ? 'Basis-Zone' : 'Vorfeld-Zone';
   const route = pr.pendingRoute
     ? `<p class="warn">Marschbefehl ${ROUTE_NAMES[pr.route]} → ${ROUTE_NAMES[pr.pendingRoute]} in ${Math.ceil((pr.routeChangeTick - world.tick) / tps)} s</p>`
     : `<p>Marschbefehl ${ROUTE_NAMES[pr.route]}${pr.produced === 0 ? ' · erster Befehl greift sofort' : ''}</p>`;

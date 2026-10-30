@@ -34,7 +34,7 @@ export function runAiMatch(options: AiMatchOptions): { world: World; ais: [Simpl
   // Vorbereitungsphase: beide KIs formen ihr Gelände vor dem ersten Tick.
   world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
   // Kein Spiel-Zeitlimit – nur ein Sicherheitsnetz für automatische Läufe (45 Minuten).
-  const maxTicks = options.maxTicks ?? 45 * 60 * world.tps;
+  const maxTicks = options.maxTicks ?? 30 * 60 * world.tps;
   while (!world.result && world.tick < maxTicks) {
     const commands: PlayerCommand[] = [];
     for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });

@@ -9,6 +9,7 @@ import { controllerAt } from '../src/sim/systems/influence';
 import { updateVision } from '../src/sim/systems/visibility';
 import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
+import { classicRules } from '../src/data/rules';
 import { cmd, lastBuilding, noIncome, openMap, stepTimes } from './fixtures';
 
 /** Felsenpass (kompakt): Niemandsland bei x 21–26. */
@@ -132,8 +133,8 @@ describe('Niemandsland', () => {
 });
 
 describe('Gebiet zahlt sich aus', () => {
-  it('Einheiten heilen sich im eigenen Gebiet, nicht im Niemandsland', () => {
-    const world = new World({ map: felsenpass, seed: 1 });
+  it('Einheiten heilen sich im eigenen Gebiet, nicht im Niemandsland (klassisches Profil)', () => {
+    const world = new World({ map: felsenpass, seed: 1, rules: classicRules() });
     const home = world.addUnit(0, UNITS.sniper, { x: 6.5, y: 13.5 }, 'mid');
     const out = world.addUnit(0, UNITS.sniper, { x: 23.5, y: 13.5 }, 'mid');
     for (const u of [home, out]) {

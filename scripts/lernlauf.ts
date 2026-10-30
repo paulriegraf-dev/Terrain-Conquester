@@ -52,7 +52,7 @@ for (let g = first; g < first + perMap * 2; g++) {
   const prep = ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd })));
   prep.forEach(count);
   world.prepare(prep);
-  const maxTicks = 45 * 60 * world.tps;
+  const maxTicks = 30 * 60 * world.tps;
   while (!world.result && world.tick < maxTicks) {
     const commands: PlayerCommand[] = [];
     for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });

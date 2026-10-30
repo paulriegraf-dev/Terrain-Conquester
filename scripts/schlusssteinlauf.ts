@@ -32,7 +32,7 @@ if (mode === 'run') {
     const world = new World({ map: getMap(map), seed, factions });
     const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), 'normal'));
     world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
-    const maxTicks = 45 * 60 * world.tps;
+    const maxTicks = 30 * 60 * world.tps;
     const center = [0, 0], jam = [0, 0], open = [0, 0], maxOpen = [0, 0], streak = [0, 0];
     while (!world.result && world.tick < maxTicks) {
       const commands: PlayerCommand[] = [];
