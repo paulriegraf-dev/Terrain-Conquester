@@ -52,6 +52,8 @@ import { SYNERGY_GROUNDS, laneCounts } from '../sim/systems/synergy';
 import { checkRally } from '../sim/systems/rally';
 import { BOARD_TUNING, newBoardMemory, updateBoard } from './blackboard';
 import type { Blackboard, BoardMemory } from './blackboard';
+import { DOMAINS, DOMAIN_COST, PERSONA_WEIGHTS, PHASE_WEIGHTS } from './weights';
+import type { Domain } from './weights';
 
 /**
  * Gegner-KI. Sie spielt nach denselben Regeln wie du:
@@ -199,6 +201,15 @@ export const AI_TUNING: {
    * - centerFloor/centerAbort: Zentrum anstreben ab 7:30, wenn D_Mitte > centerFloor und keine Lane unter −reinforceAt; aufgeben bei D_Mitte < centerAbort
    * - thinkTicks: Denk-Takt auf „Normal“ in Ticks (20 = 1,0 s; vorher 30)
    */
+  /**
+   * KI-Grundplan Patch 3 (30.10.): Ökonomie-Arbiter. Statt fester Reihenfolge (bis zu acht Ausgaben je Denkschritt) bewertet er
+   * die Bereiche (Bauen, Fabrik, HQ, Gelände, Wall, Spähen, Käufe, Markt, Täuschung, Held, Eilauftrag) mit
+   * Bedarf × Phase × Persona / (1 + Kosten / Einkommen 60 s) und lässt je Denkschritt nur den besten mit gültigem Befehl Energie
+   * ausgeben. „Sparen“ ist ein eigener Kandidat. Eröffnung (bis ownPlan.factories Fabriken) ist hart gesperrt: nur Bauen
+   * (Terra-Former auch Gelände), dazu Wall und Eilauftrag bei Bedrohung.
+   * - tfHold: Mindesthaltedauer eines Lane-Plans der Terra-Former in s (gegen häufiges Umbauen)
+   */
+  arbiter: { on: boolean; tfHold: number };
   tactic: { on: boolean; pushAt: number; pushHold: number; pushEarly: number; pushStop: number; aggressionShift: number; lateShift: number; reinforceAt: number; reinforceCalm: number; centerFloor: number; centerAbort: number; secureAt: number; secureStop: number; thinkTicks: number };
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
@@ -209,6 +220,7 @@ export const AI_TUNING: {
   ownPlan: { on: true, factories: 3 },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
+  arbiter: { on: true, tfHold: 180 },
   tactic: { on: true, pushAt: 0.25, pushHold: 3, pushEarly: 0.1, pushStop: 0.05, aggressionShift: 0.5, lateShift: 0.1, reinforceAt: 0.3, reinforceCalm: 15, centerFloor: -0.1, centerAbort: -0.35, secureAt: -0.05, secureStop: -0.3, thinkTicks: 20 },
 };
 
@@ -329,6 +341,9 @@ export class SimpleAi {
   private trendOnlyUntil = -1e9;
   /** Messwerte (für Testläufe): Spähberichte mit Anlass, Täuschungen, Fehlreaktionen. */
   readonly stats = { scoutsWithReason: 0, deceptions: 0, falseReactions: 0, counterSwitches: 0, marketOrders: 0, avoided: 0 };
+  /** Patch 3: Preis der günstigsten nächsten Fabrik (0 = keine nötig) und Zähler für Messläufe (Gewinner je Bereich, Sparen). */
+  private nextFactoryCost = 0;
+  readonly arbiterStats: Record<string, number> = {};
   /** Patch 2: seit wann D auf einer Lane über der Front-Schwelle liegt (−1 = nicht), letzter Verstärken-Abzug je Lane, Zentrum-Sperre. */
   private readonly pushSince: Record<Route, number> = { top: -1, mid: -1, bottom: -1 };
   private readonly reinforceFrom: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
@@ -447,6 +462,9 @@ export class SimpleAi {
     this.loadBias(world);
     this.adaptLive(world);
     this.saving = this.buildSavings(world);
+    // Patch 3: Mit Arbiter ist Sparen ein eigener Kandidat – die Bereiche rechnen nicht mehr jede für sich eine Rücklage ab.
+    this.nextFactoryCost = this.saving > 0 ? this.saving - WALL.cost : 0;
+    if (AI_TUNING.arbiter.on && this.level === 'normal') this.saving = 0;
     const commands: Command[] = [];
     // Notfallverlegung, sobald sie bereit ist: der bedrängte Bauabschnitt zieht in den Rückraum.
     if (checkEmergency(world, this.player).ok) commands.push({ type: 'emergency' });
@@ -456,6 +474,15 @@ export class SimpleAi {
     const center = this.decideCenterRally(world);
     if (center) commands.push(center);
     const plan = this.decidePlan(world);
+    if (AI_TUNING.arbiter.on && this.level === 'normal') {
+      const route = this.decideRoute(world);
+      if (route) commands.push(route);
+      const breaker = this.decideBreaker(world);
+      const stance = breaker ?? this.decideStance(world);
+      if (stance) commands.push(stance);
+      this.arbitrate(world, commands, plan);
+      return commands;
+    }
     if (plan) commands.push(plan);
     const build = this.decideBuild(world);
     if (build) commands.push(build);
@@ -498,6 +525,120 @@ export class SimpleAi {
       if (disguise) commands.push(disguise);
     }
     return commands;
+  }
+
+  // ------------------------------------------------------------ Ökonomie-Arbiter (Patch 3)
+
+  /** Bedarf 0–2 je Bereich aus dem Lagebild (0 = jetzt nicht nötig). */
+  private domainNeed(world: World, d: Domain, bb: Blackboard, slotFree: boolean, factories: number): number {
+    const lanes = ROUTES.map((r) => bb.lanes[r]);
+    const minD = Math.min(...lanes.map((l) => l.pressure));
+    switch (d) {
+      case 'build':
+        if (!slotFree) return 0;
+        return factories < AI_TUNING.ownPlan.factories ? 2 : 1 + (minD < -AI_TUNING.tactic.reinforceAt ? 0.3 : 0);
+      case 'factory': {
+        let units = 0;
+        for (const e of world.entities) if (e.alive && e.kind === 'unit' && e.owner === this.player) units++;
+        return (world.seconds < AI_TUNING.researchFrom ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
+      }
+      case 'hq': return 0.8;
+      case 'terrain': return 1;
+      case 'wall': {
+        if (this.funnelStep) return 1.5;
+        const hit = lanes.filter((l) => l.enemyInOwnThird > 0);
+        return hit.length ? Math.min(2, 0.3 + 2 * Math.max(0, -Math.min(...hit.map((l) => l.pressure)))) : 0.3;
+      }
+      case 'scout': return bb.reportAge === null ? 1.2 : Math.min(2, Math.max(0.3, bb.reportAge / 40));
+      case 'buys': return 1;
+      case 'market': return 0.8;
+      case 'disguise': return 0.7;
+      case 'hero': return 1;
+      case 'rush': {
+        const threat = Math.max(1.5, 3 * armyScale(world));
+        return ROUTES.some((r) => this.baseThreat[r] >= threat) ? 2 : 0;
+      }
+      case 'save': {
+        const cost = this.nextFactoryCost;
+        if (cost <= 0 || !slotFree || factories >= AI_TUNING.saveUntilFactories) return 0;
+        const e = world.players[this.player].energy;
+        if (e >= cost || e + bb.income60 * 20 < cost) return 0; // schon genug, oder in 20 s nicht erreichbar
+        return 1.5 * (world.seconds < AI_TUNING.researchFrom ? 1 : 0.4);
+      }
+    }
+  }
+
+  /** Den Bereich d jetzt entscheiden lassen (die bisherigen decide*-Funktionen, je mit ihrer eigenen Auswahl und Prüfung). */
+  private runDomain(world: World, d: Exclude<Domain, 'save'>): Command | null {
+    switch (d) {
+      case 'build': return this.decideBuild(world);
+      case 'factory': return this.decideFactory(world);
+      case 'hq': return this.decideHq(world);
+      case 'hero': return this.decideHero(world);
+      case 'rush': return this.decideRush(world);
+      case 'wall': return this.decideWall(world);
+      case 'terrain': {
+        const defense = this.decideBreakerDefense(world);
+        const shape = defense ?? this.decideTerrain(world);
+        if (shape && shape.type === 'swapTerrain' && shape.terrain !== 'gorge') {
+          const key = shape.y * world.grid.width + shape.x;
+          const last = this.shapedAt.get(key);
+          if (last !== undefined && world.tick - last < 120 * world.tps) return null;
+          this.shapedAt.set(key, world.tick);
+        }
+        return shape;
+      }
+      case 'buys': return this.decideBuys(world);
+      case 'scout': return this.decideScout(world);
+      case 'market': return this.decideMarket(world);
+      case 'disguise': return this.decideDisguise(world);
+    }
+  }
+
+  /**
+   * Je Denkschritt höchstens eine Energie-Ausgabe: Bereiche nach Score sortiert, der erste mit gültigem Befehl gewinnt.
+   * Kostenlose Befehle eines Bereichs (Haltung, Stellung, Held-Modus, Einheitenwahl) gehen durch, ohne das Budget zu verbrauchen.
+   * Liegt „Sparen“ vorn, gibt nur noch Bauen aus. Der Umwidmen-Vorschlag aus decidePlan läuft als Kandidat „Gelände“ mit.
+   */
+  private arbitrate(world: World, commands: Command[], plan: Command | null): void {
+    const bb = this.boardMem.board!;
+    const me = world.players[this.player];
+    const phase = Math.min(2, Math.max(0, world.phaseIndex)) as 0 | 1 | 2;
+    const persona = PERSONA_WEIGHTS[this.strategyId];
+    const factories = this.ownBuildings(world).filter((b) => b.producer).length;
+    const slotFree = slotLimit(world, this.player) - slotsUsed(world, this.player) > 0;
+    const opening = AI_TUNING.ownPlan.on && factories < AI_TUNING.ownPlan.factories && slotFree;
+    const tf = me.faction.id === 'terraformer';
+    const income = Math.max(1, bb.income60) * 60;
+    const score = (d: Domain, need: number): number =>
+      need * PHASE_WEIGHTS[d][phase] * (persona[d] ?? 1) / (1 + (d === 'build' && this.nextFactoryCost > 0 ? this.nextFactoryCost : DOMAIN_COST[d]) / income);
+    type Cand = { d: Exclude<Domain, 'save'>; s: number; pre?: Command };
+    const cands: Cand[] = [];
+    for (const d of DOMAINS) {
+      if (opening && !(d === 'build' || d === 'rush' || (d === 'wall' && bb.lanes && ROUTES.some((r) => bb.lanes[r].enemyInOwnThird > 0)) || (tf && d === 'terrain'))) continue;
+      const n = this.domainNeed(world, d, bb, slotFree, factories);
+      if (n > 0) cands.push({ d, s: score(d, n) });
+    }
+    if (plan && !opening) cands.push({ d: 'terrain', s: score('terrain', 1.2), pre: plan });
+    cands.sort((a, b) => b.s - a.s || DOMAINS.indexOf(a.d) - DOMAINS.indexOf(b.d));
+    const save = score('save', this.domainNeed(world, 'save', bb, slotFree, factories));
+    const lastConvert = this.lastConvert;
+    let planUsed = false;
+    for (const c of cands) {
+      if (c.s < save && c.d !== 'build') {
+        this.arbiterStats.save = (this.arbiterStats.save ?? 0) + 1;
+        break;
+      }
+      const cmd = c.pre ?? this.runDomain(world, c.d);
+      if (!cmd) continue;
+      commands.push(cmd);
+      if (c.pre) planUsed = true;
+      if (FREE_COMMANDS.has(cmd.type)) continue;
+      this.arbiterStats[c.pre ? 'plan' : c.d] = (this.arbiterStats[c.pre ? 'plan' : c.d] ?? 0) + 1;
+      break;
+    }
+    // Nicht gewählter Umwidmen-Vorschlag: seine Sperre nicht verbrauchen.
+    if (plan && !planUsed) this.lastConvert = lastConvert;
   }
 
   // ------------------------------------------------------------ Lernen (26.10.)
@@ -2141,6 +2282,8 @@ export class SimpleAi {
 
   /** Lane-Wechsel erlaubt? Höchstens einer je Lane je counterLine.hysteresis s und nie zwei Lanes innerhalb von 60 s. */
   private laneSwitchOk(world: World, r: Route, lockSeconds = AI_TUNING.counterLine.hysteresis): boolean {
+    // Patch 3: Terra-Former halten einen Lane-Plan mindestens arbiter.tfHold s (jeder Wechsel heißt Umwidmen = teurer Umbau).
+    if (AI_TUNING.arbiter.on && this.laneGround && world.players[this.player].faction.id === 'terraformer') lockSeconds = Math.max(lockSeconds, AI_TUNING.arbiter.tfHold);
     return world.tick - this.laneSwitchAt[r] >= lockSeconds * world.tps && world.tick - this.lastLaneSwitch >= 60 * world.tps;
   }
 
@@ -2480,6 +2623,8 @@ export function hqPlan(profile: AiProfileId, faction: FactionId): [HqPathId, HqP
 }
 
 const PART_KEYS: readonly PartId[] = ['arms', 'wheels', 'plates'];
+/** Befehle ohne Energiekosten – der Arbiter lässt sie durch, ohne das Budget des Denkschritts zu verbrauchen. */
+const FREE_COMMANDS: ReadonlySet<Command['type']> = new Set(['setStance', 'setRoute', 'setRally', 'heroMode', 'heroRoute', 'selectUnit', 'setLaneGround', 'setPaused', 'emergency']);
 const MOVE_KEYS: readonly MoveProfileId[] = ['foot', 'wheels', 'tracks', 'hover'];
 /** Bodenarten, mit denen die KI Angreifer bremst. */
 const SHAPE_CHOICES: readonly TerrainId[] = ['mud', 'forest', 'rubble'];
