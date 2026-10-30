@@ -15,6 +15,9 @@ import { getMap } from '../src/data/maps';
 import { aiSeed } from '../src/match';
 import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
+import { centerHolder } from '../src/sim/systems/keystone';
+import { UNITS } from '../src/data/units';
+import type { UnitId } from '../src/data/units';
 
 mkdirSync('auswertung/daten', { recursive: true });
 
@@ -33,7 +36,9 @@ const merge = (dst: Record<string, unknown>, src: Record<string, unknown>): void
   }
 };
 
-interface PlayerRec { faction: FactionId; cmds: Record<string, number>; firstResearch: number | null; research: number; energyJam: number; pressureMean?: Record<string, number> }
+interface PlayerRec { faction: FactionId; cmds: Record<string, number>; firstResearch: number | null; research: number; energyJam: number; pressureMean?: Record<string, number>;
+  /** Patch 6 (Prüfpunkte): Fabriken bei 3:00, mittlerer Drohnen-Anteil (alle 30 s), Sekunden allein in der Mitte, erster Schlussstein (min). */
+  fac180?: number; droneShare?: number; centerSec?: number; keystone1?: number | null }
 interface GameRec { g: number; pair: number; map: string; seed: number; seconds: number; winner: number | null; players: PlayerRec[]; levels?: AiLevel[] }
 
 function run(label: string, idx: number, games: number): void {
@@ -53,6 +58,7 @@ function run(label: string, idx: number, games: number): void {
     const maxTicks = 30 * 60 * world.tps;
     const cmds: Record<string, number>[] = [{}, {}];
     const firstResearch: (number | null)[] = [null, null];
+    const fac180 = [0, 0]; const share: number[][] = [[], []]; const centerSec = [0, 0];
     while (!world.result && world.tick < maxTicks) {
       const commands: PlayerCommand[] = [];
       for (const ai of ais) for (const cmd of ai.think(world)) {
@@ -62,6 +68,19 @@ function run(label: string, idx: number, games: number): void {
         if (cmd.type === 'research' && firstResearch[ai.player] === null) firstResearch[ai.player] = world.tick / world.tps;
       }
       world.step(commands);
+      if (world.tick % world.tps === 0) { const h = centerHolder(world); if (h !== null) centerSec[h]++; }
+      if (world.tick % (30 * world.tps) === 0) {
+        for (const p of [0, 1]) {
+          let all = 0, dr = 0, fac = 0;
+          for (const e of world.entities) {
+            if (!e.alive || e.owner !== p) continue;
+            if (e.kind === 'building' && e.producer) fac++;
+            if (e.kind === 'unit' && !UNITS[e.defId as UnitId]?.former) { all++; if (e.defId === 'drone') dr++; }
+          }
+          if (all > 0) share[p]!.push(dr / all);
+          if (world.tick === 180 * world.tps) fac180[p] = fac;
+        }
+      }
     }
     const rec: GameRec = {
       g, pair: idx, map, seed, seconds: world.tick / world.tps, winner: world.result?.winner ?? null, levels,
@@ -69,7 +88,9 @@ function run(label: string, idx: number, games: number): void {
         const st = world.players[p]!.stats;
         const pm = (ais[p] as unknown as { pressureLog?: Record<string, number[]> }).pressureLog;
         const mean = pm ? Object.fromEntries(Object.entries(pm).map(([r, xs]) => [r, xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0])) : undefined;
-        return { faction: factions[p]!, cmds: cmds[p]!, firstResearch: firstResearch[p]!, research: st.research, energyJam: st.energyJam, ...(mean ? { pressureMean: mean } : {}) };
+        const sh = share[p]!;
+        return { faction: factions[p]!, cmds: cmds[p]!, firstResearch: firstResearch[p]!, research: st.research, energyJam: st.energyJam, ...(mean ? { pressureMean: mean } : {}),
+          fac180: fac180[p], droneShare: sh.length ? sh.reduce((a, b) => a + b, 0) / sh.length : 0, centerSec: centerSec[p], keystone1: st.keystoneAt[0] ?? null };
       }),
     };
     appendFileSync(path, JSON.stringify(rec) + '\n');
@@ -104,6 +125,10 @@ function summary(label: string): Record<string, string> {
   row['Umwidmen je Partie'] = per((p) => p.cmds.convertFactory ?? 0, (x) => x.toFixed(1));
   row['Spähen je Partie'] = per((p) => p.cmds.scout ?? 0, (x) => x.toFixed(1));
   row['Energie-Stau s je Partie'] = per((p) => p.energyJam, (x) => x.toFixed(0));
+  row['Fabriken bei 3:00'] = per((p) => p.fac180 ?? null, (x) => Number.isNaN(x) ? '–' : x.toFixed(1));
+  row['Drohnen-/Kern-Anteil Ø'] = per((p) => p.droneShare ?? null, (x) => Number.isNaN(x) ? '–' : `${Math.round(100 * x)} %`);
+  row['Mitte allein gehalten s'] = per((p) => p.centerSec ?? null, (x) => Number.isNaN(x) ? '–' : x.toFixed(0));
+  row['Schlussstein vor 10:00'] = per((p) => (p.keystone1 === undefined ? null : p.keystone1 !== null && p.keystone1 < 10 ? 1 : 0), (x) => Number.isNaN(x) ? '–' : `${Math.round(100 * x)} %`);
   return row;
 }
 

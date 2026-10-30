@@ -107,3 +107,22 @@ describe('Schwierigkeit (Patch 4)', () => {
     assert.equal(run(), run());
   });
 });
+
+describe('Myriaden-Plan (Patch 6)', () => {
+  it('Aufbau bis 3:00: kein Spähen, keine Schmelze, Gelege früh, mindestens 4 Fabriken', () => {
+    const world = new World({ map: getMap('felsenpass'), seed: 21, factions: ['myriaden', 'technoclan'] });
+    const ais = [new SimpleAi(0, 91, 'normal'), new SimpleAi(1, 92, 'normal')];
+    world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
+    const myrCmds: string[] = [];
+    for (let t = 0; t < 180 * world.tps; t++) {
+      const cs = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
+      for (const c of cs) if (c.player === 0) myrCmds.push(c.cmd.type === 'research' ? `research:${c.cmd.upgrade}` : c.cmd.type);
+      world.step(cs);
+    }
+    assert.ok(!myrCmds.includes('scout'), 'kein Spähen im Aufbau');
+    const mine = world.entities.filter((e) => e.alive && e.owner === 0 && e.kind === 'building' && e.producer);
+    assert.ok(!mine.some((b) => b.defId === 'foundry'), 'keine Schmelze im Aufbau');
+    assert.ok(myrCmds.includes('research:barracks-clutch-1'), 'Gelege früh');
+    assert.ok(mine.length >= 4, `Fabriken bei 3:00: ${mine.length}`);
+  });
+});

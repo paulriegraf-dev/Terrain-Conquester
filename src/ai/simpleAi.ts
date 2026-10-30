@@ -182,6 +182,8 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
+  /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
+  myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number };
   /**
    * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
    * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
@@ -226,6 +228,7 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
+  myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480 },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
@@ -543,6 +546,41 @@ export class SimpleAi {
     return commands;
   }
 
+  // ------------------------------------------------------------ Myriaden-Plan (Patch 6)
+
+  /**
+   * Patch 6: Myriaden nach der Spielweise des Nutzers (Partien 30.10.) – breit aufbauen (6 Fabriken bis 3:00, Brut und
+   * Werkstatt statt früher Schmelze), Gelege früh, kein Spähen im Aufbau, Drohnen-Kern halten, alternde Drohnen werfen,
+   * Wälle einzeln, Katapult/Verspotter erst im Spätspiel. Nur Entscheidungen der KI, keine Spielwerte.
+   */
+  private myr(world: World): boolean {
+    return AI_TUNING.myrPlan.on && this.level !== 'easy' && world.players[this.player].faction.id === 'myriaden';
+  }
+
+  /** Ab wann Forschung und Stufen nicht mehr hinter der Fabrik-Rücklage warten. */
+  private researchFrom(world: World): number {
+    return this.myr(world) ? AI_TUNING.myrPlan.until : AI_TUNING.researchFrom;
+  }
+
+  /** Anteil der Drohnen-Verbände an der eigenen Armee (ohne Former). */
+  private droneShare(world: World): number {
+    let all = 0, drones = 0;
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'unit' || e.owner !== this.player || UNITS[e.defId as UnitId]?.former) continue;
+      all++;
+      if (e.defId === 'drone') drones++;
+    }
+    return all > 0 ? drones / all : 1;
+  }
+
+  /** Myriaden-Eröffnung: das Gelege (Brut-Ausbau II), sobald zwei Fabriken stehen. */
+  private myrClutch(world: World, factories: number): Command | null {
+    if (factories < 2) return null;
+    const id = 'barracks-clutch-1';
+    const c = checkResearch(world, this.player, id);
+    return c.ok && world.players[this.player].energy >= c.cost ? { type: 'research', upgrade: id } : null;
+  }
+
   // ------------------------------------------------------------ Ökonomie-Arbiter (Patch 3)
 
   /** Bedarf 0–2 je Bereich aus dem Lagebild (0 = jetzt nicht nötig). */
@@ -556,7 +594,7 @@ export class SimpleAi {
       case 'factory': {
         let units = 0;
         for (const e of world.entities) if (e.alive && e.kind === 'unit' && e.owner === this.player) units++;
-        return (world.seconds < AI_TUNING.researchFrom ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
+        return (world.seconds < this.researchFrom(world) ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
       }
       case 'hq': return 0.8;
       case 'terrain': return 1;
@@ -565,7 +603,9 @@ export class SimpleAi {
         const hit = lanes.filter((l) => l.enemyInOwnThird > 0);
         return hit.length ? Math.min(2, 0.3 + 2 * Math.max(0, -Math.min(...hit.map((l) => l.pressure)))) : 0.3;
       }
-      case 'scout': return bb.reportAge === null ? 1.2 : Math.min(2, Math.max(0.3, bb.reportAge / 40));
+      case 'scout':
+        if (this.myr(world) && world.seconds < AI_TUNING.myrPlan.until) return 0; // Patch 6: im Aufbau kein Spähen (25 Energie)
+        return bb.reportAge === null ? 1.2 : Math.min(2, Math.max(0.3, bb.reportAge / 40));
       case 'buys': return 1;
       case 'market': return 0.8;
       case 'disguise': return 0.7;
@@ -579,7 +619,7 @@ export class SimpleAi {
         if (cost <= 0 || !slotFree || factories >= AI_TUNING.saveUntilFactories) return 0;
         const e = world.players[this.player].energy;
         if (e >= cost || e + bb.income60 * 20 < cost) return 0; // schon genug, oder in 20 s nicht erreichbar
-        return 1.5 * (world.seconds < AI_TUNING.researchFrom ? 1 : 0.4);
+        return 1.5 * (world.seconds < this.researchFrom(world) ? 1 : 0.4);
       }
     }
   }
@@ -623,7 +663,9 @@ export class SimpleAi {
     const persona = PERSONA_WEIGHTS[this.strategyId];
     const factories = this.ownBuildings(world).filter((b) => b.producer).length;
     const slotFree = slotLimit(world, this.player) - slotsUsed(world, this.player) > 0;
-    const opening = AI_TUNING.ownPlan.on && factories < AI_TUNING.ownPlan.factories && slotFree;
+    const M = AI_TUNING.myrPlan;
+    const myrOpen = this.myr(world) && factories < M.factories && world.seconds < M.until && slotFree;
+    const opening = myrOpen || (AI_TUNING.ownPlan.on && factories < AI_TUNING.ownPlan.factories && slotFree);
     const tf = me.faction.id === 'terraformer';
     const income = Math.max(1, bb.income60) * 60;
     const score = (d: Domain, need: number): number =>
@@ -636,6 +678,9 @@ export class SimpleAi {
       if (n > 0) cands.push({ d, s: score(d, n) });
     }
     if (plan && !opening) cands.push({ d: 'terrain', s: score('terrain', 1.2), pre: plan });
+    // Patch 6: Myriaden-Gelege früh (Nutzer: 0:34) – als einzige Forschung neben den Fabriken im Aufbau, knapp vor dem Bauen.
+    const clutch = this.myr(world) && world.seconds < M.until ? this.myrClutch(world, factories) : null;
+    if (clutch) cands.push({ d: 'factory', s: score('build', 2) * 1.01, pre: clutch });
     cands.sort((a, b) => b.s - a.s || DOMAINS.indexOf(a.d) - DOMAINS.indexOf(b.d));
     // Patch 4: auf niedrigeren Stufen ab und zu die zweitbeste Wahl – wirkt unentschlossen, nicht unsinnig.
     const second = AI_TUNING.levels[this.level].secondBest;
@@ -923,7 +968,7 @@ export class SimpleAi {
 
   /** Eigener Plan (29.10.): Fehlt das Schwerwerk, wenn die dritte Fabrik ansteht? Dann kommt es jetzt – egal, was der Gegner zeigt. */
   private needHeavy(world: World): boolean {
-    if (!AI_TUNING.ownPlan.on || !buildingIds(world.players[this.player].faction).includes('foundry')) return false;
+    if (!AI_TUNING.ownPlan.on || this.myr(world) || !buildingIds(world.players[this.player].faction).includes('foundry')) return false;
     const mine = this.ownBuildings(world).filter((b) => b.producer);
     return mine.length >= AI_TUNING.ownPlan.factories - 1 && !mine.some((b) => b.defId === 'foundry');
   }
@@ -941,7 +986,10 @@ export class SimpleAi {
     // (Technoclan, Myriaden) steht spätestens als dritte Fabrik. Erst danach zählt, was gesehen wurde.
     const built = ids.reduce((n, id) => n + owned[id], 0);
     const ownPlan = AI_TUNING.ownPlan.on && built < AI_TUNING.ownPlan.factories;
-    const needHeavy = ownPlan && ids.includes('foundry') && owned.foundry === 0 && built >= AI_TUNING.ownPlan.factories - 1;
+    const myr = this.myr(world);
+    const needHeavy = !myr && ownPlan && ids.includes('foundry') && owned.foundry === 0 && built >= AI_TUNING.ownPlan.factories - 1;
+    // Patch 6: Brut bevorzugt, solange Drohnen unter barracksShare der Armee; Schmelze erst im Spätspiel.
+    const broodsWanted = myr && (built === 0 || owned.barracks / Math.max(1, built) < AI_TUNING.myrPlan.barracksShare || this.droneShare(world) < AI_TUNING.myrPlan.barracksShare);
     for (const id of ids) {
       if ((faction.buildings[id]!.slots ?? 1) > free + 1e-9) continue;
       // Linie bewerten: Strategie-Gewicht × wie gut ihre Start-Einheit kontert, was man gesehen hat.
@@ -950,6 +998,11 @@ export class SimpleAi {
       score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
       if (needHeavy && id === 'foundry') score *= 100;
+      if (myr) {
+        if (id === 'barracks' && broodsWanted) score *= 2;
+        if (id === 'workshop' && owned.workshop === 0 && built >= 1) score *= 2; // Werkstatt + Brut zuerst
+        if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.3;
+      }
       // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
       const part = BUILDINGS[id].part;
       if (AI_TUNING.marketWar.on && this.avoidPart === part && world.tick < this.avoidUntil) score *= 0.4;
@@ -1021,6 +1074,8 @@ export class SimpleAi {
         return !!b.producer && !!mx && b.producer.level >= mx.level && !!UNITS[mx.unit].support;
       }).length;
     const agingUnits = world.entities.filter((e) => e.alive && e.owner === this.player && e.lifespan).length;
+    const myr = this.myr(world);
+    const dronesLow = myr && this.droneShare(world) < AI_TUNING.myrPlan.droneShare;
     // Myriaden: Kanone und Katapult brauchen Drohnen als Munition – mindestens eine Fabrik baut sie.
     const ammoUnits = new Set(this.ownBuildings(world).flatMap((b) => (b.producer && UNITS[b.producer.unit].ammo ? [UNITS[b.producer.unit].ammo!.unit] : [])));
     const scoreOf = (u: UnitId, tier: number): number => {
@@ -1038,6 +1093,8 @@ export class SimpleAi {
       let score = this.counterScore(u, world) * (1 + 0.25 * (tier - 1));
       if (def.swarm && def.swarm.perNeighbor > 0) score *= 1.25; // Masse-Bonus
       if (ammoUnits.has(u) && making((x) => x === u) <= 1) score *= 1.6;
+      // Patch 6: Katapult (und damit Verspotter) erst im Spätspiel; früh nur, wenn viel Schweres steht.
+      if (myr && u === 'catapult') score *= world.seconds >= AI_TUNING.myrPlan.siegeFrom || this.seen.heavy > this.seen.infantry + this.seen.light ? 1.4 : 0.5;
       return score * this.biasOf(u);
     };
 
@@ -1047,6 +1104,7 @@ export class SimpleAi {
       // Konter-Hysterese (counterLine): höchstens ein Umrüsten je counterLine.hysteresis s je Fabrik (sonst 90 s).
       const retoolLock = AI_TUNING.counterLine.on ? Math.max(90, AI_TUNING.counterLine.hysteresis) : 90;
       if (world.tick - (this.lastRetool.get(f.id) ?? -1e9) < retoolLock * world.tps) continue;
+      if (dronesLow && pr.unit === 'drone') continue; // Patch 6: Drohnen-Kern halten
       const options = unlockedUnits(world, f);
       // Technoclan-Verbund (25.10.): Einheiten, die mit der Partner-Fabrik der Lane einen Verbund bilden, sind mehr wert –
       // Spezialisierung (gleiche Einheit) etwas mehr als eine Kombination.
@@ -1083,7 +1141,7 @@ export class SimpleAi {
     // Aufbau zuerst (AI_TUNING.buildFirst): nur vom Überschuss über die Fabrik-Rücklage.
     // 30.10. (Partien des Nutzers: KI forschte teils bis 9:30 gar nicht): ab researchFrom Sekunden zählt die Fabrik-Rücklage
     // nicht mehr – Forschung und Stufen dürfen vom Überschuss über die normale Reserve kommen.
-    const keep = AI_TUNING.buildFirst && world.seconds < AI_TUNING.researchFrom ? Math.max(reserve, this.saving) : reserve;
+    const keep = AI_TUNING.buildFirst && world.seconds < this.researchFrom(world) ? Math.max(reserve, this.saving) : reserve;
     if (this.rng.chance(0.6)) {
       // Gebäude-Ausbau (24.10., zentral je Gebäudeart: Gelege, Terraformer-Takt, Gerufene).
       const building = this.pickBuildingUpgrade(world, keep);
@@ -1638,7 +1696,7 @@ export class SimpleAi {
       const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);
       const enough = mine[r] >= ratio * enemy;
       const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
-      const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
+      const aging = (AI_TUNING.agingPush || this.myr(world)) && this.agingShare(world, r) >= 0.5; // Patch 6: alternde Drohnen werfen
       const held = this.pushSince[r] >= 0 && world.tick - this.pushSince[r] >= T.pushHold * world.tps;
       const rising = d > pushEarly && bb.lanes[r].trend > 0;
       if (holding && mine[r] >= minUnits && (aging || ((held || rising) && enough))) {
@@ -1712,7 +1770,10 @@ export class SimpleAi {
   private decideWall(world: World): Command | null {
     const me = world.players[this.player];
     const f = this.profile.walls;
+    // Patch 6: Myriaden setzen Wälle einzeln (höchstens einer je wallGap s), kein Wallteppich.
+    if (this.myr(world) && world.tick - this.lastWall < AI_TUNING.myrPlan.wallGap * world.tps) return null;
     const funnel = this.decideFunnel(world);
+    if (funnel && funnel.type === 'castWall') this.lastWall = world.tick;
     if (funnel) return funnel;
     // Seit Nachtrag G hat der Wall keine Abklingzeit mehr – die KI hält von sich aus 20 s Abstand (wie früher die Ladezeit).
     if (f <= 0 || world.tick - this.lastWall < 20 * world.tps || me.energy < WALL.length * wallTileCost(world, this.player) + 20) return null;
