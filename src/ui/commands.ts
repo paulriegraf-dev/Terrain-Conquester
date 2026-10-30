@@ -9,7 +9,7 @@ import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import { UNITS } from '../data/units';
 import { buildCost } from '../sim/costs';
 import type { BuildingId } from '../data/buildings';
-import { checkConvert, checkMerge, mergePartner, checkLevelUp, checkResearch, checkRushOrder, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { checkConvert, checkLevelUp, checkMerge, checkResearch, checkRushOrder, mergePartner, researchableUnitsOf, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { sellValue } from '../sim/systems/applyCommand';
 import { checkEmergency } from '../sim/systems/emergency';
 import { checkScout } from '../sim/systems/scout';
@@ -569,7 +569,9 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
   const mixDef = player.faction.buildings[e.defId as BuildingId]?.mix;
   const focus = ctx.view.researchFocus; // Kurzwahl (29.10.): eine Einheit oder nur der Ausbau
   const focusUnit = focus?.unit;
-  const ups = focus?.building ? [] : focusUnit ? visibleUpgrades(player.faction, focusUnit, player.research, player.gate.opened > 0) : [
+  // Kurzwahl „ganze Fabrik“ (30.10.): alle erforschbaren Einheiten dieser Gebäudeart plus ihr Ausbau – Schlusssteine nicht (eigenes Panel).
+  const fullUnits = focus?.full ? researchableUnitsOf(world, e.owner, e.defId as BuildingId) : [];
+  const ups = focus?.full ? fullUnits.flatMap((u) => visibleUpgrades(player.faction, u, player.research, false)) : focus?.building ? [] : focusUnit ? visibleUpgrades(player.faction, focusUnit, player.research, player.gate.opened > 0) : [
     ...visibleUpgrades(player.faction, pr.unit, player.research, player.gate.opened > 0),
     // Beimischung (Hund an der Brut ab Stufe III): seine Ketten und sein Schlussstein (26.10.)
     ...(mixDef && pr.level >= mixDef.level ? visibleUpgrades(player.faction, mixDef.unit, player.research, player.gate.opened > 0) : []),
@@ -614,7 +616,7 @@ function researchCommands(ctx: CommandContext, e: Entity): CommandSet {
     });
   });
   buttons.push(backButton());
-  return { title: focus?.building ? `Ausbau · ${player.faction.buildings[e.defId as BuildingId]?.name ?? ''}` : `Forschung · ${UNITS[focusUnit ?? pr.unit].name}`, buttons };
+  return { title: focus?.full ? `Forschung · ${player.faction.buildings[e.defId as BuildingId]?.name ?? ''}` : focus?.building ? `Ausbau · ${player.faction.buildings[e.defId as BuildingId]?.name ?? ''}` : `Forschung · ${UNITS[focusUnit ?? pr.unit].name}`, buttons };
 }
 
 /** Was eine Fabrikstufe bringt (seit 24.10. nur Linien: neue Einheit oder Beimischung). */

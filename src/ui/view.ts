@@ -48,7 +48,7 @@ export interface ViewState {
   swap: { terrain: TerrainId; vertical?: boolean } | null;
   /** Untermenü im Befehlsraster (wie bei klassischen Echtzeit-Strategiespielen). */
   /** Kurzwahl Forschung (29.10.): zeigt im Forschungsmenü eine Einheit oder nur den Gebäude-Ausbau statt der Fabrikeinheit. */
-  researchFocus: { unit?: UnitId; building?: boolean } | null;
+  researchFocus: { unit?: UnitId; building?: boolean; full?: boolean } | null;
   menu: 'main' | 'terrain' | 'disguise' | 'front' | 'ground' | 'research' | 'hero' | 'convert' | 'watch' | 'stock';
   /** Vorbereitungsphase läuft (Gelände formen vor Rundenbeginn). */
   prep: boolean;

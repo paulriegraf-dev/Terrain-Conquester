@@ -1220,7 +1220,7 @@ export class Game {
         this.view.wall = null;
         this.view.swap = null;
         this.view.menu = 'research';
-        this.view.researchFocus = data.full ? null : unit && !bld ? { unit } : { building: true };
+        this.view.researchFocus = data.full ? { full: true } : unit && !bld ? { unit } : { building: true };
         break;
       }
       case 'menu':

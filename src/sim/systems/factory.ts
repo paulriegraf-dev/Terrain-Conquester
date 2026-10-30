@@ -64,6 +64,14 @@ export function checkLevelUp(world: World, e: Entity): Check {
  * Einheitenarten, die Spieler p gerade erforschen kann: alles, was eine eigene Fabrik auf ihrer Stufe bauen kann
  * (seit 24.10. zentral – man muss nicht mehr die Fabrik anklicken, die die Einheit gerade baut).
  */
+/** Einheiten einer Gebäudeart, die Spieler p gerade erforschen kann (Stufen und Beimischungen) – für die Forschungs-Kurzwahl. */
+export function researchableUnitsOf(world: World, p: PlayerId, building: BuildingId): UnitId[] {
+  const fb = world.players[p].faction.buildings[building];
+  if (!fb) return [];
+  const all = researchableUnits(world, p);
+  return [...fb.tiers, ...(fb.mix ? [fb.mix.unit] : []), ...(fb.mix2 ? [fb.mix2.unit] : [])].filter((u, i, arr) => all.includes(u) && arr.indexOf(u) === i);
+}
+
 export function researchableUnits(world: World, p: PlayerId): UnitId[] {
   const out: UnitId[] = [];
   for (const e of world.entities) {

@@ -9,9 +9,9 @@ import type { OvertimeVariant } from '../data/rules';
 import { keystoneKnown } from '../sim/systems/keystone';
 import { keystoneUpgradeName } from './keystoneZone';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
-import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingFor, buildingIds } from '../data/factions';
+import { FACTIONS, FACTION_IDS, PLANNED_FACTIONS, buildingIds } from '../data/factions';
 import type { FactionId } from '../data/factions';
-import { UNITS, UNIT_IDS, emptyUnitCounts, lineUnit } from '../data/units';
+import { UNITS, UNIT_IDS, emptyUnitCounts } from '../data/units';
 import type { UnitId } from '../data/units';
 import type { Entity } from '../sim/entity';
 import { buildCost } from '../sim/costs';
@@ -26,7 +26,7 @@ import { checkPrep } from '../sim/systems/prep';
 import { lockedStock, marketLevel, marketView, productionFactor } from '../sim/systems/market';
 import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/production';
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
-import { ownsBuilding, researchableUnits, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
+import { ownsBuilding, researchableUnitsOf, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
 import { SYNERGY_GROUNDS, laneCounts, synergyFadeLeft, synergyHint, synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
@@ -384,7 +384,6 @@ export class Hud {
       const l = p.labs.find((x) => x.upgrade === id);
       return l ? Math.max(0, Math.ceil((l.doneTick - world.tick) / world.tps)) : null;
     };
-    const tf = p.faction.id === 'terraformer';
     const cell = (cls: string, attrs: string, letter: string, name: string, open: number, run: number | null, tip: string): string =>
       `<button type="button" class="rs-btn${run !== null ? ' rs-run' : ''}${open === 0 && run === null ? ' rs-dim' : ''} ${cls}" data-action="research-shortcut" ${attrs} title="${escapeHtml(tip)}" ${canAct ? '' : 'disabled'}>` +
       (open > 0 ? `<span class="rs-n">${open}</span>` : '') + `<i>${escapeHtml(letter)}</i><span class="rs-name">${escapeHtml(name)}</span>${run !== null ? `<small>⚙ ${run} s</small>` : ''}</button>`;
@@ -394,58 +393,22 @@ export class Hud {
       return l ? labOf(l.upgrade) : null;
     };
     const owned = buildingIds(p.faction).filter((b) => ownsBuilding(world, me, b));
-    // Gebäude-Ausbau je Gebäudeart (Gelege, Erntezeit, Ausrüstung …) ohne die fraktionsweiten Ketten (Naturkraft, Wurzelwerk).
-    const ownUps = (b: BuildingId) => visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => !u.anyBuilding && isOpen(u.id));
-    const ownAll = (b: BuildingId) => p.faction.buildingUpgrades.filter((u) => u.building === b && !u.anyBuilding).map((u) => u.id);
-    const units = researchableUnits(world, me).map((unit) => {
-      const ups = visibleUpgrades(p.faction, unit, p.research).filter((u) => isOpen(u.id));
-      const running = p.labs.map((l) => ({ l, u: p.faction.upgrades.find((x) => x.id === l.upgrade) })).filter((x) => x.u && (x.u.unit === unit || (x.u.keystone && lineUnit(x.u.unit) === unit)));
-      let run = running.length ? labOf(running[0]!.l.upgrade) : null;
-      const fbId = buildingFor(p.faction, unit);
-      if (tf && fbId) {
-        // Terra-Former: je Linienfabrik ein Knopf – Einheiten-Upgrades und der Ausbau dieser Fabrik zusammen (wie R an der Fabrik).
-        const bu = ownUps(fbId);
-        run = run ?? runIn(ownAll(fbId));
-        const names = [...ups.map((u) => u.name), ...bu.map((u) => u.name)];
-        return cell('', `data-unit="${unit}" data-building="${fbId}" data-full="1"`, p.faction.buildings[fbId]!.letter, p.faction.buildings[fbId]!.name, ups.length + bu.length, run,
-          `${p.faction.buildings[fbId]!.name}: ${names.length ? names.join(', ') : 'nichts offen'}. Klick = Forschungsmenü dieser Fabrik (wie R).`);
-      }
-      return cell('', `data-unit="${unit}"`, UNITS[unit].letter, UNITS[unit].name, ups.length, run, `Forschung ${UNITS[unit].name}: ${ups.map((u) => u.name).join(', ') || 'nichts offen'} – gilt für alle ${UNITS[unit].name}. Klick = Forschungsmenü einer passenden Fabrik (wie R).`);
-    });
-    // Technoclan / Myriaden: besonderer Ausbau je Gebäudeart als eigener Knopf, beschriftet mit dem nächsten Schritt (z. B. „Gelege II“);
-    // die Ausrüstungs-Ketten aller Gebäude zusammen als ein Knopf „Ausrüstung“ (öffnet das erste Gebäude mit offener Stufe).
-    const special = (b: BuildingId) => ownUps(b).filter((u) => u.kind !== 'gear');
-    const gearOf = (b: BuildingId) => ownUps(b).filter((u) => u.kind === 'gear');
-    const buildingsBtns = tf ? [] : owned.map((b) => {
-      const bu = special(b);
-      if (bu.length === 0) return '';
+    /** Alle Ausbau-IDs, die im Menü dieser Gebäudeart auftauchen können (für „Forschung läuft“). */
+    const allBuildingIds = (b: BuildingId) => p.faction.buildingUpgrades.filter((u) => u.building === b || (u.anyBuilding && !!p.faction.buildings[b]?.former)).map((u) => u.id);
+    // 30.10. (Nutzer): ein Knopf je eigener Gebäudeart – Einheiten-Upgrades aller Einheiten dieser Fabrikart plus ihr Ausbau
+    // (Gelege, Erntezeit, Ausrüstung …). Schlusssteine zählen nicht (eigenes Panel). Klick = Forschungsmenü dieser Fabrikart.
+    const buildingsBtns = owned.map((b) => {
       const fb = p.faction.buildings[b]!;
-      return cell('rs-build', `data-building="${b}"`, fb.letter, bu[0]!.name, bu.length, runIn(ownAll(b).filter((id) => p.faction.buildingUpgrades.find((u) => u.id === id)?.kind !== 'gear')), `${fb.name} – Ausbau: ${bu.map((u) => `${u.name} (${u.description})`).join(', ')}. Gilt für alle ${fb.name}. Klick = Ausbau-Menü (wie R).`);
+      const unitsOf = researchableUnitsOf(world, me, b);
+      const ups = unitsOf.flatMap((u) => visibleUpgrades(p.faction, u, p.research, false)).filter((u) => isOpen(u.id));
+      // Ausbau wie im Menü dieser Fabrik – bei den Terra-Formern also auch Naturkraft und Wurzelwerk (an jeder Linienfabrik).
+      const bu = visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => isOpen(u.id));
+      const ids = [...p.faction.upgrades.filter((u) => !u.keystone && unitsOf.includes(u.unit)).map((u) => u.id), ...allBuildingIds(b)];
+      const names = [...ups.map((u) => `${u.name} (${UNITS[u.unit].name})`), ...bu.map((u) => u.name)];
+      return cell('', `data-building="${b}" data-full="1"`, fb.letter, fb.name, ups.length + bu.length, runIn(ids),
+        `${fb.name}: ${names.length ? names.join(', ') : 'nichts offen'}. Klick = Forschungsmenü dieser Fabrikart (wie R).`);
     });
-    if (!tf) {
-      const gearBuildings = owned.filter((b) => gearOf(b).length > 0);
-      const gearIds = p.faction.buildingUpgrades.filter((u) => u.kind === 'gear' && !u.anyBuilding).map((u) => u.id);
-      const n = gearBuildings.reduce((k, b) => k + gearOf(b).length, 0);
-      const run = runIn(gearIds);
-      if (n > 0 || run !== null) {
-        const first = gearBuildings[0] ?? owned[0]!;
-        buildingsBtns.push(cell('rs-build', `data-building="${first}"`, '⚙', 'Ausrüstung', n, run, `Ausrüstung (Angriff/Panzerung je Gebäudeart): ${gearBuildings.map((b) => `${p.faction.buildings[b]!.name} ${gearOf(b)[0]!.name}`).join(', ') || 'nichts offen'}. Klick = Ausbau-Menü der ersten Fabrik mit offener Stufe.`));
-      }
-    }
-    // Fraktionsweite Ketten (Terra-Former: Naturkraft, Wurzelwerk) – je Kette ein Knopf mit dem nächsten Schritt.
-    const chains = new Map<string, string[]>();
-    if (owned.some((b) => p.faction.buildings[b]?.former)) {
-      for (const u of p.faction.buildingUpgrades) if (u.anyBuilding) chains.set(`${u.building}-${u.kind}`, [...(chains.get(`${u.building}-${u.kind}`) ?? []), u.id]);
-    }
-    const chainBtns = [...chains.values()].map((ids) => {
-      const open = ids.filter((id) => isOpen(id)).length;
-      if (open === 0 && runIn(ids) === null) return '';
-      const first = p.faction.buildingUpgrades.find((u) => ids.includes(u.id) && isOpen(u.id) && (!u.requires || p.research.includes(u.requires)))
-        ?? p.faction.buildingUpgrades.find((u) => ids.includes(u.id) && isOpen(u.id))
-        ?? p.faction.buildingUpgrades.find((u) => ids.includes(u.id))!;
-      return cell('rs-build', 'data-building="any"', '✦', first.name, open, runIn(ids), `${first.name}: ${first.description}. Gilt fraktionsweit. Klick = Ausbau-Menü einer Linienfabrik (wie R).`);
-    });
-    const html = units.join('') + buildingsBtns.join('') + chainBtns.join('');
+    const html = buildingsBtns.join('');
     const sig = html + canAct;
     if (sig === this.researchSig) return;
     this.researchSig = sig;
