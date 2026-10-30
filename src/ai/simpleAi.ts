@@ -18,6 +18,7 @@ import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
 import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
 import { checkKeystone, hasKeystone, keystoneChoices, mapCenter } from '../sim/systems/keystone';
+import { clutchSize } from '../sim/systems/myr';
 import { checkEmergency } from '../sim/systems/emergency';
 import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
@@ -183,7 +184,10 @@ export const AI_TUNING: {
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
   /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
-  myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number };
+  myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number;
+    /** Patch 7: Druck-Abwehr gegen Terra-Former, Sprengetopp-Beimischung, Forschung erst ab researchAt Fabriken, HQ-Bedarf. */
+    hold: { on: boolean; at: number; release: number; minSeconds: number; counterAfter: number; counterAt: number };
+    bomberMix: { on: boolean; every: number; cycles: number }; researchAt: number; hqNeed: number };
   /**
    * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
    * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
@@ -228,7 +232,9 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
-  myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480 },
+  myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
+    hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
+    bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3 },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
@@ -302,6 +308,12 @@ export class SimpleAi {
   private readonly holdSince: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
   /** Patch 5: letzter Haltungswechsel je Lane durch die Druck-Taktik (Mindest-Verweildauer). */
   private readonly stanceAt: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
+  /** Patch 7: Myriaden unter Druck gegen Terra-Former – seit wann (Tick), bis Entwarnung; -1 = aus. */
+  private pressedSince = -1;
+  private pressedCalmSince = -1;
+  /** Patch 7: Sprengetopp-Beimischung – Brut, zurück auf Drohnen ab Tick, letzte Beimischung. */
+  private mixBack: { id: number; at: number } | null = null;
+  private lastMix = -1e9;
   /** Für den Aufbau zurückgelegte Energie (siehe AI_TUNING) – Nebenmittel nur vom Rest. */
   private saving = 0;
   private lastReport = -1;
@@ -494,6 +506,8 @@ export class SimpleAi {
     if (center) commands.push(center);
     const plan = this.decidePlan(world);
     if (AI_TUNING.arbiter.on && this.level !== 'easy') {
+      const units = this.myrUnits(world, this.updateHold(world));
+      if (units) commands.push(units);
       const route = this.decideRoute(world);
       if (route) commands.push(route);
       const breaker = this.decideBreaker(world);
@@ -581,6 +595,75 @@ export class SimpleAi {
     return c.ok && world.players[this.player].energy >= c.cost ? { type: 'research', upgrade: id } : null;
   }
 
+  /** Patch 7: Myriaden gegen Terra-Former unter Druck? Ein: eine Lane unter hold.at mit Gegnern im eigenen Drittel; aus: alle
+   * Lanes über hold.release seit 15 s und mindestens minSeconds an. */
+  private updateHold(world: World): boolean {
+    const H = AI_TUNING.myrPlan.hold;
+    const bb = this.boardMem.board;
+    if (!H.on || !bb || !this.myr(world) || world.players[1 - this.player].faction.id !== 'terraformer') { this.pressedSince = -1; return false; }
+    const hot = ROUTES.some((r) => bb.lanes[r].pressure < H.at && bb.lanes[r].enemyInOwnThird > 0);
+    if (this.pressedSince < 0) {
+      if (hot) { this.pressedSince = world.tick; this.pressedCalmSince = -1; }
+      return this.pressedSince >= 0;
+    }
+    const calm = ROUTES.every((r) => bb.lanes[r].pressure > H.release);
+    if (!calm) this.pressedCalmSince = -1;
+    else if (this.pressedCalmSince < 0) this.pressedCalmSince = world.tick;
+    if (calm && world.tick - this.pressedCalmSince >= 15 * world.tps && world.tick - this.pressedSince >= H.minSeconds * world.tps) this.pressedSince = -1;
+    return this.pressedSince >= 0;
+  }
+
+  /** Patch 7: Soll Lane r im Druck-Modus verteidigt werden? (Gegner im eigenen Drittel oder Druck unter release) */
+  private holdWants(_world: World, r: Route): boolean {
+    const bb = this.boardMem.board;
+    return this.pressedSince >= 0 && !!bb && (bb.lanes[r].enemyInOwnThird > 0 || bb.lanes[r].pressure < AI_TUNING.myrPlan.hold.release);
+  }
+
+  /** Patch 7: Unter Druck eine Werkstatt auf Stufe II (Katapult) – bezahlter Befehl, läuft über den Arbiter. */
+  private holdWorkshopUp(world: World): Command | null {
+    const ws = this.ownBuildings(world).filter((b) => b.defId === 'workshop' && b.producer && !b.producer.job);
+    if (ws.length === 0 || this.ownBuildings(world).some((b) => b.defId === 'workshop' && (b.producer?.level ?? 0) >= 2)) return null;
+    const f = ws.find((b) => checkLevelUp(world, b).ok);
+    return f ? { type: 'upgradeFactory', entityId: f.id } : null;
+  }
+
+  /**
+   * Patch 7, kostenlose Einheitenwahl der Myriaden: unter Druck baut die Werkstatt auf Stufe II Katapulte (Zeit gewinnen,
+   * Verspotter ziehen das Feuer); sonst alle bomberMix.every s eine Brut auf Stufe II für bomberMix.cycles Gelege auf Sprengetopp
+   * (Fläche und Durchmischung), danach zurück auf Drohnen.
+   */
+  private myrUnits(world: World, holding: boolean): Command | null {
+    if (!this.myr(world)) return null;
+    const own = this.ownBuildings(world);
+    if (holding) {
+      const ws = own.find((b) => b.defId === 'workshop' && b.producer && !b.producer.job && b.producer.level >= 2);
+      if (ws && ws.producer!.unit !== 'catapult' && !own.some((b) => b.producer?.unit === 'catapult')) {
+        this.lastRetool.set(ws.id, world.tick);
+        return { type: 'selectUnit', entityId: ws.id, unit: 'catapult' };
+      }
+    }
+    const M = AI_TUNING.myrPlan.bomberMix;
+    if (this.mixBack) {
+      const b = world.get(this.mixBack.id);
+      if (!b || !b.alive) { this.mixBack = null; return null; }
+      if (world.tick < this.mixBack.at || b.producer?.job) return null;
+      this.mixBack = null;
+      if (b.producer!.unit !== 'bomber') return null;
+      this.lastRetool.set(b.id, world.tick);
+      return { type: 'selectUnit', entityId: b.id, unit: 'drone' };
+    }
+    if (!M.on || world.tick - this.lastMix < M.every * world.tps || this.droneShare(world) < AI_TUNING.myrPlan.droneShare) return null;
+    const brood = own.find((b) => b.defId === 'barracks' && b.producer && !b.producer.job && b.producer.level >= 2 && b.producer.unit === 'drone');
+    if (!brood) return null;
+    const me = world.players[this.player];
+    const clutch = clutchSize(world, brood) ?? 6;
+    const cycle = (clutch * UNITS.bomber.spawnInterval) / (me.faction.productionSpeed ?? 1);
+    this.lastMix = world.tick;
+    this.mixBack = { id: brood.id, at: world.tick + Math.round(M.cycles * cycle * world.tps) };
+    this.lastRetool.set(brood.id, world.tick);
+    return { type: 'selectUnit', entityId: brood.id, unit: 'bomber' };
+  }
+
   // ------------------------------------------------------------ Ökonomie-Arbiter (Patch 3)
 
   /** Bedarf 0–2 je Bereich aus dem Lagebild (0 = jetzt nicht nötig). */
@@ -594,9 +677,10 @@ export class SimpleAi {
       case 'factory': {
         let units = 0;
         for (const e of world.entities) if (e.alive && e.kind === 'unit' && e.owner === this.player) units++;
+        if (factories < AI_TUNING.myrPlan.researchAt) return 0; // Patch 7: erst 2–3 Fabriken, dann Forschung und Stufen
         return (world.seconds < this.researchFrom(world) ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
       }
-      case 'hq': return 0.8;
+      case 'hq': return AI_TUNING.myrPlan.hqNeed; // Patch 7: HQ-Ausbau nebensächlich, erst Kampfkraft (vorher 0,8)
       case 'terrain': return 1;
       case 'wall': {
         if (this.funnelStep) return 1.5;
@@ -681,6 +765,9 @@ export class SimpleAi {
     // Patch 6: Myriaden-Gelege früh (Nutzer: 0:34) – als einzige Forschung neben den Fabriken im Aufbau, knapp vor dem Bauen.
     const clutch = this.myr(world) && world.seconds < M.until ? this.myrClutch(world, factories) : null;
     if (clutch) cands.push({ d: 'factory', s: score('build', 2) * 1.01, pre: clutch });
+    // Patch 7: unter Druck gegen Terra-Former zuerst die Katapult-Werkstatt.
+    const wsUp = this.pressedSince >= 0 ? this.holdWorkshopUp(world) : null;
+    if (wsUp) cands.push({ d: 'factory', s: score('build', 2) * 1.05, pre: wsUp });
     cands.sort((a, b) => b.s - a.s || DOMAINS.indexOf(a.d) - DOMAINS.indexOf(b.d));
     // Patch 4: auf niedrigeren Stufen ab und zu die zweitbeste Wahl – wirkt unentschlossen, nicht unsinnig.
     const second = AI_TUNING.levels[this.level].secondBest;
@@ -1568,7 +1655,26 @@ export class SimpleAi {
     for (const r of ROUTES) {
       const target = me.pendingStance[r]?.stance ?? me.stance[r];
       if (this.baseThreat[r] >= threat && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
-      if (this.baseThreat[r] < 0.5 && target === 'defend') return { type: 'setStance', route: r, stance: 'hold' };
+      if (this.baseThreat[r] < 0.5 && target === 'defend' && !this.holdWants(world, r)) return { type: 'setStance', route: r, stance: 'hold' };
+    }
+    // Patch 7: Myriaden unter Druck gegen Terra-Former – bedrängte Lanes verteidigen; steht auf einer anderen Lane genug und
+    // läuft der große Angriff woanders, nach counterAfter s dort Front (Druck auf die gegnerische Basis).
+    if (this.pressedSince >= 0) {
+      const H = AI_TUNING.myrPlan.hold;
+      const bb = this.boardMem.board!;
+      for (const r of ROUTES) {
+        const target = me.pendingStance[r]?.stance ?? me.stance[r];
+        if (this.holdWants(world, r) && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
+      }
+      if (world.tick - this.pressedSince >= H.counterAfter * world.tps) {
+        const minUnits = Math.max(3, 12 * armyScale(world));
+        const hot = [...ROUTES].sort((a, b) => bb.lanes[a].pressure - bb.lanes[b].pressure)[0]!;
+        for (const r of ROUTES) {
+          const target = me.pendingStance[r]?.stance ?? me.stance[r];
+          if (r === hot || target === 'push' || target === 'defend') continue;
+          if (bb.lanes[r].pressure > H.counterAt && mine[r] >= minUnits) { this.stanceAt[r] = world.tick; return { type: 'setStance', route: r, stance: 'push' }; }
+        }
+      }
     }
     const late = latePhase(world);
     if (!late && world.seconds < 150) return null; // erst Grenzen ziehen, dann vorstoßen

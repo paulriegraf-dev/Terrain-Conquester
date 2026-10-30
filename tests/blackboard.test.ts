@@ -126,3 +126,28 @@ describe('Myriaden-Plan (Patch 6)', () => {
     assert.ok(mine.length >= 4, `Fabriken bei 3:00: ${mine.length}`);
   });
 });
+
+describe('Myriaden (Patch 7)', () => {
+  it('Sprengetopp-Beimischung: eine Brut wechselt auf Sprengetopp und später zurück auf Drohnen; keine Forschung vor 2 Fabriken', () => {
+    const world = new World({ map: getMap('felsenpass'), seed: 23, factions: ['myriaden', 'terraformer'] });
+    const ais = [new SimpleAi(0, 93, 'normal'), new SimpleAi(1, 94, 'normal')];
+    world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
+    const sel: string[] = [];
+    let researchEarly = false;
+    for (let t = 0; t < 600 * world.tps && !world.result; t++) {
+      const cs = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
+      for (const c of cs) {
+        if (c.player !== 0) continue;
+        if (c.cmd.type === 'selectUnit') sel.push(`${c.cmd.entityId}:${c.cmd.unit}`);
+        const fac = world.entities.filter((e) => e.alive && e.owner === 0 && e.kind === 'building' && e.producer).length;
+        if (c.cmd.type === 'research' && fac < 2) researchEarly = true;
+      }
+      world.step(cs);
+    }
+    const bomb = sel.find((x) => x.endsWith(':bomber'));
+    assert.ok(bomb, `Sprengetopp gewählt (${sel.join(', ')})`);
+    const id = bomb!.split(':')[0];
+    assert.ok(sel.slice(sel.indexOf(bomb!)).includes(`${id}:drone`), 'zurück auf Drohnen');
+    assert.ok(!researchEarly, 'keine Forschung vor 2 Fabriken');
+  });
+});
