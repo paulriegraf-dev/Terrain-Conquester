@@ -57,17 +57,21 @@ for (let g = have; g < Number(b); g++) {
       walls[p]!.push(n);
     }
   };
+  const firstHq: (number | null)[] = [null, null];
   while (!world.result && world.tick < maxTicks) {
     const commands: PlayerCommand[] = [];
     for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });
     world.step(commands);
     if (world.tick % (5 * world.tps) === 0) sample();
+    for (const q of [0, 1] as const) if (firstHq[q] === null && world.players[q].stats.hqDamageDealt > 0) firstHq[q] = world.tick / world.tps;
   }
   const rec = {
-    g, pair: idx, map: MAPS[g % 2], seconds: world.tick / world.tps, winner: world.result?.winner ?? null, factions, units, walls, models, squads,
+    g, pair: idx, map: MAPS[g % 2], seconds: world.tick / world.tps, winner: world.result?.winner ?? null, factions, units, walls, models, squads, firstHq,
     players: world.players.map((p) => ({
       built: Object.values(p.stats.spawned).reduce((x, y) => x + y, 0), lost: Object.values(p.stats.lost).reduce((x, y) => x + y, 0),
       kills: p.stats.kills, wallsBuilt: p.stats.walls, damageBy: p.stats.damageBy, damageTo: p.stats.damageTo, damageSplit: p.stats.damageSplit, spawned: p.stats.spawned,
+      // 30.10.: Auffälligkeiten – Schlusssteine (Minute je Wahl, vorgezogene Fenster), Eliten, Fabrikverluste, Beute, HQ-Schaden, erster HQ-Treffer.
+      keystones: p.gate.chosen.map((c) => c.tick / world.tps), earlyWindows: p.gate.early, elites: p.stats.elites, buildingsLost: p.stats.buildingsLost, bounty: p.stats.bounty, hqDealt: p.stats.hqDamageDealt,
     })),
   };
   appendFileSync(file(idx), JSON.stringify(rec) + '\n');
