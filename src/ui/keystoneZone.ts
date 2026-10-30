@@ -42,7 +42,7 @@ const LINES = {
   more: ['Ein weiterer Schlussstein, Kommandant. Nutzen Sie ihn.', 'Der Feind rüstet. Wir sollten nachziehen.', 'Noch eine Entscheidung, die den Tag wenden kann.'],
   centerOwn: 'Die Mitte hält, Kommandant. Noch vierzig Sekunden, dann ziehen wir vor.',
   centerFoe: 'Der Feind hält die Mitte – wenn wir ihn nicht vertreiben, rüstet er vor uns.',
-  early: 'Die Mitte ist unser! Der nächste Schlussstein ist jetzt verfügbar.',
+  early: 'Die Mitte ist unser! Der nächste Schlussstein ist jetzt verfügbar – vor dem Feind.',
   waiting: 'Kommandant, die Wahl steht noch aus.',
   two: 'Zwei Schlusssteine warten. Länger sollten wir nicht zögern.',
   foe: (name: string): string => `Der Feind hat einen Schlussstein gesetzt: ${name}. Wir sollten darauf reagieren.`,

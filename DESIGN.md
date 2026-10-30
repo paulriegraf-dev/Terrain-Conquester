@@ -2176,3 +2176,15 @@ Erster Blick (12 KI-Partien, 4 je Paarung, vor dem Veröffentlichen): Median 13 
 ## KI hält die Mitte (30.10., nach zwei Partien des Nutzers)
 - Befund (Replays 30.10., Version `1684521a`): Der Nutzer hält die Mitte früh mit Halten/Sichern (Myriaden gegen Technoclan: 130 s gehalten, KI 4 s). Erstes Fenster dadurch schon bei 2:48; danach läuft der 2,5-min-Takt ab dort weiter (5:18, 7:48) – drei Schlusssteine vor Minute 9, die KI keinen. Das folgt der Regel in Abschnitt B oben, heißt aber: Ein frühes Halten zieht den ganzen Takt vor 10:00. Ob das so bleiben soll, ist offen (Nutzer-Entscheidung).
 - **KI (`AI_TUNING.centerRoute`):** Mindestens eine Fabrik bleibt auf der Mitte; der Angriffs-Routenwechsel nimmt nie die letzte Mitte-Fabrik weg. Kurzer Vergleich (8 KI-Partien je Seite, 4 Paarungen): Mitte gehalten Ø 116 → 167 s je Partie, Fenster vor 10:00 bei 3 → 1 von 16 Spielern (beide KIs blockieren sich nun gegenseitig in der Mitte), Median-Dauer 10,9 → 12,6 min. Gegen einen Spieler, der die Mitte hält, steht die KI jetzt dort und bestreitet sie.
+
+## Schlussstein-Takt und Zentrum neu (30.10. mittags, Nutzer-GO)
+
+Anlass: Die Regel vom 28.10. („60 s Mitte → Fenster sofort, der Takt läuft ab dort weiter“) hatte keine Startzeit; ein frühes Halten zog den ganzen Takt vor 10:00 (Replay: drei Schlusssteine vor Minute 9, KI keinen). Grundsatz des Nutzers: Schlusssteine ab etwa 10/11 min, das Zentrum ist umkämpftes Gebiet, wer es hält, bekommt „einen Tick früher“.
+
+- **Mitte zählt erst ab 8:00** (`keystoneGate.centerFrom` 480). Vorher kein Fortschritt.
+- **Erstes Fenster für beide bei 10:00.** Wer die Mitte vorher 60 s allein hält, bekommt sein erstes Fenster sofort (frühestens 9:00); sein 10:00-Fenster entfällt, das nächste kommt regulär bei 12:00. Der Gegner bekommt seins bei 10:00.
+- **Danach alle 2 min** (`every` 120, vorher 150): 12:00, 14:00, 16:00 …
+- **Stabil halten:** Wer die Mitte im Moment voll hält (60 s Fortschritt), bekommt jedes weitere Fenster `centerLead` = 30 s früher (11:30 statt 12:00). Der Takt bleibt, der Vorsprung summiert sich nicht.
+- Unverändert: höchstens 2 Guthaben, nichts verfällt, 10 s Abbau ohne Kontrolle.
+- **KI:** 30 s vor 8:00 setzt sie die Stellung einer Mitte-Fabrik an den Rand der Kartenmitte (eigene Hälfte; `decideCenterRally`). Ihre haltenden Verbände sammeln sich dort. Solange sie die Mitte hält (oder die Stellung steht), rückt die Mitte-Lane nicht vor (`keepMid`). Dazu die Mitte-Fabrik aus `centerRoute`.
+- Code: `updateGates` in `src/sim/systems/keystone.ts`; Tests in `tests/schlusssteine.test.ts`.

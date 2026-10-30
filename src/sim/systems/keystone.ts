@@ -372,19 +372,25 @@ function grantWindow(world: World, p: PlayerId, early: boolean): void {
 }
 
 /**
- * Fenster öffnen (im 2,5-Minuten-Takt ab 10:00 und vorzeitig über die gehaltene Mitte), einmal je Sekunde. Alle Zeiten
- * aus Ticks (Lockstep). Der Mitte-Fortschritt steigt je gehaltener Sekunde um 1 und fällt ohne Kontrolle so, dass ein
- * voller Ring in centerDecay s leer ist.
+ * Fenster öffnen, einmal je Sekunde, alle Zeiten aus Ticks (Lockstep). Regel seit 30.10. (Nutzer):
+ * - Takt für beide: `first` (10:00), dann alle `every` s (12:00, 14:00 …). `gate.next` ist das nächste reguläre Fenster.
+ * - Die Mitte zählt erst ab `centerFrom` (8:00). Fortschritt +1 je gehaltener Sekunde, ohne Kontrolle leer in `centerDecay` s.
+ * - Vor dem ersten Fenster: Wer die Mitte `centerHold` s hält, bekommt sein erstes Fenster sofort; sein 10:00-Fenster entfällt
+ *   (nächstes regulär bei 12:00). Der Gegner bekommt seins bei 10:00.
+ * - Danach: Hält man die Mitte stabil (voller Fortschritt) `centerLead` s vor dem nächsten Fenster, öffnet es sofort; der Takt
+ *   bleibt (das übernächste kommt regulär) – kein aufsummierter Vorsprung.
  */
 export function updateGates(world: World): void {
   if (world.tick % world.tps !== 0) return;
   const g = world.rules.keystoneGate;
-  const holder = g.center ? centerHolder(world) : null;
+  const centerOpen = g.center && world.tick >= Math.round(g.centerFrom * world.tps);
+  const holder = centerOpen ? centerHolder(world) : null;
+  const step = Math.round(g.every * world.tps);
   for (const p of [0, 1] as PlayerId[]) {
     const gate = world.players[p].gate;
     if (world.tick >= gate.next) {
       grantWindow(world, p, false);
-      gate.next += Math.round(g.every * world.tps);
+      gate.next += step;
     }
     if (holder === p) {
       if (gate.holdSince < 0) gate.holdSince = world.tick;
@@ -392,11 +398,13 @@ export function updateGates(world: World): void {
       gate.hold = Math.min(g.centerHold, gate.hold + 1);
       if (before < 20 && gate.hold >= 20) world.emit({ type: 'center', owner: p, held: 20 });
       if (gate.hold >= g.centerHold) {
-        // Vorzeitig: das nächste Fenster öffnet jetzt, der Takt läuft ab hier weiter; die Mitte muss neu gehalten werden.
-        grantWindow(world, p, true);
-        gate.next = world.tick + Math.round(g.every * world.tps);
-        gate.hold = 0;
-        gate.holdSince = world.tick;
+        const first = Math.round(g.first * world.tps);
+        const beforeFirst = gate.opened === 0 && world.tick < first && gate.next === first;
+        const lead = gate.next - world.tick <= Math.round(g.centerLead * world.tps);
+        if (beforeFirst || (gate.opened > 0 && lead)) {
+          grantWindow(world, p, true);
+          gate.next += step; // dieses reguläre Fenster ist damit genommen
+        }
       }
     } else {
       gate.holdSince = -1;

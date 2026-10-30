@@ -105,17 +105,17 @@ describe('Schlusssteine Myriaden (26.10.)', () => {
 });
 
 describe('Schlussstein-Fenster (28.10. abends)', () => {
-  it('erstes Fenster 10:00, danach alle 2,5 Minuten; Guthaben höchstens 2, das dritte wartet bis zur Wahl', () => {
+  it('erstes Fenster 10:00, danach alle 2 Minuten (30.10.); Guthaben höchstens 2, das dritte wartet bis zur Wahl', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
     const g = world.players[0].gate;
     assert.equal(g.next, 600 * world.tps);
-    for (const [t, credits, pending] of [[600, 1, 0], [750, 2, 0], [900, 2, 1]] as const) {
+    for (const [t, credits, pending] of [[600, 1, 0], [720, 2, 0], [840, 2, 1]] as const) {
       world.tick = t * world.tps;
       updateGates(world);
       assert.equal(g.credits, credits, `bei ${t} s`);
       assert.equal(g.pending, pending, `bei ${t} s`);
     }
-    assert.equal(g.next, 1050 * world.tps);
+    assert.equal(g.next, 960 * world.tps);
     assert.equal(chooseKeystone(world, 0, 'wardMeadow-keystone').ok, true);
     assert.equal(g.credits, 2, 'das wartende Fenster wird sofort gutgeschrieben');
     assert.equal(g.pending, 0);
@@ -173,37 +173,42 @@ describe('Schlussstein-Fenster (28.10. abends)', () => {
     assert.equal(keystoneKnown(world, 1, 0, 'wardMeadow-keystone'), true, 'nach 30 s sichtbar');
   });
 
-  it('Zentrum: 60 s allein halten öffnet das nächste Fenster sofort; ohne Kontrolle leert sich der Ring in 10 s', () => {
+  it('Zentrum (30.10.): vor 8:00 zählt die Mitte nicht; 60 s halten ab 8:00 → erstes Fenster sofort, der Gegner bei 10:00; ohne Kontrolle leert sich der Ring in 10 s', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich, ...tf });
     const c = mapCenter(world);
     const u = world.addUnit(0, UNITS.wardMeadow, { x: c.x, y: c.y }, 'mid');
     u.mover!.speed = 0;
     u.weapon = undefined;
     const g = world.players[0].gate;
-    for (let t = 1; t <= 30; t++) {
-      world.tick = (100 + t) * world.tps;
+    const at = (sec: number): void => {
+      world.tick = sec * world.tps;
       updateGates(world);
-    }
+    };
+    for (let t = 100; t <= 200; t++) at(t);
+    assert.equal(g.hold, 0, 'vor 8:00 kein Fortschritt');
+    assert.equal(g.credits, 0);
+    for (let t = 480; t < 510; t++) at(t);
     assert.equal(g.hold, 30);
     u.pos.x += 10; // kurz raus
-    for (let t = 31; t <= 35; t++) {
-      world.tick = (100 + t) * world.tps;
-      updateGates(world);
-    }
+    for (let t = 510; t < 515; t++) at(t);
     assert.equal(g.hold, 0, '30 s Fortschritt sind nach 5 s ohne Kontrolle weg (60 s in 10 s)');
     u.pos.x -= 10;
-    for (let t = 36; t <= 96; t++) {
-      world.tick = (100 + t) * world.tps;
-      updateGates(world);
-    }
-    assert.equal(g.credits, 1);
+    for (let t = 515; t < 575; t++) at(t);
+    assert.equal(g.credits, 1, 'erstes Fenster sofort (vor 10:00)');
     assert.equal(g.early, 1);
-    assert.equal(g.next, world.tick - 1 * world.tps + 150 * world.tps, 'der Takt läuft ab dem vorgezogenen Fenster');
-    assert.equal(world.players[1].gate.credits, 0, 'dem Gegner geht nichts verloren, er bekommt aber auch nichts');
+    assert.equal(g.next, 720 * world.tps, 'sein 10:00-Fenster ist damit genommen, das nächste regulär bei 12:00');
+    for (let t = 575; t <= 600; t++) at(t);
+    assert.equal(world.players[1].gate.credits, 1, 'der Gegner bekommt seins bei 10:00');
+    assert.equal(g.credits, 1, 'bei 10:00 kein zweites für den Halter');
+    // stabil halten: das 12:00-Fenster öffnet 30 s früher
+    for (let t = 601; t <= 690; t++) at(t);
+    assert.equal(g.credits, 2, 'bei 11:30 (30 s vor 12:00) mit stabiler Mitte');
+    assert.equal(g.next, 840 * world.tps, 'der Takt bleibt (14:00), der Vorsprung summiert sich nicht');
+    for (let t = 691; t <= 720; t++) at(t);
+    assert.equal(world.players[1].gate.credits, 2, 'Gegner bei 12:00');
     const foe = world.addUnit(1, UNITS.sniper, { x: c.x + 1, y: c.y }, 'mid');
     foe.mover!.speed = 0;
-    world.tick += world.tps;
-    updateGates(world);
+    at(721);
     assert.equal(g.holdSince, -1, 'ein Gegner in der Mitte unterbricht das Halten');
   });
 

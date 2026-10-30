@@ -17,7 +17,7 @@ import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
 import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
-import { checkKeystone, hasKeystone, keystoneChoices } from '../sim/systems/keystone';
+import { checkKeystone, hasKeystone, keystoneChoices, mapCenter } from '../sim/systems/keystone';
 import { checkEmergency } from '../sim/systems/emergency';
 import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
@@ -49,6 +49,7 @@ import { ANTI_HEAVY_PAIRS, AREA_PAIRS, COUNTER_LINE, GROUND_BUILDING, SYNERGY_PL
 import type { SeenClass, SynergyPlanDef } from './plans';
 import { productionFactor } from '../sim/systems/market';
 import { SYNERGY_GROUNDS, laneCounts } from '../sim/systems/synergy';
+import { checkRally } from '../sim/systems/rally';
 
 /**
  * Gegner-KI. Sie spielt nach denselben Regeln wie du:
@@ -203,6 +204,8 @@ export class SimpleAi {
   /** Myr-Brechstange: Lane, auf der Drohnen gesammelt werden, und Pause nach einem Fehlschlag. */
   private breakerGather: { route: Route; since: number } | null = null;
   private breakerPauseUntil = 0;
+  /** Fabrik, deren Stellung an der Kartenmitte steht (30.10.). */
+  private centerRally: number | null = null;
   /** Gegnerische Brechstangen, gegen die schon eine Schlucht versucht wurde. */
   private readonly breakerSeen = new Set<number>();
   private lastRouteChange = 0;
@@ -400,6 +403,8 @@ export class SimpleAi {
     // Schlussstein-Fenster (28.10. abends): kostenlos – sofort wählen.
     const ks = this.pickKeystone(world);
     if (ks) commands.push(ks);
+    const center = this.decideCenterRally(world);
+    if (center) commands.push(center);
     const plan = this.decidePlan(world);
     if (plan) commands.push(plan);
     const build = this.decideBuild(world);
@@ -650,6 +655,41 @@ export class SimpleAi {
     const perZone: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
     for (const b of this.ownBuildings(world)) perZone[zoneAt(world.map.height, b.pos.y)]++;
     return [...ROUTES].sort((a, b) => perZone[a] - perZone[b]);
+  }
+
+  /**
+   * Zentrum (30.10.): 30 s bevor die Mitte zählt (centerFrom), setzt die KI die Stellung einer Mitte-Fabrik an den Rand der
+   * Kartenmitte (eigene Hälfte) – ihre haltenden Verbände sammeln sich dort und bestreiten die Mitte. Fällt die Fabrik oder
+   * steht keine Fabrik auf der Mitte, versucht sie es mit der nächsten.
+   */
+  private decideCenterRally(world: World): Command | null {
+    if (!AI_TUNING.aiCenter || this.level !== 'normal') return null;
+    const g = world.rules.keystoneGate;
+    if (!g.center || world.tick < Math.round((g.centerFrom - 30) * world.tps) || world.tick % (5 * world.tps) !== 0) return null;
+    if (this.centerRallyActive(world)) return null;
+    const mid = this.ownBuildings(world).filter((b) => b.producer && b.producer.route === 'mid');
+    const b = mid[0];
+    if (!b) return null;
+    const c = mapCenter(world);
+    const dir = this.player === 0 ? -1 : 1;
+    for (const dx of [1, 0, 2]) {
+      for (const dy of [0, -1, 1]) {
+        const x = Math.floor(c.x) + dir * dx;
+        const y = Math.floor(c.y) + dy;
+        if (!checkRally(world, b, x, y)) {
+          this.centerRally = b.id;
+          return { type: 'setRally', entityId: b.id, x, y };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Steht die Zentrums-Stellung (Fabrik lebt, Stellung gesetzt)? */
+  private centerRallyActive(world: World): boolean {
+    if (this.centerRally === null) return false;
+    const b = world.get(this.centerRally);
+    return !!b && b.alive && !!b.producer?.rally && b.producer.route === 'mid';
   }
 
   /** Eigener Plan (29.10.): Fehlt das Schwerwerk, wenn die dritte Fabrik ansteht? Dann kommt es jetzt – egal, was der Gegner zeigt. */
@@ -1244,7 +1284,9 @@ export class SimpleAi {
     // Zentrumsanreiz (26.10. spät, AI_TUNING.aiCenter): Hält die KI die Kartenmitte seit 30 s ohne Gegner und ist das nächste
     // Tor über 60 s entfernt, bleibt die Haltung der Mitte, wie sie ist (die Truppen sollen dort stehen bleiben).
     const gate = me.gate;
-    const keepMid = AI_TUNING.aiCenter && gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps && gate.next - world.tick > 60 * world.tps;
+    // 30.10.: Die Mitte zählt ab centerFrom (8:00); wer sie stabil hält, bekommt jedes Fenster früher – also nicht mehr vorrücken,
+    // solange man sie hält (andere Lanes dürfen weiter drücken).
+    const keepMid = AI_TUNING.aiCenter && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
       if (keepMid && r === 'mid') continue;

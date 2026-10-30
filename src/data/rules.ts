@@ -194,7 +194,7 @@ export interface Rules {
    * nächste Fenster öffnet sofort; ohne Kontrolle leert sich der Fortschritt in `centerDecay` s. Gegnerische Wahl ohne
    * Spähbericht erst nach `revealDelay` s sichtbar.
    */
-  keystoneGate: { first: number; every: number; maxCredits: number; cost: number; center: boolean; centerHold: number; centerDecay: number; centerSize: number; revealDelay: number };
+  keystoneGate: { first: number; every: number; maxCredits: number; cost: number; center: boolean; centerHold: number; centerDecay: number; centerSize: number; revealDelay: number; centerFrom: number; centerLead: number };
   keystone: {
     enabled: boolean; only: 'all' | 'wards' | 'summons';
     homeThreshold: number; homeHeal: number; homeRadius: number;
@@ -425,7 +425,10 @@ export const RULES: Rules = {
     surge: { prices: [120, 180, 260], seconds: 60, factor: 1.3, from: 1e9 }, // Pur-Profil: Nachschub aus (vorher ab 480 s)
   },
   mudStacks: { enabled: true, perHit: 1, max: 6, dps: 1, decayAfter: 3, decay: 1, slingStacks: 2, slowFactor: 0.7, toughness: false },
-  keystoneGate: { first: 600, every: 150, maxCredits: 2, cost: 0, center: true, centerHold: 60, centerDecay: 10, centerSize: 5, revealDelay: 30 },
+  // 30.10. (Nutzer): Mitte erst ab 8:00 einnehmbar (centerFrom). Fenster für beide ab 10:00, dann alle 2 min. Wer die Mitte vor
+  // 10:00 60 s hält, bekommt sein erstes Fenster sofort (frühestens 9:00) – der Gegner trotzdem bei 10:00. Danach öffnet jedes
+  // Fenster für den, der die Mitte im Moment stabil hält (60 s), `centerLead` s früher; der Vorsprung summiert sich nicht.
+  keystoneGate: { first: 600, every: 120, maxCredits: 2, cost: 0, center: true, centerHold: 60, centerDecay: 10, centerSize: 5, revealDelay: 30, centerFrom: 480, centerLead: 30 },
   keystone: {
     enabled: true, only: 'all',
     homeThreshold: 0.5, homeHeal: 5, homeRadius: 12,

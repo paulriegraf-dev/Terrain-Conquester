@@ -415,7 +415,7 @@ function basicsTab(): string {
   ])}
   ${section('Forschung, HQ und Held', [
     `Forschung (bis ${r.researchSlots} gleichzeitig): <b>Ausrüstung I–III</b> je Fabrikart (Angriff und Panzerung aller Einheiten dieser Fabrik, Heiler: Heilung) und einzelne Sonder-Upgrades. Terra-Former zusätzlich <b>Naturkraft</b> (Gerufene) und <b>Wurzelwerk</b> (Terraformer). Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
-    `<b>Schlusssteine</b> kommen in Fenstern: das erste bei ${Math.round(r.keystoneGate.first / 60)}:00, danach alle ${r.keystoneGate.every / 60} Minuten; je Fenster eine Karte wählen (Taste K) – kostenlos und sofort wirksam, höchstens ${r.keystoneGate.maxCredits} Wahlen auf Vorrat. Wer die Kartenmitte ${r.keystoneGate.centerHold} s allein hält, bekommt sein nächstes Fenster sofort.`,
+    `<b>Schlusssteine</b> kommen in Fenstern: das erste bei ${Math.round(r.keystoneGate.first / 60)}:00, danach alle ${r.keystoneGate.every / 60} Minuten; je Fenster eine Karte wählen (Taste K) – kostenlos und sofort wirksam, höchstens ${r.keystoneGate.maxCredits} Wahlen auf Vorrat. Die <b>Kartenmitte</b> ist ab ${Math.round(r.keystoneGate.centerFrom / 60)}:00 umkämpft: Wer sie ${r.keystoneGate.centerHold} s allein hält, bekommt sein erstes Fenster sofort (frühestens ${Math.round((r.keystoneGate.centerFrom + r.keystoneGate.centerHold) / 60)}:00) – und hält er sie danach stabil, öffnet jedes weitere Fenster ${r.keystoneGate.centerLead} s früher.`,
     'Jede Fraktion hat einen Helden, der über das HQ kommt und nach seinem Tod zurückkehrt.',
   ])}
   ${section('Stationen', ['Oben und unten je eine Station mit einem Vorteil nur für ihre Lane – Tabelle und Pool je Karte im Tab Gelände.'])}`;

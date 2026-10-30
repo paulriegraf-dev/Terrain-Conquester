@@ -237,7 +237,7 @@ function steps(doc: Document): Step[] {
     },
     {
       // 28.10. abends: Schlussstein-Fenster – der Schritt wartet auf das erste Fenster (10:00).
-      text: 'Ab Minute 10 öffnet sich alle zweieinhalb Minuten ein Schlussstein-Fenster: Unten erscheinen Karten – ein Klick setzt den Schlussstein, kostenlos und sofort. Wähle deinen ersten, sobald es so weit ist.',
+      text: 'Ab Minute 10 öffnet sich alle zwei Minuten ein Schlussstein-Fenster (wer ab Minute 8 die Kartenmitte hält, früher): Unten erscheinen Karten – ein Klick setzt den Schlussstein, kostenlos und sofort. Wähle deinen ersten, sobald es so weit ist.',
       hint: (c) => {
         const g = c.world.players[0].gate;
         if (g.credits > 0) return 'Karte anklicken · Taste K öffnet und schließt die Karten';
