@@ -218,7 +218,7 @@ export const AI_TUNING: {
    * (kein Gelände, Markt, Spähen, Wall; seltener denken).
    */
   levels: Record<AiLevel, { thinkTicks: number; scoutError: number; secondBest: number; blindAfter: number }>;
-  tactic: { on: boolean; pushAt: number; pushHold: number; pushEarly: number; pushStop: number; aggressionShift: number; lateShift: number; reinforceAt: number; reinforceCalm: number; centerFloor: number; centerAbort: number; secureAt: number; secureStop: number; thinkTicks: number };
+  tactic: { on: boolean; pushAt: number; pushHold: number; pushEarly: number; pushStop: number; aggressionShift: number; lateShift: number; reinforceAt: number; reinforceCalm: number; centerFloor: number; centerAbort: number; secureAt: number; secureStop: number; thinkTicks: number; dwell: number; pushRatio: number };
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
@@ -234,7 +234,7 @@ export const AI_TUNING: {
     normal: { thinkTicks: 20, scoutError: 0.15, secondBest: 0.08, blindAfter: 40 },
     paulslike: { thinkTicks: 20, scoutError: 0.05, secondBest: 0, blindAfter: 60 },
   },
-  tactic: { on: true, pushAt: 0.25, pushHold: 3, pushEarly: 0.1, pushStop: 0.05, aggressionShift: 0.5, lateShift: 0.1, reinforceAt: 0.3, reinforceCalm: 15, centerFloor: -0.1, centerAbort: -0.35, secureAt: -0.05, secureStop: -0.3, thinkTicks: 20 },
+  tactic: { on: true, pushAt: 0.25, pushHold: 3, pushEarly: 0.1, pushStop: 0.05, aggressionShift: 0.5, lateShift: 0.1, reinforceAt: 0.3, reinforceCalm: 15, centerFloor: -0.1, centerAbort: -0.35, secureAt: -0.05, secureStop: -0.3, thinkTicks: 20, dwell: 15, pushRatio: 0.75 },
 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
@@ -297,6 +297,8 @@ export class SimpleAi {
   private focusSince = 0;
   /** Seit wann eine Route (wieder) hält – für die Wellen in der Entscheidungsphase. */
   private readonly holdSince: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+  /** Patch 5: letzter Haltungswechsel je Lane durch die Druck-Taktik (Mindest-Verweildauer). */
+  private readonly stanceAt: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
   /** Für den Aufbau zurückgelegte Energie (siehe AI_TUNING) – Nebenmittel nur vom Rest. */
   private saving = 0;
   private lastReport = -1;
@@ -1619,37 +1621,49 @@ export class SimpleAi {
     }
     const gate = me.gate;
     const keepMid = AI_TUNING.aiCenter && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
+    // Patch 5: Was im Nebel steht, zählt mindestens wie die alte Annahme (Gegner so stark wie man selbst, gleich verteilt) –
+    // sonst sieht eine Lane ohne Sicht auf den Gegner nach Übermacht aus und die KI stößt ins Leere.
+    const myTotal = mine.top + mine.mid + mine.bottom;
+    const assumed = Math.max(this.enemyEstimate, myTotal) / 3;
+    const ratio = (late ? 1.2 : 2.2 - this.strategy.aggression) * T.pushRatio;
+    const dwell = T.dwell * world.tps;
+    const set = (r: Route, stance: 'push' | 'hold' | 'secure'): Command => { this.stanceAt[r] = world.tick; return { type: 'setStance', route: r, stance }; };
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
       if (keepMid && r === 'mid') continue;
       if (r === this.breakerLane()) continue;
       if (AI_TUNING.intel.on && world.tick < this.noPushUntil && me.stance[r] !== 'push') continue;
+      if (world.tick - this.stanceAt[r] < dwell) continue; // Patch 5: Mindest-Verweildauer gegen Flattern
       const d = bb.lanes[r].pressure;
+      const enemy = Math.max(3 * armyScale(world), this.seenByRoute[r], assumed);
+      const enough = mine[r] >= ratio * enemy;
       const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
       const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
       const held = this.pushSince[r] >= 0 && world.tick - this.pushSince[r] >= T.pushHold * world.tps;
       const rising = d > pushEarly && bb.lanes[r].trend > 0;
-      if (holding && mine[r] >= minUnits && (aging || held || rising)) {
+      if (holding && mine[r] >= minUnits && (aging || ((held || rising) && enough))) {
         this.pushPlannedAt = world.tick;
-        return { type: 'setStance', route: r, stance: 'push' };
+        return set(r, 'push');
       }
       const wr = world.wallRatio[this.player][r];
       if (AI_TUNING.buys.siegeLead && holding && wr >= 1.5 && wr <= world.rules.walls.detour && mine[r] >= minUnits * 0.6 && this.hasSiegeOn(world, r) && d > -T.reinforceAt) {
         this.pushPlannedAt = world.tick;
-        return { type: 'setStance', route: r, stance: 'push' };
+        return set(r, 'push');
       }
       const site = world.map.sites.findIndex((s) => s.route === r);
       if (site >= 0 && !late) {
         const st = world.siteStates[site]!;
         const mineActive = st.owner === this.player && st.active;
         const secureMin = Math.max(3, 6 * armyScale(world));
-        if (me.stance[r] === 'hold' && !mineActive && mine[r] >= secureMin && d > T.secureAt) return { type: 'setStance', route: r, stance: 'secure' };
-        if (me.stance[r] === 'secure' && d < T.secureStop) return { type: 'setStance', route: r, stance: 'hold' };
+        if (me.stance[r] === 'hold' && !mineActive && mine[r] >= secureMin && d > T.secureAt) return set(r, 'secure');
+        if (me.stance[r] === 'secure' && d < T.secureStop) return set(r, 'hold');
       }
       // Front → Halten: Druck unter pushStop (Hysterese) oder die Welle ist verbraucht (wieder sammeln).
-      if (me.stance[r] === 'push' && !aging && (d < pushStop || (!late && mine[r] < minUnits * 0.5))) {
+      // Patch 5: in der Entscheidungsphase bleibt die Front (wie vor Patch 2); sonst zurück, wenn der Druck kippt und man dort
+      // auch nach Annahme unterlegen ist, oder die Welle verbraucht ist.
+      if (me.stance[r] === 'push' && !aging && !late && ((d < pushStop && mine[r] < enemy) || mine[r] < minUnits * 0.5)) {
         this.holdSince[r] = world.tick;
-        return { type: 'setStance', route: r, stance: 'hold' };
+        return set(r, 'hold');
       }
     }
     return null;
