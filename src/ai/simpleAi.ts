@@ -313,6 +313,8 @@ export class SimpleAi {
   private readonly stanceAt: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
   /** Patch 7: Myriaden unter Druck gegen Terra-Former – seit wann (Tick), bis Entwarnung; -1 = aus. */
   private pressedSince = -1;
+  /** Patch 7: Lanes, die der Druck-Modus auf Verteidigen gestellt hat – sie bleiben dort, bis der Modus endet. */
+  private readonly pressedLanes = new Set<Route>();
   private pressedCalmSince = -1;
   /** Patch 7: Sprengetopp-Beimischung – Brut, zurück auf Drohnen ab Tick, letzte Beimischung. */
   private mixBack: { id: number; at: number } | null = null;
@@ -1685,9 +1687,12 @@ export class SimpleAi {
     for (const r of ROUTES) {
       const target = me.pendingStance[r]?.stance ?? me.stance[r];
       if (this.baseThreat[r] >= threat && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
-      // Patch 7: eine im Druck-Modus gesetzte Verteidigung bleibt mindestens tactic.dwell s (gegen Flattern).
-      const fresh = this.myr(world) && world.tick - this.stanceAt[r] < AI_TUNING.tactic.dwell * world.tps;
-      if (this.baseThreat[r] < 0.5 && target === 'defend' && !this.holdWants(world, r) && !fresh) return { type: 'setStance', route: r, stance: 'hold' };
+      // Patch 7: vom Druck-Modus verteidigte Lanes bleiben auf Verteidigen, bis der Modus endet („für die Zeit“).
+      if (this.pressedLanes.has(r)) {
+        if (this.pressedSince >= 0) continue;
+        this.pressedLanes.delete(r);
+      }
+      if (this.baseThreat[r] < 0.5 && target === 'defend') return { type: 'setStance', route: r, stance: 'hold' };
     }
     // Patch 7: Myriaden unter Druck gegen Terra-Former – bedrängte Lanes verteidigen; steht auf einer anderen Lane genug und
     // läuft der große Angriff woanders, nach counterAfter s dort Front (Druck auf die gegnerische Basis).
@@ -1696,7 +1701,7 @@ export class SimpleAi {
       const bb = this.boardMem.board!;
       for (const r of ROUTES) {
         const target = me.pendingStance[r]?.stance ?? me.stance[r];
-        if (this.holdWants(world, r) && target !== 'defend' && world.tick - this.stanceAt[r] >= AI_TUNING.tactic.dwell * world.tps) { this.stanceAt[r] = world.tick; return { type: 'setStance', route: r, stance: 'defend' }; }
+        if (this.holdWants(world, r) && target !== 'defend' && !this.pressedLanes.has(r)) { this.pressedLanes.add(r); this.stanceAt[r] = world.tick; return { type: 'setStance', route: r, stance: 'defend' }; }
       }
       if (world.tick - this.pressedSince >= H.counterAfter * world.tps) {
         const minUnits = Math.max(3, 12 * armyScale(world));
