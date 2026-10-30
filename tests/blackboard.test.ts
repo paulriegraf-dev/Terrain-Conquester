@@ -151,3 +151,22 @@ describe('Myriaden (Patch 7)', () => {
     assert.ok(!researchEarly, 'keine Forschung vor 2 Fabriken');
   });
 });
+
+describe('Myriaden (Patch 8)', () => {
+  it('gegen Technoclan: erste Fabrik ist eine Werkstatt, die ersten Fabriken stehen in der Mitte', () => {
+    const world = new World({ map: getMap('felsenpass'), seed: 25, factions: ['myriaden', 'technoclan'] });
+    const ais = [new SimpleAi(0, 95, 'normal'), new SimpleAi(1, 96, 'normal')];
+    world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
+    const builds: { building: string; y: number }[] = [];
+    for (let t = 0; t < 120 * world.tps; t++) {
+      const cs = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
+      for (const c of cs) if (c.player === 0 && c.cmd.type === 'build') builds.push({ building: c.cmd.building, y: c.cmd.y });
+      world.step(cs);
+    }
+    assert.ok(builds.length >= 2, `gebaut: ${JSON.stringify(builds)}`);
+    assert.equal(builds[0]!.building, 'workshop');
+    const h = world.map.height;
+    const mid = builds.slice(0, 2).filter((b) => b.y + world.rules.building.size / 2 >= h / 3 && b.y + world.rules.building.size / 2 < (2 * h) / 3).length;
+    assert.ok(mid >= 1, `Mitte: ${JSON.stringify(builds)}`);
+  });
+});

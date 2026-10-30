@@ -16,7 +16,7 @@ import { OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memo
 import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
-import { checkLevelUp, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
+import { checkLevelUp, checkMerge, checkResearch, checkRushOrder, researching, unlockedUnits } from '../sim/systems/factory';
 import { checkKeystone, hasKeystone, keystoneChoices, mapCenter } from '../sim/systems/keystone';
 import { clutchSize } from '../sim/systems/myr';
 import { checkEmergency } from '../sim/systems/emergency';
@@ -187,7 +187,9 @@ export const AI_TUNING: {
   myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number;
     /** Patch 7: Druck-Abwehr gegen Terra-Former, Sprengetopp-Beimischung, Forschung erst ab researchAt Fabriken, HQ-Bedarf. */
     hold: { on: boolean; at: number; release: number; minSeconds: number; counterAfter: number; counterAt: number };
-    bomberMix: { on: boolean; every: number; cycles: number }; researchAt: number; hqNeed: number };
+    bomberMix: { on: boolean; every: number; cycles: number }; researchAt: number; hqNeed: number;
+    /** Patch 8: gegen Technoclan Kanonen früh, Fabriken mittig, Bruten gezielt hoch, Sprengetopp öfter; Superbrut ab superFrom s; Schlussstein Katapult vor Brechstange. */
+    vsTc: { on: boolean; workshops: number; midFactories: number; mixEvery: number; broodUp: number }; superBrood: boolean; superFrom: number; catapultKeystone: boolean };
   /**
    * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
    * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
@@ -234,7 +236,8 @@ export const AI_TUNING: {
   ownPlan: { on: true, factories: 3 },
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
-    bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3 },
+    bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3,
+    vsTc: { on: true, workshops: 2, midFactories: 3, mixEvery: 75, broodUp: 1.6 }, superBrood: true, superFrom: 300, catapultKeystone: true },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
@@ -587,6 +590,21 @@ export class SimpleAi {
     return all > 0 ? drones / all : 1;
   }
 
+  /** Patch 8: Myriaden gegen Technoclan? */
+  private myrVsTc(world: World): boolean {
+    return this.myr(world) && AI_TUNING.myrPlan.vsTc.on && world.players[1 - this.player].faction.id === 'technoclan';
+  }
+
+  /** Patch 8: Superbrut – zwei Bruten auf höchster Stufe verschmelzen (der Platz der zweiten wird frei für die nächste Brut). */
+  private myrSuperBrood(world: World): Command | null {
+    if (!this.myr(world) || !AI_TUNING.myrPlan.superBrood || world.seconds < AI_TUNING.myrPlan.superFrom) return null;
+    for (const b of this.ownBuildings(world)) {
+      if (b.defId !== 'barracks' || !b.producer || b.producer.super) continue;
+      if (checkMerge(world, b).ok) return { type: 'mergeBroods', entityId: b.id };
+    }
+    return null;
+  }
+
   /** Myriaden-Eröffnung: das Gelege (Brut-Ausbau II), sobald zwei Fabriken stehen. */
   private myrClutch(world: World, factories: number): Command | null {
     if (factories < 2) return null;
@@ -652,7 +670,8 @@ export class SimpleAi {
       this.lastRetool.set(b.id, world.tick);
       return { type: 'selectUnit', entityId: b.id, unit: 'drone' };
     }
-    if (!M.on || world.tick - this.lastMix < M.every * world.tps || this.droneShare(world) < AI_TUNING.myrPlan.droneShare) return null;
+    const every = this.myrVsTc(world) ? AI_TUNING.myrPlan.vsTc.mixEvery : M.every; // Patch 8: gegen Technoclan öfter ganze Sprengetopp-Gelege
+    if (!M.on || world.tick - this.lastMix < every * world.tps || this.droneShare(world) < AI_TUNING.myrPlan.droneShare) return null;
     const brood = own.find((b) => b.defId === 'barracks' && b.producer && !b.producer.job && b.producer.level >= 2 && b.producer.unit === 'drone');
     if (!brood) return null;
     const me = world.players[this.player];
@@ -768,6 +787,9 @@ export class SimpleAi {
     // Patch 7: unter Druck gegen Terra-Former zuerst die Katapult-Werkstatt.
     const wsUp = this.pressedSince >= 0 ? this.holdWorkshopUp(world) : null;
     if (wsUp) cands.push({ d: 'factory', s: score('build', 2) * 1.05, pre: wsUp });
+    // Patch 8: Superbrut, sobald zwei Bruten auf höchster Stufe stehen – vor Bauen, damit der frei werdende Platz zählt.
+    const merge = this.myrSuperBrood(world);
+    if (merge) cands.push({ d: 'factory', s: score('build', 2) * 1.1, pre: merge });
     cands.sort((a, b) => b.s - a.s || DOMAINS.indexOf(a.d) - DOMAINS.indexOf(b.d));
     // Patch 4: auf niedrigeren Stufen ab und zu die zweitbeste Wahl – wirkt unentschlossen, nicht unsinnig.
     const second = AI_TUNING.levels[this.level].secondBest;
@@ -944,7 +966,9 @@ export class SimpleAi {
     // Etwas Energie für den Erdwall zurückhalten (nur auf „Normal“).
     const reserve = this.level !== 'easy' ? WALL.cost : 0;
     if (me.energy < def.buildCost * (me.faction.buildings[type]!.costFactor ?? 1) + reserve) return null;
-    const order = !heavy && planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
+    let order = !heavy && planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
+    // Patch 8: Myriaden gegen Technoclan setzen die ersten Fabriken in die Mitte (Zentrum kontrollieren).
+    if (this.myrVsTc(world) && this.ownBuildings(world).filter((b) => b.producer).length < AI_TUNING.myrPlan.vsTc.midFactories) order = ['mid', ...order.filter((r) => r !== 'mid')];
     const site = this.chooseSite(world, type, me.energy - reserve, order);
     if (!site) return null;
     this.wantedRoute.set(`${site.x},${site.y}`, order[0]!);
@@ -1076,7 +1100,7 @@ export class SimpleAi {
     const myr = this.myr(world);
     const needHeavy = !myr && ownPlan && ids.includes('foundry') && owned.foundry === 0 && built >= AI_TUNING.ownPlan.factories - 1;
     // Patch 6: Brut bevorzugt, solange Drohnen unter barracksShare der Armee; Schmelze erst im Spätspiel.
-    const broodsWanted = myr && (built === 0 || owned.barracks / Math.max(1, built) < AI_TUNING.myrPlan.barracksShare || this.droneShare(world) < AI_TUNING.myrPlan.barracksShare);
+    const broodsWanted = myr && !(this.myrVsTc(world) && owned.workshop < AI_TUNING.myrPlan.vsTc.workshops) && (built === 0 || owned.barracks / Math.max(1, built) < AI_TUNING.myrPlan.barracksShare || this.droneShare(world) < AI_TUNING.myrPlan.barracksShare);
     for (const id of ids) {
       if ((faction.buildings[id]!.slots ?? 1) > free + 1e-9) continue;
       // Linie bewerten: Strategie-Gewicht × wie gut ihre Start-Einheit kontert, was man gesehen hat.
@@ -1088,7 +1112,9 @@ export class SimpleAi {
       if (myr) {
         if (id === 'barracks' && broodsWanted) score *= 2;
         if (id === 'workshop' && owned.workshop === 0 && built >= 1) score *= 2; // Werkstatt + Brut zuerst
-        if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.3;
+        // Patch 8: gegen Technoclan zuerst Kanonen-Werkstätten (Mischung), danach Bruten.
+        if (this.myrVsTc(world) && id === 'workshop' && owned.workshop < AI_TUNING.myrPlan.vsTc.workshops) score *= built === 0 ? 4 : 3;
+        if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.01; // Schmelze erst im Spätspiel (Nutzer)
       }
       // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
       const part = BUILDINGS[id].part;
@@ -1244,6 +1270,8 @@ export class SimpleAi {
           const now = Math.max(...tiers.slice(0, lvl).map((u, k) => scoreOf(u, k + 1)));
           const next = tiers[lvl];
           if (fbd.former) return lvl === 1 ? 1.5 : 1.2; // Terra-Former: die Stufe ist der Naturspeicher (II = 2, III = 3 Rufe)
+          // Patch 8: Myriaden stufen Bruten gezielt hoch (Sprengetopp, Superbrut braucht höchste Stufe).
+          if (myr && f.defId === 'barracks' && AI_TUNING.myrPlan.superBrood) return Math.max(1, next ? scoreOf(next, lvl + 1) / Math.max(0.1, now) : 1) * (this.myrVsTc(world) ? AI_TUNING.myrPlan.vsTc.broodUp : 1.3);
           if (next && this.lanePair && (this.lanePair[f.producer!.route] as readonly string[]).includes(next)) return 1.6 * scoreOf(next, lvl + 1) / Math.max(0.1, now);
           if (next) return scoreOf(next, lvl + 1) / Math.max(0.1, now);
           // Beimischung (Unterstützer): die erste solche Fabrik hat Vorrang, sobald eine Armee steht – Unterstützer sollen
@@ -1307,7 +1335,9 @@ export class SimpleAi {
     };
     const drones = world.entities.filter((e) => e.alive && e.owner === this.player && e.defId === 'drone').length;
     const breaker = choices.find((c) => c.unit === 'drone');
-    const pick = breaker && drones >= 4 ? breaker : choices[0]!; // choices: meiste lebende Verbände zuerst
+    // Patch 8: Myriaden nehmen den Katapult-Schlussstein vor der Brechstange.
+    const cat = this.myr(world) && AI_TUNING.myrPlan.catapultKeystone ? choices.find((c) => c.unit === 'catapult') : undefined;
+    const pick = cat ?? (breaker && drones >= 4 && !(this.myr(world) && AI_TUNING.myrPlan.catapultKeystone) ? breaker : choices[0]!); // choices: meiste lebende Verbände zuerst
     const id = door(pick);
     return checkKeystone(world, this.player, id).ok ? { type: 'research', upgrade: id } : null;
   }
