@@ -3,13 +3,15 @@
  *   npx tsx scripts/tcdiagnose.ts run <Name> <Paarung 0–3> <Partien>      (0 TC–Myr, 1 Myr–TC, 2 TC–TF, 3 TF–TC)
  *   npx tsx scripts/tcdiagnose.ts sum <Name>
  */
-import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { SimpleAi } from '../src/ai/simpleAi';
 import type { FactionId } from '../src/data/factions';
 import { getMap } from '../src/data/maps';
 import { aiSeed } from '../src/match';
 import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
+
+mkdirSync('auswertung/daten', { recursive: true }); // frischer Klon: Datenordner ist nicht eingecheckt
 
 const F: FactionId[] = ['technoclan', 'myriaden', 'terraformer'];
 const PAIRS: [FactionId, FactionId][] = [[F[0]!, F[1]!], [F[1]!, F[0]!], [F[0]!, F[2]!], [F[2]!, F[0]!]];

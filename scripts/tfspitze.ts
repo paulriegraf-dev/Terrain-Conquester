@@ -3,7 +3,7 @@
  *   npx tsx scripts/tfspitze.ts run <A|B|C> <0|1> <Partien>   (0 = Myr–TF, 1 = TF–Myr)
  *   npx tsx scripts/tfspitze.ts sum
  */
-import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { SimpleAi } from '../src/ai/simpleAi';
 import type { FactionId } from '../src/data/factions';
 import { getMap } from '../src/data/maps';
@@ -12,6 +12,8 @@ import type { Rules } from '../src/data/rules';
 import { aiSeed } from '../src/match';
 import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
+
+mkdirSync('auswertung/daten', { recursive: true }); // frischer Klon: Datenordner ist nicht eingecheckt
 
 const VARIANTS: Record<string, Partial<Rules>> = {
   A: {},

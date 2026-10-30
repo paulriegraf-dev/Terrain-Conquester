@@ -3,7 +3,7 @@
  * 6 Paarungen × 52 = 312 Partien. Pro Partie Zeitreihe (alle 5 s): Truppen (Einheitenlimit inkl. Gelege) und Erdwall-Kacheln je Spieler.
  *   npx tsx scripts/fraktionslauf.ts run <Name> <Paarung 0–5> [Partien = 52]
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { SimpleAi } from '../src/ai/simpleAi';
 import type { FactionId } from '../src/data/factions';
 import { getMap } from '../src/data/maps';
@@ -12,6 +12,8 @@ import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
 import { UNITS } from '../src/data/units';
 import type { UnitId } from '../src/data/units';
+
+mkdirSync('auswertung/daten', { recursive: true }); // frischer Klon: Datenordner ist nicht eingecheckt
 
 const F: FactionId[] = ['technoclan', 'myriaden', 'terraformer'];
 export const PAIRS: [FactionId, FactionId][] = [[F[0]!, F[1]!], [F[1]!, F[0]!], [F[0]!, F[2]!], [F[2]!, F[0]!], [F[1]!, F[2]!], [F[2]!, F[1]!]];

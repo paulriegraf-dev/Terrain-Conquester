@@ -5,7 +5,7 @@
  *   npx tsx scripts/schlusssteinlauf.ts run <Name> <Paarung 0–2> [von=0] [bis=24]
  *   npx tsx scripts/schlusssteinlauf.ts sum <Name> [<Vergleichsname>]
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { SimpleAi } from '../src/ai/simpleAi';
 import type { FactionId } from '../src/data/factions';
 import { getMap } from '../src/data/maps';
@@ -14,6 +14,8 @@ import type { PlayerCommand } from '../src/sim/commands';
 import { World } from '../src/sim/world';
 import { energyCap } from '../src/sim/systems/economy';
 import { centerHolder } from '../src/sim/systems/keystone';
+
+mkdirSync('auswertung/daten', { recursive: true }); // frischer Klon: Datenordner ist nicht eingecheckt
 
 const PAIRS: [FactionId, FactionId][] = [['technoclan', 'myriaden'], ['technoclan', 'terraformer'], ['myriaden', 'terraformer']];
 const MAPS = ['felsenpass', 'schluchttal-gross'];
