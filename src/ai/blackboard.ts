@@ -31,7 +31,7 @@ export const BOARD_TUNING = {
   blindAfter: 40,
   blindPressure: -0.2,
   /** Patch 5: Kampfkraft rechnet Fläche, Masse-Bonus, Heilung, Todes-Brut und Wurf-Ladung mit ein. */
-  mechanics: true,
+  mechanics: false, // getestet 30.10.: half den Myriaden nicht (3 statt 2 Siege in 24 Partien), daher aus
   /** Schätzfehler auf Spähstärken (±Anteil, Patch 4: je Schwierigkeit), geglättet. */
   scoutError: 0.15,
   /** Geschätzte Truppenstärke (Versorgung) je Spähstufe 0–3, wenn die KI wie der Mensch nur die Stufe kennt. */
