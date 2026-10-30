@@ -1655,7 +1655,9 @@ export class SimpleAi {
     for (const r of ROUTES) {
       const target = me.pendingStance[r]?.stance ?? me.stance[r];
       if (this.baseThreat[r] >= threat && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
-      if (this.baseThreat[r] < 0.5 && target === 'defend' && !this.holdWants(world, r)) return { type: 'setStance', route: r, stance: 'hold' };
+      // Patch 7: eine im Druck-Modus gesetzte Verteidigung bleibt mindestens tactic.dwell s (gegen Flattern).
+      const fresh = this.myr(world) && world.tick - this.stanceAt[r] < AI_TUNING.tactic.dwell * world.tps;
+      if (this.baseThreat[r] < 0.5 && target === 'defend' && !this.holdWants(world, r) && !fresh) return { type: 'setStance', route: r, stance: 'hold' };
     }
     // Patch 7: Myriaden unter Druck gegen Terra-Former – bedrängte Lanes verteidigen; steht auf einer anderen Lane genug und
     // läuft der große Angriff woanders, nach counterAfter s dort Front (Druck auf die gegnerische Basis).
@@ -1664,7 +1666,7 @@ export class SimpleAi {
       const bb = this.boardMem.board!;
       for (const r of ROUTES) {
         const target = me.pendingStance[r]?.stance ?? me.stance[r];
-        if (this.holdWants(world, r) && target !== 'defend') return { type: 'setStance', route: r, stance: 'defend' };
+        if (this.holdWants(world, r) && target !== 'defend' && world.tick - this.stanceAt[r] >= AI_TUNING.tactic.dwell * world.tps) { this.stanceAt[r] = world.tick; return { type: 'setStance', route: r, stance: 'defend' }; }
       }
       if (world.tick - this.pressedSince >= H.counterAfter * world.tps) {
         const minUnits = Math.max(3, 12 * armyScale(world));
