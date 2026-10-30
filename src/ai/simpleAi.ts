@@ -167,7 +167,7 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean; centerRoute: boolean;
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean; centerRoute: boolean; researchFrom: number; routeCalm: number; convertCalm: number;
   /** Nachtrag G (26.10. spät): Dauerspähen, Aufgebot, Nachschub, Vorratskauf, Trichter, Belagerung an die Spitze. */
   buys: { watch: boolean; rush: boolean; surge: boolean; stock: boolean; funnel: boolean; siegeLead: boolean };
   plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
@@ -176,7 +176,7 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true,
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
@@ -250,6 +250,8 @@ export class SimpleAi {
   private lastReport = -1;
   /** Gemerkte Vorliebe (Paarung) – wird beim ersten Denken geladen oder von außen gesetzt (Lernläufe). */
   learnedBias: Bias | null = null;
+  /** Letzter Umwidmen-Befehl (Tick), für AI_TUNING.convertCalm. */
+  private lastConvert = -1e9;
   /** Anpassung nur in dieser Partie (Schaden je gebauter Einheit). */
   private liveBias: Bias = {};
   private lastLive = 0;
@@ -852,7 +854,9 @@ export class SimpleAi {
     // 2. Hochstufen oder forschen, wenn Energie übrig ist (Energie ist sonst schnell am Maximum).
     if (me.energy < reserve + 80) return null;
     // Aufbau zuerst (AI_TUNING.buildFirst): nur vom Überschuss über die Fabrik-Rücklage.
-    const keep = AI_TUNING.buildFirst ? Math.max(reserve, this.saving) : reserve;
+    // 30.10. (Partien des Nutzers: KI forschte teils bis 9:30 gar nicht): ab researchFrom Sekunden zählt die Fabrik-Rücklage
+    // nicht mehr – Forschung und Stufen dürfen vom Überschuss über die normale Reserve kommen.
+    const keep = AI_TUNING.buildFirst && world.seconds < AI_TUNING.researchFrom ? Math.max(reserve, this.saving) : reserve;
     if (this.rng.chance(0.6)) {
       // Gebäude-Ausbau (24.10., zentral je Gebäudeart: Gelege, Terraformer-Takt, Gerufene).
       const building = this.pickBuildingUpgrade(world, keep);
@@ -1170,6 +1174,8 @@ export class SimpleAi {
     }
 
     // 3. Angreifen: ab und zu die Route wählen, auf der am wenigsten Gegner gesehen wurden.
+    // 30.10.: Angriffs-Routenwechsel höchstens alle routeCalm Sekunden (vorher alle 8 s möglich – Armee nie beisammen).
+    if (world.tick - this.lastRouteChange < AI_TUNING.routeCalm * world.tps) return null;
     if (this.level === 'normal' && this.rng.chance(this.strategy.aggression * 0.35)) {
       const weakest = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
       // Pläne (26.10.): Plan-Fabriken (Synergie-Linie, Verbund, Elite in Reichweite) bleiben auf ihrer Lane.
@@ -2028,6 +2034,8 @@ export class SimpleAi {
     if (this.spare(world) < 0) return null;
     // nie zwei Lanes gleichzeitig umbauen
     if (this.ownBuildings(world).some((b) => b.producer?.job?.kind === 'convert')) return null;
+    // 30.10.: Höchstens ein Umwidmen-Befehl je convertCalm Sekunden (vorher derselbe Befehl 7× in 3 s, wenn er nicht griff).
+    if (world.tick - this.lastConvert < AI_TUNING.convertCalm * world.tps) return null;
     const syn = world.synergy[this.player];
     for (const r of ROUTES) {
       const want = GROUND_BUILDING[this.laneGround[r]];
@@ -2041,6 +2049,7 @@ export class SimpleAi {
         })
         .sort((a, b) => a.producer!.level - b.producer!.level || a.id - b.id)[0];
       if (!cand) continue;
+      this.lastConvert = world.tick;
       return { type: 'convertFactory', entityId: cand.id, to: want };
     }
     return null;
