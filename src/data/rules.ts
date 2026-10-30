@@ -541,9 +541,10 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [4, 6, 8], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 2, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 / 1.15 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [3, 4, 5], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 1, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 / 1.15 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2,
     preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 4, everyLevel2: 3, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
+  // 30.10. (Nutzer): höchstens 1 lebender Terraformer je Fabrik (vorher 2), Naturspeicher 3 / 4 / 5 Rufe je Stufe (vorher 4 / 6 / 8).
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },
   synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },
   // Gelände in der eigenen Hälfte (23.10.): 3 Vorbereitungs-Flächen mehr, danach dort 10 statt 15 Energie und 2 statt 3 s

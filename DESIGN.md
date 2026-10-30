@@ -2188,3 +2188,8 @@ Anlass: Die Regel vom 28.10. („60 s Mitte → Fenster sofort, der Takt läuft 
 - Unverändert: höchstens 2 Guthaben, nichts verfällt, 10 s Abbau ohne Kontrolle.
 - **KI:** 30 s vor 8:00 setzt sie die Stellung einer Mitte-Fabrik an den Rand der Kartenmitte (eigene Hälfte; `decideCenterRally`). Ihre haltenden Verbände sammeln sich dort. Solange sie die Mitte hält (oder die Stellung steht), rückt die Mitte-Lane nicht vor (`keepMid`). Dazu die Mitte-Fabrik aus `centerRoute`.
 - Code: `updateGates` in `src/sim/systems/keystone.ts`; Tests in `tests/schlusssteine.test.ts`.
+
+## Terraformer und Kurzwahl (30.10. mittags, Nutzer)
+
+- **Terraformer:** höchstens **1** lebender Terraformer je Fabrik (`terraform.maxPerFactory` 2 → 1), Naturspeicher **3 / 4 / 5** Rufe je Fabrikstufe (`storeByLevel` vorher 4 / 6 / 8). Messung vorher (A/B/C, je 16 Partien Myr–TF, Pur-Profil): Limit 1 allein senkt die Spitze nur 6,9 → 5,3 Terraformer, TF gewinnt in allen Varianten ≈ 14 : 2; das Kernproblem ist der Einbruch der Myriaden (Modelle 92 → 15 bis 12:00, Drohnen leben Ø 20 s). Der Nutzer will das Limit trotzdem (früher Schneeball kleiner, Masse später).
+- **Kurzwahl zeigt den Gebäude-Ausbau:** Technoclan/Myriaden bekommen je Gebäudeart mit besonderem Ausbau einen eigenen Knopf mit dem Namen des nächsten Schritts (z. B. „Gelege II“ an der Brut); alle Ausrüstungs-Ketten zusammen als ein Knopf „Ausrüstung“. Terra-Former: Die Linien-Knöpfe zählen Einheiten-Upgrades und Ausbau ihrer Fabrik zusammen und öffnen das volle Menü (wie R); Naturkraft und Wurzelwerk je ein eigener Knopf. Vorher gab es nur einen Sammelknopf „Ausbau“, unter dem z. B. das Gelege nicht zu finden war.

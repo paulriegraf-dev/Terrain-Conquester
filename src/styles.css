@@ -1141,5 +1141,6 @@ body.start-mode .sp-fields { gap: 7px; }
 .rs-btn.rs-run { border-color: var(--good); }
 .rs-btn.rs-dim { opacity: 0.5; }
 .rs-btn.rs-build { border-style: dashed; }
+.rs-btn.rs-build .rs-name { max-width: 13em; }
 .rs-empty { color: var(--muted); font-size: 0.75rem; }
 .console-tip.ks-busy > .rs-row { display: none; }
