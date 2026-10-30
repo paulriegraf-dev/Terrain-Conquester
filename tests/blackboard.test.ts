@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { BOARD_TUNING, newBoardMemory, powerOf, updateBoard } from '../src/ai/blackboard';
-import { SimpleAi } from '../src/ai/simpleAi';
+import { AI_LEVELS, AI_TUNING, SimpleAi } from '../src/ai/simpleAi';
 import { getMap } from '../src/data/maps';
 import { UNITS } from '../src/data/units';
 import { rectCenter } from '../src/sim/math';
@@ -84,5 +84,26 @@ describe('Architektur-Wächter KI', () => {
       assert.ok(!/Math\.random/.test(src), `${f}: Math.random`);
       assert.ok(!/Date\.now|new Date\(|performance\.now/.test(src), `${f}: Uhrzeit`);
     }
+  });
+});
+
+describe('Schwierigkeit (Patch 4)', () => {
+  it('drei Stufen; Paulslike verschätzt sich am wenigsten und wählt nie die zweitbeste Option', () => {
+    assert.deepEqual([...AI_LEVELS], ['easy', 'normal', 'paulslike']);
+    const L = AI_TUNING.levels;
+    assert.ok(L.paulslike.scoutError < L.normal.scoutError && L.normal.scoutError < L.easy.scoutError);
+    assert.equal(L.paulslike.secondBest, 0);
+    assert.ok(L.easy.thinkTicks > L.normal.thinkTicks);
+  });
+
+  it('Paulslike spielt deterministisch (zwei gleiche Partien, gleicher Ausgang nach 2 min)', () => {
+    const run = (): string => {
+      const world = new World({ map: getMap('felsenpass'), seed: 11, factions: ['myriaden', 'technoclan'] });
+      const ais = [new SimpleAi(0, 77, 'paulslike'), new SimpleAi(1, 78, 'normal')];
+      world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
+      for (let t = 0; t < 120 * world.tps; t++) world.step(ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd }))));
+      return JSON.stringify(world.log);
+    };
+    assert.equal(run(), run());
   });
 });

@@ -62,7 +62,9 @@ import type { Domain } from './weights';
  * Pro Runde wählt sie eine Strategie. Das sorgt für Abwechslung.
  */
 
-export type AiLevel = 'easy' | 'normal';
+/** Schwierigkeit (KI-Patch 4, 30.10.): Leicht, Normal, Paulslike – Unterschiede nur in Takt, Schätzfehler, Zweitwahl und Blind-Alter, nie in Energie oder Werten. */
+export type AiLevel = 'easy' | 'normal' | 'paulslike';
+export const AI_LEVELS: readonly AiLevel[] = ['easy', 'normal', 'paulslike'];
 export type AiStrategyId = 'swarm' | 'raid' | 'siege' | 'balanced';
 
 interface StrategyDef {
@@ -210,6 +212,12 @@ export const AI_TUNING: {
    * - tfHold: Mindesthaltedauer eines Lane-Plans der Terra-Former in s (gegen häufiges Umbauen)
    */
   arbiter: { on: boolean; tfHold: number };
+  /**
+   * KI-Patch 4: je Stufe Denk-Takt (Ticks), Schätzfehler auf gegnerische Kampfkraft (±Anteil), Anteil zweitbester Wahl im
+   * Arbiter und Sekunden ohne Blick, ab denen eine Lane als „blind“ gilt. Leicht behält außerdem die bisherigen Einschränkungen
+   * (kein Gelände, Markt, Spähen, Wall; seltener denken).
+   */
+  levels: Record<AiLevel, { thinkTicks: number; scoutError: number; secondBest: number; blindAfter: number }>;
   tactic: { on: boolean; pushAt: number; pushHold: number; pushEarly: number; pushStop: number; aggressionShift: number; lateShift: number; reinforceAt: number; reinforceCalm: number; centerFloor: number; centerAbort: number; secureAt: number; secureStop: number; thinkTicks: number };
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
@@ -221,6 +229,11 @@ export const AI_TUNING: {
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
+  levels: {
+    easy: { thinkTicks: 50, scoutError: 0.35, secondBest: 0.25, blindAfter: 20 },
+    normal: { thinkTicks: 20, scoutError: 0.15, secondBest: 0.08, blindAfter: 40 },
+    paulslike: { thinkTicks: 20, scoutError: 0.05, secondBest: 0, blindAfter: 60 },
+  },
   tactic: { on: true, pushAt: 0.25, pushHold: 3, pushEarly: 0.1, pushStop: 0.05, aggressionShift: 0.5, lateShift: 0.1, reinforceAt: 0.3, reinforceCalm: 15, centerFloor: -0.1, centerAbort: -0.35, secureAt: -0.05, secureStop: -0.3, thinkTicks: 20 },
 };
 
@@ -368,7 +381,7 @@ export class SimpleAi {
     this.boardRng = new Rng((seed ^ 0x2c1b3c6d) >>> 0 || 1);
     this.strategyId = strategy ?? this.rng.pick(AI_STRATEGY_IDS);
     this.flank = this.rng.chance(0.5) ? 'top' : 'bottom';
-    this.interval = level === 'easy' ? 50 : AI_TUNING.tactic.on ? AI_TUNING.tactic.thinkTicks : 30;
+    this.interval = level === 'easy' ? AI_TUNING.levels.easy.thinkTicks : AI_TUNING.tactic.on ? AI_TUNING.levels[level].thinkTicks : 30;
   }
 
   /** Letztes Lagebild (null vor dem ersten Denkschritt). */
@@ -456,7 +469,8 @@ export class SimpleAi {
     // Beide KIs denken im selben Tick (keine Seite hat einen Zeitvorsprung).
     if (world.result || world.tick % this.interval !== 0) return [];
     this.observe(world);
-    const bb = updateBoard(world, this.player, this.boardMem, this.boardRng, AI_TUNING.perception);
+    const lv = AI_TUNING.levels[this.level];
+    const bb = updateBoard(world, this.player, this.boardMem, this.boardRng, { ...AI_TUNING.perception, scoutError: lv.scoutError, blindAfter: lv.blindAfter });
     for (const r of ROUTES) this.pressureLog[r].push(bb.lanes[r].pressure);
     this.readLosses(world);
     this.loadBias(world);
@@ -464,7 +478,7 @@ export class SimpleAi {
     this.saving = this.buildSavings(world);
     // Patch 3: Mit Arbiter ist Sparen ein eigener Kandidat – die Bereiche rechnen nicht mehr jede für sich eine Rücklage ab.
     this.nextFactoryCost = this.saving > 0 ? this.saving - WALL.cost : 0;
-    if (AI_TUNING.arbiter.on && this.level === 'normal') this.saving = 0;
+    if (AI_TUNING.arbiter.on && this.level !== 'easy') this.saving = 0;
     const commands: Command[] = [];
     // Notfallverlegung, sobald sie bereit ist: der bedrängte Bauabschnitt zieht in den Rückraum.
     if (checkEmergency(world, this.player).ok) commands.push({ type: 'emergency' });
@@ -474,7 +488,7 @@ export class SimpleAi {
     const center = this.decideCenterRally(world);
     if (center) commands.push(center);
     const plan = this.decidePlan(world);
-    if (AI_TUNING.arbiter.on && this.level === 'normal') {
+    if (AI_TUNING.arbiter.on && this.level !== 'easy') {
       const route = this.decideRoute(world);
       if (route) commands.push(route);
       const breaker = this.decideBreaker(world);
@@ -497,7 +511,7 @@ export class SimpleAi {
     if (hero) commands.push(hero);
     const hq = this.decideHq(world);
     if (hq) commands.push(hq);
-    if (this.level === 'normal') {
+    if (this.level !== 'easy') {
       const rush = this.decideRush(world);
       if (rush) commands.push(rush);
       const wall = this.decideWall(world);
@@ -621,6 +635,9 @@ export class SimpleAi {
     }
     if (plan && !opening) cands.push({ d: 'terrain', s: score('terrain', 1.2), pre: plan });
     cands.sort((a, b) => b.s - a.s || DOMAINS.indexOf(a.d) - DOMAINS.indexOf(b.d));
+    // Patch 4: auf niedrigeren Stufen ab und zu die zweitbeste Wahl – wirkt unentschlossen, nicht unsinnig.
+    const second = AI_TUNING.levels[this.level].secondBest;
+    if (second > 0 && cands.length >= 2 && this.rng.chance(second)) [cands[0], cands[1]] = [cands[1]!, cands[0]!];
     const save = score('save', this.domainNeed(world, 'save', bb, slotFree, factories));
     const lastConvert = this.lastConvert;
     let planUsed = false;
@@ -663,7 +680,7 @@ export class SimpleAi {
 
   /** Alle 60 s nach 4 min: Linien mit überdurchschnittlichem Schaden je gebauter Einheit etwas bevorzugen. */
   private adaptLive(world: World): void {
-    if (!AI_TUNING.liveAdapt || this.level !== 'normal' || world.seconds < 240 || world.tick - this.lastLive < 60 * world.tps) return;
+    if (!AI_TUNING.liveAdapt || this.level === 'easy' || world.seconds < 240 || world.tick - this.lastLive < 60 * world.tps) return;
     this.lastLive = world.tick;
     const rel = relativeEfficiency(lineStats(world.players[this.player].stats), 3);
     // Im Rückstand (der Gegner hat mehr Abschüsse) wird stärker angepasst (AI_TUNING.liveLossBoost).
@@ -791,7 +808,7 @@ export class SimpleAi {
     const type = heavy ? 'foundry' : planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
     const def = BUILDINGS[type];
     // Etwas Energie für den Erdwall zurückhalten (nur auf „Normal“).
-    const reserve = this.level === 'normal' ? WALL.cost : 0;
+    const reserve = this.level !== 'easy' ? WALL.cost : 0;
     if (me.energy < def.buildCost * (me.faction.buildings[type]!.costFactor ?? 1) + reserve) return null;
     const order = !heavy && planned && planned.type === type ? [planned.route, ...ROUTES.filter((r) => r !== planned.route)] : this.zoneOrder(world);
     const site = this.chooseSite(world, type, me.energy - reserve, order);
@@ -858,7 +875,7 @@ export class SimpleAi {
    * steht keine Fabrik auf der Mitte, versucht sie es mit der nächsten.
    */
   private decideCenterRally(world: World): Command | null {
-    if (!AI_TUNING.aiCenter || this.level !== 'normal') return null;
+    if (!AI_TUNING.aiCenter || this.level === 'easy') return null;
     const g = world.rules.keystoneGate;
     if (!g.center || world.tick < Math.round((g.centerFrom - 30) * world.tps) || world.tick % (5 * world.tps) !== 0) return null;
     const bb = this.boardMem.board;
@@ -926,7 +943,7 @@ export class SimpleAi {
     for (const id of ids) {
       if ((faction.buildings[id]!.slots ?? 1) > free + 1e-9) continue;
       // Linie bewerten: Strategie-Gewicht × wie gut ihre Start-Einheit kontert, was man gesehen hat.
-      const counter = this.level === 'normal' && !ownPlan ? this.counterScore(faction.buildings[id]!.tiers[0]!, world) : 1;
+      const counter = this.level !== 'easy' && !ownPlan ? this.counterScore(faction.buildings[id]!.tiers[0]!, world) : 1;
       let score = (((this.strategy.mix[id] ?? 2) * counter) / (owned[id] + 1)) * (0.85 + this.rng.next() * 0.3);
       score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
@@ -985,7 +1002,7 @@ export class SimpleAi {
   /** Ein Fabrik-Befehl pro Denkschritt: umrüsten, hochstufen oder forschen. */
   private decideFactory(world: World): Command | null {
     const me = world.players[this.player];
-    const reserve = this.level === 'normal' ? WALL.cost : 0;
+    const reserve = this.level !== 'easy' ? WALL.cost : 0;
     const factories = this.ownBuildings(world).filter((b) => b.producer && !b.producer.job);
     if (factories.length === 0) return null;
     const myUnits = world.entities.filter((e) => e.alive && e.kind === 'unit' && e.owner === this.player).length;
@@ -1386,7 +1403,7 @@ export class SimpleAi {
     }
 
     // 2. Entscheidungsphase: Schwerpunkt – alle Fabriken auf eine Route (die schwächste gesehene).
-    if (this.level === 'normal' && AI_TUNING.lateFocus && latePhase(world)) {
+    if (this.level !== 'easy' && AI_TUNING.lateFocus && latePhase(world)) {
       if (this.focus === null || world.tick - this.focusSince >= AI_TUNING.focusSeconds * world.tps) {
         this.focus = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
         this.focusSince = world.tick;
@@ -1402,7 +1419,7 @@ export class SimpleAi {
     if (world.tick - this.lastRouteChange < AI_TUNING.routeCalm * world.tps) return null;
     // Patch 2: Chance je Denkschritt an den Takt angepasst (1,0 s statt 1,5 s → gleich oft je Minute).
     const perThink = this.strategy.aggression * 0.35 * (this.interval / 30);
-    if (this.level === 'normal' && this.rng.chance(perThink)) {
+    if (this.level !== 'easy' && this.rng.chance(perThink)) {
       // Patch 2: Ziel ist die Lane mit dem höchsten Druck (dort lohnt der Stoß), nicht die mit den wenigsten gesehenen Gegnern.
       const weakest = AI_TUNING.tactic.on && bb
         ? [...ROUTES].sort((a, b) => bb.lanes[b].pressure - bb.lanes[a].pressure || this.rng.next() - 0.5)[0]!
@@ -2580,7 +2597,7 @@ export class SimpleAi {
    * Bauplatz frei ist, wird die günstigste passende Fabrik plus Erdwall-Reserve zurückgelegt.
    */
   private buildSavings(world: World): number {
-    if (this.level !== 'normal' || AI_TUNING.saveUntilFactories <= 0) return 0;
+    if (this.level === 'easy' || AI_TUNING.saveUntilFactories <= 0) return 0;
     const me = world.players[this.player];
     if (this.ownBuildings(world).filter((b) => b.producer).length >= AI_TUNING.saveUntilFactories) return 0;
     const free = slotLimit(world, this.player) - slotsUsed(world, this.player);

@@ -151,6 +151,9 @@ function depthWeight(t: number): number {
 export interface PerceptionSwitches {
   /** Spähbericht: genaue Stärke (alter KI-Vorteil) statt Stufe 0–3 mit Schätzfehler. */
   exactScout: boolean;
+  /** Patch 4 (je Schwierigkeit): Schätzfehler und Blind-Alter; ohne Angabe die Werte aus BOARD_TUNING. */
+  scoutError?: number;
+  blindAfter?: number;
 }
 
 /**
@@ -196,7 +199,7 @@ export function updateBoard(world: World, player: PlayerId, mem: BoardMemory, rn
   const rep = me.scout.last;
   const reportAge = rep ? (tick - rep.tick) / tps : null;
   for (const r of ROUTES) {
-    const sample = 1 + T.scoutError * (2 * rng.next() - 1);
+    const sample = 1 + (perception.scoutError ?? T.scoutError) * (2 * rng.next() - 1);
     mem.noise[r] = mem.noise[r] * 0.85 + sample * 0.15;
   }
   if (rep && reportAge !== null && reportAge <= 40) {
@@ -210,11 +213,13 @@ export function updateBoard(world: World, player: PlayerId, mem: BoardMemory, rn
       mem.lastLook[r] = Math.max(mem.lastLook[r], rep.tick);
     }
   }
+  // Patch 4: Schätzfehler auch auf die gesehene gegnerische Kampfkraft (je Lane, geglättet) – Leicht verschätzt sich stärker.
+  if (perception.scoutError !== undefined) for (const r of ROUTES) foe[r] *= mem.noise[r];
   const k0 = T.k0Units * unitPower;
   const lanes = {} as Record<Route, LaneView>;
   for (const r of ROUTES) {
     let d = (own[r] - foe[r]) / (own[r] + foe[r] + k0);
-    const blindFor = (tick - mem.lastLook[r]) / tps - T.blindAfter;
+    const blindFor = (tick - mem.lastLook[r]) / tps - (perception.blindAfter ?? T.blindAfter);
     if (blindFor > 0) {
       const a = Math.min(1, blindFor / 60);
       d = d * (1 - a) + T.blindPressure * a;

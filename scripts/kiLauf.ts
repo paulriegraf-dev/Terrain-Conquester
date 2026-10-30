@@ -4,9 +4,12 @@
  *   npx tsx scripts/kiLauf.ts run <Name> <Paarung 0–5> [Partien = 20]
  *   npx tsx scripts/kiLauf.ts sum <Name> [<Name2>]      → Tabelle (zwei Namen: vorher/nachher)
  * Schalter überschreiben: Umgebungsvariable KI_TUNING='{"perception":{"exactScout":true}}' (tief zusammengeführt in AI_TUNING).
+ * Stufe gegen Stufe (Patch 4): KI_LEVELS='paulslike,normal' – die erste Stufe spielt in geraden Partien links, in ungeraden rechts.
+ *   npx tsx scripts/kiLauf.ts levels <Name>            → Siegquote der ersten Stufe
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { AI_TUNING, SimpleAi } from '../src/ai/simpleAi';
+import type { AiLevel } from '../src/ai/simpleAi';
 import type { FactionId } from '../src/data/factions';
 import { getMap } from '../src/data/maps';
 import { aiSeed } from '../src/match';
@@ -31,7 +34,7 @@ const merge = (dst: Record<string, unknown>, src: Record<string, unknown>): void
 };
 
 interface PlayerRec { faction: FactionId; cmds: Record<string, number>; firstResearch: number | null; research: number; energyJam: number; pressureMean?: Record<string, number> }
-interface GameRec { g: number; pair: number; map: string; seed: number; seconds: number; winner: number | null; players: PlayerRec[] }
+interface GameRec { g: number; pair: number; map: string; seed: number; seconds: number; winner: number | null; players: PlayerRec[]; levels?: AiLevel[] }
 
 function run(label: string, idx: number, games: number): void {
   if (process.env.KI_TUNING) merge(AI_TUNING as unknown as Record<string, unknown>, JSON.parse(process.env.KI_TUNING) as Record<string, unknown>);
@@ -43,7 +46,9 @@ function run(label: string, idx: number, games: number): void {
     const seed = seedOf(idx, g);
     const map = MAPS[g % 2]!;
     const world = new World({ map: getMap(map), seed, factions });
-    const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), 'normal'));
+    const pairLv = (process.env.KI_LEVELS ?? 'normal,normal').split(',') as AiLevel[];
+    const levels: AiLevel[] = g % 2 === 0 ? [pairLv[0]!, pairLv[1]!] : [pairLv[1]!, pairLv[0]!];
+    const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), levels[p]!));
     world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
     const maxTicks = 30 * 60 * world.tps;
     const cmds: Record<string, number>[] = [{}, {}];
@@ -59,7 +64,7 @@ function run(label: string, idx: number, games: number): void {
       world.step(commands);
     }
     const rec: GameRec = {
-      g, pair: idx, map, seed, seconds: world.tick / world.tps, winner: world.result?.winner ?? null,
+      g, pair: idx, map, seed, seconds: world.tick / world.tps, winner: world.result?.winner ?? null, levels,
       players: [0, 1].map((p) => {
         const st = world.players[p]!.stats;
         const pm = (ais[p] as unknown as { pressureLog?: Record<string, number[]> }).pressureLog;
@@ -104,6 +109,16 @@ function summary(label: string): Record<string, string> {
 
 const [mode, label = 'basis', a = '0', b = '20'] = process.argv.slice(2);
 if (mode === 'run') run(label, Number(a), Number(b));
+else if (mode === 'levels') {
+  const games = load(label);
+  const first = games[0]?.levels?.[0];
+  let w = 0, l = 0, o = 0;
+  for (const g of games) {
+    const lead = g.g % 2 === 0 ? 0 : 1; // Seite der ersten Stufe
+    if (g.winner === null) o++; else if (g.winner === lead) w++; else l++;
+  }
+  console.log(`${label}: ${first ?? '?'} gewinnt ${w}, verliert ${l}, offen ${o} (${games.length} Partien, ${Math.round((100 * w) / Math.max(1, w + l))} % der entschiedenen)`);
+}
 else if (mode === 'sum') {
   const left = summary(label);
   const right = process.argv[4] ? summary(process.argv[4]) : null;
