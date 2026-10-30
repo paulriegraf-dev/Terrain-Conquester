@@ -81,3 +81,14 @@ abMRZ  n=24 TC 11 Myr  4 TF  9 offen 0 | Haltung 2.03 | Forsch 3.3 | Median 8.4 
   Front im Spätspiel halten). Die Myriaden-Schwäche bleibt.
 - Kein einzelner Baustein erklärt den Myriaden-Einbruch; die Mechanik-Zuschläge helfen nicht (Schalter `mechanics`, aus).
 - Die Stufen trennen noch nicht: Normal verliert gegen Leicht (kleine Stichprobe, Richtung aber falsch).
+
+## Patch 6 (Myriaden-Plan nach Blaupause), Myriaden-Paarungen, gleiche 24 Seeds
+
+```
+p1     n=24 TC  9 Myr  9 TF  6 offen 0 | Haltung 1.81 | Forsch 6.5 | Median 13.1 | Myr build 6.0 upg 5.2 hq 4.8 res 6.6 wall 5.8 route 32.5
+p5     n=24 TC 12 Myr  2 TF 10 offen 0 | Haltung 1.93 | Forsch 1.9 | Median 8.1 | Myr build 5.0 upg 2.8 hq 2.7 res 1.7 wall 6.5 route 22.6
+p6     n=24 TC  7 Myr  7 TF 10 offen 0 | Haltung 2.38 | Forsch 4.6 | Median 10.2 | Myr build 7.0 upg 4.8 hq 3.2 res 4.9 wall 3.5 route 33.3
+```
+
+Myriaden gegen Technoclan 6 von 12, gegen Terra-Former 2 von 12 (dort meist nach 6–8 min verloren).
+Prüfpunkte Myriaden: Fabriken bei 3:00 6,0; Drohnen-Anteil 51 %; Mitte allein 91 s; Schlussstein vor 10:00 4 % (Regel: Mitte zählt erst ab 8:00).
