@@ -2172,3 +2172,7 @@ Dazu umgesetzt (30.10., Nutzer-GO):
 
 Erster Blick (12 KI-Partien, 4 je Paarung, vor dem Veröffentlichen): Median 13 min, kürzeste 7 min, 1 von 12 offen bei 30 min (vorher 19 von 32 bei TC–TF). Technoclan 3 : 1 gegen Myriaden – zu wenig Partien für eine Aussage, aber kein Rush-Kollaps unter 6 min.
 
+
+## KI hält die Mitte (30.10., nach zwei Partien des Nutzers)
+- Befund (Replays 30.10., Version `1684521a`): Der Nutzer hält die Mitte früh mit Halten/Sichern (Myriaden gegen Technoclan: 130 s gehalten, KI 4 s). Erstes Fenster dadurch schon bei 2:48; danach läuft der 2,5-min-Takt ab dort weiter (5:18, 7:48) – drei Schlusssteine vor Minute 9, die KI keinen. Das folgt der Regel in Abschnitt B oben, heißt aber: Ein frühes Halten zieht den ganzen Takt vor 10:00. Ob das so bleiben soll, ist offen (Nutzer-Entscheidung).
+- **KI (`AI_TUNING.centerRoute`):** Mindestens eine Fabrik bleibt auf der Mitte; der Angriffs-Routenwechsel nimmt nie die letzte Mitte-Fabrik weg. Kurzer Vergleich (8 KI-Partien je Seite, 4 Paarungen): Mitte gehalten Ø 116 → 167 s je Partie, Fenster vor 10:00 bei 3 → 1 von 16 Spielern (beide KIs blockieren sich nun gegenseitig in der Mitte), Median-Dauer 10,9 → 12,6 min. Gegen einen Spieler, der die Mitte hält, steht die KI jetzt dort und bestreitet sie.

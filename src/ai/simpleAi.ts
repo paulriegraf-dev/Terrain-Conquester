@@ -166,7 +166,7 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean;
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean; centerRoute: boolean;
   /** Nachtrag G (26.10. spät): Dauerspähen, Aufgebot, Nachschub, Vorratskauf, Trichter, Belagerung an die Spitze. */
   buys: { watch: boolean; rush: boolean; surge: boolean; stock: boolean; funnel: boolean; siegeLead: boolean };
   plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
@@ -175,7 +175,7 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true,
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'myr', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
@@ -1109,6 +1109,14 @@ export class SimpleAi {
       }
     }
 
+    // 1b. Zentrum (30.10., nach Partien des Nutzers): Wer die Mitte 60 s hält, bekommt sein Schlussstein-Fenster früher – auch vor
+    // 10:00. Der Nutzer stellt dafür früh Truppen auf die Mitte (Halten/Sichern) und hält sie. Die KI hält immer mindestens eine
+    // Fabrik auf der Mitte (AI_TUNING.centerRoute).
+    if (AI_TUNING.centerRoute && buildings.length >= 2 && !buildings.some((x) => (x.producer!.pendingRoute ?? x.producer!.route) === 'mid')) {
+      const b = buildings.find((x) => !this.planBound(world, x)) ?? buildings[0]!;
+      return this.setRoute(world, b, 'mid');
+    }
+
     // 2. Entscheidungsphase: Schwerpunkt – alle Fabriken auf eine Route (die schwächste gesehene).
     if (this.level === 'normal' && AI_TUNING.lateFocus && latePhase(world)) {
       if (this.focus === null || world.tick - this.focusSince >= AI_TUNING.focusSeconds * world.tps) {
@@ -1125,7 +1133,8 @@ export class SimpleAi {
     if (this.level === 'normal' && this.rng.chance(this.strategy.aggression * 0.35)) {
       const weakest = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
       // Pläne (26.10.): Plan-Fabriken (Synergie-Linie, Verbund, Elite in Reichweite) bleiben auf ihrer Lane.
-      const b = buildings.find((x) => x.producer!.route !== weakest && !this.planBound(world, x));
+      const onMid = buildings.filter((x) => x.producer!.route === 'mid').length;
+      const b = buildings.find((x) => x.producer!.route !== weakest && !this.planBound(world, x) && !(AI_TUNING.centerRoute && x.producer!.route === 'mid' && onMid <= 1));
       if (b) return this.setRoute(world, b, weakest);
     }
     return null;
