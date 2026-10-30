@@ -92,3 +92,19 @@ p6     n=24 TC  7 Myr  7 TF 10 offen 0 | Haltung 2.38 | Forsch 4.6 | Median 10.2
 
 Myriaden gegen Technoclan 6 von 12, gegen Terra-Former 2 von 12 (dort meist nach 6–8 min verloren).
 Prüfpunkte Myriaden: Fabriken bei 3:00 6,0; Drohnen-Anteil 51 %; Mitte allein 91 s; Schlussstein vor 10:00 4 % (Regel: Mitte zählt erst ab 8:00).
+
+## Patches 7–8 (Vorgaben des Nutzers 30./31.10.), Myriaden-Paarungen, je 12 Partien
+
+```
+p6    vs TC: 5/12 12.7min Haltung 2.85 Superbrut 0.0 | vs TF: 2/12 8.5min Haltung 1.88 Superbrut 0.0
+p7    vs TC: 2/12 13.8min Haltung 2.49 Superbrut 0.0 | vs TF: 5/12 12.1min Haltung 3.62 Superbrut 0.0
+p7b   vs TC: 2/12 13.8min Haltung 2.49 Superbrut 0.0 | vs TF: 5/12 13.8min Haltung 5.23 Superbrut 0.0
+p8    vs TC: 6/12 14.8min Haltung 2.21 Superbrut 0.3 | vs TF: 4/12 11.8min Haltung 3.54 Superbrut 0.5
+p8b   vs TC: 6/12 14.8min Haltung 2.21 Superbrut 0.3 | vs TF: 5/12 11.8min Haltung 0.95 Superbrut 0.6
+abBM  vs TC: 4/12 15.8min Haltung 2.77 Superbrut 0.0 | vs TF: –
+abRH  vs TC: 5/12 15.6min Haltung 2.54 Superbrut 0.0 | vs TF: –
+abR0  vs TC: 6/12 14.8min Haltung 2.21 Superbrut 0.3 | vs TF: –
+abHQ  vs TC: 7/12 11.5min Haltung 2.25 Superbrut 0.3 | vs TF: –
+```
+
+p8b = Patch 8 + Druck-Modus verteidigt bis zum Ende. abR0: Forschung ab 0 Fabriken (identische Partien – die Regel greift bei den Myriaden nicht); abHQ: HQ-Bedarf 0,8 (7 statt 6 von 12, im Rauschen).
