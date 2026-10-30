@@ -11,9 +11,9 @@ import { noIncome, openMap, smallBases, stepTimes } from './fixtures';
 
 /** Den nächsten Denkschritt der KI abwarten und ihre Befehle zurückgeben (ohne sie auszuführen). */
 function nextThought(world: World, ai: SimpleAi): Command[] {
-  for (let k = 0; k < 60; k++) {
+  for (let k = 0; k < 120; k++) {
     const out = ai.think(world);
-    if (world.tick % 30 === 0) return out;
+    if (out.length > 0 || world.tick % 60 === 0) return out; // erster Denkschritt mit Befehlen (Takt 20 oder 30 Ticks)
     world.step();
   }
   return [];

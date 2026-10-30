@@ -18,7 +18,7 @@ describe('KI-Pläne (26.10.)', () => {
   it('Terra-Former gegen Technoclan: Matsch-Doppel als Plan (oben/unten Matsch, Mitte Wald)', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, factions: ['terraformer', 'technoclan'] });
     const ai = new SimpleAi(0, 5);
-    world.tick = 30;
+    world.tick = 60; // Vielfaches beider Denk-Takte (20 und 30 Ticks)
     ai.think(world);
     assert.deepEqual(ai.laneGround, { top: 'mud', mid: 'forest', bottom: 'mud' });
   });
@@ -26,7 +26,7 @@ describe('KI-Pläne (26.10.)', () => {
   it('Technoclan gegen Terra-Former: Panzerjagd-Paar auf der ersten Lane', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, factions: ['technoclan', 'terraformer'] });
     const ai = new SimpleAi(0, 5);
-    world.tick = 30;
+    world.tick = 60; // Vielfaches beider Denk-Takte (20 und 30 Ticks)
     ai.think(world);
     assert.deepEqual(ai.lanePair?.top, ['sniper', 'gunner']);
   });

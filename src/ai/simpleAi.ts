@@ -189,6 +189,17 @@ export const AI_TUNING: {
   perception: { exactScout: boolean; fogDeaths: boolean; enemyKills: boolean; marketOwners: boolean; heroSignal: boolean };
   /** Stellschrauben des Blackboards (siehe src/ai/blackboard.ts). */
   board: typeof BOARD_TUNING;
+  /**
+   * KI-Grundplan Patch 2 (30.10.): Taktik auf Lane-Druck (D aus dem Blackboard) statt Truppenzählen.
+   * - on: neue Taktik (false = alte Zähl-Regeln)
+   * - pushAt/pushHold: Front ab D > pushAt, wenn das `pushHold` s lang anhält – oder ab D > pushEarly bei steigendem Trend
+   * - pushStop: Front → Halten, sobald D darunter fällt (Hysterese; kein Rückzug, Verteidigen nur bei bedrängtem HQ)
+   * - aggressionShift: Schwelle sinkt je Aggression über 0,45 um diesen Faktor (Tempo-KI drückt früher)
+   * - reinforceAt: Verstärken – Fabrik von einer Lane mit D > +reinforceAt auf eine mit D < −reinforceAt umlenken, je Quell-Lane höchstens alle reinforceCalm s
+   * - centerFloor/centerAbort: Zentrum anstreben ab 7:30, wenn D_Mitte > centerFloor und keine Lane unter −reinforceAt; aufgeben bei D_Mitte < centerAbort
+   * - thinkTicks: Denk-Takt auf „Normal“ in Ticks (20 = 1,0 s; vorher 30)
+   */
+  tactic: { on: boolean; pushAt: number; pushHold: number; pushEarly: number; pushStop: number; aggressionShift: number; lateShift: number; reinforceAt: number; reinforceCalm: number; centerFloor: number; centerAbort: number; secureAt: number; secureStop: number; thinkTicks: number };
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
@@ -198,6 +209,7 @@ export const AI_TUNING: {
   ownPlan: { on: true, factories: 3 },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
+  tactic: { on: true, pushAt: 0.25, pushHold: 3, pushEarly: 0.1, pushStop: 0.05, aggressionShift: 0.5, lateShift: 0.1, reinforceAt: 0.3, reinforceCalm: 15, centerFloor: -0.1, centerAbort: -0.35, secureAt: -0.05, secureStop: -0.3, thinkTicks: 20 },
 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
@@ -317,6 +329,10 @@ export class SimpleAi {
   private trendOnlyUntil = -1e9;
   /** Messwerte (für Testläufe): Spähberichte mit Anlass, Täuschungen, Fehlreaktionen. */
   readonly stats = { scoutsWithReason: 0, deceptions: 0, falseReactions: 0, counterSwitches: 0, marketOrders: 0, avoided: 0 };
+  /** Patch 2: seit wann D auf einer Lane über der Front-Schwelle liegt (−1 = nicht), letzter Verstärken-Abzug je Lane, Zentrum-Sperre. */
+  private readonly pushSince: Record<Route, number> = { top: -1, mid: -1, bottom: -1 };
+  private readonly reinforceFrom: Record<Route, number> = { top: -1e9, mid: -1e9, bottom: -1e9 };
+  private centerPauseUntil = -1e9;
   /** Blackboard (Patch 1): Lagebild je Denkschritt, eigener Zufallsstrom für Schätzrauschen. */
   private readonly boardMem: BoardMemory = newBoardMemory();
   private readonly boardRng: Rng;
@@ -337,7 +353,7 @@ export class SimpleAi {
     this.boardRng = new Rng((seed ^ 0x2c1b3c6d) >>> 0 || 1);
     this.strategyId = strategy ?? this.rng.pick(AI_STRATEGY_IDS);
     this.flank = this.rng.chance(0.5) ? 'top' : 'bottom';
-    this.interval = level === 'easy' ? 50 : 30;
+    this.interval = level === 'easy' ? 50 : AI_TUNING.tactic.on ? AI_TUNING.tactic.thinkTicks : 30;
   }
 
   /** Letztes Lagebild (null vor dem ersten Denkschritt). */
@@ -704,6 +720,21 @@ export class SimpleAi {
     if (!AI_TUNING.aiCenter || this.level !== 'normal') return null;
     const g = world.rules.keystoneGate;
     if (!g.center || world.tick < Math.round((g.centerFrom - 30) * world.tps) || world.tick % (5 * world.tps) !== 0) return null;
+    const bb = this.boardMem.board;
+    if (AI_TUNING.tactic.on && bb) {
+      // Patch 2: Mitte nur bestreiten, wenn sie nicht klar verloren ist und keine andere Lane brennt; sonst Stellung aufgeben.
+      const T = AI_TUNING.tactic;
+      if (this.centerRallyActive(world)) {
+        if (bb.lanes.mid.pressure < T.centerAbort) {
+          const b = world.get(this.centerRally!)!;
+          this.centerRally = null;
+          this.centerPauseUntil = world.tick + 30 * world.tps;
+          return { type: 'setRally', entityId: b.id, x: -1, y: -1 };
+        }
+        return null;
+      }
+      if (world.tick < this.centerPauseUntil || bb.lanes.mid.pressure <= T.centerFloor || ROUTES.some((r) => bb.lanes[r].pressure < -T.reinforceAt)) return null;
+    }
     if (this.centerRallyActive(world)) return null;
     const mid = this.ownBuildings(world).filter((b) => b.producer && b.producer.route === 'mid');
     const b = mid[0];
@@ -1189,6 +1220,22 @@ export class SimpleAi {
       }
     }
 
+    // 1a. Verstärken (Patch 2): Lane klar unter Druck, eine andere klar im Vorteil → eine Fabrik von dort herüber.
+    const bb = this.boardMem.board;
+    if (AI_TUNING.tactic.on && bb) {
+      const T = AI_TUNING.tactic;
+      const weak = [...ROUTES].sort((a, b) => bb.lanes[a].pressure - bb.lanes[b].pressure)[0]!;
+      const strong = [...ROUTES].sort((a, b) => bb.lanes[b].pressure - bb.lanes[a].pressure)[0]!;
+      if (weak !== strong && bb.lanes[weak].pressure < -T.reinforceAt && bb.lanes[strong].pressure > T.reinforceAt && world.tick - this.reinforceFrom[strong] >= T.reinforceCalm * world.tps) {
+        const onStrong = buildings.filter((x) => (x.producer!.pendingRoute ?? x.producer!.route) === strong);
+        const b = onStrong.find((x) => !this.planBound(world, x)) ?? (onStrong.length >= 2 ? onStrong[0] : undefined);
+        if (b && !(AI_TUNING.centerRoute && strong === 'mid' && onStrong.length <= 1)) {
+          this.reinforceFrom[strong] = world.tick;
+          return this.setRoute(world, b, weak);
+        }
+      }
+    }
+
     // 1b. Zentrum (30.10., nach Partien des Nutzers): Wer die Mitte 60 s hält, bekommt sein Schlussstein-Fenster früher – auch vor
     // 10:00. Der Nutzer stellt dafür früh Truppen auf die Mitte (Halten/Sichern) und hält sie. Die KI hält immer mindestens eine
     // Fabrik auf der Mitte (AI_TUNING.centerRoute).
@@ -1212,8 +1259,13 @@ export class SimpleAi {
     // 3. Angreifen: ab und zu die Route wählen, auf der am wenigsten Gegner gesehen wurden.
     // 30.10.: Angriffs-Routenwechsel höchstens alle routeCalm Sekunden (vorher alle 8 s möglich – Armee nie beisammen).
     if (world.tick - this.lastRouteChange < AI_TUNING.routeCalm * world.tps) return null;
-    if (this.level === 'normal' && this.rng.chance(this.strategy.aggression * 0.35)) {
-      const weakest = [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
+    // Patch 2: Chance je Denkschritt an den Takt angepasst (1,0 s statt 1,5 s → gleich oft je Minute).
+    const perThink = this.strategy.aggression * 0.35 * (this.interval / 30);
+    if (this.level === 'normal' && this.rng.chance(perThink)) {
+      // Patch 2: Ziel ist die Lane mit dem höchsten Druck (dort lohnt der Stoß), nicht die mit den wenigsten gesehenen Gegnern.
+      const weakest = AI_TUNING.tactic.on && bb
+        ? [...ROUTES].sort((a, b) => bb.lanes[b].pressure - bb.lanes[a].pressure || this.rng.next() - 0.5)[0]!
+        : [...ROUTES].sort((a, b) => this.seenByRoute[a] - this.seenByRoute[b] || this.rng.next() - 0.5)[0]!;
       // Pläne (26.10.): Plan-Fabriken (Synergie-Linie, Verbund, Elite in Reichweite) bleiben auf ihrer Lane.
       const onMid = buildings.filter((x) => x.producer!.route === 'mid').length;
       const b = buildings.find((x) => x.producer!.route !== weakest && !this.planBound(world, x) && !(AI_TUNING.centerRoute && x.producer!.route === 'mid' && onMid <= 1));
@@ -1302,6 +1354,8 @@ export class SimpleAi {
     }
     const late = latePhase(world);
     if (!late && world.seconds < 150) return null; // erst Grenzen ziehen, dann vorstoßen
+    const bb = this.boardMem.board;
+    if (AI_TUNING.tactic.on && bb) return this.pressureStance(world, mine, late);
     const waves = late && AI_TUNING.lateWaves;
     const ratio = late ? 1.2 : 2.2 - this.strategy.aggression;
     const minUnits = waves ? Math.max(4, 16 * armyScale(world)) : late ? Math.max(2, 6 * armyScale(world)) : Math.max(3, 12 * armyScale(world));
@@ -1365,6 +1419,77 @@ export class SimpleAi {
       // Nach einer Welle wieder sammeln (die Welle selbst kämpft gebunden weiter). In der
       // Entscheidungsphase nur, bis die nächste Welle steht (siehe oben) – sonst bleibt die Front offen.
       if (me.stance[r] === 'push' && (waves ? mine[r] < minUnits * 0.5 : !late && (mine[r] < minUnits * 0.5 || (mine[r] < enemy && !aging)))) {
+        this.holdSince[r] = world.tick;
+        return { type: 'setStance', route: r, stance: 'hold' };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Patch 2: Haltung je Lane nach Lane-Druck D mit Hysterese. Front ab D > Schwelle (pushHold s lang, oder früher bei steigendem
+   * Trend), zurück aufs Halten bei D < pushStop oder nach der Welle. Kein Rückzug: Verteidigen bleibt an der HQ-Bedrohung
+   * (oben in decideStance). Sonderfälle wie bisher: Spionage-Druck, Belagerung an der Spitze, Stationen sichern, Mitte halten.
+   */
+  private pressureStance(world: World, mine: Record<Route, number>, late: boolean): Command | null {
+    const me = world.players[this.player];
+    const bb = this.boardMem.board!;
+    const T = AI_TUNING.tactic;
+    const minUnits = late ? Math.max(2, 6 * armyScale(world)) : Math.max(3, 12 * armyScale(world));
+    const shift = (this.strategy.aggression - 0.45) * T.aggressionShift + (late ? T.lateShift : 0);
+    // Hysterese bleibt geordnet: Halten-Schwelle < früher Stoß < Stoß, auch bei aggressiven Strategien.
+    const pushStop = T.pushStop - shift * 0.5;
+    const pushAt = Math.max(T.pushAt - shift, pushStop + 0.1);
+    const pushEarly = Math.max(T.pushEarly - shift, pushStop + 0.05);
+    // Zeit über der Schwelle mitführen (auch für Lanes, die gerade nicht entschieden werden).
+    for (const r of ROUTES) {
+      if (bb.lanes[r].pressure > pushAt) {
+        if (this.pushSince[r] < 0) this.pushSince[r] = world.tick;
+      } else this.pushSince[r] = -1;
+    }
+    if (AI_TUNING.intel.on && world.tick >= this.noPushUntil) {
+      if (this.pushLaneAt && world.tick >= this.pushLaneAt.at) {
+        const r = this.pushLaneAt.lane;
+        this.pushLaneAt = null;
+        if (!me.pendingStance[r] && me.stance[r] === 'hold' && bb.lanes[r].pressure > 0 && mine[r] >= 3) return { type: 'setStance', route: r, stance: 'push' };
+      }
+      const rep = me.scout.last;
+      if (rep && this.freshReport(world)) {
+        const empty = ROUTES.find((r) => rep.routes[r].level === 0 && me.stance[r] === 'hold' && !me.pendingStance[r] && mine[r] >= 3);
+        if (empty && ROUTES.some((r) => rep.routes[r].level === 3)) return { type: 'setStance', route: empty, stance: 'push' };
+      }
+    }
+    const gate = me.gate;
+    const keepMid = AI_TUNING.aiCenter && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
+    for (const r of this.rng.shuffled(ROUTES)) {
+      if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
+      if (keepMid && r === 'mid') continue;
+      if (r === this.breakerLane()) continue;
+      if (AI_TUNING.intel.on && world.tick < this.noPushUntil && me.stance[r] !== 'push') continue;
+      const d = bb.lanes[r].pressure;
+      const holding = me.stance[r] === 'hold' || me.stance[r] === 'secure';
+      const aging = AI_TUNING.agingPush && this.agingShare(world, r) >= 0.5;
+      const held = this.pushSince[r] >= 0 && world.tick - this.pushSince[r] >= T.pushHold * world.tps;
+      const rising = d > pushEarly && bb.lanes[r].trend > 0;
+      if (holding && mine[r] >= minUnits && (aging || held || rising)) {
+        this.pushPlannedAt = world.tick;
+        return { type: 'setStance', route: r, stance: 'push' };
+      }
+      const wr = world.wallRatio[this.player][r];
+      if (AI_TUNING.buys.siegeLead && holding && wr >= 1.5 && wr <= world.rules.walls.detour && mine[r] >= minUnits * 0.6 && this.hasSiegeOn(world, r) && d > -T.reinforceAt) {
+        this.pushPlannedAt = world.tick;
+        return { type: 'setStance', route: r, stance: 'push' };
+      }
+      const site = world.map.sites.findIndex((s) => s.route === r);
+      if (site >= 0 && !late) {
+        const st = world.siteStates[site]!;
+        const mineActive = st.owner === this.player && st.active;
+        const secureMin = Math.max(3, 6 * armyScale(world));
+        if (me.stance[r] === 'hold' && !mineActive && mine[r] >= secureMin && d > T.secureAt) return { type: 'setStance', route: r, stance: 'secure' };
+        if (me.stance[r] === 'secure' && d < T.secureStop) return { type: 'setStance', route: r, stance: 'hold' };
+      }
+      // Front → Halten: Druck unter pushStop (Hysterese) oder die Welle ist verbraucht (wieder sammeln).
+      if (me.stance[r] === 'push' && !aging && (d < pushStop || (!late && mine[r] < minUnits * 0.5))) {
         this.holdSince[r] = world.tick;
         return { type: 'setStance', route: r, stance: 'hold' };
       }
