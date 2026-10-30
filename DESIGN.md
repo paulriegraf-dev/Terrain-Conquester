@@ -2156,6 +2156,10 @@ Hintergrund: Feature-Stopp. Alle zeit- und uhrgesteuerten Patt-Hebel sollen raus
 | Befestigte Gebäude | 50 % Schaden in der Basiszone | 100 % | `rules.baseBuildingDamageTaken` |
 | Nachschub-Kauf (surge) | ab 8:00, 120/180/260, 60 s ×1,3 | aus | `rules.purchases.surge`; KI `AI_TUNING.buys.surge` |
 
+| Energie-Faktor je Phase | ×1 · 8:00 ×1,4 · 11:00 ×1,8 | im Pur-Profil: ×1 durchgehend (Balance/Rohtest). **Später gewollt (Nutzer, 30.10.): ×1,5 ab 10:00**, als Energie für Upgrades; nicht früher wieder einbauen. | `rules.phases[].energyMult` |
+
+Offener Gedanke (Nutzer): Eine zerstörte Fabrik ist für 60 Energie sofort wieder da, das kann Partien stallen. Noch nicht entschieden (Optionen: Wiederaufbau-Sperre je Bauplatz, Preis steigt je Verlust, Beute höher).
+
 Bleibt ausdrücklich drin: Notfallverlegung (Key-Gameplay laut Nutzer), Bauschutz 15 s, Einheitenlimit 150, Marktbremse, Gebietseinkommen, Myriaden-Lebensuhr, Beute, Flanke, Schlussstein-Fenster, Energie-Faktoren der Phasen (noch offen, siehe Diskussion).
 
 Umsetzung geplant als Regelprofil (Schalter im Startmenü / `rules`-Override), damit der heutige Stand erhalten bleibt und beide Fassungen direkt vergleichbar sind.
