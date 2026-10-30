@@ -50,6 +50,8 @@ import type { SeenClass, SynergyPlanDef } from './plans';
 import { productionFactor } from '../sim/systems/market';
 import { SYNERGY_GROUNDS, laneCounts } from '../sim/systems/synergy';
 import { checkRally } from '../sim/systems/rally';
+import { BOARD_TUNING, newBoardMemory, updateBoard } from './blackboard';
+import type { Blackboard, BoardMemory } from './blackboard';
 
 /**
  * Gegner-KI. Sie spielt nach denselben Regeln wie du:
@@ -176,6 +178,17 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
+  /**
+   * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
+   * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
+   * - fogDeaths: gegnerische Tode im Nebel zählen für Verluste je Lane
+   * - enemyKills: Live-Anpassung liest die Abschusszahl des Gegners (sonst: eigene vs. gesehene gegnerische Verluste)
+   * - marketOwners: Markt-Bestellungen mit Besitzer sichtbar (sonst: Verdacht aus unerklärten Preissprüngen)
+   * - heroSignal: Sammel-Signal des gegnerischen Commanders auch im Nebel (bewusstes Spielsignal, bleibt an)
+   */
+  perception: { exactScout: boolean; fogDeaths: boolean; enemyKills: boolean; marketOwners: boolean; heroSignal: boolean };
+  /** Stellschrauben des Blackboards (siehe src/ai/blackboard.ts). */
+  board: typeof BOARD_TUNING;
 } = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
@@ -183,6 +196,8 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
+  perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
+  board: BOARD_TUNING,
 };
 
 type SeenArmor = 'infantry' | 'light' | 'heavy';
@@ -302,6 +317,14 @@ export class SimpleAi {
   private trendOnlyUntil = -1e9;
   /** Messwerte (für Testläufe): Spähberichte mit Anlass, Täuschungen, Fehlreaktionen. */
   readonly stats = { scoutsWithReason: 0, deceptions: 0, falseReactions: 0, counterSwitches: 0, marketOrders: 0, avoided: 0 };
+  /** Blackboard (Patch 1): Lagebild je Denkschritt, eigener Zufallsstrom für Schätzrauschen. */
+  private readonly boardMem: BoardMemory = newBoardMemory();
+  private readonly boardRng: Rng;
+  /** Messwerte: Lane-Druck je Denkschritt (für Messläufe). */
+  readonly pressureLog: Record<Route, number[]> = { top: [], mid: [], bottom: [] };
+  /** Verluste seit Spielbeginn: eigene, gesehene gegnerische (Ersatz für die gegnerische Abschusszahl). */
+  private lostOwn = 0;
+  private lostEnemySeen = 0;
 
   constructor(
     readonly player: PlayerId,
@@ -311,9 +334,15 @@ export class SimpleAi {
     readonly profileId: AiProfileId = 'standard',
   ) {
     this.rng = new Rng(seed);
+    this.boardRng = new Rng((seed ^ 0x2c1b3c6d) >>> 0 || 1);
     this.strategyId = strategy ?? this.rng.pick(AI_STRATEGY_IDS);
     this.flank = this.rng.chance(0.5) ? 'top' : 'bottom';
     this.interval = level === 'easy' ? 50 : 30;
+  }
+
+  /** Letztes Lagebild (null vor dem ersten Denkschritt). */
+  get board(): Blackboard | null {
+    return this.boardMem.board;
   }
 
   get strategy(): StrategyDef {
@@ -396,6 +425,9 @@ export class SimpleAi {
     // Beide KIs denken im selben Tick (keine Seite hat einen Zeitvorsprung).
     if (world.result || world.tick % this.interval !== 0) return [];
     this.observe(world);
+    const bb = updateBoard(world, this.player, this.boardMem, this.boardRng, AI_TUNING.perception);
+    for (const r of ROUTES) this.pressureLog[r].push(bb.lanes[r].pressure);
+    this.readLosses(world);
     this.loadBias(world);
     this.adaptLive(world);
     this.saving = this.buildSavings(world);
@@ -479,7 +511,9 @@ export class SimpleAi {
     const rel = relativeEfficiency(lineStats(world.players[this.player].stats), 3);
     // Im Rückstand (der Gegner hat mehr Abschüsse) wird stärker angepasst (AI_TUNING.liveLossBoost).
     const me = world.players[this.player].stats;
-    const behind = world.players[1 - this.player].stats.kills > me.kills * 1.2 + 3;
+    const behind = AI_TUNING.perception.enemyKills
+      ? world.players[1 - this.player].stats.kills > me.kills * 1.2 + 3
+      : this.lostOwn > this.lostEnemySeen * 1.2 + 3; // ohne Vollwissen: eigene Verluste gegen gesehene gegnerische
     const k = 0.35 * (behind ? AI_TUNING.liveLossBoost : 1);
     const span = behind ? AI_TUNING.liveLossBoost : 1;
     for (const [line, { rel: r }] of rel) this.liveBias[line] = Math.max(1 - 0.25 * span, Math.min(1 + 0.35 * span, 1 + k * (r - 1)));
@@ -535,7 +569,7 @@ export class SimpleAi {
     }
     // Sammel-Signal: Sammelt der gegnerische Commander, ist seine Route markiert (auch im Nebel).
     const enemy = world.players[this.player === 0 ? 1 : 0];
-    if (enemy.hero && enemy.hero.mode === 'gather' && enemy.hero.respawnTick < 0 && enemy.faction.hero?.leadsWaves) {
+    if (AI_TUNING.perception.heroSignal && enemy.hero && enemy.hero.mode === 'gather' && enemy.hero.respawnTick < 0 && enemy.faction.hero?.leadsWaves) {
       nowByRoute[enemy.hero.route] += 2;
     }
     // Spähbericht: auch was im Nebel steht
@@ -555,9 +589,11 @@ export class SimpleAi {
       if (this.reports.length > 4) this.reports.shift();
       for (const r of ROUTES) {
         const x = report.routes[r];
-        nowByRoute[r] = Math.max(nowByRoute[r], x.strength);
-        if (x.armor) now[x.armor] = Math.max(now[x.armor], x.strength);
-        if (x.armor) this.seenLane[r][x.armor] = Math.max(this.seenLane[r][x.armor], x.strength * 0.5);
+        // Patch 1: ohne exactScout nur die Stufe (wie beim Menschen), geschätzt mit dem Rauschen des Blackboards.
+        const strength = AI_TUNING.perception.exactScout ? x.strength : AI_TUNING.board.scoutLevelStrength[x.level as 0 | 1 | 2 | 3] * this.boardMem.noise[r];
+        nowByRoute[r] = Math.max(nowByRoute[r], strength);
+        if (x.armor) now[x.armor] = Math.max(now[x.armor], strength);
+        if (x.armor) this.seenLane[r][x.armor] = Math.max(this.seenLane[r][x.armor], strength * 0.5);
       }
     }
     if (AI_TUNING.intel.on) this.intelLook(world);
@@ -2105,7 +2141,13 @@ export class SimpleAi {
     for (const ev of world.events) {
       if (ev.seq <= this.lastEventSeq) continue;
       this.lastEventSeq = ev.seq;
-      if (ev.type === 'death' && ev.kind === 'unit') this.losses.push({ tick: ev.tick, lane: band(world, ev.pos.y), mine: ev.owner === this.player });
+      if (ev.type !== 'death' || ev.kind !== 'unit') continue;
+      const mine = ev.owner === this.player;
+      // Patch 1: gegnerische Tode zählen nur, wo man hinsieht.
+      if (!mine && !AI_TUNING.perception.fogDeaths && !world.players[this.player].vision.isVisible(Math.floor(ev.pos.x), Math.floor(ev.pos.y))) continue;
+      if (mine) this.lostOwn++;
+      else this.lostEnemySeen++;
+      this.losses.push({ tick: ev.tick, lane: band(world, ev.pos.y), mine });
     }
     const keep = world.tick - 120 * world.tps;
     while (this.losses.length > 0 && this.losses[0]!.tick < keep) this.losses.shift();
@@ -2148,7 +2190,17 @@ export class SimpleAi {
     const own = world.market.boundBy[this.player];
     this.priceHist.push({ tick: world.tick, prices: { ...world.market.prices }, own: { ...own } });
     if (this.priceHist.length > 6) this.priceHist.shift();
-    for (const o of world.market.orders) if (o.owner !== this.player && !this.enemyOrders.includes(o.endTick)) this.enemyOrders.push(o.endTick);
+    if (AI_TUNING.perception.marketOwners) {
+      for (const o of world.market.orders) if (o.owner !== this.player && !this.enemyOrders.includes(o.endTick)) this.enemyOrders.push(o.endTick);
+    } else {
+      // Patch 1: Bestellungen sieht der Mensch nicht – Verdacht nur aus einem Preissprung (≥ 15 % in 30 s) ohne eigenen
+      // Mehrbedarf und ohne eigene laufende Bestellung auf diesem Bauteil.
+      const prev = this.priceHist[this.priceHist.length - 2];
+      if (prev) for (const k of PART_KEYS) {
+        const mineRunning = world.market.orders.some((o) => o.owner === this.player && o.part === k && o.endTick > world.tick);
+        if (!mineRunning && world.market.prices[k] >= prev.prices[k] * 1.15 && own[k] <= prev.own[k] * 1.1 + 0.5) this.enemyOrders.push(world.tick);
+      }
+    }
     while (this.enemyOrders.length > 0 && this.enemyOrders[0]! < world.tick - 240 * world.tps) this.enemyOrders.shift();
     // Verteidigung: eigenes Kernbauteil in 60 s um ≥ 40 % teurer, ohne eigenen Mehrbedarf → Eingriff vermutet.
     const core = this.corePart(world);
