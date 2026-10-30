@@ -2202,3 +2202,8 @@ Anlass (Partien des Nutzers 30.10.): KIs forschten kaum bzw. erst ab 9–15 min,
 - `AI_TUNING.routeCalm` 40: Angriffs-Routenwechsel höchstens alle 40 s (vorher 8 s). Verteidigungs-Umlenken unverändert.
 - `AI_TUNING.convertCalm` 90: höchstens ein Umwidmen-Befehl je 90 s.
 - Vergleich (12 KI-Partien je Seite, alle 6 Paarungen, Felsenpass groß): erste Forschung Technoclan 9:34 → 3:53, Myriaden 12:45 → 6:27, Terra-Former 15:07 → 10:54; Forschungen je Partie TC 1,5 → 4,3, Myr 1,9 → 4,8, TF 3,3 → 6,0; Routenbefehle je min etwa halbiert (TC 3,0 → 1,8, Myr 4,6 → 2,2, TF 2,4 → 1,3); Median-Dauer 10,3 → 13,1 min; Siege TF 6/TC 4/Myr 1 → TF 4/TC 5/Myr 2. **Offen:** Terra-Former-Umwidmen nicht weniger (4,1 → 5,6 Befehle je Partie; der Spam ist weg, aber es wird öfter echt umgebaut) und erste TF-Forschung noch spät (Stufen haben Vorrang).
+
+## KI: 4–6 Fabriken früh, bei Druck Stufe statt Fabrik 5/6 (30.10., Spielweise des Nutzers)
+- `AI_TUNING.factoryPush` (an): Bis Minute 6 spart die KI für Fabriken bis 6 statt bis 4 (Ausgaben für Markt, Späher, Gelände usw. warten). Sieht sie mehr Gegner als ≥ 1,3 × eigene Verbände (mindestens 6), bleibt es bei 4 – die Energie geht dann in Stufen und Forschung, um den ersten Push abzuwehren.
+- Anlass: Myriaden-KI blieb bei 3–4 Fabriken (Nutzer überrannte sie als Technoclan in 4:53).
+- Vergleich (12 KI-Partien je Seite, 6 Paarungen, Felsenpass groß), Fabriken bei 2 / 3 / 6 min: Myriaden 4,0 / 4,3 / 4,0 → 5,1 / 6,0 / 5,6; Technoclan 4,6 / 5,1 / 5,8 → 5,0 / 6,0 / 6,0; Terra-Former 6,0 / 6,0 / 5,5 → 6,0 / 6,0 / 5,8. Siege TC 5 / Myr 1 / TF 6 → 4 / 3 / 4 (1 offen). Median-Dauer 12,7 → 15,9 min (Ziel 13–20).

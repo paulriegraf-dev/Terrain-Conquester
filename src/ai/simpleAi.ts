@@ -167,7 +167,7 @@ export const AI_PROFILE_IDS: readonly AiProfileId[] = ['standard', 'trader', 'sh
  */
 export const AI_TUNING: {
   saveUntilFactories: number; lateWaves: boolean; lateGatherSeconds: number; lateFocus: boolean; focusSeconds: number;
-  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean; centerRoute: boolean; researchFrom: number; routeCalm: number; convertCalm: number;
+  seenDefense: boolean; agingPush: boolean; smartResearch: 'off' | 'myr' | 'all'; myrHound: boolean; tfPrep: boolean; seenDefenseMyr: boolean; buildFirst: boolean; learned: boolean; liveAdapt: boolean; liveLossBoost: number; buyForStorers: boolean; synergyBuys: boolean; keystones: boolean; aiBreakerDefense: boolean; aiBreaker: boolean; homeMeadow: boolean; tfStrictBuys: boolean; tfSpawnBuy: boolean; tfSpawnBuyEvery: number; aiCenter: boolean; centerRoute: boolean; researchFrom: number; routeCalm: number; convertCalm: number; factoryPush: boolean;
   /** Nachtrag G (26.10. spät): Dauerspähen, Aufgebot, Nachschub, Vorratskauf, Trichter, Belagerung an die Spitze. */
   buys: { watch: boolean; rush: boolean; surge: boolean; stock: boolean; funnel: boolean; siegeLead: boolean };
   plans: { synergy: boolean; verbund: boolean; adapt: boolean; synergyBuy: boolean; buyEvery: number; keepLanes: boolean };
@@ -176,7 +176,7 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
-} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90,
+} = { saveUntilFactories: 4, lateWaves: false, lateGatherSeconds: 40, lateFocus: false, focusSeconds: 120, seenDefense: false, agingPush: false, smartResearch: 'all', myrHound: true, tfPrep: false, seenDefenseMyr: true, buildFirst: true, learned: true, liveAdapt: true, liveLossBoost: 1, buyForStorers: true, synergyBuys: true, keystones: true, aiBreakerDefense: true, aiBreaker: true, homeMeadow: true, tfStrictBuys: false, tfSpawnBuy: true, tfSpawnBuyEvery: 20, aiCenter: true, centerRoute: true, researchFrom: 180, routeCalm: 40, convertCalm: 90, factoryPush: true,
   buys: { watch: true, rush: true, surge: true, stock: true, funnel: true, siegeLead: true },
   plans: { synergy: true, verbund: true, adapt: true, synergyBuy: true, buyEvery: 15, keepLanes: true },
   counterLine: { on: true, hysteresis: 120, share: 0.4, budget: 70 },
@@ -2262,7 +2262,7 @@ export class SimpleAi {
   private buildSavings(world: World): number {
     if (this.level !== 'normal' || AI_TUNING.saveUntilFactories <= 0) return 0;
     const me = world.players[this.player];
-    if (this.ownBuildings(world).filter((b) => b.producer).length >= AI_TUNING.saveUntilFactories) return 0;
+    if (this.ownBuildings(world).filter((b) => b.producer).length >= this.factoryTarget(world)) return 0;
     const free = slotLimit(world, this.player) - slotsUsed(world, this.player);
     let cheapest = Infinity;
     for (const id of buildingIds(me.faction)) {
@@ -2271,6 +2271,20 @@ export class SimpleAi {
       cheapest = Math.min(cheapest, BUILDINGS[id].buildCost * (fb.costFactor ?? 1));
     }
     return cheapest === Infinity ? 0 : cheapest + WALL.cost;
+  }
+
+  /**
+   * Fabrik-Ziel (30.10., Spielweise des Nutzers, AI_TUNING.factoryPush): so schnell wie möglich 4, dann bis 6 Fabriken –
+   * es sei denn, ein früher Druck zeichnet sich ab (gesehene Gegner deutlich mehr als eigene Verbände). Dann bleibt es
+   * bei 4 und die Energie geht in Stufen, um den ersten Push abzuwehren. Ab Minute 6 gilt wieder saveUntilFactories.
+   */
+  private factoryTarget(world: World): number {
+    const base = AI_TUNING.saveUntilFactories;
+    if (!AI_TUNING.factoryPush || world.seconds >= 360) return base;
+    const own = world.entities.filter((e) => e.alive && e.kind === 'unit' && e.owner === this.player).length;
+    const seen = this.seenByRoute.top + this.seenByRoute.mid + this.seenByRoute.bottom;
+    const threat = seen >= Math.max(6, own * 1.3);
+    return threat ? Math.max(base, 4) : Math.max(base, 6);
   }
 
   /** Anteil (nach Gewicht) der wartenden Verbände mit Lebensuhr auf Route r, die ihre Reifezeit hinter sich haben. */
