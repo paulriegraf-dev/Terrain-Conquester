@@ -30,6 +30,8 @@ export const BOARD_TUNING = {
   /** Ab so vielen Sekunden ohne Blick auf eine Lane wird D in 60 s Richtung blindPressure gezogen (Patch 4: je Schwierigkeit). */
   blindAfter: 40,
   blindPressure: -0.2,
+  /** Patch 5: Kampfkraft rechnet Fläche, Masse-Bonus, Heilung, Todes-Brut und Wurf-Ladung mit ein. */
+  mechanics: true,
   /** Schätzfehler auf Spähstärken (±Anteil, Patch 4: je Schwierigkeit), geglättet. */
   scoutError: 0.15,
   /** Geschätzte Truppenstärke (Versorgung) je Spähstufe 0–3, wenn die KI wie der Mensch nur die Stufe kennt. */
@@ -126,7 +128,22 @@ export function dpsOf(e: Entity): number {
  * Einheiten ohne Waffe (Heiler, Brechstange) zählen mit einem kleinen Mindestschaden, damit ihr Leben nicht verschwindet.
  */
 export function powerOf(e: Entity): number {
-  return Math.sqrt(Math.max(0, e.hp) * Math.max(0.25, dpsOf(e)));
+  let hp = Math.max(0, e.hp);
+  let dps = dpsOf(e);
+  if (BOARD_TUNING.mechanics) {
+    // Patch 5: Mechanik-Zuschläge – für jede Einheit mit der Mechanik gleich, unabhängig von der Fraktion.
+    const def = UNITS[e.defId as UnitId];
+    if (def) {
+      const w = e.weapon?.def;
+      if (w?.splash) dps *= 1 + 0.5 * w.splash; // Flächenschaden trifft mehrere
+      if (def.swarm && def.swarm.max > 0) dps *= 1 + 0.5 * def.swarm.max; // Masse-Bonus, im Mittel zur Hälfte
+      if (def.support?.heal) dps += 2 * def.support.heal; // Heilung hält Verbündete im Kampf
+      const share = e.maxHp > 0 ? hp / e.maxHp : 1;
+      if (def.deathSpawn) { const u = UNITS[def.deathSpawn.unit]; hp += 0.5 * (def.deathSpawn.count / (u.models ?? 1)) * u.hp; }
+      if (def.launch) { const u = UNITS[def.launch.unit]; hp += share * def.launch.max * ((def.launch.models ?? u.models ?? 1) / (u.models ?? 1)) * u.hp; }
+    }
+  }
+  return Math.sqrt(hp * Math.max(0.25, dps));
 }
 
 /** Kartendrittel (oben/Mitte/unten) einer y-Position – wie band() in der KI. */
