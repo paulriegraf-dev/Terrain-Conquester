@@ -403,7 +403,7 @@ function pushing(world: World, e: Entity): boolean {
  * preparedRadius voraus auf der eigenen Route. Am liebsten nah (24.10.: vorher „am liebsten weit vorn“ – dann lief
  * der Terraformer an der Basis vorbei zu weit entfernten Blöcken und ließ das Gelände dazwischen liegen).
  */
-function findReadyBlock(world: World, e: Entity, ground: number, far = true): CellRect | null {
+function findReadyBlock(world: World, e: Entity, ground: number, far = true, avoid: { x: number; y: number } | null = null): CellRect | null {
   const g = world.grid;
   const p = e.owner;
   const cx = Math.floor(e.pos.x);
@@ -428,6 +428,7 @@ function findReadyBlock(world: World, e: Entity, ground: number, far = true): Ce
         if (distant && (Math.abs(my - routeY) > 6 || (mx - e.pos.x) * dir < -1)) continue; // weit weg nur voraus auf der Route
         const r = { x, y, w, h };
         if (!readyBlock(world, r, p, ground)) continue;
+        if (tooClose(world, avoid, mx, my)) continue; // Vorsicht: nicht nah am gesichteten Gegner rufen
         // 26.10. (2a): Rituale überall außer in den Basiszonen – auch im gegnerischen Gebiet (readyBlock prüft die Zonen).
         if (!world.rules.terraform.anyLineBlock && !push && blockCells(world, r).some((i) => controllerAt(world, i) === enemy)) continue;
         const d = Math.sqrt((mx - e.pos.x) * (mx - e.pos.x) + (my - e.pos.y) * (my - e.pos.y));
@@ -452,7 +453,7 @@ export function formerNeedsBlock(world: World, e: Entity): boolean {
 }
 
 /** Nächste umformbare Kachel im Umkreis: zuerst Kacheln, die noch nicht eigener Boden sind; bei Gleichstand weiter vorn. */
-function nextWorkCell(world: World, e: Entity, ground: number, radius: number): number | null {
+function nextWorkCell(world: World, e: Entity, ground: number, radius: number, avoid: { x: number; y: number } | null = null): number | null {
   const g = world.grid;
   const p = e.owner;
   const dir = forward(world, p);
@@ -473,6 +474,7 @@ function nextWorkCell(world: World, e: Entity, ground: number, radius: number): 
       const i = g.index(x, y);
       if (!convertible(world, i, p, ground)) continue;
       if (!push && controllerAt(world, i) === enemy) continue;
+      if (tooClose(world, avoid, x + 0.5, y + 0.5)) continue; // Vorsicht: nicht nah am gesichteten Gegner formen
       const ownOther = world.formed[i] === p + 1 ? 2 : 0; // eigene andere Linie erst, wenn nichts anderes da ist
       const score = Math.sqrt(d2) + ownOther - 0.3 * dx * dir;
       if (score < bestScore - 1e-9) {
@@ -563,6 +565,13 @@ function frontLimit(world: World, e: Entity): number {
   return edge + 0.5;
 }
 
+/** Steht ein eigener Wächter-Verband zwischen Terraformer e und Gegner o? */
+function coveredByWard(world: World, e: Entity, o: Entity): boolean {
+  const dx = o.pos.x - e.pos.x;
+  return world.entities.some((w) => w.alive && w.owner === e.owner && w.kind === 'unit' && isWardUnit(w) &&
+    (w.pos.x - e.pos.x) * Math.sign(dx || 1) > 0 && (o.pos.x - w.pos.x) * Math.sign(dx || 1) >= -0.5 && Math.abs(w.pos.y - (e.pos.y + o.pos.y) / 2) <= 2);
+}
+
 /** Gegner in retreatRadius ohne eigenen Wächter dazwischen? Dann weicht der Terraformer zurück. */
 function exposed(world: World, e: Entity): boolean {
   const r = world.rules.terraform.retreatRadius;
@@ -572,11 +581,36 @@ function exposed(world: World, e: Entity): boolean {
     const dx = o.pos.x - e.pos.x;
     const dy = o.pos.y - e.pos.y;
     if (dx * dx + dy * dy > r * r) continue;
-    const covered = world.entities.some((w) => w.alive && w.owner === p && w.kind === 'unit' && isWardUnit(w) &&
-      (w.pos.x - e.pos.x) * Math.sign(dx || 1) > 0 && (o.pos.x - w.pos.x) * Math.sign(dx || 1) >= -0.5 && Math.abs(w.pos.y - (e.pos.y + o.pos.y) / 2) <= 2);
-    if (!covered) return true;
+    if (!coveredByWard(world, e, o)) return true;
   }
   return false;
+}
+
+/**
+ * Vorsicht (31.10.): der nächste *sichtbare* bewaffnete Gegner in cautionRadius, den kein eigener Wächter-Verband abschirmt
+ * (null = keiner). Der Terraformer „schaut“ so, bevor er auf die nächste Kachel geht: Er sieht nur, was sein Spieler sieht.
+ */
+function cautionOf(world: World, e: Entity): { x: number; y: number; until: number } | null {
+  const r = world.rules.terraform.cautionRadius;
+  if (r <= 0) return null;
+  let best: { x: number; y: number; d: number } | null = null;
+  for (const o of world.entities) {
+    if (!o.alive || o.owner === e.owner || o.kind !== 'unit' || !o.weapon) continue;
+    const d = Math.sqrt((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2);
+    if (d > r || (best && d >= best.d) || !world.isVisibleTo(e.owner, o) || coveredByWard(world, e, o)) continue;
+    best = { x: o.pos.x, y: o.pos.y, d };
+  }
+  // Gesichtet: Position merken (cautionMemory s). Sieht er nichts mehr, gilt die letzte Sichtung noch eine Weile.
+  if (best) return { x: best.x, y: best.y, until: world.tick + Math.round(world.rules.terraform.cautionMemory * world.tps) };
+  const old = e.tf!.caution;
+  return old && world.tick < old.until ? old : null;
+}
+
+/** Liegt Punkt (x, y) im Abstandsbereich um den gesichteten Gegner (zu nah zum Formen oder Rufen)? */
+function tooClose(world: World, c: { x: number; y: number } | null, x: number, y: number, slack = 1): boolean {
+  if (!c) return false;
+  const s = world.rules.terraform.standoff - slack;
+  return (x - c.x) ** 2 + (y - c.y) ** 2 < s * s;
 }
 
 /**
@@ -631,6 +665,28 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   const ground = formerGround(world, e, def);
   const rules = world.rules.terraform;
   const here: Vec2 = { x: e.pos.x, y: e.pos.y };
+  // Vorsicht (31.10.): alle 10 Ticks nach sichtbaren Gegnern schauen.
+  if ((world.tick + e.id) % 10 === 0 || tf.caution === undefined) tf.caution = cautionOf(world, e);
+  const caution = tf.caution ?? null;
+  const cd = caution ? Math.sqrt((e.pos.x - caution.x) ** 2 + (e.pos.y - caution.y) ** 2) : Infinity;
+  // Gegner zu nah: Ritual abbrechen, auf Abstand gehen (Rückzug bleibt der letzte Ausweg bei retreatRadius).
+  if (caution && cd < rules.standoff) {
+    tf.block = null;
+    tf.workTick = 0;
+    tf.workCell = -1;
+    tf.sprint = false;
+    tf.firstFree = false;
+    const dx = e.pos.x - caution.x;
+    const dy = e.pos.y - caution.y;
+    const len = Math.max(0.01, Math.sqrt(dx * dx + dy * dy));
+    const back = rules.standoff - cd + 1;
+    const g = world.grid;
+    tf.stepTo = {
+      x: Math.min(g.width - 1, Math.max(0, e.pos.x + (dx / len) * back)),
+      y: Math.min(g.height - 1, Math.max(0, e.pos.y + (dy / len) * back)),
+    };
+    tf.stepUntil = world.tick + 4 * world.tps;
+  }
   // 1. Ritual auf einem fertigen Block
   if (tf.block) {
     if (!readyBlock(world, tf.block, p, ground)) {
@@ -796,7 +852,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   // Die weite Suche (Route, 16 Kacheln) gilt nur kurz nach dem Spawn; die geschenkte Arbeit bleibt bis zum ersten Ruf.
   if (tf.sprint && world.tick - (tf.spawnTick ?? 0) > rules.sprintWindow * world.tps) tf.sprint = false;
   const ready = canSummon && (tf.work ?? 0) >= workPerSummonOf(world, p);
-  const block = ready ? findReadyBlock(world, e, ground, !!tf.sprint) : null;
+  const block = ready ? findReadyBlock(world, e, ground, !!tf.sprint, caution) : null;
   if (block) {
     tf.block = block;
     tf.workTick = 0;
@@ -805,7 +861,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     return;
   }
   tf.done = 0;
-  const cell = nextWorkCell(world, e, ground, rules.workRadius);
+  const cell = nextWorkCell(world, e, ground, rules.workRadius, caution);
   if (cell !== null) {
     tf.started = true;
     tf.workCell = cell;
@@ -814,6 +870,11 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     return;
   }
   tf.workCell = -1;
+  // Gegner in Sicht: nicht weiter vorrücken – stehen bleiben, Lage beobachten und aus sicherem Abstand arbeiten.
+  if (caution) {
+    m.goal = here;
+    return;
+  }
   // 3. Vorrücken – stets ein Stück nach vorn, beim Halten nicht über die Grenze hinaus
   const dir = forward(world, p);
   // Nach dem Sprint gilt der Frontabstand (hinter dem vordersten Wächter seiner Route), sonst die alte Grenze.
@@ -826,7 +887,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   const ahead = { x: e.pos.x + dir * rules.advanceStep, y: e.pos.y + Math.sign(routeY - e.pos.y) * Math.min(Math.abs(routeY - e.pos.y), 0.5) };
   if (limit !== null && (ahead.x - limit) * dir > 0) {
     // An der Grenze: weiter weg nach Arbeit suchen, sonst stehen bleiben.
-    const far = nextWorkCell(world, e, ground, rules.workRadius + 2);
+    const far = nextWorkCell(world, e, ground, rules.workRadius + 2, caution);
     m.goal = far !== null ? { x: (far % world.grid.width) + 0.5, y: Math.floor(far / world.grid.width) + 0.5 } : here;
     return;
   }

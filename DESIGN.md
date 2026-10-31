@@ -2202,3 +2202,10 @@ Anlass (Partien des Nutzers 30.10.): KIs forschten kaum bzw. erst ab 9–15 min,
 - `AI_TUNING.routeCalm` 40: Angriffs-Routenwechsel höchstens alle 40 s (vorher 8 s). Verteidigungs-Umlenken unverändert.
 - `AI_TUNING.convertCalm` 90: höchstens ein Umwidmen-Befehl je 90 s.
 - Vergleich (12 KI-Partien je Seite, alle 6 Paarungen, Felsenpass groß): erste Forschung Technoclan 9:34 → 3:53, Myriaden 12:45 → 6:27, Terra-Former 15:07 → 10:54; Forschungen je Partie TC 1,5 → 4,3, Myr 1,9 → 4,8, TF 3,3 → 6,0; Routenbefehle je min etwa halbiert (TC 3,0 → 1,8, Myr 4,6 → 2,2, TF 2,4 → 1,3); Median-Dauer 10,3 → 13,1 min; Siege TF 6/TC 4/Myr 1 → TF 4/TC 5/Myr 2. **Offen:** Terra-Former-Umwidmen nicht weniger (4,1 → 5,6 Befehle je Partie; der Spam ist weg, aber es wird öfter echt umgebaut) und erste TF-Forschung noch spät (Stufen haben Vorrang).
+
+## Terraformer: Vorsicht vor Gegnern (31.10., Nutzer-Wunsch)
+- Vorher prüfte nur der Rückzug (Gegner in 6 Kacheln ohne Wächter dazwischen) etwas; Vorrücken, Formen und Rufen gingen blind auf die nächste Kachel.
+- Jetzt „schaut“ der Terraformer alle 10 Ticks: nächster **sichtbarer** bewaffneter Gegner in `cautionRadius` 11, den kein eigener Wächter-Verband abschirmt (er sieht nur, was sein Spieler sieht; selbst sieht er ~6 Kacheln, deshalb merkt er sich die Sichtung `cautionMemory` 8 s).
+- Bei Sichtung: **kein Vorrücken** (bleibt stehen), **Abstand** `standoff` 8 Kacheln (näher → Ritual abbrechen, 4 s auf Abstand gehen), **formt und ruft nur auf Kacheln/Blöcken ≥ standoff−1 vom Gegner** – also aus sicherem Abstand weiter Kacheln umwandeln und beschwören. Der alte Rückzug (6 Kacheln) bleibt letzter Ausweg.
+- Schalter: `terraform.cautionRadius 0` = alt (für Vergleichsläufe). Keine Werte der Einheiten geändert. Tests: tests/tfVorsicht.test.ts; Suite 404 grün.
+- Offen/Beobachten: Tempo der Terraformer im Zentrum (vorrücken stoppt bei Gegnern in Sicht) – per Lauf prüfen, noch nicht simuliert.
