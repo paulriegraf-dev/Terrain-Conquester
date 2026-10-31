@@ -2209,3 +2209,19 @@ Anlass (Partien des Nutzers 30.10.): KIs forschten kaum bzw. erst ab 9–15 min,
 - Bei Sichtung: **kein Vorrücken** (bleibt stehen), **Abstand** `standoff` 8 Kacheln (näher → Ritual abbrechen, 4 s auf Abstand gehen), **formt und ruft nur auf Kacheln/Blöcken ≥ standoff−1 vom Gegner** – also aus sicherem Abstand weiter Kacheln umwandeln und beschwören. Der alte Rückzug (6 Kacheln) bleibt letzter Ausweg.
 - Schalter: `terraform.cautionRadius 0` = alt (für Vergleichsläufe). Keine Werte der Einheiten geändert. Tests: tests/tfVorsicht.test.ts; Suite 404 grün.
 - Offen/Beobachten: Tempo der Terraformer im Zentrum (vorrücken stoppt bei Gegnern in Sicht) – per Lauf prüfen, noch nicht simuliert.
+
+## Erdwall lenkt statt sperrt (31.10., Nutzer-GO)
+Befund aus 156 Partien: KI baut 4–6 Wälle je Partie, Schaden an Wällen 0 – Wälle waren faktisch unzerstörbares Gelände (Brechen nur Schwere/Belagerung und nur bei Umweg > ×2,0, das beim Setzen ohnehin verboten ist). Ziel des Nutzers: Wälle lenken und bündeln Bewegung (AoE), die Schlucht macht eine Lane tot; „ein Weg HQ–HQ bleibt offen“ bleibt.
+
+| Wert | alt | neu |
+|---|---|---|
+| Budget | 24 / 36 Kacheln | aus (0 = unbegrenzt) |
+| Preis je Kachel | 15 | 8, jeder weitere Wall binnen 45 s +4, Deckel 16 (`stepCost/stepWindow/costCap`, `world.wallCasts`) |
+| Umweg-Grenze beim Setzen | ×2,0 | ×1,5 |
+| Brechen dürfen | Schwere, Belagerung, Sprengetopps | jede Einheit (`anyBreaks`), weiter nur bei Umweg über der Grenze |
+| Leben / Widerstand / Rüstung | 200 / 10 / 4 | 80 / 6 / 6 |
+| Lücke (`gap`) | – | 2: zu Wall, Fels, Schlucht, Kartenrand entweder direkt anschließen (auch verlängern, Ecken, entlang einer Felswand) oder ≥ 2 freie Kacheln; 1 freie Kachel wird abgelehnt (staut statt lenkt, Einheitenradius 0,25–0,6) |
+
+- Alte Werte in `classicRules().walls` (tests/wall.test.ts nutzt sie). Neue Tests: tests/trichter.test.ts. Suite 410 grün.
+- KI: baut weiter nach `wallGap`-Takt, Budgetprüfung ist mit `Infinity` wirkungslos; einige KI-Wälle fallen künftig an ×1,5 oder der Lücke weg. Nicht simuliert (Nutzer: kein Lauf).
+- HUD: Erdwall-Knopf zeigt den aktuellen Kachelpreis statt Budget; Vorschau meldet die Lücken-Ablehnung.

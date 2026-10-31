@@ -175,6 +175,7 @@ export function checkWall(world: World, p: PlayerId, x: number, y: number, verti
   }
   const budget = wallBudget(world, p);
   if (wallTiles(world, p) + cells.length > budget) return fail(`Wall-Budget erschöpft (${wallTiles(world, p)} von ${budget} Kacheln) – schütte eigene Wälle zu`);
+  if (!keepsGap(world, cells)) return fail(`Zu nah an Wall, Fels oder Schlucht – direkt anschließen oder ${world.rules.walls.gap} Kacheln Lücke lassen`);
   const cost = cells.length * wallTileCost(world, p);
   if (player.energy < cost) return fail(`Zu wenig Energie (${cost} nötig)`);
   if (!staysOpenWith(world, cells, TERRAIN_INDEX.wall)) return fail('Eine Route von HQ zu HQ muss offen bleiben');
@@ -183,6 +184,52 @@ export function checkWall(world: World, p: PlayerId, x: number, y: number, verti
   const worst = Math.max(...ROUTES.map((r) => ratios[r].ratio));
   if (worst > world.rules.walls.detour + 1e-9) return fail(`Umweg zu groß (×${worst.toFixed(2)} – höchstens ×${world.rules.walls.detour.toFixed(1)})`, ratios);
   return { ok: true, cells, ratios: withRatios ? ratios : undefined };
+}
+
+/**
+ * Trichter-Regel (31.10., Nutzer): Jede neue Wall-Kachel liegt zu jeder Sperre (stehende und angekündigte Wälle, Fels,
+ * Schlucht, Kartenrand) entweder direkt an (Abstand 1 – anschließen, Ecken) oder mindestens `gap` Kacheln frei dazwischen
+ * (Abstand > gap). Dazwischen (1 … gap−1 freie Kacheln) entstünde eine Engstelle, die Verbände staut statt lenkt.
+ */
+function keepsGap(world: World, cells: readonly number[]): boolean {
+  const gap = world.rules.walls.gap;
+  if (gap <= 1) return true;
+  const g = world.grid;
+  const own = new Set(cells);
+  const pending = new Set<number>();
+  for (const w of world.walls) for (const c of w.cells) pending.add(c.index);
+  const blocked = (x: number, y: number): boolean => {
+    if (!g.inBounds(x, y)) return true;
+    const i = g.index(x, y);
+    if (own.has(i)) return false;
+    return pending.has(i) || !TERRAIN_LIST[g.terrain[i]!]!.solid || g.terrain[i] === TERRAIN_INDEX.wall;
+  };
+  const xs = cells.map((i) => i % g.width);
+  const ys = cells.map((i) => Math.floor(i / g.width));
+  const dist = (x: number, y: number): number => {
+    let d = Infinity;
+    for (let k = 0; k < cells.length; k++) d = Math.min(d, Math.max(Math.abs(xs[k]! - x), Math.abs(ys[k]! - y)));
+    return d;
+  };
+  // Jede Sperr-Kachel im Umkreis gap: ihr Abstand zur neuen Linie ist 1 (anschließen) oder > gap – oder sie hängt über
+  // Nachbar-Sperren an einer näheren (eine Felswand oder ein Wall, an den man anschließt oder den man verlängert).
+  const x0 = Math.min(...xs) - gap;
+  const x1 = Math.max(...xs) + gap;
+  const y0 = Math.min(...ys) - gap;
+  const y1 = Math.max(...ys) + gap;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (!blocked(x, y)) continue;
+      const d = dist(x, y);
+      if (d < 2 || d > gap) continue;
+      let joined = false;
+      for (let dy = -1; dy <= 1 && !joined; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if ((dx !== 0 || dy !== 0) && blocked(x + dx, y + dy) && dist(x + dx, y + dy) < d) { joined = true; break; }
+      }
+      if (!joined) return false;
+    }
+  }
+  return true;
 }
 
 /** Vorschau (HUD und Bild): dieselbe Prüfung mit Umwegfaktoren, je Mausposition und Sekunde nur einmal gerechnet. */
@@ -209,6 +256,8 @@ export function castWall(world: World, p: PlayerId, x: number, y: number, vertic
   player.energy -= cost;
   player.stats.energySpent += cost;
   player.stats.walls++;
+  world.wallCasts[p].push(world.tick);
+  if (world.wallCasts[p].length > 32) world.wallCasts[p].splice(0, world.wallCasts[p].length - 32);
   world.walls.push({
     owner: p,
     cells: check.cells.map((index) => ({ index, original: world.grid.terrain[index]! })),
@@ -269,7 +318,7 @@ export function updateWalls(world: World): void {
  * ohne Wälle beträgt (seit 27.10. auch für Belagerung: kein Beschuss von Wällen, die nicht im Weg stehen).
  */
 export function mayBreakWall(world: World, e: Entity): boolean {
-  if (!breaksWalls(e)) return false;
+  if (!breaksWalls(e) && !(world.rules.walls.anyBreaks && e.kind === 'unit')) return false;
   const route = e.mover?.route;
   // 27.10.: nur wenn der Wall den Weg wirklich versperrt (Umweg über der Grenze) – auch Artillerie schießt sonst nicht auf Wälle.
   return !!route && world.wallRatio[e.owner][route] > world.rules.walls.detour + 1e-9;

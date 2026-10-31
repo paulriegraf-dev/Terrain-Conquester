@@ -9,10 +9,11 @@ import { checkWall, mayBreakWall, wallTiles } from '../src/sim/systems/abilities
 import { detourRatios } from '../src/sim/systems/walls';
 import { pathsStayOpen } from '../src/sim/connectivity';
 import { World } from '../src/sim/world';
-import { RULES } from '../src/data/rules';
+import { RULES, classicRules } from '../src/data/rules';
 import { chokeMap, cmd, openMap, smallBases, stepTimes } from './fixtures';
 
-const calm = { ...smallBases, front: { ...RULES.front, regenPerSecond: 0 } };
+// Alte Wall-Regeln (Budget 24, 15 je Kachel, Umweg 2,0, Brechen nur Schwere) über classicRules() – Stand bis 31.10.
+const calm = { ...smallBases, front: { ...RULES.front, regenPerSecond: 0 }, walls: classicRules().walls! };
 
 /** Nachtrag G.3 (26.10. spät): Erdwall als Gelände, Budget in Kacheln, Umweg-Regel, Brechen nur bei zu großem Umweg. */
 describe('Erdwall als Gelände (Nachtrag G.3)', () => {
@@ -25,7 +26,7 @@ describe('Erdwall als Gelände (Nachtrag G.3)', () => {
     const energy = world.players[0].energy;
     const version = world.grid.version;
     world.step([cmd(0, { type: 'castWall', x: 4, y: 7, vertical: true })]);
-    assert.ok(Math.abs(world.players[0].energy - (energy - WALL.length * RULES.walls.tileCost)) < 1, 'drei Kacheln × 15');
+    assert.ok(Math.abs(world.players[0].energy - (energy - WALL.length * calm.walls.tileCost)) < 1, 'drei Kacheln × 15');
     assert.equal(world.grid.terrain[world.grid.index(4, 7)], TERRAIN_INDEX.meadow, 'erst angekündigt');
     stepTimes(world, WALL.raiseSeconds * world.tps + 1);
     for (const y of [6, 7, 8]) assert.equal(world.grid.terrain[world.grid.index(4, y)], TERRAIN_INDEX.wall);
@@ -65,7 +66,7 @@ describe('Erdwall als Gelände (Nachtrag G.3)', () => {
   });
 
   it('Budget 24 Kacheln je Spieler', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { startEnergy: 400, maxEnergy: 2000 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { startEnergy: 400, maxEnergy: 2000, walls: classicRules().walls! } });
     world.players[0].energy = 2000;
     let placed = 0;
     for (let x = 2; x <= 12 && placed < 8; x += 2) for (const y of [2, 24]) {
@@ -90,7 +91,7 @@ describe('Erdwall als Gelände (Nachtrag G.3)', () => {
   });
 
   it('ein Weg von HQ zu HQ bleibt immer offen; Umweg über 2,0 wird abgelehnt', () => {
-    const world = new World({ map: chokeMap, seed: 1, rules: smallBases });
+    const world = new World({ map: chokeMap, seed: 1, rules: calm });
     world.step();
     const blocked = checkWall(world, 0, 8, 3, true); // genau im Engpass
     assert.equal(blocked.ok, false);

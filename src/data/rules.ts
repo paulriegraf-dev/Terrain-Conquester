@@ -175,10 +175,14 @@ export interface Rules {
    * Aufgebot (rush): je Fabrik 40 → 60 → 90. Nachschub ab Minute `surge.from`/60.
    */
   /**
-   * Erdwall als Gelände (Nachtrag G.3, 26.10. spät): Budget in Kacheln (HQ-Gelände 5: budget5), Preis je Kachel,
+   * Erdwall als Gelände (Nachtrag G.3, 26.10. spät): Budget in Kacheln (HQ-Gelände 5: budget5; 0 = unbegrenzt), Preis je Kachel,
    * Umwegfaktor (gegnerische Route ≤ detour × Kosten ohne Wälle), Leben beim Brechen (wie Bauwerk: Widerstand/Rüstung).
+   * Erdwall lenkt statt sperrt (31.10., Nutzer): `stepCost` – jeder weitere Wall binnen `stepWindow` s kostet so viel mehr je Kachel
+   * (Deckel `costCap`); `gap` – zu anderen Wällen, Fels, Schluchten und dem Kartenrand entweder direkt anschließen oder mindestens
+   * `gap` Kacheln Lücke lassen (Trichter bleibt begehbar); `anyBreaks` – jede Einheit darf einen Wall brechen, der ihre Route über
+   * `detour` hinaus verlängert (sonst nur Schwere, Belagerung, Sprengetopps).
    */
-  walls: { budget: number; budget5: number; tileCost: number; detour: number; breakHp: number; toughness: number; save: number };
+  walls: { budget: number; budget5: number; tileCost: number; detour: number; breakHp: number; toughness: number; save: number; stepCost: number; stepWindow: number; costCap: number; gap: number; anyBreaks: boolean };
   purchases: {
     window: number;
     watch: { prices: readonly number[]; seconds: number; every: number };
@@ -417,7 +421,7 @@ export const RULES: Rules = {
   maxEnergy: 400,
   upgradePriceMax: 1.5,
   energyPerSecond: 3,
-  walls: { budget: 24, budget5: 36, tileCost: 15, detour: 2.0, breakHp: 200, toughness: 10, save: 4 },
+  walls: { budget: 0, budget5: 0, tileCost: 8, detour: 1.5, breakHp: 80, toughness: 6, save: 6, stepCost: 4, stepWindow: 45, costCap: 16, gap: 2, anyBreaks: true },
   purchases: {
     window: 180,
     watch: { prices: [60, 90, 130], seconds: 120, every: 20 },
@@ -635,5 +639,6 @@ export function classicRules(): Partial<Rules> {
     purchases: { ...RULES.purchases, surge: { ...RULES.purchases.surge, from: 480 } },
     hqWeapon: true,
     siteLockSeconds: 0,
+    walls: { budget: 24, budget5: 36, tileCost: 15, detour: 2.0, breakHp: 200, toughness: 10, save: 4, stepCost: 0, stepWindow: 0, costCap: 15, gap: 0, anyBreaks: false },
   };
 }

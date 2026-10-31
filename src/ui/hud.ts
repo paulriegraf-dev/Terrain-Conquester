@@ -487,7 +487,7 @@ export class Hud {
       const busy = new Set(world.swaps.filter((s) => s.owner === me).map((s) => s.batch)).size;
       html =
         `<p>Bauplätze <strong>${num(slotsUsed(world, me), Number.isInteger(slotsUsed(world, me)) ? 0 : 1)} / ${slotLimit(world, me)}</strong> (${buildingCount(world, me)} Gebäude) · gebaut wird in Bauzonen: <span class="zone-key" data-zone="base"></span> Basis${world.rules.baseBuildingDamageTaken < 1 ? " (befestigt)" : ""}, <span class="zone-key" data-zone="front"></span> Vorfeld.</p>` +
-        `<p>Erdwall: ${wallTiles(world, me)} von ${wallBudget(world, me)} Kacheln · ${wallTileCost(world, me)} Energie je Kachel</p>` +
+        `<p>Erdwall: ${wallBudget(world, me) === Infinity ? `${wallTiles(world, me)} Kacheln` : `${wallTiles(world, me)} von ${wallBudget(world, me)} Kacheln`} · ${wallTileCost(world, me)} Energie je Kachel</p>` +
         (busy ? `<p>Gelände: ${busy} von ${SWAP.maxParallel} Flächen im Umbau</p>` : '') +
         (p.research.length ? `<p class="muted">Erforscht: ${p.research.length}</p>` : '') +
         synergyLine(world, me) +

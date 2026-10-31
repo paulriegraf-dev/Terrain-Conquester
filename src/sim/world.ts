@@ -342,6 +342,8 @@ export class World {
   /** Nach ID sortiert (neue Entities kommen immer hinten dazu). */
   entities: Entity[] = [];
   walls: ActiveWall[] = [];
+  /** Ticks der letzten Wall-Käufe je Spieler (Preisstaffel, 31.10.). */
+  wallCasts: [number[], number[]] = [[], []];
   /** Umwegfaktor durch Wälle je Angreifer und Route (Nachtrag G.3, alle 2 s); Sekunden mit Umweg (Messung). */
   wallRatio: [Record<Route, number>, Record<Route, number>] = [{ top: 1, mid: 1, bottom: 1 }, { top: 1, mid: 1, bottom: 1 }];
   wallBlockedSeconds = 0;

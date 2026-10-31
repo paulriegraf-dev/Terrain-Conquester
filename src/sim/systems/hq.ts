@@ -136,8 +136,15 @@ export function swapBrush(world: World, p: PlayerId, base: number): number {
 }
 /** Wall-Budget (Kacheln) und Preis je Kachel (Gelände 5: 36 Kacheln, −30 %). */
 export function wallBudget(world: World, p: PlayerId): number {
-  return hqTier(world, p, 'terrain') >= 5 ? world.rules.walls.budget5 : world.rules.walls.budget;
+  const b = hqTier(world, p, 'terrain') >= 5 ? world.rules.walls.budget5 : world.rules.walls.budget;
+  return b > 0 ? b : Infinity; // 0 = unbegrenzt (31.10.)
 }
+/** Preis je Kachel: Grundpreis (Gelände 5: −30 %) + stepCost je weiterem Wall binnen stepWindow s, höchstens costCap. */
 export function wallTileCost(world: World, p: PlayerId): number {
-  return Math.round(world.rules.walls.tileCost * (hqTier(world, p, 'terrain') >= 5 ? HQ_FX.wallDiscount : 1));
+  const r = world.rules.walls;
+  const base = Math.round(r.tileCost * (hqTier(world, p, 'terrain') >= 5 ? HQ_FX.wallDiscount : 1));
+  if (r.stepCost <= 0 || r.stepWindow <= 0) return base;
+  const since = world.tick - Math.round(r.stepWindow * world.tps);
+  const recent = world.wallCasts[p].filter((t) => t > since).length;
+  return Math.min(r.costCap, base + r.stepCost * recent);
 }

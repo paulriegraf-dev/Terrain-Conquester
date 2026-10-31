@@ -129,12 +129,12 @@ function mainCommands(ctx: CommandContext): CommandSet {
   buttons.push({
     id: 'wall',
     glyph: '▤',
-    label: `Erdwall ${tiles}/${budget}`,
+    label: budget === Infinity ? `Erdwall ${tileCost}` : `Erdwall ${tiles}/${budget}`,
     key: 'w',
     cost: WALL.length * tileCost,
     disabled: !canAct,
     pressed: !!view.wall && !view.wall.fill,
-    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg, Sicht und direkte Schüsse (Bogenfeuer – Batterie, Katapult, Myr-Kanone, Schlammwürfe – geht drüber), kein Ziel, keine Lebensdauer. Eigene Einheiten direkt am eigenen Wall sehen und schießen drüber (Schießscharte); haltende Fernkämpfer (ab Reichweite 4) rücken von selbst an die Scharte, wenn dahinter ein Gegner steht. Schweber sehen über jeden Wall. In der eigenen Kartenhälfte immer, sonst in der eigenen Einflusszone. Budget ${budget} Kacheln (belegt ${tiles}). Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher). Die Vorschau zählt Matsch auf dem gegnerischen Weg (Trichter).`,
+    tip: `Erdwall (Gelände, ${tileCost} Energie je Kachel, ${WALL.length} Kacheln je Wall): blockiert Weg, Sicht und direkte Schüsse (Bogenfeuer – Batterie, Katapult, Myr-Kanone, Schlammwürfe – geht drüber), kein Ziel, keine Lebensdauer. Jeder weitere Wall kurz nacheinander kostet mehr. Zu anderen Wällen, Fels und Schluchten entweder direkt anschließen oder ${world.rules.walls.gap} Kacheln Lücke lassen (Trichter: lenken, nicht sperren). Eigene Einheiten direkt am eigenen Wall sehen und schießen drüber (Schießscharte); haltende Fernkämpfer (ab Reichweite 4) rücken von selbst an die Scharte, wenn dahinter ein Gegner steht. Schweber sehen über jeden Wall. In der eigenen Kartenhälfte immer, sonst in der eigenen Einflusszone. ${budget === Infinity ? 'Kein Budget' : `Budget ${budget} Kacheln (belegt ${tiles})`}. Jede gegnerische Route bleibt höchstens ×${world.rules.walls.detour.toFixed(1)} so teuer wie ohne Wälle – die Vorschau zeigt den neuen gegnerischen Weg je Lane und den Umwegfaktor. Brechen nur, wenn der Umweg doch darüber liegt${world.rules.walls.anyBreaks ? ' – dann von jeder Einheit' : ' (Belagerung, Schwere mit Durchschlag, Sprengetopps, Frontbrecher)'}. Die Vorschau zählt Matsch auf dem gegnerischen Weg (Trichter).`,
     action: 'wall',
   });
   if (view.wall) {
