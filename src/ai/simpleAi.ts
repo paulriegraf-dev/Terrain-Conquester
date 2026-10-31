@@ -240,7 +240,7 @@ export const AI_TUNING: {
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
     bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3,
     vsTc: { on: true, workshops: 2, midFactories: 3, mixEvery: 75, broodUp: 1.6 }, superBrood: true, superFrom: 360, superFactories: 5, catapultKeystone: true,
-    vsTf: { on: true, catapultFrom: 180, foundryAt: 0 } },
+    vsTf: { on: true, catapultFrom: 300, foundryAt: 2 } }, // 31.10.: Schmelze als 3. Fabrik, Katapult ab 5:00 → 7 von 12 statt 11 von 12
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },

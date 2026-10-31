@@ -108,3 +108,20 @@ abHQ  vs TC: 7/12 11.5min Haltung 2.25 Superbrut 0.3 | vs TF: –
 ```
 
 p8b = Patch 8 + Druck-Modus verteidigt bis zum Ende. abR0: Forschung ab 0 Fabriken (identische Partien – die Regel greift bei den Myriaden nicht); abHQ: HQ-Bedarf 0,8 (7 statt 6 von 12, im Rauschen).
+
+## Patch 9 (Siegpartie des Nutzers gegen Terra-Former) und Abschwächung
+
+```
+p8b   vs TC: 6/12 14.8min Haltung 2.21 Superbrut 0.3 | vs TF: 5/12 11.8min Haltung 0.95 Superbrut 0.6
+p9    vs TC: 6/12 14.8min Haltung 2.21 Superbrut 0.3 | vs TF: 11/12 11.8min Haltung 1.74 Superbrut 0.6
+c240  vs TC: – | vs TF: 11/12 12.0min Haltung 1.86 Superbrut 0.9
+c300  vs TC: – | vs TF: 11/12 12.0min Haltung 1.86 Superbrut 0.9
+c360  vs TC: – | vs TF: 11/12 12.0min Haltung 1.86 Superbrut 0.9
+f2    vs TC: – | vs TF: 7/12 16.8min Haltung 0.86 Superbrut 0.9
+f4    vs TC: – | vs TF: 8/12 16.4min Haltung 1.48 Superbrut 0.6
+f99   vs TC: – | vs TF: 5/12 11.8min Haltung 0.96 Superbrut 0.6
+```
+
+c240/c300/c360 = Katapult-Werkstatt ab 4:00/5:00/6:00 (Schmelze zuerst) – identisch. f2/f4/f99 = Schmelze als 3./5./keine frühe Fabrik, Katapult ab 5:00. Gewählt: f2 (7 von 12).
+
+Stufen (Patch 9, je 15 Partien): Paulslike gegen Normal 10 : 5; Normal gegen Leicht 7 : 7 (1 offen).

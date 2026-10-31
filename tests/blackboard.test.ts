@@ -172,13 +172,13 @@ describe('Myriaden (Patch 8)', () => {
 });
 
 describe('Myriaden (Patch 9)', () => {
-  it('gegen Terra-Former: erste Fabrik ist die Schmelze, ab 3:00 eine Werkstatt auf Stufe II mit Katapult', () => {
+  it('gegen Terra-Former: dritte Fabrik ist die Schmelze, ab 5:00 eine Werkstatt auf Stufe II mit Katapult', () => {
     const world = new World({ map: getMap('felsenpass'), seed: 27, factions: ['myriaden', 'terraformer'] });
     const ais = [new SimpleAi(0, 97, 'normal'), new SimpleAi(1, 98, 'normal')];
     world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
     const builds: string[] = [];
     let catapult = false;
-    for (let t = 0; t < 300 * world.tps && !world.result; t++) {
+    for (let t = 0; t < 420 * world.tps && !world.result; t++) {
       const cs = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
       for (const c of cs) {
         if (c.player !== 0) continue;
@@ -187,7 +187,8 @@ describe('Myriaden (Patch 9)', () => {
       }
       world.step(cs);
     }
-    assert.equal(builds[0], 'foundry', builds.join(', '));
+    assert.equal(builds[2], 'foundry', builds.join(', '));
+    assert.ok(!builds.slice(0, 2).includes('foundry'), builds.join(', '));
     assert.ok(catapult, 'Katapult gewählt');
   });
 });
