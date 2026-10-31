@@ -189,7 +189,9 @@ export const AI_TUNING: {
     hold: { on: boolean; at: number; release: number; minSeconds: number; counterAfter: number; counterAt: number };
     bomberMix: { on: boolean; every: number; cycles: number }; researchAt: number; hqNeed: number;
     /** Patch 8: gegen Technoclan Kanonen früh, Fabriken mittig, Bruten gezielt hoch, Sprengetopp öfter; Superbrut ab superFrom s; Schlussstein Katapult vor Brechstange. */
-    vsTc: { on: boolean; workshops: number; midFactories: number; mixEvery: number; broodUp: number }; superBrood: boolean; superFrom: number; catapultKeystone: boolean };
+    vsTc: { on: boolean; workshops: number; midFactories: number; mixEvery: number; broodUp: number }; superBrood: boolean; superFrom: number; superFactories: number; catapultKeystone: boolean;
+    /** Patch 9 (Siegpartie des Nutzers gegen Terra-Former 31.10.): Schmelze als erste Fabrik, Katapult-Werkstatt ab catapultFrom s auch ohne Druck. */
+    vsTf: { on: boolean; catapultFrom: number } };
   /**
    * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
    * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
@@ -237,7 +239,8 @@ export const AI_TUNING: {
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
     bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3,
-    vsTc: { on: true, workshops: 2, midFactories: 3, mixEvery: 75, broodUp: 1.6 }, superBrood: true, superFrom: 300, catapultKeystone: true },
+    vsTc: { on: true, workshops: 2, midFactories: 3, mixEvery: 75, broodUp: 1.6 }, superBrood: true, superFrom: 360, superFactories: 5, catapultKeystone: true,
+    vsTf: { on: true, catapultFrom: 180 } },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
@@ -597,9 +600,21 @@ export class SimpleAi {
     return this.myr(world) && AI_TUNING.myrPlan.vsTc.on && world.players[1 - this.player].faction.id === 'technoclan';
   }
 
+  /** Patch 9: Myriaden gegen Terra-Former? */
+  private myrVsTf(world: World): boolean {
+    return this.myr(world) && AI_TUNING.myrPlan.vsTf.on && world.players[1 - this.player].faction.id === 'terraformer';
+  }
+
+  /** Patch 9: Katapult-Werkstatt gewünscht (Druck-Modus, oder gegen Terra-Former ab catapultFrom s)? */
+  private wantCatapult(world: World): boolean {
+    return this.pressedSince >= 0 || (this.myrVsTf(world) && world.seconds >= AI_TUNING.myrPlan.vsTf.catapultFrom);
+  }
+
   /** Patch 8: Superbrut – zwei Bruten auf höchster Stufe verschmelzen (der Platz der zweiten wird frei für die nächste Brut). */
   private myrSuperBrood(world: World): Command | null {
     if (!this.myr(world) || !AI_TUNING.myrPlan.superBrood || world.seconds < AI_TUNING.myrPlan.superFrom) return null;
+    // Patch 9: erst in der Breite (Nutzer verlor mit Superbrut bei 2:20 aus zwei Bruten; Sieg mit Superbrut bei 6:40 und 10:15).
+    if (this.ownBuildings(world).filter((b) => b.producer).length < AI_TUNING.myrPlan.superFactories) return null;
     for (const b of this.ownBuildings(world)) {
       if (b.defId !== 'barracks' || !b.producer || b.producer.super) continue;
       if (checkMerge(world, b).ok) return { type: 'mergeBroods', entityId: b.id };
@@ -655,7 +670,7 @@ export class SimpleAi {
   private myrUnits(world: World, holding: boolean): Command | null {
     if (!this.myr(world)) return null;
     const own = this.ownBuildings(world);
-    if (holding) {
+    if (holding || this.wantCatapult(world)) {
       const ws = own.find((b) => b.defId === 'workshop' && b.producer && !b.producer.job && b.producer.level >= 2);
       if (ws && ws.producer!.unit !== 'catapult' && !own.some((b) => b.producer?.unit === 'catapult')) {
         this.lastRetool.set(ws.id, world.tick);
@@ -787,7 +802,7 @@ export class SimpleAi {
     const clutch = this.myr(world) && world.seconds < M.until ? this.myrClutch(world, factories) : null;
     if (clutch) cands.push({ d: 'factory', s: score('build', 2) * 1.01, pre: clutch });
     // Patch 7: unter Druck gegen Terra-Former zuerst die Katapult-Werkstatt.
-    const wsUp = this.pressedSince >= 0 ? this.holdWorkshopUp(world) : null;
+    const wsUp = this.wantCatapult(world) ? this.holdWorkshopUp(world) : null; // Patch 9: gegen Terra-Former ab 3:00 auch ohne Druck
     if (wsUp) cands.push({ d: 'factory', s: score('build', 2) * 1.05, pre: wsUp });
     // Patch 8: Superbrut, sobald zwei Bruten auf höchster Stufe stehen – vor Bauen, damit der frei werdende Platz zählt.
     const merge = this.myrSuperBrood(world);
@@ -1116,7 +1131,9 @@ export class SimpleAi {
         if (id === 'workshop' && owned.workshop === 0 && built >= 1) score *= 2; // Werkstatt + Brut zuerst
         // Patch 8: gegen Technoclan zuerst Kanonen-Werkstätten (Mischung), danach Bruten.
         if (this.myrVsTc(world) && id === 'workshop' && owned.workshop < AI_TUNING.myrPlan.vsTc.workshops) score *= built === 0 ? 4 : 3;
-        if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.01; // Schmelze erst im Spätspiel (Nutzer)
+        // Patch 9: gegen Terra-Former die Schmelze als erste Fabrik (Sphären halten den frühen Vorstoß), sonst erst im Spätspiel.
+        if (id === 'foundry' && this.myrVsTf(world) && built === 0) score *= 100;
+        else if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.01; // Schmelze erst im Spätspiel (Nutzer)
       }
       // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
       const part = BUILDINGS[id].part;
