@@ -192,3 +192,21 @@ describe('Myriaden (Patch 9)', () => {
     assert.ok(catapult, 'Katapult gewählt');
   });
 });
+
+describe('Lernen aus Partien von Menschen', () => {
+  it('Terra-Former gegen Technoclan: die gelernte erste Fabrik steht unter den ersten beiden Bauten', async () => {
+    const { REPLAY_PLANS } = await import('../src/ai/fromReplays');
+    const plan = REPLAY_PLANS['terraformer>technoclan'];
+    assert.ok(plan && plan.games >= AI_TUNING.replays.minGames, 'Plan vorhanden');
+    const world = new World({ map: getMap('felsenpass'), seed: 29, factions: ['terraformer', 'technoclan'] });
+    const ais = [new SimpleAi(0, 99, 'normal'), new SimpleAi(1, 100, 'normal')];
+    world.prepare(ais.flatMap((ai) => ai.prepare(world).map((cmd) => ({ player: ai.player, cmd }))));
+    const builds: string[] = [];
+    for (let t = 0; t < 90 * world.tps; t++) {
+      const cs = ais.flatMap((ai) => ai.think(world).map((cmd) => ({ player: ai.player, cmd })));
+      for (const c of cs) if (c.player === 0 && c.cmd.type === 'build') builds.push(c.cmd.building);
+      world.step(cs);
+    }
+    assert.ok(builds.slice(0, 2).includes(plan!.opening[0]!), `${builds.join(', ')} – Plan ${plan!.opening.join(', ')}`);
+  });
+});
