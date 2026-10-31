@@ -135,3 +135,15 @@ Stufen (Patch 9, je 15 Partien): Paulslike gegen Normal 10 : 5; Normal gegen Lei
 | Technoclan – Terra-Former | 20 : 11 (21 offen) | 17 : 19 (16 offen) |
 
 Gesamt: TC 88, Myr 126, TF 59, offen 39. Median 16,8 min.
+
+## Terra-Former: Lage-Ruf (31.10.)
+
+Nach Pauls Partie: Die KI ruft nicht mehr nach Uhrzeit, sondern nach Lage – erst 6 Frontbrecher/Hainhüter je Lane,
+unter Druck weiter Frontbrecher (gegen leichte Truppen Lawinenrufer), sonst Steppenjäger mit je 2 eine Schlammschleuder.
+Den passenden Block kauft sie direkt vor einem rufbereiten Terraformer. Der Lane-Boden selbst bleibt unverändert.
+
+| TF vs TC, 52 Partien (Paare 2+3) | Technoclan | Terra-Former | offen |
+|---|---|---|---|
+| ohne Regel | 18 | 16 | 18 |
+| Uhr-Regel (verworfen) | 21 | 8 | 23 |
+| Lage-Ruf | 19 | 22 | 11 |
