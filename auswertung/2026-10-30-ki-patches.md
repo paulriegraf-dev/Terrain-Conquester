@@ -125,3 +125,13 @@ f99   vs TC: – | vs TF: 5/12 11.8min Haltung 0.96 Superbrut 0.6
 c240/c300/c360 = Katapult-Werkstatt ab 4:00/5:00/6:00 (Schmelze zuerst) – identisch. f2/f4/f99 = Schmelze als 3./5./keine frühe Fabrik, Katapult ab 5:00. Gewählt: f2 (7 von 12).
 
 Stufen (Patch 9, je 15 Partien): Paulslike gegen Normal 10 : 5; Normal gegen Leicht 7 : 7 (1 offen).
+
+## Nachtlauf 312 Partien (main nach PR #2, Normal vs Normal)
+
+| Paarung | Felsenpass (klein) | Schluchttal groß |
+|---|---|---|
+| Myriaden – Technoclan | 16 : 36 | 37 : 15 |
+| Myriaden – Terra-Former | 37 : 13 (2 offen) | 36 : 16 |
+| Technoclan – Terra-Former | 20 : 11 (21 offen) | 17 : 19 (16 offen) |
+
+Gesamt: TC 88, Myr 126, TF 59, offen 39. Median 16,8 min.
