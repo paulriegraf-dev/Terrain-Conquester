@@ -191,7 +191,7 @@ export const AI_TUNING: {
     /** Patch 8: gegen Technoclan Kanonen früh, Fabriken mittig, Bruten gezielt hoch, Sprengetopp öfter; Superbrut ab superFrom s; Schlussstein Katapult vor Brechstange. */
     vsTc: { on: boolean; workshops: number; midFactories: number; mixEvery: number; broodUp: number }; superBrood: boolean; superFrom: number; superFactories: number; catapultKeystone: boolean;
     /** Patch 9 (Siegpartie des Nutzers gegen Terra-Former 31.10.): Schmelze als erste Fabrik, Katapult-Werkstatt ab catapultFrom s auch ohne Druck. */
-    vsTf: { on: boolean; catapultFrom: number } };
+    vsTf: { on: boolean; catapultFrom: number; foundryAt: number } };
   /**
    * KI-Grundplan Patch 1 (30.10.): Wahrnehmung ohne Vollwissen. true = alter KI-Vorteil eingeschaltet.
    * - exactScout: Spähbericht mit genauer Stärke (sonst wie der Mensch nur Stufe 0–3, geschätzt mit Fehler)
@@ -240,7 +240,7 @@ export const AI_TUNING: {
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
     bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3,
     vsTc: { on: true, workshops: 2, midFactories: 3, mixEvery: 75, broodUp: 1.6 }, superBrood: true, superFrom: 360, superFactories: 5, catapultKeystone: true,
-    vsTf: { on: true, catapultFrom: 180 } },
+    vsTf: { on: true, catapultFrom: 180, foundryAt: 0 } },
   perception: { exactScout: false, fogDeaths: false, enemyKills: false, marketOwners: false, heroSignal: true },
   board: BOARD_TUNING,
   arbiter: { on: true, tfHold: 180 },
@@ -1132,7 +1132,7 @@ export class SimpleAi {
         // Patch 8: gegen Technoclan zuerst Kanonen-Werkstätten (Mischung), danach Bruten.
         if (this.myrVsTc(world) && id === 'workshop' && owned.workshop < AI_TUNING.myrPlan.vsTc.workshops) score *= built === 0 ? 4 : 3;
         // Patch 9: gegen Terra-Former die Schmelze als erste Fabrik (Sphären halten den frühen Vorstoß), sonst erst im Spätspiel.
-        if (id === 'foundry' && this.myrVsTf(world) && built === 0) score *= 100;
+        if (id === 'foundry' && this.myrVsTf(world) && owned.foundry === 0 && built === AI_TUNING.myrPlan.vsTf.foundryAt) score *= 100;
         else if (id === 'foundry' && world.seconds < AI_TUNING.myrPlan.siegeFrom) score *= 0.01; // Schmelze erst im Spätspiel (Nutzer)
       }
       // Markt (Patch A): Ausweichen vom teuren Kernbauteil; gegen Händler nie alle Fabriken auf ein Bauteil.
