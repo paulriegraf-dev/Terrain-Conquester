@@ -186,7 +186,7 @@ export const AI_TUNING: {
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
   /** Lernen aus Partien von Menschen (31.10., src/ai/fromReplays.ts): ab minGames Partien je Paarung Einheiten-Vorliebe und Fabrik-Reihenfolge übernehmen. */
-  tfGround: { on: boolean; front: number; meadowFrom: number; mudFrom: number; dwell: number };
+  tfGround: { on: boolean; from: number; front: number; mudPer: number; hot: number; dwell: number; reserve: number };
   replays: { on: boolean; minGames: number; opening: number; firstFactories: number };
   /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
   myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number;
@@ -241,7 +241,7 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
-  tfGround: { on: true, front: 4, meadowFrom: 150, mudFrom: 330, dwell: 30 },
+  tfGround: { on: true, from: 120, front: 6, mudPer: 2, hot: -0.15, dwell: 12, reserve: 40 },
   replays: { on: true, minGames: 3, opening: 3, firstFactories: 3 },
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
@@ -589,21 +589,48 @@ export class SimpleAi {
    * (Auto-Boden), steht die Front (front Frontbrecher auf der Lane) Wiese für Steppenjäger, im Angriff ab mudFrom Matsch für
    * Schlammschleudern (Belagerung, Flächenschaden).
    */
+  /**
+   * Terra-Former, Lage-Ruf (31.10., nach Pauls Partie): Statt den Lane-Boden nach Uhr umzustellen, liest die KI die Lage
+   * jeder Lane und kauft vor einem rufbereiten Terraformer (Speicher voll, kein fertiger Block) einen Block des Bodens,
+   * dessen Wesen die Lage braucht. Der Lane-Boden selbst (Plan, Streifen) bleibt unberührt.
+   * Nach Paul (31.10.): erst viele von einem Typ, dann die anderen nachziehen.
+   * - Bis `front` Frontbrecher/Hainhüter auf der Lane stehen: Frontbrecher (Geröll).
+   * - Danach unter Druck (Gegner im eigenen Drittel, Druck unter hot): weiter Frontbrecher, gegen leichte Truppen Lawinenrufer.
+   * - Sonst (neutral oder Angriff): Steppenjäger zum Drücken, je `mudPer` Steppenjäger eine Schlammschleuder dahinter.
+   */
   private tfGround(world: World): Command | null {
     const T = AI_TUNING.tfGround;
     const me = world.players[this.player];
-    if (!T.on || me.faction.id !== 'terraformer' || world.seconds < T.meadowFrom) return null;
+    const bb = this.boardMem.board;
+    if (!T.on || !bb || me.faction.id !== 'terraformer' || world.seconds < T.from) return null;
     if (world.tick - this.lastGround < T.dwell * world.tps) return null;
-    const front: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
-    for (const e of world.entities) if (e.alive && e.kind === 'unit' && e.owner === this.player && e.defId === 'specialRubble' && e.mover) front[e.mover.route]++;
-    for (const r of ROUTES) {
-      const stance = me.pendingStance[r]?.stance ?? me.stance[r];
-      let want: 'meadow' | 'mud' | null = null;
-      if (world.seconds >= T.mudFrom && stance === 'push') want = 'mud';
-      else if (front[r] >= T.front) want = 'meadow';
-      if (!want || me.laneGround[r] === want) continue;
-      this.lastGround = world.tick;
-      return { type: 'setLaneGround', route: r, ground: want };
+    const n = { front: { top: 0, mid: 0, bottom: 0 }, meadow: { top: 0, mid: 0, bottom: 0 }, mud: { top: 0, mid: 0, bottom: 0 } };
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'unit' || e.owner !== this.player || !e.mover) continue;
+      const k = e.defId === 'specialRubble' || e.defId === 'specialForest' ? 'front' : e.defId === 'specialMeadow' ? 'meadow' : e.defId === 'specialMud' ? 'mud' : null;
+      if (k) n[k][e.mover.route]++;
+    }
+    const dir = this.player === 0 ? 1 : -1;
+    for (const e of world.entities) {
+      if (e.owner !== this.player || !e.mover || !formerNeedsBlock(world, e)) continue;
+      const r = e.mover.route;
+      const L = bb.lanes[r];
+      let want: TerrainId;
+      if (n.front[r] < T.front) want = 'rubble';
+      else if (L.enemyInOwnThird > 0 && L.pressure < T.hot) want = L.armor.heavy >= L.armor.light + L.armor.infantry ? 'rubble' : 'snow';
+      else want = n.mud[r] * T.mudPer < n.meadow[r] ? 'mud' : 'meadow';
+      if (TERRAIN_INDEX[want] === formerGround(world, e)) continue; // formt er ohnehin – der Speicher-Kauf reicht
+      for (const ahead of [2, 3, 1, 4]) {
+        for (const dy of [0, -1, 1, -2, 2]) {
+          const x = Math.floor(e.pos.x) + dir * ahead;
+          const y = Math.floor(e.pos.y) + dy;
+          if (!checkSwapArea(world, this.player, x, y, want).ok) continue;
+          if (this.spare(world) < swapCostAt(world, this.player, x, want).cost + T.reserve) return null;
+          this.lastGround = world.tick;
+          me.stats.forcedBlocks = (me.stats.forcedBlocks ?? 0) + 1;
+          return { type: 'swapTerrain', x, y, terrain: want };
+        }
+      }
     }
     return null;
   }

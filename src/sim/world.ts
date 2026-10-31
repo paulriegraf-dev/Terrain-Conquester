@@ -166,6 +166,8 @@ export interface PlayerStats {
   combatTiles: number;
   /** Terra-Former-Diagnose (26.10. abends): Gelände-Käufe für Terraformer mit Speicher; Terraformer je Fabrikstufe (Index 0 = Stufe I). */
   storerBuys: number;
+  /** KI, Lage-Ruf der Terra-Former (31.10.): gekaufte Blöcke für das Wesen, das die Lane-Lage braucht. */
+  forcedBlocks?: number;
   formersByLevel: number[];
   /** 26.10. spät: Rufe je Wesen; Rufe auf einem Block mit gekauftem Boden; Entscheidungen (Forschung, Stufe, Kauf, Umwidmen). */
   summonsByGround: Record<string, number>;
