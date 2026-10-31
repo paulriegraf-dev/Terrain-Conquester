@@ -147,3 +147,6 @@ Den passenden Block kauft sie direkt vor einem rufbereiten Terraformer. Der Lane
 | ohne Regel | 18 | 16 | 18 |
 | Uhr-Regel (verworfen) | 21 | 8 | 23 |
 | Lage-Ruf | 19 | 22 | 11 |
+
+Myriaden gegen Terra-Former auf neuem main (Paare 4+5, je 52 Partien): mit Lage-Ruf 41:11, ohne 41:11, Front 3 statt 6 42:10.
+Der Lage-Ruf ist gegen Myriaden neutral; der Abstand kommt von den Myriaden selbst.
