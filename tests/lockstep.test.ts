@@ -81,7 +81,9 @@ describe('Multiplayer: Lockstep', () => {
     assert.equal(a!.ls.desyncAt, null, 'keine Abweichung gemeldet');
     assert.equal(b!.ls.desyncAt, null);
     const cmds = a!.s.world.log.filter((c) => c.tick > 0).length;
-    assert.ok(cmds > 20, `Befehle wurden ausgeführt (${cmds})`);
+    // 30.10. (KI-Patch 3): Der Arbiter gibt je Denkschritt höchstens eine Energie-Ausgabe – in 2 min kommen weniger Befehle
+    // als früher (vorher knapp über 20, auf dem Stand vor dem Patch schon 19). Es geht nur darum, dass Befehle durchlaufen.
+    assert.ok(cmds > 10, `Befehle wurden ausgeführt (${cmds})`);
     // Beide Logs gleich bis zum gemeinsamen Tick.
     const upTo = Math.min(a!.s.world.tick, b!.s.world.tick);
     const la = a!.s.world.log.filter((c) => c.tick < upTo);

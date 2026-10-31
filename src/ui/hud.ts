@@ -1,3 +1,4 @@
+import type { AiLevel } from '../ai/simpleAi';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import { orderCost, scoutCost, scoutDelay } from '../sim/systems/hq';
 import { DISGUISE, SWAP } from '../data/abilities';
@@ -623,7 +624,7 @@ export class Hud {
    */
   showStart(
     maps: readonly { id: string; name: string; description: string }[],
-    ingame?: { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode },
+    ingame?: { mapId: string; level: AiLevel; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode },
     /** Menü während einer Multiplayer-Runde: Das Spiel läuft weiter, nur Aufgeben, Übersicht, Musik. */
     online = false,
   ): void {
@@ -701,13 +702,13 @@ export class Hud {
     return !this.el.startOverlay.hidden;
   }
 
-  startOptions(): { mapId: string; level: 'easy' | 'normal'; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode } {
+  startOptions(): { mapId: string; level: AiLevel; factions: [FactionId, FactionId]; overtime: OvertimeVariant; side: PlayerId; stations: StationMode } {
     const level = this.doc.querySelector<HTMLInputElement>('input[name="opt-level"]:checked')?.value;
     const faction = (sel: HTMLSelectElement): FactionId =>
       FACTION_IDS.includes(sel.value as FactionId) ? (sel.value as FactionId) : 'technoclan';
     return {
       mapId: this.el.mapSelect.value,
-      level: level === 'easy' ? 'easy' : 'normal',
+      level: level === 'easy' || level === 'paulslike' ? level : 'normal',
       factions: [faction(this.el.factionSelect), faction(this.el.enemyFactionSelect)],
       overtime: OVERTIME_VARIANT_IDS.includes(this.el.overtimeSelect.value as OvertimeVariant) ? (this.el.overtimeSelect.value as OvertimeVariant) : 'off',
       side: this.doc.querySelector<HTMLInputElement>('input[name="opt-side"]:checked')?.value === '1' ? 1 : 0,

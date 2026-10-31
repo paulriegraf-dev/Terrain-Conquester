@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import { AI_TUNING, SimpleAi } from '../src/ai/simpleAi';
 import { BUILDINGS } from '../src/data/buildings';
 import { FACTIONS } from '../src/data/factions';
@@ -11,15 +11,18 @@ import { noIncome, openMap, smallBases, stepTimes } from './fixtures';
 
 /** Den nächsten Denkschritt der KI abwarten und ihre Befehle zurückgeben (ohne sie auszuführen). */
 function nextThought(world: World, ai: SimpleAi): Command[] {
-  for (let k = 0; k < 60; k++) {
+  for (let k = 0; k < 120; k++) {
     const out = ai.think(world);
-    if (world.tick % 30 === 0) return out;
+    if (out.length > 0 || world.tick % 60 === 0) return out; // erster Denkschritt mit Befehlen (Takt 20 oder 30 Ticks)
     world.step();
   }
   return [];
 }
 
 describe('KI: Aufbau zuerst', () => {
+  // Patch 3: prüft die Auswahl innerhalb eines Bereichs (alte Regeln) – ohne Arbiter und dessen Eröffnungssperre.
+  before(() => { AI_TUNING.arbiter.on = false; });
+  after(() => { AI_TUNING.arbiter.on = true; });
   it('spart für die nächste Fabrik, statt mit dem letzten Rest zu spähen', () => {
     const scouts = (saveUntil: number): boolean => {
       const before = AI_TUNING.saveUntilFactories;
@@ -40,6 +43,9 @@ describe('KI: Aufbau zuerst', () => {
 });
 
 describe('KI: Terra-Former formen eigenen Boden', () => {
+  // Patch 3: prüft die Auswahl innerhalb eines Bereichs (alte Regeln) – ohne Arbiter und dessen Eröffnungssperre.
+  before(() => { AI_TUNING.arbiter.on = false; });
+  after(() => { AI_TUNING.arbiter.on = true; });
   it('stehen dort Schnee-Verbände, formt sie Schnee an der eigenen Grenze (nicht bloß Bremsboden)', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases, factions: ['terraformer', 'technoclan'] });
     for (const [x, y] of [[6.5, 4.5], [6.5, 5.0], [7.5, 5.5]] as const) {
@@ -120,6 +126,9 @@ describe('KI: Konter nach gesehenen Werten', () => {
 });
 
 describe('KI: schlaue Forschung (Myriaden)', () => {
+  // Patch 3: prüft die Auswahl innerhalb eines Bereichs (alte Regeln) – ohne Arbiter und dessen Eröffnungssperre.
+  before(() => { AI_TUNING.arbiter.on = false; });
+  after(() => { AI_TUNING.arbiter.on = true; });
   it('forscht für die Einheit, von der sie am meisten hat', () => {
     const before = AI_TUNING.smartResearch;
     AI_TUNING.smartResearch = 'myr';
@@ -149,6 +158,9 @@ describe('KI: schlaue Forschung (Myriaden)', () => {
 });
 
 describe('KI: Aufbau zuerst auch vor Forschung (buildFirst)', () => {
+  // Patch 3: prüft die Auswahl innerhalb eines Bereichs (alte Regeln) – ohne Arbiter und dessen Eröffnungssperre.
+  before(() => { AI_TUNING.arbiter.on = false; });
+  after(() => { AI_TUNING.arbiter.on = true; });
   it('mit einer Fabrik und 140 Energie forscht sie nicht, sondern spart für die nächste', () => {
     const researches = (buildFirst: boolean): boolean => {
       const before = AI_TUNING.buildFirst;
@@ -171,5 +183,35 @@ describe('KI: Aufbau zuerst auch vor Forschung (buildFirst)', () => {
     };
     assert.equal(researches(false), true, 'bisher: forscht sofort');
     assert.equal(researches(true), false, 'neu: spart');
+  });
+});
+
+describe('KI-Arbiter (Patch 3)', () => {
+  const paid = (c: Command): boolean => !['setStance', 'setRoute', 'setRally', 'heroMode', 'heroRoute', 'selectUnit', 'setLaneGround', 'setPaused', 'emergency'].includes(c.type);
+
+  it('Eröffnung: mit einer Fabrik und viel Energie weder Spähen noch Forschung – sie baut in die Breite', () => {
+    const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, ...noIncome }, factions: ['myriaden', 'technoclan'] });
+    world.addBuilding(0, BUILDINGS.barracks, { x: 3, y: 0, w: 2, h: 2 });
+    stepTimes(world, 200 * world.tps); // nach researchFrom (3:00) und nach der Spähsperre
+    const ai = new SimpleAi(0, 5);
+    const seen: string[] = [];
+    for (let k = 0; k < 8; k++) {
+      world.players[0].energy = 600;
+      for (const c of nextThought(world, ai)) seen.push(c.type);
+      world.step();
+    }
+    assert.ok(!seen.includes('scout') && !seen.includes('research') && !seen.includes('upgradeFactory'), seen.join(','));
+    assert.ok(seen.includes('build'), `baut (${seen.join(',')})`);
+  });
+
+  it('je Denkschritt höchstens eine Energie-Ausgabe', () => {
+    const world = new World({ map: openMap, seed: 2, rules: smallBases, factions: ['technoclan', 'myriaden'] });
+    const ai = new SimpleAi(0, 9);
+    for (let t = 0; t < 240 * world.tps; t++) {
+      world.players[0].energy = Math.max(world.players[0].energy, 300);
+      const out = ai.think(world);
+      assert.ok(out.filter(paid).length <= 1, `${world.tick}: ${out.map((c) => c.type).join(',')}`);
+      world.step(out.map((cmd) => ({ player: 0 as const, cmd })));
+    }
   });
 });
