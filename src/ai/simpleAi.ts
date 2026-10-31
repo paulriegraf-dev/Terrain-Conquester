@@ -12,7 +12,9 @@ import { VERBUND, VERBUND_UNITS, verbundKey } from '../data/verbund';
 import type { VerbundUnit } from '../data/verbund';
 import { UNITS, lineUnit } from '../data/units';
 import { LEARNED } from './learned';
-import { OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memory';
+import { BIAS_MAX, BIAS_MIN, OPENING_PRIOR, lineStats, matchupKey, relativeEfficiency } from './memory';
+import { REPLAY_PLANS } from './fromReplays';
+import type { ReplayPlan } from './fromReplays';
 import type { Bias } from './memory';
 import type { UnitId, WeaponDef } from '../data/units';
 import type { UpgradeEffect } from '../data/factions';
@@ -183,6 +185,8 @@ export const AI_TUNING: {
   intel: { on: boolean; maxAge: number; deceive: boolean };
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
+  /** Lernen aus Partien von Menschen (31.10., src/ai/fromReplays.ts): ab minGames Partien je Paarung Einheiten-Vorliebe und Fabrik-Reihenfolge übernehmen. */
+  replays: { on: boolean; minGames: number; opening: number; firstFactories: number };
   /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
   myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number;
     /** Patch 7: Druck-Abwehr gegen Terra-Former, Sprengetopp-Beimischung, Forschung erst ab researchAt Fabriken, HQ-Bedarf. */
@@ -236,6 +240,7 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
+  replays: { on: true, minGames: 3, opening: 3, firstFactories: 3 },
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
     bomberMix: { on: true, every: 120, cycles: 1.5 }, researchAt: 3, hqNeed: 0.3,
@@ -838,6 +843,20 @@ export class SimpleAi {
     const own = world.players[this.player].faction.id;
     const enemy = world.players[1 - this.player].faction.id;
     this.learnedBias = LEARNED[matchupKey(own, enemy)] ?? OPENING_PRIOR[own] ?? {};
+    // Partien von Menschen (fromReplays.ts): Einheiten-Vorliebe dazumultiplizieren, begrenzt auf BIAS_MIN–BIAS_MAX.
+    const plan = this.replayPlan(world);
+    if (plan) {
+      const merged: Bias = { ...this.learnedBias };
+      for (const [u, b] of Object.entries(plan.bias)) merged[u as UnitId] = Math.min(BIAS_MAX, Math.max(BIAS_MIN, (merged[u as UnitId] ?? 1) * b!));
+      this.learnedBias = merged;
+    }
+  }
+
+  /** Gelernter Plan aus Partien von Menschen für diese Paarung (ab replays.minGames Partien), sonst null. */
+  private replayPlan(world: World): ReplayPlan | null {
+    if (!AI_TUNING.replays.on || this.level === 'easy') return null;
+    const plan = REPLAY_PLANS[matchupKey(world.players[this.player].faction.id, world.players[1 - this.player].faction.id)];
+    return plan && plan.games >= AI_TUNING.replays.minGames ? plan : null;
   }
 
   /** Vorliebe für eine Einheit: gemerkt (Paarung) × live (diese Partie). */
@@ -978,7 +997,14 @@ export class SimpleAi {
     const planned = this.plannedBuild(world);
     // Konter-Antwort mit neuer Fabrik nur mit Energie ≥ Puffer + counterLine.budget.
     const heavy = this.needHeavy(world);
-    const type = heavy ? 'foundry' : planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
+    let type = heavy ? 'foundry' : planned && (!this.planChanges.length || this.spare(world) >= AI_TUNING.counterLine.budget) ? planned.type : this.chooseType(world);
+    // Partien von Menschen: die ersten replays.firstFactories Fabriken in der gelernten Reihenfolge (vor Lane-Plänen; nicht Myriaden).
+    const rp = this.myr(world) ? null : this.replayPlan(world);
+    if (rp && !heavy) {
+      const built = this.ownBuildings(world).filter((b) => b.producer).length;
+      const want = rp.opening[built] as BuildingId | undefined;
+      if (built < AI_TUNING.replays.firstFactories && want && me.faction.buildings[want]) type = want;
+    }
     const def = BUILDINGS[type];
     // Etwas Energie für den Erdwall zurückhalten (nur auf „Normal“).
     const reserve = this.level !== 'easy' ? WALL.cost : 0;
@@ -1125,6 +1151,10 @@ export class SimpleAi {
       let score = (((this.strategy.mix[id] ?? 2) * counter) / (owned[id] + 1)) * (0.85 + this.rng.next() * 0.3);
       score *= this.lineBias(faction.buildings[id]!.tiers);
       if (owned[id] === 0 && this.openingLines.includes(id)) score *= 2.5;
+      // Partien von Menschen: Fabrik-Reihenfolge der Eröffnung (nicht für die Myriaden – deren Plan ist schon von Hand
+      // aus den Partien des Nutzers gebaut, siehe myrPlan).
+      const rp = myr ? null : this.replayPlan(world);
+      if (rp && built < rp.opening.length && rp.opening[built] === id) score *= AI_TUNING.replays.opening;
       if (needHeavy && id === 'foundry') score *= 100;
       if (myr) {
         if (id === 'barracks' && broodsWanted) score *= 2;
