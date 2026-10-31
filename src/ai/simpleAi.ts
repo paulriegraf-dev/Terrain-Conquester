@@ -186,6 +186,7 @@ export const AI_TUNING: {
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
   /** Lernen aus Partien von Menschen (31.10., src/ai/fromReplays.ts): ab minGames Partien je Paarung Einheiten-Vorliebe und Fabrik-Reihenfolge übernehmen. */
+  tfGround: { on: boolean; front: number; meadowFrom: number; mudFrom: number; dwell: number };
   replays: { on: boolean; minGames: number; opening: number; firstFactories: number };
   /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
   myrPlan: { on: boolean; factories: number; until: number; droneShare: number; barracksShare: number; wallGap: number; siegeFrom: number;
@@ -240,6 +241,7 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
+  tfGround: { on: true, front: 4, meadowFrom: 150, mudFrom: 330, dwell: 30 },
   replays: { on: true, minGames: 3, opening: 3, firstFactories: 3 },
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
     hold: { on: true, at: -0.3, release: -0.1, minSeconds: 30, counterAfter: 25, counterAt: 0.15 },
@@ -521,6 +523,8 @@ export class SimpleAi {
     if (AI_TUNING.arbiter.on && this.level !== 'easy') {
       const units = this.myrUnits(world, this.updateHold(world));
       if (units) commands.push(units);
+      const ground = this.tfGround(world);
+      if (ground) commands.push(ground);
       const route = this.decideRoute(world);
       if (route) commands.push(route);
       const breaker = this.decideBreaker(world);
@@ -580,6 +584,31 @@ export class SimpleAi {
    * Werkstatt statt früher Schmelze), Gelege früh, kein Spähen im Aufbau, Drohnen-Kern halten, alternde Drohnen werfen,
    * Wälle einzeln, Katapult/Verspotter erst im Spätspiel. Nur Entscheidungen der KI, keine Spielwerte.
    */
+  /**
+   * 31.10. (Sieg des Nutzers als Terra-Former gegen Technoclan in 7:19): Lane-Boden nach Phase umschalten – erst Frontbrecher
+   * (Auto-Boden), steht die Front (front Frontbrecher auf der Lane) Wiese für Steppenjäger, im Angriff ab mudFrom Matsch für
+   * Schlammschleudern (Belagerung, Flächenschaden).
+   */
+  private tfGround(world: World): Command | null {
+    const T = AI_TUNING.tfGround;
+    const me = world.players[this.player];
+    if (!T.on || me.faction.id !== 'terraformer' || world.seconds < T.meadowFrom) return null;
+    if (world.tick - this.lastGround < T.dwell * world.tps) return null;
+    const front: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+    for (const e of world.entities) if (e.alive && e.kind === 'unit' && e.owner === this.player && e.defId === 'specialRubble' && e.mover) front[e.mover.route]++;
+    for (const r of ROUTES) {
+      const stance = me.pendingStance[r]?.stance ?? me.stance[r];
+      let want: 'meadow' | 'mud' | null = null;
+      if (world.seconds >= T.mudFrom && stance === 'push') want = 'mud';
+      else if (front[r] >= T.front) want = 'meadow';
+      if (!want || me.laneGround[r] === want) continue;
+      this.lastGround = world.tick;
+      return { type: 'setLaneGround', route: r, ground: want };
+    }
+    return null;
+  }
+  private lastGround = -1e9;
+
   private myr(world: World): boolean {
     return AI_TUNING.myrPlan.on && this.level !== 'easy' && world.players[this.player].faction.id === 'myriaden';
   }
