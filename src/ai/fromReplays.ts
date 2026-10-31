@@ -1,5 +1,5 @@
 /**
- * Aus Partien von Menschen gelernt (scripts/replayLernen.ts, 17 Partien in auswertung/replays).
+ * Aus Partien von Menschen gelernt (scripts/replayLernen.ts, 18 Partien in auswertung/replays).
  * NICHT von Hand bearbeiten – neu erzeugen mit: npx tsx scripts/replayLernen.ts
  * Die KI nutzt eine Paarung erst ab AI_TUNING.replays.minGames Partien (Einheiten-Vorliebe, Fabrik-Reihenfolge).
  */
@@ -146,9 +146,9 @@ export const REPLAY_PLANS: Readonly<Record<string, ReplayPlan>> = {
     ]
   },
   "terraformer>technoclan": {
-    "games": 6,
+    "games": 7,
     "wins": 4,
-    "weight": 4.8,
+    "weight": 5.2,
     "opening": [
       "meadowhall",
       "grove",
@@ -157,15 +157,15 @@ export const REPLAY_PLANS: Readonly<Record<string, ReplayPlan>> = {
       "quarry",
       "meadowhall"
     ],
-    "factoriesAt3": 5.1,
-    "firstResearch": 236.1,
+    "factoriesAt3": 5,
+    "firstResearch": 234.8,
     "superBrood": null,
     "bias": {
-      "wardMeadow": 1.2,
+      "wardMeadow": 1.21,
       "wardForest": 0.91,
-      "wardMud": 1.04,
+      "wardMud": 1.03,
       "wardSnow": 0.8,
-      "wardRubble": 1.16
+      "wardRubble": 1.14
     },
     "keystones": [
       "wardMeadow-keystone",
