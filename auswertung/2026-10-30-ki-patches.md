@@ -150,3 +150,23 @@ Den passenden Block kauft sie direkt vor einem rufbereiten Terraformer. Der Lane
 
 Myriaden gegen Terra-Former auf neuem main (Paare 4+5, je 52 Partien): mit Lage-Ruf 41:11, ohne 41:11, Front 3 statt 6 42:10.
 Der Lage-Ruf ist gegen Myriaden neutral; der Abstand kommt von den Myriaden selbst.
+
+## Myriaden gegen Terra-Former: frühe Schmelze ausgewürfelt (01.11. nachts)
+
+Der Sonderplan gegen Terra-Former hat zwei Teile. Die Katapulte ändern kaum etwas, die frühe Schmelze wirkt wie ein Schalter:
+
+| Variante (52 Partien, Paare 4+5) | Myriaden | Terra-Former |
+|---|---|---|
+| wie bisher | 41 | 11 |
+| ohne frühe Schmelze | 11 | 41 |
+| Katapulte nur unter Druck | 40 | 12 |
+| Schmelze als 4./5./6. Fabrik | 36–40 | 12–16 |
+
+Deshalb wird je Partie ausgewürfelt, ob die frühe Schmelze kommt (foundryChance).
+Schon der zusätzliche Würfelwurf verschiebt die Partien – 52 Partien schwanken stärker als gedacht.
+
+| foundryChance (104 Partien) | Myriaden | Terra-Former | offen |
+|---|---|---|---|
+| 1,0 | 65 | 37 | 2 |
+| **0,85 (übernommen)** | 55 | 47 | 2 |
+| 0,6 (52 Partien) | 17 | 33 | 2 |
