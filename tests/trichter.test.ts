@@ -11,21 +11,20 @@ import { chokeMap, cmd, openMap, smallBases, stepTimes } from './fixtures';
 
 const calm = { ...smallBases, front: { ...RULES.front, regenPerSecond: 0 } };
 
-/** Erdwall lenkt statt sperrt (31.10., Nutzer): kein Budget, 8 je Kachel mit Staffel, Lücke 2, Umweg 1,5, Brechen für alle, 80 Leben. */
+/** Erdwall lenkt statt sperrt (31.10., Nutzer): kein Budget, 8 je Kachel mit Staffel, Umweg 1,5, Brechen für alle, 80 Leben. */
 describe('Erdwall als Trichter (31.10.)', () => {
-  it('Werte: kein Budget, 8 je Kachel, Staffel +4 binnen 45 s bis 16, Umweg 1,5, Lücke 2, 80 Leben, alle brechen', () => {
+  it('Werte: kein Budget, 8 je Kachel, Staffel +4 binnen 45 s bis 16, Umweg 1,5, 80 Leben, alle brechen', () => {
     const w = RULES.walls;
     assert.equal(w.budget, 0);
     assert.equal(w.tileCost, 8);
     assert.deepEqual([w.stepCost, w.stepWindow, w.costCap], [4, 45, 16]);
     assert.equal(w.detour, 1.5);
-    assert.equal(w.gap, 2);
     assert.deepEqual([w.breakHp, w.toughness, w.save], [80, 6, 6]);
     assert.equal(w.anyBreaks, true);
   });
 
   it('kein Budget: Budget ist unbegrenzt, Preis je Kachel 8 → 12 → 16 (Deckel) bei schnellem Nachbauen, nach dem Fenster wieder 8', () => {
-    const world = new World({ map: openMap, seed: 1, rules: { ...calm, walls: { ...RULES.walls, gap: 0 } } }); // Lücke hier aus – nur der Preis
+    const world = new World({ map: openMap, seed: 1, rules: calm });
     world.players[0].energy = 1000;
     assert.equal(wallBudget(world, 0), Infinity);
     assert.equal(wallTileCost(world, 0), 8);
@@ -39,28 +38,14 @@ describe('Erdwall als Trichter (31.10.)', () => {
     assert.equal(wallTileCost(world, 0), 8, 'Fenster abgelaufen');
   });
 
-  it('Lücke: 1 freie Kachel neben einem Wall wird abgelehnt, direkt anschließen und 2 freie Kacheln sind erlaubt', () => {
+  it('keine Abstandsregel (2.11. zurückgenommen): ein Wall mit nur einer freien Kachel neben einem anderen ist erlaubt', () => {
     const world = new World({ map: openMap, seed: 1, rules: calm });
     world.players[0].energy = 1000;
-    world.step([cmd(0, { type: 'castWall', x: 3, y: 4, vertical: true })]); // Kacheln (3,3)(3,4)(3,5)
+    world.step([cmd(0, { type: 'castWall', x: 3, y: 4, vertical: true })]);
     stepTimes(world, WALL.raiseSeconds * world.tps + 1);
     assert.equal(world.grid.terrain[world.grid.index(3, 4)], TERRAIN_INDEX.wall);
-    const tooClose = checkWall(world, 0, 5, 4, true); // Spalte 5: eine freie Kachel (4) dazwischen
-    assert.equal(tooClose.ok, false);
-    assert.match(tooClose.ok ? '' : tooClose.reason, /Lücke/);
-    assert.equal(checkWall(world, 0, 6, 4, true).ok, true, 'Spalte 6: zwei freie Kacheln (4, 5) – Trichter, direkt am Fels');
-    assert.equal(checkWall(world, 0, 4, 4, true).ok, true, 'Spalte 4: direkt anschließen');
-    assert.equal(checkWall(world, 0, 3, 7, true).ok, true, 'Spalte 3 darunter: verlängern (3,6 … 3,8)');
-  });
-
-  it('Lücke gilt auch zu Fels und Kartenrand', () => {
-    const world = new World({ map: openMap, seed: 1, rules: calm });
-    world.players[0].energy = 1000;
-    // openMap: Fels bei x=7, y=2..4 → Spalte 5 ließe eine Kachel (6) frei
-    assert.equal(checkWall(world, 0, 5, 3, true).ok, false, 'eine Kachel zum Fels');
-    assert.equal(checkWall(world, 0, 6, 3, true).ok, true, 'direkt am Fels');
-    const edge = checkWall(world, 0, 3, 1, false); // Zeile 1: eine freie Zeile (0) zum Rand
-    assert.equal(edge.ok, false, 'eine Kachel zum Kartenrand');
+    assert.equal(checkWall(world, 0, 5, 4, true).ok, true, 'Spalte 5: eine freie Kachel (4) dazwischen');
+    assert.equal(checkWall(world, 0, 5, 3, true).ok, true, 'eine Kachel vor dem Fels');
   });
 
   it('Brechen: jede Einheit darf einen Wall brechen, wenn ihre Route über 1,5 verlängert ist – darunter niemand', () => {
@@ -79,6 +64,6 @@ describe('Erdwall als Trichter (31.10.)', () => {
     world.step();
     const blocked = checkWall(world, 0, 8, 3, true);
     assert.equal(blocked.ok, false);
-    assert.match(blocked.ok ? '' : blocked.reason, /HQ zu HQ|Umweg|Lücke/);
+    assert.match(blocked.ok ? '' : blocked.reason, /HQ zu HQ|Umweg/);
   });
 });

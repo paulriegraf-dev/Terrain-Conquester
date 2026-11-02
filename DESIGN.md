@@ -2225,3 +2225,8 @@ Befund aus 156 Partien: KI baut 4–6 Wälle je Partie, Schaden an Wällen 0 –
 - Alte Werte in `classicRules().walls` (tests/wall.test.ts nutzt sie). Neue Tests: tests/trichter.test.ts. Suite 410 grün.
 - KI: baut weiter nach `wallGap`-Takt, Budgetprüfung ist mit `Infinity` wirkungslos; einige KI-Wälle fallen künftig an ×1,5 oder der Lücke weg. Nicht simuliert (Nutzer: kein Lauf).
 - HUD: Erdwall-Knopf zeigt den aktuellen Kachelpreis statt Budget; Vorschau meldet die Lücken-Ablehnung.
+
+## Erdwall: Abstandsregel zurückgenommen (2.11., Nutzer)
+- Die Lücken-Regel (`walls.gap` 2, 31.10.) ist komplett entfernt: Mit ihr ließen sich zentral kaum Wälle setzen, Trichter und erzwungene Wege nicht bauen.
+- Es bleiben: kein Budget, 8 je Kachel mit Staffel (+4 binnen 45 s, Deckel 16), Umweg-Grenze ×1,5, ein Weg HQ–HQ bleibt offen, Brechen durch jede Einheit bei Umweg über der Grenze, 80 Leben.
+- Tests: tests/trichter.test.ts prüft jetzt, dass eine freie Kachel zwischen Wällen bzw. vor Fels erlaubt ist. Suite 409 grün.
