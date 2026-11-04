@@ -232,6 +232,8 @@ export interface Rules {
     deathRadius: number; deathDamagePerModel: number; deathShare: number; deathMinShare: number;
     /** Einheiten mit Flächenschaden beschießen bevorzugt fusionierende Drohnen in Reichweite. */
     splashFocus: boolean;
+    /** Die Brechstange führt ihre Lane an (4.11.): eigene Verbände ihrer Route gehen in ihrem Tempo, wer vorn ist, wartet auf sie. */
+    leadsLane: boolean;
   };
   /** Terra-Former (26.10.): Lane-Farbe und aktive Synergie bleiben so viele Sekunden, nachdem ihre Bedingung weggefallen ist. */
   laneHysteresis: number;
@@ -459,6 +461,7 @@ export const RULES: Rules = {
     leapDistance: 4.5, leapRange: 5, leapSeconds: 1.2, leapRadius: 1.5, leapDamagePerModel: 18, buildingShare: 0.25, leapMinShare: 0.4,
     deathRadius: 1, deathDamagePerModel: 8, deathShare: 0.4, deathMinShare: 0.25,
     splashFocus: true,
+    leadsLane: true,
   },
   laneHysteresis: 30,
   // Seit 22.10. gedrosselt: Bauzeiten ×5 (vorher ×1) – weniger, aber gewichtigere Verbände, damit Spionage,

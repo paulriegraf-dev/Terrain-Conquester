@@ -281,7 +281,7 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     if (m.passedWaypoint) m.committed = true;
     // Welle: Wer zurückliegt, schließt direkt zum Commander auf (das Tempo regelt escortSpeed).
     const lead = escortLeader(world, e);
-    if (lead && dist(e.pos, lead.prev) > ESCORT_GAP && lineClear(world, e.pos, lead.prev, profile, e.owner)) return steer(e, lead.prev);
+    if (lead && !lead.breaker && dist(e.pos, lead.prev) > ESCORT_GAP && lineClear(world, e.pos, lead.prev, profile, e.owner)) return steer(e, lead.prev);
     const enemyHq = hqKey(otherPlayer(e.owner));
     next = world.fields.get(m.passedWaypoint ? enemyHq : waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
     if (next < 0 && !m.passedWaypoint) {
@@ -322,10 +322,34 @@ const ESCORT_GAP = 3;
 /** Wer weiter als das vor dem Commander ist, geht langsamer, bis er wieder auf einer Höhe ist. */
 const ESCORT_LEAD = 1;
 
+/** Lebende Myr-Brechstangen (je Tick einmal gesammelt). */
+const breakerCache = new WeakMap<World, { tick: number; list: Entity[] }>();
+function breakersOf(world: World): Entity[] {
+  let c = breakerCache.get(world);
+  if (!c || c.tick !== world.tick) {
+    c = { tick: world.tick, list: world.entities.filter((o) => o.alive && !!o.breaker) };
+    breakerCache.set(world, c);
+  }
+  return c.list;
+}
+
+/**
+ * Die Brechstange führt ihre Lane an (4.11., Nutzer): Eigene Einheiten auf ihrer Route, die nicht gerade kämpfen, gehen im Tempo
+ * der Brechstange – wer zurückliegt, holt mit vollem Tempo auf, wer vor ihr ist, geht halb so schnell, bis sie auf gleicher Höhe ist.
+ * Gilt für alle eigenen Verbände der Route, auch für später gebaute (kein Marschbefehl nötig).
+ */
+function breakerLead(world: World, e: Entity): Entity | null {
+  if (!world.rules.breaker.leadsLane || e.breaker || e.kind !== 'unit' || e.fuse !== undefined) return null;
+  const m = e.mover!;
+  if (m.deployed) return null;
+  for (const b of breakersOf(world)) if (b.owner === e.owner && b.mover!.route === m.route && !b.mover!.deployed) return b;
+  return null;
+}
+
 /** Commander, den diese Einheit begleitet (lebend, beide noch nicht ausgeschwärmt) – sonst null. */
 function escortLeader(world: World, e: Entity): Entity | null {
   const m = e.mover!;
-  if (!m.escortId) return null;
+  if (!m.escortId) return breakerLead(world, e);
   const lead = world.get(m.escortId);
   if (!lead?.alive || lead.mover!.deployed || m.deployed) {
     m.escortId = 0; // Welle aufgelöst: ab jetzt jeder für sich
@@ -340,10 +364,12 @@ function escortLeader(world: World, e: Entity): Entity | null {
  */
 function escortSpeed(world: World, e: Entity, lead: Entity): number {
   const m = e.mover!;
-  if (dist(e.pos, lead.prev) > ESCORT_GAP) return m.speed;
-  const pace = Math.min(m.speed, lead.mover!.speed);
   const enemyHq = rectCenter(world.map.hq[otherPlayer(e.owner)]);
   const ahead = dist(lead.prev, enemyHq) - dist(e.pos, enemyHq);
+  const pace = Math.min(m.speed, lead.mover!.speed);
+  // Brechstange: wer vor ihr ist, geht auch weit vor ihr langsamer (sie führt an); wer zurückliegt, holt auf.
+  if (lead.breaker && ahead > ESCORT_LEAD) return pace * 0.5;
+  if (dist(e.pos, lead.prev) > ESCORT_GAP) return m.speed;
   return ahead > ESCORT_LEAD ? pace * 0.5 : pace;
 }
 

@@ -2230,3 +2230,9 @@ Befund aus 156 Partien: KI baut 4–6 Wälle je Partie, Schaden an Wällen 0 –
 - Die Lücken-Regel (`walls.gap` 2, 31.10.) ist komplett entfernt: Mit ihr ließen sich zentral kaum Wälle setzen, Trichter und erzwungene Wege nicht bauen.
 - Es bleiben: kein Budget, 8 je Kachel mit Staffel (+4 binnen 45 s, Deckel 16), Umweg-Grenze ×1,5, ein Weg HQ–HQ bleibt offen, Brechen durch jede Einheit bei Umweg über der Grenze, 80 Leben.
 - Tests: tests/trichter.test.ts prüft jetzt, dass eine freie Kachel zwischen Wällen bzw. vor Fels erlaubt ist. Suite 409 grün.
+
+## Myr-Brechstange führt ihre Lane an (4.11., Nutzer-GO)
+- Befund (12 Messpartien, `scripts/brechstange.ts`): Brechstange Tempo 0,7, Drohnen 1,7 → die Armee ist bei der Landung längst vorbei; 15 Sprünge, davon 11 ohne Gegner im Einschlag (Schaden 0), Ø nur wenige Hundert Schaden bei Treffern. Aufprall nie spürbar.
+- Neu (`rules.breaker.leadsLane`, `breakerLead` in movement.ts): Solange eine eigene Brechstange auf einer Route marschiert, gehen alle eigenen Verbände dieser Route (auch später gebaute, nicht ausgeschwärmt, nicht fusionierend, nicht im Kampf) in ihrem Tempo; wer zurückliegt, holt mit vollem Tempo auf; wer vor ihr ist, geht halb so schnell (auch weit davor), bis sie auf gleicher Höhe ist. Kein direktes Zurücklaufen zu ihr (anders als beim Commander).
+- Offen (noch nicht gebaut): Sprung auf den Gegner statt auf die Strecke (Punkt 2), Einschlagsschaden (Punkt 3), Fusionsschutz (Punkt 4).
+- Test: tests/brechstange.test.ts („führt ihre Lane an“).

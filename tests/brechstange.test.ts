@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { RULES } from '../src/data/rules';
 import { TERRAIN_INDEX } from '../src/data/terrain';
 import { UNITS } from '../src/data/units';
 import { applyHits } from '../src/sim/systems/combat';
@@ -125,5 +126,23 @@ describe('Myr-Brechstange (28.10. abends)', () => {
     for (let k = 0; k < 3; k++) world.step();
     assert.equal(b.alive, false);
     assert.equal(world.players[0].stats.breaker.timeout, 1);
+  });
+
+  it('Brechstange führt ihre Lane an (4.11.): Drohnen der Route gehen in ihrem Tempo, wer vorn ist, wartet', () => {
+    const run = (leads: boolean): { ahead: number; breaker: number } => {
+      const rules = { ...smallBases, breaker: { ...RULES.breaker, leadsLane: leads } };
+      const world = new World({ map: openMap, seed: 1, rules, ...myr });
+      const b = breakerAt(world, 1.5, 1.5, 24);
+      b.mover!.route = 'mid';
+      world.players[0].stance.mid = 'push';
+      const ahead = world.addUnit(0, UNITS.drone, { x: 3.5, y: 1.5 }, 'mid');
+      ahead.weapon = undefined;
+      for (let k = 0; k < 2 * world.tps; k++) world.step();
+      return { ahead: ahead.pos.x - 3.5, breaker: b.pos.x - 1.5 };
+    };
+    const free = run(false);
+    const led = run(true);
+    assert.ok(led.ahead < free.ahead * 0.6, `vorne ${led.ahead.toFixed(2)} gegen frei ${free.ahead.toFixed(2)}`);
+    assert.ok(led.breaker > 0.5, 'Brechstange marschiert');
   });
 });
