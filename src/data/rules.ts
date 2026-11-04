@@ -181,7 +181,9 @@ export interface Rules {
    * (Deckel `costCap`); `anyBreaks` – jede Einheit darf einen Wall brechen, der ihre Route über
    * `detour` hinaus verlängert (sonst nur Schwere, Belagerung, Sprengetopps).
    */
-  walls: { budget: number; budget5: number; tileCost: number; detour: number; breakHp: number; toughness: number; save: number; stepCost: number; stepWindow: number; costCap: number; anyBreaks: boolean };
+  walls: { budget: number; budget5: number; tileCost: number; detour: number; breakHp: number; toughness: number; save: number; stepCost: number; stepWindow: number; costCap: number; anyBreaks: boolean;
+    /** HQ-Schutz (04.11., Nutzer): Wälle mit einer Kachel bis `hqGuard` Kacheln am eigenen HQ darf jede gegnerische Einheit angreifen – ohne Umweg-Bedingung (kein Einmauern; 0 = aus). */
+    hqGuard: number };
   purchases: {
     window: number;
     watch: { prices: readonly number[]; seconds: number; every: number };
@@ -420,7 +422,7 @@ export const RULES: Rules = {
   maxEnergy: 400,
   upgradePriceMax: 1.5,
   energyPerSecond: 3,
-  walls: { budget: 0, budget5: 0, tileCost: 8, detour: 1.5, breakHp: 80, toughness: 6, save: 6, stepCost: 4, stepWindow: 45, costCap: 16, anyBreaks: true },
+  walls: { budget: 0, budget5: 0, tileCost: 8, detour: 1.5, breakHp: 80, toughness: 6, save: 6, stepCost: 4, stepWindow: 45, costCap: 16, anyBreaks: true, hqGuard: 8 },
   purchases: {
     window: 180,
     watch: { prices: [60, 90, 130], seconds: 120, every: 20 },
@@ -638,6 +640,6 @@ export function classicRules(): Partial<Rules> {
     purchases: { ...RULES.purchases, surge: { ...RULES.purchases.surge, from: 480 } },
     hqWeapon: true,
     siteLockSeconds: 0,
-    walls: { budget: 24, budget5: 36, tileCost: 15, detour: 2.0, breakHp: 200, toughness: 10, save: 4, stepCost: 0, stepWindow: 0, costCap: 15, anyBreaks: false },
+    walls: { budget: 24, budget5: 36, tileCost: 15, detour: 2.0, breakHp: 200, toughness: 10, save: 4, stepCost: 0, stepWindow: 0, costCap: 15, anyBreaks: false, hqGuard: 0 },
   };
 }

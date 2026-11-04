@@ -270,11 +270,27 @@ export function updateWalls(world: World): void {
  * Durchschlag, Sprengetopp, Frontbrecher) – und nur, wenn der billigste Weg ihrer Route mehr als `detour` × die Kosten
  * ohne Wälle beträgt (seit 27.10. auch für Belagerung: kein Beschuss von Wällen, die nicht im Weg stehen).
  */
-export function mayBreakWall(world: World, e: Entity): boolean {
+export function mayBreakWall(world: World, e: Entity, wall?: Entity): boolean {
+  if (wall && e.kind === 'unit' && wallGuardsHq(world, wall)) return true;
   if (!breaksWalls(e) && !(world.rules.walls.anyBreaks && e.kind === 'unit')) return false;
   const route = e.mover?.route;
   // 27.10.: nur wenn der Wall den Weg wirklich versperrt (Umweg über der Grenze) – auch Artillerie schießt sonst nicht auf Wälle.
   return !!route && world.wallRatio[e.owner][route] > world.rules.walls.detour + 1e-9;
+}
+
+/** HQ-Schutz (04.11.): Reicht dieser Wall bis `rules.walls.hqGuard` Kacheln an das HQ seines Besitzers heran? */
+export function wallGuardsHq(world: World, wall: Entity): boolean {
+  const r = world.rules.walls.hqGuard;
+  if (!r || !wall.wallCells) return false;
+  const hq = world.map.hq[wall.owner];
+  const w = world.grid.width;
+  return wall.wallCells.some(({ index }) => {
+    const x = index % w;
+    const y = Math.floor(index / w);
+    const dx = Math.max(hq.x - x, 0, x - (hq.x + hq.w - 1));
+    const dy = Math.max(hq.y - y, 0, y - (hq.y + hq.h - 1));
+    return Math.max(dx, dy) <= r;
+  });
 }
 
 /** Ein Erdwall fällt: der Boden darunter kehrt zurück. */
