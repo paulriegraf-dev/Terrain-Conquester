@@ -62,7 +62,7 @@ export function aimPoint(a: Entity, t: Entity): Vec2 {
 
 function canAttack(world: World, e: Entity, t: Entity): boolean {
   // Erdwall (24.10.): nur schwere Einheiten, Artillerie und Sprengetopps brechen ihn – „weiche Sperre“.
-  if (t.kind === 'wall' && !mayBreakWall(world, e)) return false;
+  if (t.kind === 'wall' && !mayBreakWall(world, e, t)) return false;
   // In der Sturm-Phase halten Gebäude niemanden mehr auf – nur Einheiten und das HQ zählen.
   if (t.kind === 'building' && e.mover && world.phase.stormHq) return false;
   // Bauschutz: geschützte Gebäude sind kein Ziel.

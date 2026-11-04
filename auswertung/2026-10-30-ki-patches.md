@@ -170,3 +170,20 @@ Schon der zusätzliche Würfelwurf verschiebt die Partien – 52 Partien schwank
 | 1,0 | 65 | 37 | 2 |
 | **0,85 (übernommen)** | 55 | 47 | 2 |
 | 0,6 (52 Partien) | 17 | 33 | 2 |
+
+## 04.11. Erdwall: HQ-Schutz + gedrosselte KI-Notfallwälle
+
+Anlass: Replays 02.–03.11. Die KI setzte ausschließlich Querwälle ≤12 Kacheln vor das eigene HQ (Match 5: 29 Wälle, Spitze 87 Kacheln, 185:77 Abschüsse am Wall), unangreifbar, weil kein Wall allein den Weg über 1,5× verlängerte.
+
+- Regel `walls.hqGuard: 8`: Wälle, die bis 8 Kacheln an das eigene HQ reichen, sind für Einheiten immer angreifbar. Trichter im Feld bleiben geschützt.
+- KI `hqWalls: { gap: 45, maxNear: 9 }`: Notfallwall höchstens alle 45 s (vorher 20 s), höchstens 9 eigene Wallkacheln im HQ-Schutzbereich.
+- Match 5 mit den Originalbefehlen nachgespielt: hqGuard 0 → 1 Wall gebrochen, nach 900 s offen; hqGuard 8 → 9 KI-Wälle gebrochen, Paul gewinnt nach 592 s (Original 1155 s).
+
+KI gegen KI, beide mit hqGuard 8, 16 Partien je Paar (96 gesamt):
+
+| Variante | TC | Myr | TF | offen | Median |
+|---|---|---|---|---|---|
+| alte Wall-KI (gap 20, unbegrenzt) | 32 | 27 | 27 | 10 | 15,2 min |
+| neue Wall-KI (gap 45, max 9) | 36 | 24 | 28 | 8 | 15,6 min |
+
+Unterschied im Rauschen (±7 je 52 Partien). TF–TC (Paar 3) bleibt in beiden Varianten mit 7/16 offenen Partien auffällig → nächster Punkt: TF-Spätspiel.

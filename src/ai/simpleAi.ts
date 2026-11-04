@@ -26,7 +26,7 @@ import type { Command } from '../sim/commands';
 import type { Entity } from '../sim/entity';
 import { dist, rectCenter } from '../sim/math';
 import { Rng } from '../sim/rng';
-import { checkSwapArea, checkWall, gorgeCells, swapArea, swapCostAt, wallCoords, wallTiles } from '../sim/systems/abilities';
+import { checkSwapArea, checkWall, gorgeCells, swapArea, swapCostAt, wallCoords, wallGuardsHq, wallTiles } from '../sim/systems/abilities';
 import { checkBuy } from '../sim/systems/purchases';
 import { detourRatios } from '../sim/systems/walls';
 import { BUILD_ZONE } from '../sim/map';
@@ -186,6 +186,8 @@ export const AI_TUNING: {
   /** 29.10.: Die ersten `factories` Fabriken folgen dem eigenen Plan (Strategie, mit einem Schwerwerk bis zur dritten); erst ab der nächsten passt sich die KI dem Gegner an. */
   ownPlan: { on: boolean; factories: number };
   /** Lernen aus Partien von Menschen (31.10., src/ai/fromReplays.ts): ab minGames Partien je Paarung Einheiten-Vorliebe und Fabrik-Reihenfolge übernehmen. */
+  /** 04.11. (Nutzer, Match 5): Notfall-Wälle am HQ – höchstens einer je `gap` s und höchstens `maxNear` eigene Wall-Kacheln am HQ (kein Einmauern). */
+  hqWalls: { gap: number; maxNear: number };
   tfGround: { on: boolean; from: number; front: number; mudPer: number; hot: number; dwell: number; reserve: number };
   replays: { on: boolean; minGames: number; opening: number; firstFactories: number };
   /** Patch 6 (30.10., Blaupause aus den Partien des Nutzers): Myriaden-Spielweise – siehe myr(). */
@@ -241,6 +243,7 @@ export const AI_TUNING: {
   marketWar: { on: true, takt: 45, gap: 0.3, selfLimit: 1.3, ausweichenAb: 1.4 },
   intel: { on: true, maxAge: 40, deceive: true },
   ownPlan: { on: true, factories: 3 },
+  hqWalls: { gap: 45, maxNear: 9 },
   tfGround: { on: true, from: 120, front: 6, mudPer: 2, hot: -0.15, dwell: 12, reserve: 40 },
   replays: { on: true, minGames: 3, opening: 3, firstFactories: 3 },
   myrPlan: { on: true, factories: 6, until: 180, droneShare: 0.4, barracksShare: 0.5, wallGap: 60, siegeFrom: 480,
@@ -2025,9 +2028,13 @@ export class SimpleAi {
     if (funnel && funnel.type === 'castWall') this.lastWall = world.tick;
     if (funnel) return funnel;
     // Seit Nachtrag G hat der Wall keine Abklingzeit mehr – die KI hält von sich aus 20 s Abstand (wie früher die Ladezeit).
-    if (f <= 0 || world.tick - this.lastWall < 20 * world.tps || me.energy < WALL.length * wallTileCost(world, this.player) + 20) return null;
+    const H = AI_TUNING.hqWalls;
+    if (f <= 0 || world.tick - this.lastWall < H.gap * world.tps || me.energy < WALL.length * wallTileCost(world, this.player) + 20) return null;
     const hq = world.hq(this.player);
     if (!hq) return null;
+    let near = 0;
+    for (const e of world.entities) if (e.alive && e.kind === 'wall' && e.owner === this.player && wallGuardsHq(world, e)) near += e.wallCells?.length ?? 0;
+    if (near >= H.maxNear) return null;
     const attackers = this.visibleEnemyUnits(world).filter((e) => dist(e.pos, hq.pos) <= 12 * Math.min(1.5, Math.max(1, f)));
     // Mindestens zwei Angreifer (wie vor den Profilen) – nur der Landformer-Typ (Wälle ×2) reagiert schon auf einen.
     if (attackers.length < Math.max(f >= 2 ? 1 : 2, Math.round((4 * armyScale(world)) / f))) return null;
