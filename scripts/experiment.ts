@@ -9,7 +9,7 @@
  *
  * Varianten: base (Standard) · shrink / territory / home (Patt-Auflöser A / B / C, siehe rules.ts)
  *            · slots (Myr-Brut belegt nur einen halben Bauplatz, hat 60 % Leben, nie befestigt)
- *            · impact (Feuergruppen: Schaden erst beim Einschlag des Geschosses, siehe rules.projectiles)
+ *            · impact (Schaden beim Einschlag, Standard) · fire (alt: Schaden beim Abfeuern) · nocatch (Einschlag ohne Nachrücker)
  * Paarungen: tt = Technoclan gegen Technoclan · tm = Technoclan gegen Myriaden · mm = Myriaden gegen Myriaden
  *            · tf = Technoclan gegen Terra-Former · mf = Myriaden gegen Terra-Former · ff = Terra-Former gegen Terra-Former
  *
@@ -37,6 +37,8 @@ else if (variant === 'slots') {
   const brut = FACTIONS.myriaden.buildings.barracks as FactionBuilding;
   Object.assign(brut, { slots: 0.5, hpFactor: 0.6, neverFortified: true });
 } else if (variant === 'impact') rules = { projectiles: { ...RULES.projectiles, impact: true } };
+else if (variant === 'fire') rules = { projectiles: { ...RULES.projectiles, impact: false } };
+else if (variant === 'nocatch') rules = { projectiles: { ...RULES.projectiles, impact: true, catch: 0 } };
 else if (variant !== 'base') throw new Error(`Unbekannte Variante: ${variant}`);
 
 const PAIRS: Record<string, [FactionId, FactionId]> = {
