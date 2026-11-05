@@ -123,6 +123,17 @@ die bestehenden Bausteine nur neu an und ergänzt, was das Mock-up zusätzlich h
 - Afterfix (Nutzer, 05.11.): kleine Bildschirme, Tutorial, Nebel am Boden; Leistung bei großen Gefechten nach der
   nächsten Etappe. Die Aktionsleiste wird später schöner (z. B. Konsole wie Warcraft 3) – dann 2–3 Varianten.
 
+## Leistung (05.11. spät, gemessen im KI-gegen-KI-Gefecht, 4×, ~10 min Spielzeit)
+Gemessen headless (Software-Grafik); entscheidend sind die JavaScript-Anteile je Bild:
+- Geländeänderung (Erdwall, Tausch, Beschwörung): vorher ganze Karte neu gemalt, Spitzen bis 100 ms → jetzt nur der
+  geänderte Ausschnitt (~2 ms).
+- Fundamente: vorher ganze Bodentextur gelesen/geschrieben (bis 29 ms) → nur noch der Bereich je Gebäude.
+- Bodenmarken: Gebiet wird zwischengespeichert und mit vorgezeichneten Rasterkacheln gemalt (14 → ~2 ms), Bodenmarken
+  insgesamt jedes zweite Bild (Hochladen halbiert).
+- Übrig je Bild ~3–5 ms JavaScript. Zeichenaufrufe 140–400 bei 60–170 Figuren (je Figur ein Sprite + Schatten).
+  Für sehr große Drohnenschlachten (500+ Figuren) wäre der nächste Schritt Instancing (alle Figuren eines Sheets in
+  einem Aufruf) – erst angehen, wenn es auf echten Geräten ruckelt.
+
 ## Ziel ist das ganze Mock-up, nicht nur die Grafik (Nutzer, 05.11. abends)
 Die HD-2D-Ansicht übernimmt das Mock-up vollständig – Kamera, Gelände-Look, Overlays **und die besprochene Spiel-UI**
 (Variante C „Mischform“: schlanke Leiste unten, Kontext-Panel rechts beim gewählten Gebäude, Ansichtsleiste über der

@@ -111,6 +111,8 @@ export class Hd2dRenderer {
   private ground: THREE.Mesh | null = null;
   private overlayMesh: THREE.Mesh | null = null;
   private baseGround: HTMLCanvasElement | null = null;
+  private terrPrev: Uint8Array | null = null;
+  private overlayFrame = 0;
   private readonly groundComposite = document.createElement('canvas');
   private footKey = '';
   private bbMesh: THREE.Mesh | null = null;
@@ -433,8 +435,12 @@ export class Hd2dRenderer {
     const now = world.tick + alpha;
     this.stepCamera();
     this.ensureTerrain(world);
-    this.overlay.draw(world, alpha, view);
-    this.overlayTex.needsUpdate = true;
+    // Bodenmarken (klassische Zeichnung als Textur) jedes zweite Bild: halbiert Zeichnen und Hochladen (~6–14 ms je Bild),
+    // ~30 Bilder/s reichen für Gebiet, Zonen und Vorschauen.
+    if ((this.overlayFrame++ & 1) === 0) {
+      this.overlay.draw(world, alpha, view);
+      this.overlayTex.needsUpdate = true;
+    }
     const visibleTo = (e: Entity): boolean => !view.fog || view.human === null || world.isVisibleTo(view.human, e);
     this.updateFogMap(world, view);
     this.processEvents(world, now);
@@ -497,11 +503,54 @@ export class Hd2dRenderer {
     const imgs = Object.values(TILESETS).map((s) => this.image(s));
     const key = `${this.viewX0}:${this.viewCols}:${sum}:${imgs.every((i) => this.ready(i))}`;
     if (key === this.terrainKey) return;
+    const prevKey = this.terrainKey;
     this.terrainKey = key;
     const x0 = this.viewX0;
     const cols = this.viewCols;
     const rows = this.rows;
     const at = (x: number, y: number): number => terr[world.grid.index(Math.max(0, Math.min(world.grid.width - 1, x)), Math.max(0, Math.min(rows - 1, y)))]!;
+    // Nur Gelände geändert (Erdwall, Geländetausch, Beschwörung …): nur den geänderten Ausschnitt neu malen statt der
+    // ganzen Karte (vorher bis ~100 ms je Änderung). Höhen/Bäume werden wie bisher neu aufgebaut (schnell).
+    const sameView = prevKey.split(':').slice(0, 2).join(':') === `${x0}:${cols}` && prevKey.endsWith(':true') && key.endsWith(':true');
+    const prev = this.terrPrev;
+    this.terrPrev = Uint8Array.from(terr);
+    if (sameView && prev && prev.length === terr.length && this.baseGround && this.ground) {
+      let bx0 = Infinity, by0 = Infinity, bx1 = -1, by1 = -1;
+      let heights = false;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = world.grid.index(x0 + x, y);
+          if (prev[i] === terr[i]) continue;
+          if ((HEIGHT[prev[i]!] ?? 0) !== (HEIGHT[terr[i]!] ?? 0)) heights = true;
+          bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x); by1 = Math.max(by1, y);
+        }
+      }
+      if (bx1 >= 0 && (bx1 - bx0 + 1) * (by1 - by0 + 1) < cols * rows * 0.4) {
+        const box = { x0: Math.max(0, bx0 - 1), y0: Math.max(0, by0 - 1), x1: Math.min(cols, bx1 + 2), y1: Math.min(rows, by1 + 2) };
+        this.paintGround(this.baseGround, at, box);
+        this.groundComposite.getContext('2d')!.drawImage(this.baseGround, box.x0 * 32, box.y0 * 32, (box.x1 - box.x0) * 32, (box.y1 - box.y0) * 32, box.x0 * 32, box.y0 * 32, (box.x1 - box.x0) * 32, (box.y1 - box.y0) * 32);
+        this.footKey = '';
+        ((this.ground.material as THREE.MeshLambertMaterial).map as THREE.Texture).needsUpdate = true;
+        if (heights) {
+          const pos = this.ground.geometry.attributes.position!;
+          for (let i = 0; i < pos.count; i++) {
+            const gx = pos.getX(i) + cols / 2;
+            const gy = rows / 2 - pos.getY(i);
+            const tx = Math.floor(Math.min(cols - 0.001, Math.max(0, gx)));
+            const ty = Math.floor(Math.min(rows - 0.001, Math.max(0, gy)));
+            if (tx < box.x0 - 1 || tx > box.x1 || ty < box.y0 - 1 || ty > box.y1) continue;
+            const t = at(x0 + tx, ty);
+            let h = HEIGHT[t] ?? 0;
+            if (t === 4) h += 0.3 * Math.sin(gx * 2.3) * Math.cos(gy * 1.7) + 0.12 * Math.sin(gx * 7.1 + gy * 3.3);
+            pos.setZ(i, h);
+          }
+          pos.needsUpdate = true;
+          this.ground.geometry.computeVertexNormals();
+        }
+        this.buildTrees(world, at);
+        return;
+      }
+    }
     // Höhenfeld: 4 Segmente je Kachel, Berge leicht gewellt (feste Formel, kein Zufall nötig).
     const SEG = 4;
     const geo = new THREE.PlaneGeometry(cols, rows, cols * SEG, rows * SEG);
@@ -571,11 +620,12 @@ export class Hd2dRenderer {
       const c = document.createElement('canvas');
       c.width = c.height = 64;
       const g = c.getContext('2d')!;
-      const pal = ['#2c2f36', '#33363e', '#3b3e46', '#262930', '#41444c'];
-      for (let y = 0; y < 64; y += 2) for (let x = 0; x < 64; x += 2) {
-        const n = hash(x >> 3, y >> 3) * 0.6 + hash(x, y) * 0.4;
+      // Grobe, kontrastarme Blöcke: der Rand liegt flach im Hintergrund, feine Pixel flimmern dort als Streifen.
+      const pal = ['#2e3138', '#32353c', '#363940', '#2b2e35'];
+      for (let y = 0; y < 64; y += 8) for (let x = 0; x < 64; x += 8) {
+        const n = hash(x >> 4, y >> 4) * 0.5 + hash(x, y) * 0.5;
         g.fillStyle = pal[Math.min(pal.length - 1, Math.floor(n * pal.length))]!;
-        g.fillRect(x, y, 2, 2);
+        g.fillRect(x, y, 8, 8);
       }
       const t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -601,13 +651,20 @@ export class Hd2dRenderer {
 
   /** Boden aus den PixelLab-Kacheln (Variante N des Mock-ups), Übergänge verzahnt, Kanten mit Höhensprung schattiert. */
   private groundCanvas(world: World, at: (x: number, y: number) => number): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = this.viewCols * 32;
+    c.height = this.rows * 32;
+    this.paintGround(c, at, { x0: 0, y0: 0, x1: this.viewCols, y1: this.rows });
+    void world;
+    return c;
+  }
+
+  /** Boden in einen Kachel-Ausschnitt malen (ganze Karte beim Aufbau, sonst nur, was sich geändert hat). */
+  private paintGround(c: HTMLCanvasElement, at: (x: number, y: number) => number, box: { x0: number; y0: number; x1: number; y1: number }): void {
     const TP = 32;
     const cols = this.viewCols;
     const rows = this.rows;
-    const c = document.createElement('canvas');
-    c.width = cols * TP;
-    c.height = rows * TP;
-    const g = c.getContext('2d')!;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
     g.imageSmoothingEnabled = false;
     const s1 = this.image(TILESETS.tiles1);
     const s2 = this.image(TILESETS.tiles2);
@@ -627,8 +684,8 @@ export class Hd2dRenderer {
       range(s3, 0, [9, 10, 11]), // Ödland
     ];
     const ok = [s1, s2, s3].every((i) => this.ready(i));
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
+    for (let y = box.y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) {
         const wx = this.viewX0 + x;
         const t = at(wx, y);
         const h = hash(wx, y);
@@ -647,9 +704,9 @@ export class Hd2dRenderer {
         g.restore();
       }
     }
-    if (ok) blendEdges(g, cols, rows, (x, y) => at(this.viewX0 + x, y));
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
+    if (ok) blendEdges(g, cols, rows, (x, y) => at(this.viewX0 + x, y), box);
+    for (let y = box.y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) {
         const wx = this.viewX0 + x;
         const h = HEIGHT[at(wx, y)] ?? 0;
         const s = y + 1 < rows ? (HEIGHT[at(wx, y + 1)] ?? 0) : h;
@@ -664,8 +721,6 @@ export class Hd2dRenderer {
         }
       }
     }
-    void world;
-    return c;
   }
 
   /**
@@ -811,12 +866,10 @@ export class Hd2dRenderer {
     if (key === this.footKey) return;
     this.footKey = key;
     const TP = 32;
-    const g = this.groundComposite.getContext('2d')!;
+    const g = this.groundComposite.getContext('2d', { willReadFrequently: true })!;
     g.drawImage(this.baseGround, 0, 0);
     const CW = this.groundComposite.width;
     const CH = this.groundComposite.height;
-    const img = g.getImageData(0, 0, CW, CH);
-    const d = img.data;
     const FOOT: Record<FactionId, number[][]> = {
       technoclan: [[66, 70, 80], [82, 86, 96], [54, 58, 68], [96, 100, 108]],
       myriaden: [[112, 86, 54], [132, 102, 62], [92, 70, 44], [150, 118, 70]],
@@ -828,22 +881,30 @@ export class Hd2dRenderer {
       const cx = (r.x + r.w / 2 - this.viewX0) * TP;
       const cy = (r.y + r.h / 2) * TP;
       const R = (Math.max(r.w, r.h) / 2) * TP * 1.05;
-      for (let py = Math.max(0, Math.floor(cy - R * 1.4)); py < Math.min(CH, cy + R * 1.4); py++) {
-        for (let px = Math.max(0, Math.floor(cx - R * 1.4)); px < Math.min(CW, cx + R * 1.4); px++) {
+      // Nur den Ausschnitt um das Gebäude lesen und schreiben (vorher die ganze Karte je Änderung).
+      const ox = Math.max(0, Math.floor(cx - R * 1.4));
+      const oy = Math.max(0, Math.floor(cy - R * 1.4));
+      const ow = Math.min(CW, Math.ceil(cx + R * 1.4)) - ox;
+      const oh = Math.min(CH, Math.ceil(cy + R * 1.4)) - oy;
+      if (ow <= 0 || oh <= 0) continue;
+      const img = g.getImageData(ox, oy, ow, oh);
+      const d = img.data;
+      for (let py = oy; py < oy + oh; py++) {
+        for (let px = ox; px < ox + ow; px++) {
           const dx = (px - cx) / (R * 1.25);
           const dy = (py - cy) / (R * 1.1);
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist > 0.75 + 0.4 * vnoise(px, py)) continue;
           const c = pal[Math.floor(hash(px >> 1, py >> 1) * pal.length)]!;
           const a = dist < 0.55 ? 0.92 : 0.55;
-          const i = (py * CW + px) * 4;
+          const i = ((py - oy) * ow + (px - ox)) * 4;
           d[i] = d[i]! * (1 - a) + c[0]! * a;
           d[i + 1] = d[i + 1]! * (1 - a) + c[1]! * a;
           d[i + 2] = d[i + 2]! * (1 - a) + c[2]! * a;
         }
       }
+      g.putImageData(img, ox, oy);
     }
-    g.putImageData(img, 0, 0);
     ((this.ground.material as THREE.MeshLambertMaterial).map as THREE.Texture).needsUpdate = true;
   }
 
@@ -1500,18 +1561,27 @@ function vnoise(px: number, py: number): number {
 }
 
 /** Übergänge (aus dem Mock-up): höherrangiges ebenes Gelände greift mit pixeligem Rauschen in die Nachbarkachel. */
-function blendEdges(g: CanvasRenderingContext2D, cols: number, rows: number, at: (x: number, y: number) => number): void {
+function blendEdges(g: CanvasRenderingContext2D, cols: number, rows: number, at: (x: number, y: number) => number, box?: { x0: number; y0: number; x1: number; y1: number }): void {
   const TP = 32;
+  // Nur ein Ausschnitt (Etappe 3, Leistung): Bild des Ausschnitts plus eine Kachel Rand lesen, nur im Ausschnitt schreiben.
+  const bx0 = box ? Math.max(0, box.x0 - 1) : 0;
+  const by0 = box ? Math.max(0, box.y0 - 1) : 0;
+  const bx1 = box ? Math.min(cols, box.x1 + 1) : cols;
+  const by1 = box ? Math.min(rows, box.y1 + 1) : rows;
   // Rang je Bodenart (Index wie TERRAIN_LIST); Gebirge, Schlucht, Erdwall bleiben scharf.
   const PRI: Record<number, number> = { 0: 1, 8: 2, 2: 3, 1: 4, 6: 4, 3: 5 };
-  const CW = cols * TP;
-  const img = g.getImageData(0, 0, CW, rows * TP);
+  const CW = (bx1 - bx0) * TP;
+  const img = g.getImageData(bx0 * TP, by0 * TP, CW, (by1 - by0) * TP);
   const d = img.data;
   const src = new Uint8ClampedArray(d);
   const B = 11;
   const DIRS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
-  for (let ty = 0; ty < rows; ty++) {
-    for (let tx = 0; tx < cols; tx++) {
+  const wx0 = box ? box.x0 : 0;
+  const wy0 = box ? box.y0 : 0;
+  const wx1 = box ? box.x1 : cols;
+  const wy1 = box ? box.y1 : rows;
+  for (let ty = wy0; ty < wy1; ty++) {
+    for (let tx = wx0; tx < wx1; tx++) {
       const t = at(tx, ty);
       if (PRI[t] === undefined) continue;
       const nb: [number, number][] = [];
@@ -1541,8 +1611,8 @@ function blendEdges(g: CanvasRenderingContext2D, cols: number, rows: number, at:
           const px = tx * TP + lx;
           const py = ty * TP + ly;
           if (best && bd < B * (0.15 + 0.95 * vnoise(px, py))) {
-            const si = (((ty + best[1]) * TP + ly) * CW + (tx + best[0]) * TP + lx) * 4;
-            const di = (py * CW + px) * 4;
+            const si = (((ty + best[1] - by0) * TP + ly) * CW + (tx + best[0] - bx0) * TP + lx) * 4;
+            const di = ((py - by0 * TP) * CW + (px - bx0 * TP)) * 4;
             d[di] = src[si]!;
             d[di + 1] = src[si + 1]!;
             d[di + 2] = src[si + 2]!;
@@ -1551,5 +1621,5 @@ function blendEdges(g: CanvasRenderingContext2D, cols: number, rows: number, at:
       }
     }
   }
-  g.putImageData(img, 0, 0);
+  g.putImageData(img, bx0 * TP, by0 * TP);
 }

@@ -939,13 +939,61 @@ export class Renderer {
    * Gebiet & Grenze nach Grafik-Leitfaden Stil B (HD-2D, 05.11.): kachelgenaue Stufenlinie mit dunkler Kontur, Fläche
    * gerastert – am Rand kräftig, innen schwach, kein Leuchten. Mit Nebel nur das eigene Gebiet; umkämpft gestrichelt.
    */
+  private terrCache: { canvas: HTMLCanvasElement; key: string } | null = null;
+
+  /**
+   * Gebiet Stil B, zwischengespeichert (Etappe 3, Leistung): Gebiet ändert sich nur, wenn sich Besitz oder „umkämpft“
+   * einer Kachel ändert – dann neu zeichnen, sonst nur das fertige Bild einsetzen (vorher ~14 ms je Bild).
+   */
   private drawTerritoryB(world: World, viewer: PlayerId | null): void {
-    const ctx = this.ctx;
+    const t = this.tile;
+    const w = world.map.width;
+    const h = world.map.height;
+    let key = `${t}|${this.dpr}|${viewer}|`;
+    let acc = 0;
+    for (let i = 0; i < w * h; i++) {
+      const o = controllerAt(world, i);
+      acc = (Math.imul(acc, 31) + (o === null ? 0 : o + 1) * 2 + (world.contested[i] ? 1 : 0)) | 0;
+    }
+    key += acc;
+    if (!this.terrCache || this.terrCache.key !== key) {
+      const c = this.terrCache?.canvas ?? document.createElement('canvas');
+      c.width = Math.ceil(w * t * this.dpr);
+      c.height = Math.ceil(h * t * this.dpr);
+      const g = c.getContext('2d')!;
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      g.clearRect(0, 0, w * t, h * t);
+      this.paintTerritoryB(g, world, viewer);
+      this.terrCache = { canvas: c, key };
+    }
+    this.ctx.drawImage(this.terrCache.canvas, 0, 0, w * t, h * t);
+  }
+
+  private paintTerritoryB(ctx: CanvasRenderingContext2D, world: World, viewer: PlayerId | null): void {
     const t = this.tile;
     const w = world.map.width;
     const h = world.map.height;
     const owner = (x: number, y: number): PlayerId | null => (x < 0 || y < 0 || x >= w || y >= h ? null : controllerAt(world, y * w + x));
     const step = Math.max(2, Math.round(t / 8));
+    // Raster-Kacheln je Spieler und Stärke einmal vorzeichnen, dann nur noch einsetzen (statt ~30 Rechtecke je Kachel).
+    const stamps = new Map<string, HTMLCanvasElement>();
+    const stamp = (o: PlayerId, a: number): HTMLCanvasElement => {
+      const k = `${o}|${a}`;
+      let c = stamps.get(k);
+      if (!c) {
+        c = document.createElement('canvas');
+        c.width = Math.ceil(t * this.dpr);
+        c.height = Math.ceil(t * this.dpr);
+        const g = c.getContext('2d')!;
+        g.scale(this.dpr, this.dpr);
+        g.fillStyle = withAlpha(PALETTE.player[o], a);
+        for (let py = 0; py < t; py += step) {
+          for (let px = ((py / step) % 2) * step; px < t; px += step * 2) g.fillRect(px, py, step, step);
+        }
+        stamps.set(k, c);
+      }
+      return c;
+    };
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const o = owner(x, y);
@@ -956,36 +1004,37 @@ export class Renderer {
           if (owner(x - d, y) !== o || owner(x + d, y) !== o || owner(x, y - d) !== o || owner(x, y + d) !== o) edge = d - 1;
         }
         const a = edge === 0 ? 0.34 : edge === 1 ? 0.18 : 0.08;
-        ctx.fillStyle = withAlpha(PALETTE.player[o], a);
-        for (let py = 0; py < t; py += step) {
-          for (let px = ((py / step) % 2) * step; px < t; px += step * 2) ctx.fillRect(x * t + px, y * t + py, step, step);
-        }
+        ctx.drawImage(stamp(o, a), x * t, y * t, t, t);
       }
     }
-    const line = (x0: number, y0: number, x1: number, y1: number, color: string, width: number, dash: number[]): void => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.setLineDash(dash);
-      ctx.beginPath();
-      ctx.moveTo(x0 * t, y0 * t);
-      ctx.lineTo(x1 * t, y1 * t);
-      ctx.stroke();
-    };
+    // Grenzlinien gesammelt: je Spieler ein Pfad durchgezogen, einer gestrichelt (umkämpft) – Kontur, dann Farbe.
+    const paths: Record<string, { o: PlayerId; dashed: boolean; segs: number[] }> = {};
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const o = owner(x, y);
         if (o === null || (viewer !== null && o !== viewer)) continue;
-        const contested = !!world.contested[y * w + x];
-        const dash = contested ? [t * 0.25, t * 0.2] : [];
-        const sides: [number, number, number, number, number, number][] = [
-          [x - 1, y, x, y, x, y + 1], [x + 1, y, x + 1, y, x + 1, y + 1], [x, y - 1, x, y, x + 1, y], [x, y + 1, x, y + 1, x + 1, y + 1],
-        ];
-        for (const [nx, ny, ax, ay, bx, by] of sides) {
-          if (owner(nx, ny) === o) continue;
-          line(ax, ay, bx, by, 'rgba(8,10,14,0.85)', Math.max(2, t * 0.16), dash);
-          line(ax, ay, bx, by, PALETTE.player[o], Math.max(1, t * 0.07), dash);
-        }
+        const dashed = !!world.contested[y * w + x];
+        const key = `${o}|${dashed}`;
+        const P = (paths[key] ??= { o, dashed, segs: [] });
+        if (owner(x - 1, y) !== o) P.segs.push(x, y, x, y + 1);
+        if (owner(x + 1, y) !== o) P.segs.push(x + 1, y, x + 1, y + 1);
+        if (owner(x, y - 1) !== o) P.segs.push(x, y, x + 1, y);
+        if (owner(x, y + 1) !== o) P.segs.push(x, y + 1, x + 1, y + 1);
       }
+    }
+    for (const P of Object.values(paths)) {
+      ctx.beginPath();
+      for (let i = 0; i < P.segs.length; i += 4) {
+        ctx.moveTo(P.segs[i]! * t, P.segs[i + 1]! * t);
+        ctx.lineTo(P.segs[i + 2]! * t, P.segs[i + 3]! * t);
+      }
+      ctx.setLineDash(P.dashed ? [t * 0.25, t * 0.2] : []);
+      ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+      ctx.lineWidth = Math.max(2, t * 0.16);
+      ctx.stroke();
+      ctx.strokeStyle = PALETTE.player[P.o];
+      ctx.lineWidth = Math.max(1, t * 0.07);
+      ctx.stroke();
     }
     ctx.setLineDash([]);
   }

@@ -1292,7 +1292,7 @@ body.ui-c[data-pop="log"] #panel-log { max-height: 50vh; }
 
 /* Meldungen und Banner nicht unter der Leiste */
 body.ui-c .flash { left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 29; }
-body.ui-c .mode-banner { top: 64px; left: 12px; z-index: 24; }
+body.ui-c .mode-banner { top: 15px; left: 130px; z-index: 31; }
 body.ui-c.start-mode .c-hud, body.ui-c.start-mode .c-feed, body.ui-c.start-mode .c-view { visibility: hidden; }
 body.ui-c .rs-row:has(> .rs-empty) { display: none; }
 body.ui-c.start-mode .topbar, body.ui-c.start-mode .console, body.ui-c.start-mode .side,
