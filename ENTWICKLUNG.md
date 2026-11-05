@@ -26,6 +26,7 @@ Echtzeit-Strategie-Runden (Ziel 13–20 Minuten) mit kostenloser automatischer T
 | `npx tsx scripts/experiment.ts impact 6 tm,tf,mf` | Vergleichslauf mit „Schaden beim Einschlag“ (Feuergruppen, `rules.projectiles.impact`); Paarungen auch `tf`/`mf`/`ff` mit Terra-Formern |
 | `npx tsx scripts/feuergruppen.ts tabelle` | Feuergruppen je Einheit: Geschosse je Salve und je Sekunde (Zielwert ≤ 2,5) |
 | `npx tsx scripts/feuergruppen.ts messung 1 [impact]` | Messung über echte Partien: theoretischer vs. gelieferter Schaden, Überschuss, im Flug verfallen, Geschosse/s im dichtesten Bildausschnitt |
+| `npx tsx scripts/stammdaten.ts stammdaten.csv` | Alle Einheiten als CSV für Excel (Semikolon, Dezimalkomma), inkl. Geschosse je Salve und Schaden/s je Panzerung |
 | `npx tsx scripts/gefecht.ts aus.json technoclan,myriaden` | Gefechtsausschnitt (45 s) einer KI-Partie als JSON für das Grafik-Mock-up |
 | `npm run build` | `dist/index.html` neu bauen (eine Datei, läuft offline) |
 | `npm run typecheck` | TypeScript prüfen |
