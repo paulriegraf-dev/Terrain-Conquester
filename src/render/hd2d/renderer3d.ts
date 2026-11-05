@@ -161,7 +161,14 @@ export class Hd2dRenderer {
     }
     // Verschieben: mittlere Maustaste ziehen, Pfeiltasten; Mausposition für Zoom zum Zeiger.
     let drag: { x: number; y: number; cx: number; cz: number } | null = null;
+    // Verschieben (Nutzer, 05.11.): mit gedrückter linker Maustaste ziehen (ab 6 px – darunter bleibt es ein Klick)
+    // oder mit der mittleren Maustaste. Beim Gelände-Malen zieht die linke Taste nicht.
+    let left: { x: number; y: number; cx: number; cz: number; active: boolean } | null = null;
     canvas.addEventListener('pointerdown', (ev) => {
+      if (ev.button === 0 && this.leftDragAllowed()) {
+        left = { x: ev.clientX, y: ev.clientY, cx: this.cam.tcx, cz: this.cam.tcz, active: false };
+        return;
+      }
       if (ev.button !== 1) return;
       ev.preventDefault();
       drag = { x: ev.clientX, y: ev.clientY, cx: this.cam.tcx, cz: this.cam.tcz };
@@ -169,12 +176,30 @@ export class Hd2dRenderer {
     window.addEventListener('pointermove', (ev) => {
       // Nur über der Szene merken: Zoom per Knopf (Maus unter dem Bild) soll nicht zum Kartenrand ziehen.
       this.mouse = ev.target === canvas ? { x: ev.clientX, y: ev.clientY } : null;
-      if (!drag) return;
       const k = (distFor(this.cam.z) / Math.max(1, this.height)) * 1.2;
+      if (left && (ev.buttons & 1)) {
+        if (!left.active && Math.hypot(ev.clientX - left.x, ev.clientY - left.y) > 6) {
+          left.active = true;
+          canvas.style.cursor = 'grabbing';
+        }
+        if (left.active) {
+          this.cam.tcx = left.cx - (ev.clientX - left.x) * k;
+          this.cam.tcz = left.cz - (ev.clientY - left.y) * k * 1.4;
+        }
+        return;
+      }
+      if (!drag) return;
       this.cam.tcx = drag.cx - (ev.clientX - drag.x) * k;
       this.cam.tcz = drag.cz - (ev.clientY - drag.y) * k * 1.4;
     });
-    window.addEventListener('pointerup', () => (drag = null));
+    window.addEventListener('pointerup', () => {
+      drag = null;
+      if (left?.active) {
+        this.dragged = true;
+        canvas.style.cursor = '';
+      }
+      left = null;
+    });
     window.addEventListener('keydown', (ev) => {
       const tag = (ev.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -353,6 +378,17 @@ export class Hd2dRenderer {
     const a = new THREE.Vector3(this.cam.cx, 0, this.cam.cz).project(this.camera);
     const b = new THREE.Vector3(this.cam.cx + 1, 0, this.cam.cz).project(this.camera);
     return Math.abs(b.x - a.x) * 0.5 * this.width;
+  }
+
+  /** game.ts: darf die linke Maustaste gerade verschieben? (nicht beim Gelände-Malen) */
+  leftDragAllowed: () => boolean = () => true;
+  private dragged = false;
+
+  /** War der letzte Linksklick ein Verschieben? Dann ist er kein Klick (einmal abfragen, danach zurückgesetzt). */
+  consumeDrag(): boolean {
+    const d = this.dragged;
+    this.dragged = false;
+    return d;
   }
 
   // ------------------------------------------------------------------ Ansicht (Etappe 3: Ansichtsleiste, Minimap)

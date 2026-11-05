@@ -18,7 +18,8 @@ import { centerHolder } from '../sim/systems/keystone';
 import { marketLevel, marketView } from '../sim/systems/market';
 import type { PlayerId, Route } from '../sim/types';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
-import { STANCE_NAMES, type Stance, type World } from '../sim/world';
+import { STANCES, STANCE_NAMES, type Stance, type World } from '../sim/world';
+import { STANCE_TIP } from './commands';
 import type { Tone } from './hud';
 import { factoryPanel, type CtxTab } from './ctxPanel';
 
@@ -35,8 +36,9 @@ const LEVELS: readonly { id: ZoomLevel; name: string; key: string; zoom: number 
 const LANE_KEY: Record<Route, string> = { top: 'q', mid: 'w', bottom: 'e' };
 const LANE_SHORT: Record<Route, string> = { top: 'O', mid: 'M', bottom: 'U' };
 const PART_SHORT: Record<string, string> = { arms: 'Waffen', wheels: 'Räder', plates: 'Platten' };
+const FRONT_KEYS = ['1234', 'qwer', 'asdf'];
 const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secure: '◎', push: '»' };
-export type Pop = 'market' | 'scout' | 'keystones' | 'log';
+export type Pop = 'market' | 'scout' | 'keystones' | 'log' | 'front';
 const POPS: readonly { id: Pop; name: string }[] = [
   { id: 'market', name: 'Markt' },
   { id: 'scout', name: 'Späher' },
@@ -204,10 +206,82 @@ export class HudC {
         if (!this.d.toggleKeystones()) this.togglePop('keystones');
         return true;
       case 'c-fronts':
-        this.d.action('menu', { menu: 'front' });
+        this.togglePop('front');
         return true;
+      case 'menu':
+        // Variante C: „Fronten“ (Knopf/Taste A) öffnet das Fronten-Fenster wie im Mock-up statt des Untermenüs.
+        if (data.menu === 'front') {
+          this.togglePop('front');
+          return true;
+        }
+        return false;
     }
     return false;
+  }
+
+  /** Fronten-Fenster offen? */
+  frontOpen(): boolean {
+    return this.d.doc.body.dataset.pop === 'front';
+  }
+
+  /** Tasten im Fronten-Fenster: Zeilen wie die Tastatur (1–4 Oben, Q–R Mitte, A–F Unten). true = erledigt. */
+  frontKey(key: string): boolean {
+    if (!this.frontOpen()) return false;
+    const row = FRONT_KEYS.findIndex((k) => k.includes(key));
+    if (row < 0) return false;
+    const stance = STANCES[FRONT_KEYS[row]!.indexOf(key)];
+    if (!stance) return false;
+    this.d.action('stance', { route: ROUTES[row]!, stance });
+    return true;
+  }
+
+  private frontEl: HTMLElement | null = null;
+  private frontSig = '';
+
+  /** Fronten-Fenster (Mock-up „Mischform“): je Lane Verteidigen / Halten / Sichern / Front, Umstellung mit Countdown. */
+  private updateFront(world: World, view: ViewState): void {
+    if (!this.frontEl) {
+      const el = this.d.doc.createElement('div');
+      el.className = 'c-front';
+      el.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== 0) return;
+        const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
+        if (!t || (t as HTMLButtonElement).disabled) return;
+        ev.preventDefault();
+        const data: Record<string, string> = {};
+        for (const [k, v] of Object.entries(t.dataset)) if (v !== undefined && k !== 'action') data[k] = v;
+        this.d.action(t.dataset.action!, data);
+      });
+      el.addEventListener('click', (ev) => ev.stopPropagation());
+      (this.d.doc.getElementById('board-frame') ?? this.d.doc.body).append(el);
+      this.frontEl = el;
+    }
+    if (!this.frontOpen()) return;
+    const me: PlayerId = view.human ?? 0;
+    const p = world.players[me];
+    const canAct = view.human !== null && !world.result;
+    const secs = (tick: number): number => Math.max(0, Math.ceil((tick - world.tick) / world.tps));
+    const home: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+    const away: Record<Route, number> = { top: 0, mid: 0, bottom: 0 };
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'unit' || e.owner !== me || !e.mover) continue;
+      if (e.mover.committed) away[e.mover.route]++;
+      else home[e.mover.route]++;
+    }
+    let html = `<div class="cf-title"><b>Fronten</b> · Haltung je Lane, Wechsel greift nach ${world.rules.front.stanceChangeSeconds} s<button type="button" class="cf-close" data-action="c-pop" data-pop="front" title="Schließen (Esc)">✕</button></div>`;
+    ROUTES.forEach((r, row) => {
+      const pend = p.pendingStance[r];
+      html += `<span class="cf-lane">${ROUTE_NAMES[r][0]!.toUpperCase()}${ROUTE_NAMES[r].slice(1)}<small>${home[r]} hier${away[r] ? ` · ${away[r]} im Angriff` : ''}</small></span>`;
+      STANCES.forEach((st, col) => {
+        const on = p.stance[r] === st;
+        const pd = pend?.stance === st;
+        html += `<button type="button" class="cf-btn${on ? ' on' : ''}${pd ? ' pend' : ''}" data-action="stance" data-route="${r}" data-stance="${st}" ${canAct ? '' : 'disabled'} title="${esc(`${STANCE_NAMES[st]}: ${STANCE_TIP[st]}${on && pend ? ' – Klick bricht die laufende Umstellung ab' : ''}`)}"><span class="cf-g">${STANCE_GLYPH[st]}</span> ${STANCE_NAMES[st]}<kbd>${FRONT_KEYS[row]![col]!.toUpperCase()}</kbd></button>`;
+      });
+      html += `<span class="cf-cd">${pend ? `→ ${STANCE_GLYPH[pend.stance]} ${secs(pend.tick)} s` : ''}</span>`;
+    });
+    if (html === this.frontSig) return;
+    this.frontSig = html;
+    this.frontEl.innerHTML = html;
   }
 
   /** Tasten der Ansicht (1–4, Q/W/E, Tab). true = erledigt. */
@@ -241,6 +315,7 @@ export class HudC {
     const next = p && body.dataset.pop !== p ? p : '';
     if (next) body.dataset.pop = next;
     else delete body.dataset.pop;
+    this.frontSig = '';
     for (const b of this.el.pops.querySelectorAll<HTMLElement>('[data-pop]')) b.setAttribute('aria-pressed', String(b.dataset.pop === next));
   }
 
@@ -287,6 +362,7 @@ export class HudC {
     this.drawMiniFrame(world);
     if (now - this.last < 200) return;
     this.updateCtx(world, view);
+    this.updateFront(world, view);
     this.last = now;
     const me: PlayerId = view.human ?? 0;
     const foe: PlayerId = me === 0 ? 1 : 0;
