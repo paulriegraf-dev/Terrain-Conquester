@@ -7,9 +7,8 @@ import { PROJECTILES, UNIT_SPRITES } from '../src/render/hd2d/sprites';
 
 /** HD-2D-Vorbereitung (05.11.): Daten vollständig, Regeln der Darstellung wie mit dem Nutzer festgelegt. */
 describe('HD-2D: Sprite-Daten', () => {
-  it('jede Einheit hat Sprite-Daten und ein Sheet (Commander folgt)', () => {
+  it('jede Einheit hat Sprite-Daten und ein Sheet', () => {
     for (const id of UNIT_IDS) {
-      if (id === 'commander') continue;
       const s = UNIT_SPRITES[id];
       assert.ok(s, `Sprite-Daten für ${id}`);
       assert.ok(existsSync(`assets/sprites/${s.sheet}`), `Sheet ${s.sheet}`);

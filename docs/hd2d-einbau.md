@@ -33,8 +33,8 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
   Schuss-Frames, Mündungspunkte, Geschoss-Optik; dazu `PROJECTILES` (Optik je Geschossart). Aus dem Mock-up exportiert
   (gewählte Varianten des Nutzers).
 - `assets/sprites/units/<id>.png`: drei Zeilen Stehen / Laufen / Angriff (Plasmawerfer und Landformer: Feuerstoß D bzw.
-  A). Noch nicht im Spiel gebündelt (Größe ca. 1,9 MB), erst mit der HD-2D-Darstellung.
-- Commander: Sprite und Animationen folgen (PixelLab, Varianten-Auswahl durch den Nutzer).
+  A). Noch nicht im Spiel gebündelt (Größe ca. 2 MB), erst mit der HD-2D-Darstellung.
+- Commander (05.11.): Kandidat 1 (Pelzmantel, Pistole, Cyan-Monokel), Stehen A, Laufen A, Angriff B (Befehl + 3 Schüsse).
 
 ## Regeln der Darstellung (`src/render/hd2d/anim.ts`, getestet in tests/hd2d.test.ts)
 - **Ausholbewegung nach Ladezustand** (`attackTime`): Startet so früh, dass der Schuss-Frame auf das Geschoss fällt;

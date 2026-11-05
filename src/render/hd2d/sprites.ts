@@ -26,6 +26,8 @@ export interface UnitSprite {
 }
 
 export const UNIT_SPRITES: Partial<Record<UnitId, UnitSprite>> = {
+  // Commander (05.11., Nutzer-Wahl: Kandidat 1, Stehen A, Laufen A, Angriff B „Befehl + 3 Schüsse“, Schüsse bei Bild 2/10/14; PixelLab 49e39e93)
+  commander: { faction: 'technoclan', sheet: 'units/commander.png', cell: 64, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.147, 0.618, 0.853], muzzles: [[0.55, 1.25], [0.55, 1.25], [0.55, 1.25]], projectile: 'bolt' }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
   sniper: { faction: 'technoclan', sheet: 'units/sniper.png', cell: 48, frames: { idle: 9, walk: 9, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.2], muzzles: [[0.62, 0.5]], projectile: "rail" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   plasma: { faction: 'technoclan', sheet: 'units/plasma.png', cell: 48, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.156, 0.594, 0.844], muzzles: [[0.56, 0.3], [0.56, 0.3], [0.56, 0.3]], projectile: "pglob" }, chosen: { idle: 'A', walk: 'A', attack: 'Feuerstoß D' } },
   nanomedic: { faction: 'technoclan', sheet: 'units/nanomedic.png', cell: 48, frames: { idle: 9, walk: 13, attack: 17 }, scale: 0.85, fly: 0, attack: { dur: 1.8, hits: [0.42], muzzles: [[0.3, 0.5]], projectile: "heal" }, chosen: { idle: 'A', walk: 'C', attack: 'B' } },
