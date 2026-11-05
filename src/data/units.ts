@@ -67,6 +67,13 @@ export interface WeaponDef {
   splash?: number;
   /** Explosiv: gegen Verbände +1 Schuss je so viele lebende Modelle des Ziels (gut gegen dichte Masse). */
   blast?: number;
+  /**
+   * Feuergruppen (05.11., Excel-Spalte „Geschosse je Salve“, Standard 1): So viele sichtbare Geschosse erzeugt eine
+   * Salve. Die Modelle werden gleichmäßig auf die Gruppen verteilt; jede Gruppe trägt ihren Anteil der Wunden.
+   * Größer als die Modellzahl = ein Modell feuert auf mehrere Geschosse verteilt (Railgun-Batterie: 6 Laserbögen).
+   * Rein darstellend – an Schaden und Takt ändert sich nichts (siehe combat.ts fireSalvo).
+   */
+  fireGroups?: number;
 }
 
 /** Automatische Unterstützung (kein Mikro): heilt eigene Einheiten in der Nähe. */
@@ -344,7 +351,7 @@ const RAW: Record<UnitId, UnitInput> = {
     id: 'sniper', protocol: 'antiHeavy', name: 'Railgun-Scharfschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     // 25.10. (Nutzer): Treffen 2+ → 3+, Reichweite 5 → 4,5, alle 6 statt 5 s – sie überlebten hinter der Front zu lange
     speed: 1.3, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 22 / 3,
-    weapon: { shots: 1, cooldown: 1.6, range: 4.5, skill: 3, strength: 5, ap: 3, damage: 16, type: 'pierce', anti: { heavy: 2 } },
+    weapon: { shots: 1, cooldown: 1.6, range: 4.5, skill: 3, strength: 5, ap: 3, damage: 16, type: 'pierce', anti: { heavy: 2 }, fireGroups: 2 },
     shape: 'circle', letter: 'R', role: 'Anti-Panzer auf Distanz, wenig Leben',
   },
   plasma: {
@@ -368,7 +375,7 @@ const RAW: Record<UnitId, UnitInput> = {
   battery: {
     id: 'battery', protocol: 'range', name: 'Railgun-Batterie', armor: 'light', hp: 90, toughness: 5, save: 5,
     speed: 0.8, move: 'wheels', part: 'wheels', binds: { wheels: 1, arms: 1 }, radius: 0.45, vision: 6, spawnInterval: 10,
-    weapon: { shots: 2, cooldown: 3, range: 7.5, skill: 3, strength: 8, ap: 1, damage: 50, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0, blast: 2 },
+    weapon: { shots: 2, cooldown: 3, range: 7.5, skill: 3, strength: 8, ap: 1, damage: 50, type: 'siege', anti: { structure: 2 }, structureDamage: 2, splash: 1.0, blast: 2, fireGroups: 6 },
     shape: 'diamond', letter: 'B', role: 'Artillerie: sehr weit, stark gegen Gebäude, zerbrechlich',
   },
   gunner: {
@@ -405,7 +412,8 @@ const RAW: Record<UnitId, UnitInput> = {
   drone: {
     id: 'drone', name: 'Myr-Drohnen', armor: 'infantry', hp: 72, models: 8, toughness: 3, save: 5,
     speed: 1.7, move: 'foot', part: 'arms', binds: { arms: 0.35 }, supply: 0.5, radius: 0.25, vision: 5, spawnInterval: 2.3,
-    weapon: { shots: 1, cooldown: 0.4, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 1.55, type: 'rifle' },
+    // Feuergruppen: Vorschlag war 2, bei 0,4 s Abklingzeit wären das 5 Geschosse/s (Ziel ≤ 2,5) – daher 1.
+    weapon: { shots: 1, cooldown: 0.4, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 1.55, type: 'rifle', fireGroups: 1 },
     swarm: { perNeighbor: 0.06, max: 0.6, radius: 2.5 },
     corrode: { shotsPerLevel: 40, max: 2, seconds: 4 },
     // 25.10.: Speerspitze – Reichweite 2,5, schnell nahe der eigenen Basis, Ansturm ab 3 Verbänden. Nachmittags: 9 statt 8
@@ -511,7 +519,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardMeadow: {
     id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 5.5,
-    weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle' },
+    weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle', fireGroups: 2 },
     ground: 'meadow', groundBonus: { speed: 1.3 },
     shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
   },
@@ -528,7 +536,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardForest: {
     id: 'wardForest', name: 'Borkenschützen', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     speed: 1.0, move: 'foot', part: 'arms', radius: 0.3, vision: 7, spawnInterval: 5.5,
-    weapon: { shots: 1, cooldown: 1.4, range: 5, skill: 3, strength: 5, ap: 1, damage: 8, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 1.4, range: 5, skill: 3, strength: 5, ap: 1, damage: 8, type: 'rifle', fireGroups: 2 },
     ground: 'forest', groundBonus: { camouflage: 2 },
     shape: 'circle', letter: 'b', role: 'Leicht, mehr Reichweite – im Wald getarnt (erst aus 2 Kacheln zu sehen)',
   },
@@ -565,7 +573,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardSnow: {
     id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 4,
     speed: 0.9, move: 'foot', part: 'wheels', radius: 0.32, vision: 6, spawnInterval: 5.5,
-    weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle', fireGroups: 2 },
     hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
     ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },
     shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf Schnee bremst er stärker',
@@ -583,7 +591,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardRubble: {
     id: 'wardRubble', name: 'Steinwächter', armor: 'heavy', hp: 240, models: 2, toughness: 6, save: 3,
     speed: 0.6, move: 'tracks', part: 'plates', radius: 0.4, vision: 6, spawnInterval: 6.6,
-    weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 } },
+    weapon: { shots: 1, cooldown: 1.8, range: 3, skill: 4, strength: 8, ap: 3, damage: 30, type: 'pierce', anti: { heavy: 3 }, fireGroups: 2 },
     ground: 'rubble', groundBonus: { save: 1 },
     shape: 'square', letter: 'g', role: 'Massiv und langsam, Panzerknacker mit viel Schaden – auf Geröll Rüstung +1',
   },

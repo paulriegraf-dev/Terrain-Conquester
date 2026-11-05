@@ -21,6 +21,8 @@ export interface AiMatchOptions {
   /** Regeln überschreiben (z. B. um Balance-Varianten zu vergleichen). */
   rules?: Partial<Rules>;
   factions?: [FactionId, FactionId];
+  /** Nach jedem Tick aufgerufen (Messung in Skripten; darf die Welt nicht verändern). */
+  onStep?: (world: World) => void;
 }
 
 /** Zwei KIs gegeneinander, bis die Runde endet. */
@@ -39,6 +41,7 @@ export function runAiMatch(options: AiMatchOptions): { world: World; ais: [Simpl
     const commands: PlayerCommand[] = [];
     for (const ai of ais) for (const cmd of ai.think(world)) commands.push({ player: ai.player, cmd });
     world.step(commands);
+    options.onStep?.(world);
   }
   return { world, ais };
 }

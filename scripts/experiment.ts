@@ -9,7 +9,9 @@
  *
  * Varianten: base (Standard) · shrink / territory / home (Patt-Auflöser A / B / C, siehe rules.ts)
  *            · slots (Myr-Brut belegt nur einen halben Bauplatz, hat 60 % Leben, nie befestigt)
+ *            · impact (Feuergruppen: Schaden erst beim Einschlag des Geschosses, siehe rules.projectiles)
  * Paarungen: tt = Technoclan gegen Technoclan · tm = Technoclan gegen Myriaden · mm = Myriaden gegen Myriaden
+ *            · tf = Technoclan gegen Terra-Former · mf = Myriaden gegen Terra-Former · ff = Terra-Former gegen Terra-Former
  *
  * Gleiche Fraktionen: jede Partie mit eigenem Seed. Technoclan gegen Myriaden: immer zwei Partien
  * mit demselben Seed und getauschten Seiten – so misst „links/rechts“ wirklich die Seiten.
@@ -21,7 +23,7 @@ import type { AiStrategyId } from '../src/ai/simpleAi';
 import { FACTIONS } from '../src/data/factions';
 import type { FactionBuilding, FactionId } from '../src/data/factions';
 import { MAPS } from '../src/data/maps';
-import { overtimeRules } from '../src/data/rules';
+import { overtimeRules, RULES } from '../src/data/rules';
 import type { Rules } from '../src/data/rules';
 import { UNIT_IDS, UNITS } from '../src/data/units';
 import { aiSeed, runAiMatch } from '../src/match';
@@ -34,12 +36,16 @@ if (variant === 'shrink' || variant === 'territory' || variant === 'home') rules
 else if (variant === 'slots') {
   const brut = FACTIONS.myriaden.buildings.barracks as FactionBuilding;
   Object.assign(brut, { slots: 0.5, hpFactor: 0.6, neverFortified: true });
-} else if (variant !== 'base') throw new Error(`Unbekannte Variante: ${variant}`);
+} else if (variant === 'impact') rules = { projectiles: { ...RULES.projectiles, impact: true } };
+else if (variant !== 'base') throw new Error(`Unbekannte Variante: ${variant}`);
 
 const PAIRS: Record<string, [FactionId, FactionId]> = {
   tt: ['technoclan', 'technoclan'],
   tm: ['technoclan', 'myriaden'],
   mm: ['myriaden', 'myriaden'],
+  tf: ['technoclan', 'terraformer'],
+  mf: ['myriaden', 'terraformer'],
+  ff: ['terraformer', 'terraformer'],
 };
 const pairings = pairArg.split(',').filter((p) => PAIRS[p]);
 const maps = mapArg === 'all' ? MAPS : MAPS.filter((m) => mapArg.split(',').includes(m.id));
@@ -107,10 +113,11 @@ console.log(summary('alle', results));
 for (const pairing of pairings) {
   const rs = results.filter((r) => r.pairing === pairing);
   console.log('\n' + summary(`Paarung ${pairing}`, rs));
-  if (pairing === 'tm') {
-    const tc = rs.filter((r) => r.winner !== null && r.factions[r.winner] === 'technoclan').length;
-    const my = rs.filter((r) => r.winner !== null && r.factions[r.winner] === 'myriaden').length;
-    console.log(`  Fraktionen: Technoclan ${tc} · Myriaden ${my}`);
+  const pair = PAIRS[pairing]!;
+  if (pair[0] !== pair[1]) {
+    const a = rs.filter((r) => r.winner !== null && r.factions[r.winner] === pair[0]).length;
+    const b = rs.filter((r) => r.winner !== null && r.factions[r.winner] === pair[1]).length;
+    console.log(`  Fraktionen: ${FACTIONS[pair[0]].name} ${a} · ${FACTIONS[pair[1]].name} ${b}`);
   }
   const strat = new Map<string, [number, number]>();
   for (const r of rs) {
@@ -123,7 +130,7 @@ for (const pairing of pairings) {
   console.log(`  Strategien (ohne gleiche Paarung): ${[...strat].map(([s, [w, n]]) => `${AI_STRATEGIES[s as AiStrategyId].name} ${Math.round((100 * w) / n)} % (${n})`).join(' · ')}`);
   for (const map of maps) console.log('  ' + summary(map.name, rs.filter((r) => r.map === map.id)));
 }
-for (const f of ['technoclan', 'myriaden'] as FactionId[]) {
+for (const f of ['technoclan', 'myriaden', 'terraformer'] as FactionId[]) {
   const counts = new Map<string, number>();
   for (const r of results) r.factions.forEach((fac, i) => fac === f && Object.entries(r.spawned[i]!).forEach(([u, n]) => counts.set(u, (counts.get(u) ?? 0) + n)));
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
