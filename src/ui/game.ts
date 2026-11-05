@@ -1338,6 +1338,9 @@ export class Game {
       case 'research':
         if (data.upgrade) this.session.issue({ type: 'research', upgrade: data.upgrade });
         break;
+      case 'research-cancel':
+        if (data.upgrade) this.session.issue({ type: 'cancelResearch', upgrade: data.upgrade });
+        break;
       case 'hq-upgrade':
         if (data.path === 'intel' || data.path === 'market' || data.path === 'terrain') this.session.issue({ type: 'hqUpgrade', path: data.path });
         break;

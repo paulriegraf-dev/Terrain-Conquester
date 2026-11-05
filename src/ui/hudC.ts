@@ -20,6 +20,7 @@ import type { PlayerId, Route } from '../sim/types';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
 import { STANCE_NAMES, type Stance, type World } from '../sim/world';
 import type { Tone } from './hud';
+import { factoryPanel, type CtxTab } from './ctxPanel';
 
 /** Tasten der Ansichtsleiste (wie im Mock-up). */
 export const VIEW_KEYS: ReadonlySet<string> = new Set(['1', '2', '3', '4', 'q', 'w', 'e']);
@@ -145,6 +146,40 @@ export class HudC {
   }
 
   private worldRef: World | null = null;
+  private ctxTab: CtxTab = 'level';
+  private ctxSig = '';
+  private ctxEl: HTMLElement | null = null;
+
+  /** Kontext-Panel: Route + Ausbau-Reiter unter der Auswahl-Info (nur eigene Fabrik). */
+  private updateCtx(world: World, view: ViewState): void {
+    if (!this.ctxEl) {
+      const info = this.d.doc.querySelector('.console-info');
+      if (!info) return;
+      const el = this.d.doc.createElement('div');
+      el.className = 'cx';
+      // Schon beim Drücken auslösen (das Panel zeichnet sich jede Sekunde neu) und den allgemeinen Klick-Verteiler auslassen.
+      el.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== 0) return;
+        const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
+        if (!t || (t as HTMLButtonElement).disabled) return;
+        ev.preventDefault();
+        const data: Record<string, string> = {};
+        for (const [k, v] of Object.entries(t.dataset)) if (v !== undefined && k !== 'action') data[k] = v;
+        this.d.action(t.dataset.action!, data);
+      });
+      el.addEventListener('click', (ev) => ev.stopPropagation());
+      info.append(el);
+      this.ctxEl = el;
+    }
+    const sel = view.selected;
+    const e = sel?.kind === 'entity' ? world.get(sel.id) : undefined;
+    const own = !!e?.alive && !!e.producer && view.human !== null && e.owner === view.human;
+    const html = own ? factoryPanel(world, e!, this.ctxTab, !world.result) : '';
+    if (html === this.ctxSig) return;
+    this.ctxSig = html;
+    this.ctxEl.innerHTML = html;
+    this.ctxEl.hidden = !html;
+  }
 
   /** Aktionen der neuen Oberfläche (aus dem gemeinsamen Klick-Verteiler). true = erledigt. */
   handle(action: string, data: Record<string, string | undefined>): boolean {
@@ -154,6 +189,10 @@ export class HudC {
         return true;
       case 'c-lane':
         this.focusLane(data.route as Route);
+        return true;
+      case 'c-tab':
+        this.ctxTab = (data.tab as CtxTab) ?? 'level';
+        this.ctxSig = '';
         return true;
       case 'c-next':
         this.nextLane(1);
@@ -247,6 +286,7 @@ export class HudC {
     this.d.doc.body.classList.toggle('c-sel', !!view.selected);
     this.drawMiniFrame(world);
     if (now - this.last < 200) return;
+    this.updateCtx(world, view);
     this.last = now;
     const me: PlayerId = view.human ?? 0;
     const foe: PlayerId = me === 0 ? 1 : 0;

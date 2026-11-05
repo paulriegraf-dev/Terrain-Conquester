@@ -32,7 +32,7 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
 - `src/render/hd2d/sprites.ts`: je Einheit Sheet, Zellgröße, Bildzahl je Zeile, Maßstab, Schwebehöhe, Angriffsdauer,
   Schuss-Frames, Mündungspunkte, Geschoss-Optik; dazu `PROJECTILES` (Optik je Geschossart). Aus dem Mock-up exportiert
   (gewählte Varianten des Nutzers).
-- `assets/sprites/units/<id>.png`: drei Zeilen Stehen / Laufen / Angriff (Plasmawerfer und Landformer: Feuerstoß D bzw.
+- `assets/sprites/units/<id>.webp`: drei Zeilen Stehen / Laufen / Angriff (Plasmawerfer und Landformer: Feuerstoß D bzw.
   A). Noch nicht im Spiel gebündelt (Größe ca. 2 MB), erst mit der HD-2D-Darstellung.
 - Commander (05.11.): Kandidat 1 (Pelzmantel, Pistole, Cyan-Monokel), Stehen A, Laufen A, Angriff B (Befehl + 3 Schüsse).
 
@@ -109,8 +109,19 @@ die bestehenden Bausteine nur neu an und ergänzt, was das Mock-up zusätzlich h
   Befehlsrasters liegen Bauen, Erdwall und Verlegen dann auf **Shift + Taste** (⇧1–⇧3, ⇧W, ⇧Q), die Ebene Einfluss
   auf ⇧E; das Raster zeigt die Tasten mit ⇧. In Untermenüs (Fronten, Gelände, HQ …) gelten deren Tasten wie bisher.
 - Tempo und Ebenen klein links unten, Forschung-Kurzwahl darunter.
-- Offen: Ausbau-Reiter je Fabrik und Routenwechsel-Band direkt im Kontext-Panel (heute über die Befehlsleiste), Tutorial
-  auf die neue Anordnung prüfen, Kleinbildschirme.
+- **Kontext-Panel eigene Fabrik** (`src/ui/ctxPanel.ts`): Route (Oben/Mitte/Unten mit Countdown, „sofort“ gegen
+  Energie, Klick auf die alte Route bricht ab) und Ausbau-Reiter **Stufe** (Fabrikstufe, Einheitenwahl) /
+  **Ausrüstung** (Ausrüstung I–III) / **Spezial** (übriger Ausbau, Einheiten-Upgrades) mit Kosten, Dauer, Wirkung,
+  Sperrgrund, Fortschrittsbalken und **Abbrechen mit voller Erstattung** (neuer Befehl `cancelResearch`).
+  Schlusssteine bleiben im Schlussstein-Fenster.
+- **Routenbänder** in der Szene (wie im Mock-up): je eigener Fabrik ein Pfeilband zur Lane, fließt je Haltung (Front
+  schnell, Verteidigen rückwärts), gewählte Fabrik heller. Bei einer Umstellung bleibt das alte Band, das neue pulsiert
+  hell mit Countdown-Schild.
+- Menüknopf heißt jetzt „Neue Grafik (2,5D)“.
+- Dateigröße: Sheets verlustfrei als WebP, Startmusik (Frostwacht, Leitstelle) mit 80 kbit/s → Spiel-Datei 6,7 MB
+  (vorher 10,8 MB).
+- Afterfix (Nutzer, 05.11.): kleine Bildschirme, Tutorial, Nebel am Boden; Leistung bei großen Gefechten nach der
+  nächsten Etappe. Die Aktionsleiste wird später schöner (z. B. Konsole wie Warcraft 3) – dann 2–3 Varianten.
 
 ## Ziel ist das ganze Mock-up, nicht nur die Grafik (Nutzer, 05.11. abends)
 Die HD-2D-Ansicht übernimmt das Mock-up vollständig – Kamera, Gelände-Look, Overlays **und die besprochene Spiel-UI**

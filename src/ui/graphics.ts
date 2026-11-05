@@ -2,7 +2,7 @@
  * Grafik-Modus (05.11., Wunsch des Nutzers): Mit der HD-2D-Darstellung bleibt die bisherige Ansicht als „Alte Version“
  * abrufbar – ein Knopf im Hauptmenü schaltet um und startet die Seite neu. Gemerkt wird die Wahl nur im Browser.
  *
- * Solange HD-2D eine Vorschau ist, bleibt „klassisch“ der Standard; der Knopf heißt dann „Neue Grafik (HD-2D, Vorschau)“.
+ * Solange HD-2D eine Vorschau ist, bleibt „klassisch“ der Standard; der Knopf heißt dann „Neue Grafik (2,5D)“.
  */
 export type GraphicsMode = 'classic' | 'hd2d';
 
@@ -35,5 +35,5 @@ export function switchGraphics(mode: GraphicsMode): void {
 
 /** Beschriftung des Knopfs im Hauptmenü. */
 export function graphicsButtonLabel(mode: GraphicsMode): string {
-  return mode === 'hd2d' ? 'Alte Version (klassische Grafik)' : 'Neue Grafik (HD-2D, Vorschau)';
+  return mode === 'hd2d' ? 'Alte Version (klassische Grafik)' : 'Neue Grafik (2,5D)';
 }

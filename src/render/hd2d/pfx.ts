@@ -2,19 +2,19 @@
  * PixelFX-Effekte der HD-2D-Darstellung (05.11., aus dem Mock-up übernommen): Mündungsfeuer, Funken, Explosionen, Erde,
  * Heilung als Sprite-Sheets (pixelfx, je Bild fw×fh, `cols` Bilder je Zeile). `px/py` = Bezugspunkt im Bild.
  */
-import spark_cyan from '../../../assets/hd2d/pfx/spark_cyan.png';
-import spark_mag from '../../../assets/hd2d/pfx/spark_mag.png';
-import spark_green from '../../../assets/hd2d/pfx/spark_green.png';
-import spark_orange from '../../../assets/hd2d/pfx/spark_orange.png';
-import boom from '../../../assets/hd2d/pfx/boom.png';
-import pboom_purple from '../../../assets/hd2d/pfx/pboom_purple.png';
-import pboom_cyan from '../../../assets/hd2d/pfx/pboom_cyan.png';
-import pboom_mag from '../../../assets/hd2d/pfx/pboom_mag.png';
-import muzzle_orange from '../../../assets/hd2d/pfx/muzzle_orange.png';
-import muzzle_cyan from '../../../assets/hd2d/pfx/muzzle_cyan.png';
-import heal_cyan from '../../../assets/hd2d/pfx/heal_cyan.png';
-import heal_mag from '../../../assets/hd2d/pfx/heal_mag.png';
-import dirt from '../../../assets/hd2d/pfx/dirt.png';
+import spark_cyan from '../../../assets/hd2d/pfx/spark_cyan.webp';
+import spark_mag from '../../../assets/hd2d/pfx/spark_mag.webp';
+import spark_green from '../../../assets/hd2d/pfx/spark_green.webp';
+import spark_orange from '../../../assets/hd2d/pfx/spark_orange.webp';
+import boom from '../../../assets/hd2d/pfx/boom.webp';
+import pboom_purple from '../../../assets/hd2d/pfx/pboom_purple.webp';
+import pboom_cyan from '../../../assets/hd2d/pfx/pboom_cyan.webp';
+import pboom_mag from '../../../assets/hd2d/pfx/pboom_mag.webp';
+import muzzle_orange from '../../../assets/hd2d/pfx/muzzle_orange.webp';
+import muzzle_cyan from '../../../assets/hd2d/pfx/muzzle_cyan.webp';
+import heal_cyan from '../../../assets/hd2d/pfx/heal_cyan.webp';
+import heal_mag from '../../../assets/hd2d/pfx/heal_mag.webp';
+import dirt from '../../../assets/hd2d/pfx/dirt.webp';
 
 export interface PfxSheet {
   src: string;

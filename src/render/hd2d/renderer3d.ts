@@ -17,7 +17,7 @@ import type { UnitId } from '../../data/units';
 import type { Entity } from '../../sim/entity';
 import { aliveModels, fireGroupWeights } from '../../sim/systems/combat';
 import { apparentBuilding } from '../../sim/systems/visibility';
-import type { Vec2 } from '../../sim/types';
+import type { Route, Vec2 } from '../../sim/types';
 import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
@@ -443,6 +443,7 @@ export class Hd2dRenderer {
     this.drawUnits(world, alpha, now, visibleTo);
     this.drawFlights(world, alpha);
     this.updateShots(now, view);
+    this.updateRouteBands(world, view);
     this.updateFx(now);
     this.gl.render(this.scene, this.camera);
   }
@@ -1274,7 +1275,186 @@ export class Hd2dRenderer {
     return z >= 0.85 ? 'near' : z >= 0.55 ? 'mid' : z >= 0.25 ? 'lanes' : 'map';
   }
 
+  // ------------------------------------------------------------------ Routenbänder (Etappe 3, Mock-up „Routenwechsel“)
+
+  private readonly bands = new Map<number, { key: string; cur: THREE.Mesh; pend: THREE.Mesh | null; label: THREE.Sprite | null; labelText: string }>();
+  private bandTex: THREE.CanvasTexture | null = null;
+  private lastBandT = 0;
+
+  /** Pfeil-Streifen (wie im Mock-up): wiederholt sich entlang des Bands, läuft je Haltung schneller oder rückwärts. */
+  private bandTexture(): THREE.CanvasTexture {
+    if (this.bandTex) return this.bandTex;
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 8;
+    const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(255,255,255,.22)';
+    g.fillRect(0, 2, 16, 4);
+    g.fillStyle = '#fff';
+    for (const [x, o] of [[2, 3], [3, 2], [4, 1], [5, 0]] as const) g.fillRect(x + 4, o, 2, 8 - 2 * o);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping;
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    this.bandTex = t;
+    return t;
+  }
+
+  /** Weg einer Fabrik zu ihrer Lane: aus der Fabrik zur Lane, dann ein Stück die Lane entlang Richtung Mitte. */
+  private bandPath(world: World, e: Entity, route: Route): [number, number][] {
+    const r = e.rect!;
+    const sx = r.x + r.w / 2;
+    const sy = r.y + r.h / 2;
+    const ly = world.map.waypoints[route].y;
+    const cx = world.map.width / 2;
+    const dir = cx >= sx ? 1 : -1;
+    const pts: [number, number][] = [[sx + dir * (r.w / 2 + 0.3), sy], [sx + dir * 2.5, (sy + ly) / 2], [sx + dir * 4.5, ly], [cx - dir * 2.5, ly]];
+    const out: [number, number][] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i]!;
+      const b = pts[i + 1]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.5));
+      for (let k = 0; k < n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+    }
+    out.push(pts[pts.length - 1]!);
+    return out;
+  }
+
+  private ribbon(world: World, pts: [number, number][], width: number, color: string): THREE.Mesh {
+    const P: number[] = [];
+    const U: number[] = [];
+    const I: number[] = [];
+    let len = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]!;
+      const q = pts[Math.min(i + 1, pts.length - 1)]!;
+      const o = pts[Math.max(i - 1, 0)]!;
+      const dx = q[0] - o[0];
+      const dz = q[1] - o[1];
+      const L = Math.hypot(dx, dz) || 1;
+      const nx = (-dz / L) * (width / 2);
+      const nz = (dx / L) * (width / 2);
+      if (i > 0) len += Math.hypot(p[0] - pts[i - 1]![0], p[1] - pts[i - 1]![1]);
+      const y = Math.max(0, this.heightAt(world, p[0], p[1])) + 0.12;
+      P.push(p[0] + nx, y, p[1] + nz, p[0] - nx, y, p[1] - nz);
+      U.push(len / 1.1, 0, len / 1.1, 1);
+      if (i > 0) {
+        const k = (i - 1) * 2;
+        I.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    g.setIndex(I);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: this.bandTexture().clone(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0.6 }));
+    ((m.material as THREE.MeshBasicMaterial).map as THREE.Texture).needsUpdate = true;
+    m.renderOrder = 6;
+    this.scene.add(m);
+    return m;
+  }
+
+  private dropMesh(m: THREE.Mesh | THREE.Sprite | null): void {
+    if (!m) return;
+    this.scene.remove(m);
+    if ((m as THREE.Mesh).geometry && !(m as THREE.Sprite).isSprite) (m as THREE.Mesh).geometry.dispose();
+    const mat = m.material as THREE.MeshBasicMaterial;
+    mat.map?.dispose();
+    mat.dispose();
+  }
+
+  /**
+   * Routenbänder der eigenen Fabriken: das aktive Band fließt je nach Haltung der Lane (Front schnell, Halten langsam,
+   * Verteidigen rückwärts). Läuft eine Umstellung, bleibt das alte Band aktiv und das neue zeichnet sich hell pulsierend
+   * ein, mit Countdown am Ende. Gewählte Fabrik heller.
+   */
+  private updateRouteBands(world: World, view: ViewState): void {
+    const me = view.human;
+    const t = performance.now() / 1000;
+    const dt = this.lastBandT ? Math.min(0.1, t - this.lastBandT) : 0;
+    this.lastBandT = t;
+    const seen = new Set<number>();
+    if (me !== null) {
+      const color = FACTION_COLOR[world.players[me].faction.id];
+      const selId = view.selected?.kind === 'entity' ? view.selected.id : -1;
+      const FLOW: Record<string, number> = { push: 1.6, secure: 1.1, hold: 0.6, defend: -0.6 };
+      for (const e of world.entities) {
+        if (!e.alive || e.owner !== me || !e.producer || !e.rect) continue;
+        seen.add(e.id);
+        const pr = e.producer;
+        const key = `${pr.route}|${pr.pendingRoute ?? ''}|${e.rect.x},${e.rect.y}`;
+        let b = this.bands.get(e.id);
+        if (!b || b.key !== key) {
+          if (b) {
+            this.dropMesh(b.cur);
+            this.dropMesh(b.pend);
+            this.dropMesh(b.label);
+          }
+          const cur = this.ribbon(world, this.bandPath(world, e, pr.route), 0.42, color);
+          const pend = pr.pendingRoute ? this.ribbon(world, this.bandPath(world, e, pr.pendingRoute), 0.5, '#ffffff') : null;
+          b = { key, cur, pend, label: null, labelText: '' };
+          this.bands.set(e.id, b);
+        }
+        const sel = e.id === selId;
+        const curMat = b.cur.material as THREE.MeshBasicMaterial;
+        curMat.opacity = sel ? 0.95 : 0.5;
+        curMat.map!.offset.x -= dt * (FLOW[world.players[me].stance[pr.route]] ?? 0.6);
+        if (b.pend && pr.pendingRoute) {
+          const pm = b.pend.material as THREE.MeshBasicMaterial;
+          pm.opacity = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(t * 6));
+          pm.map!.offset.x -= dt * 1.2;
+          const left = Math.max(0, Math.ceil((pr.routeChangeTick - world.tick) / world.tps));
+          const text = `${left} s`;
+          if (text !== b.labelText) {
+            this.dropMesh(b.label);
+            b.label = this.textSprite(text, color);
+            const end = this.bandPath(world, e, pr.pendingRoute).at(-1)!;
+            b.label.position.set(end[0], Math.max(0, this.heightAt(world, end[0], end[1])) + 0.9, end[1]);
+            this.scene.add(b.label);
+            b.labelText = text;
+          }
+        }
+      }
+    }
+    for (const [id, b] of this.bands) {
+      if (seen.has(id)) continue;
+      this.dropMesh(b.cur);
+      this.dropMesh(b.pend);
+      this.dropMesh(b.label);
+      this.bands.delete(id);
+    }
+  }
+
+  /** Kleines Pixel-Schild mit Text (Countdown). */
+  private textSprite(text: string, color: string): THREE.Sprite {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 20;
+    const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(8,12,20,.85)';
+    g.fillRect(0, 0, 64, 20);
+    g.strokeStyle = color;
+    g.strokeRect(0.5, 0.5, 63, 19);
+    g.fillStyle = '#fff';
+    g.font = 'bold 13px monospace';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 32, 11);
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false }));
+    s.scale.set(1.6, 0.5, 1);
+    s.renderOrder = 10;
+    return s;
+  }
+
   private clearDynamic(): void {
+    for (const b of this.bands.values()) {
+      this.dropMesh(b.cur);
+      this.dropMesh(b.pend);
+      this.dropMesh(b.label);
+    }
+    this.bands.clear();
     for (const sq of this.squads.values()) this.removeSquad(sq);
     this.squads.clear();
     for (const o of this.structures.values()) this.scene.remove(o);
