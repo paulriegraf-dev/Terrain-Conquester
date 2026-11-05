@@ -11,7 +11,28 @@ import type { PlayerId, Route, Vec2 } from './types';
  * Darstellung beliebig ausgetauscht werden, ohne das Spiel zu verändern.
  */
 export type SimEventData =
-  | { type: 'shot'; owner: PlayerId; from: Vec2; to: Vec2; heavy: boolean }
+  /**
+   * Schuss bzw. Geschoss. Waffen-Salven (05.11., Feuergruppen) kommen mit den Zusatzfeldern: je Feuergruppe ein
+   * Ereignis = ein sichtbares Geschoss, das zum Tick `spawn` startet und zum Tick `land` einschlägt. `budget` = erwartete Wunden dieses Geschosses,
+   * `wounds` = ganze Wunden, die es mitbringt; `salvoShots` = Schüsse der ganzen Salve (Modelle × Schüsse, Vergleichswert).
+   */
+  | {
+      type: 'shot';
+      owner: PlayerId;
+      from: Vec2;
+      to: Vec2;
+      heavy: boolean;
+      shooter?: number;
+      target?: number;
+      unit?: string;
+      group?: number;
+      groups?: number;
+      budget?: number;
+      wounds?: number;
+      spawn?: number;
+      land?: number;
+      salvoShots?: number;
+    }
   | { type: 'death'; owner: PlayerId; kind: EntityKind; name: string; pos: Vec2 }
   /** Myr-Kanone oder Katapult hat eine Drohne als Munition verbraucht. */
   | { type: 'ammo'; owner: PlayerId; from: Vec2; to: Vec2 }

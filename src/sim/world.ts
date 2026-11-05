@@ -104,6 +104,27 @@ export interface MatchConfig {
 }
 
 /** Ein geworfener Myr-Verband im Flug (Myr-Kanone, Myr-Katapult). */
+/** Geschoss im Flug (Schaden beim Einschlag): ganze Wunden je Ziel, angewendet zum Tick `land`. */
+export interface PendingProjectile {
+  land: number;
+  attacker: PlayerId;
+  src: string;
+  shooter: number;
+  target: number;
+  /** Einschlagpunkt (Zielpunkt beim Abfeuern) – Mitte für Fläche und Nachrücker. */
+  point: Vec2;
+  /** Anteil dieses Geschosses: erwartete Wunden und Schaden je Wunde gegen das Ziel (mit allen Schützen-Boni). */
+  expected: number;
+  damage: number;
+  shots: number;
+  blast: number | undefined;
+  bonus: number;
+  wdef: WeaponDef;
+  dpw0: number;
+  wps0: number;
+  share: number;
+}
+
 export interface Flight {
   owner: PlayerId;
   unit: UnitId;
@@ -211,6 +232,28 @@ export interface PlayerStats {
   verbundSeconds: Record<string, number>;
   /** Flakstation: abgeschossene Flugobjekte. */
   flakKills?: number;
+  /** Feuergruppen-Messung (05.11.) je eigener Einheitenart – nur Statistik, siehe FireStat. */
+  fire: Record<string, FireStat>;
+}
+
+/** Messung je Einheitenart: theoretischer und gelieferter Schaden, Verluste, sichtbare Geschosse. */
+export interface FireStat {
+  /** Abgefeuerte Salven und daraus erzeugte Geschosse (Feuergruppen). */
+  salvos: number;
+  projectiles: number;
+  /** Schüsse (Modelle × Schüsse je Modell + Explosiv) – so viele Geschosse wären es ohne Feuergruppen. */
+  shots: number;
+  /** Theoretischer Schaden: erwartete Wunden × Schaden je Wunde (Hauptziel, ohne Fläche/Durchschuss). */
+  theory: number;
+  /** Ganze Wunden × Schaden, die beim Ziel ankamen (vor Überschuss), und davon tatsächlich angerichtet. */
+  potential: number;
+  dealt: number;
+  /** Schaden beim Einschlag: erwartete Wunden × Schaden, deren Ziel tot war und kein Nachrücker am Einschlagpunkt stand. */
+  lostInFlight: number;
+  /** … und die stattdessen einen Nachrücker trafen (neu gerechnet). */
+  caught: number;
+  /** Ticks bereit und Ziel in Reichweite, aber nicht gefeuert (betäubt, Bauschutz). */
+  blockedTicks: number;
 }
 
 /**
@@ -444,6 +487,8 @@ export class World {
   readonly mudNests: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
   /** Myriaden: geworfene Myrs im Flug (Kanone, Katapult). */
   flights: Flight[] = [];
+  /** Geschosse im Flug, deren Schaden erst beim Einschlag fällt (rules.projectiles.impact). */
+  projectiles: PendingProjectile[] = [];
   /** Laufende Fusionen zur Myr-Brechstange (28.10. abends). */
   fusions: { id: number; owner: PlayerId; center: Vec2; squads: number[]; start: number; end: number; route: Route }[] = [];
   fusionSeq = 0;
@@ -1072,6 +1117,7 @@ export class World {
         damageBy: {},
         damageTo: {},
         damageSplit: {},
+        fire: {},
         lifetime: {},
         blocks: 0,
         elites: 0,

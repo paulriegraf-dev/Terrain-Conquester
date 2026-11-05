@@ -1354,7 +1354,20 @@ export class Renderer {
       !view.fog || view.human === null || world.players[view.human].vision.isVisible(Math.floor(p.x), Math.floor(p.y));
     for (const ev of world.events) {
       const age = world.tick - ev.tick;
-      if (ev.type === 'shot' && age <= 3) {
+      if (ev.type === 'shot' && ev.land !== undefined) {
+        // Geschoss einer Feuergruppe (05.11.): ein Punkt je Ereignis, fliegt von spawn bis land, dann kurzer Einschlag.
+        const spawn = ev.spawn ?? ev.tick;
+        if (world.tick < spawn || world.tick > ev.land + 3) continue;
+        if (!seen(ev.from) && !seen(ev.to)) continue;
+        const k = Math.min(1, (world.tick - spawn) / Math.max(1, ev.land - spawn));
+        const x = (ev.from.x + (ev.to.x - ev.from.x) * k) * t;
+        const y = (ev.from.y + (ev.to.y - ev.from.y) * k) * t;
+        ctx.fillStyle = withAlpha(PALETTE.player[ev.owner], world.tick > ev.land ? 0.5 : 0.95);
+        const r = world.tick > ev.land ? t * 0.22 : ev.heavy ? Math.max(2, t * 0.14) : Math.max(1.5, t * 0.09);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (ev.type === 'shot' && age <= 3) {
         if (!seen(ev.from) && !seen(ev.to)) continue;
         ctx.strokeStyle = withAlpha(PALETTE.player[ev.owner], 0.85 - age * 0.2);
         ctx.lineWidth = ev.heavy ? Math.max(1.5, t * 0.14) : Math.max(1, t * 0.06);

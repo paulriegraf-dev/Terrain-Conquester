@@ -118,8 +118,9 @@ describe('Kampf: Treffen, Verwunden, Rüstung, Schaden', () => {
   });
 
   it('Flächenwaffen verlieren im Gedränge keinen angebrochenen Schaden am Hauptziel', () => {
+    // Prüft die Bruchteil-Sammlung beim Schützen; updateCombat ohne Zeitfortschritt → Schaden beim Abfeuern.
     const damageWith = (crowd: number): number => {
-      const world = new World({ map: openMap, seed: 1, rules: smallBases });
+      const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, projectiles: { ...RULES.projectiles, impact: false } } });
       const plasma = world.addUnit(0, UNITS.plasma, { x: 8.0, y: 7.5 }, 'mid');
       const tank = world.addUnit(1, UNITS.colossus, { x: 10.5, y: 7.5 }, 'mid');
       tank.weapon = undefined;
