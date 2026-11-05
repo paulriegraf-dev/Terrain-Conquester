@@ -931,7 +931,7 @@ export class World {
     }
     if (e.kind === 'building') stats.buildingsLost++;
     if (killer !== e.owner) this.players[killer].stats.kills++;
-    this.emit({ type: 'death', owner: e.owner, kind: e.kind, name: e.name, pos: { x: e.pos.x, y: e.pos.y } });
+    this.emit({ type: 'death', owner: e.owner, kind: e.kind, name: e.name, pos: { x: e.pos.x, y: e.pos.y }, entity: e.id, unit: e.defId });
   }
 
   finish(winner: PlayerId | null, reason: MatchResult['reason']): void {
