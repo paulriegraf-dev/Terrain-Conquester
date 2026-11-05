@@ -35,6 +35,7 @@ import { SITE_NAMES, siteActiveText } from '../sim/systems/sites';
 import { STATIONS } from '../data/stations';
 import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
+import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
 import { Hud } from './hud';
@@ -154,7 +155,13 @@ export class Game {
     private readonly frameEl: HTMLElement,
     private readonly doc: Document,
   ) {
+    // Grafik-Modus (05.11.): bis die HD-2D-Darstellung fertig ist, gibt es nur die klassische Ansicht.
     this.renderer = new Renderer(canvas);
+    const gfx = doc.getElementById('btn-graphics');
+    if (gfx) {
+      gfx.hidden = !HD2D_AVAILABLE;
+      gfx.textContent = graphicsButtonLabel(graphicsMode());
+    }
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
     // Schlussstein-Fenster (28.10. abends): Soldat und Karten in der Hinweiszone.
@@ -1191,6 +1198,10 @@ export class Game {
       case 'music-toggle':
         this.music.setEnabled(!this.music.enabled);
         this.syncMusicButtons();
+        break;
+      case 'graphics-toggle':
+        // Alte Version / neue Grafik (05.11.): umschalten und neu starten.
+        switchGraphics(graphicsMode() === 'hd2d' ? 'classic' : 'hd2d');
         break;
       case 'resume':
         this.closeMenu();

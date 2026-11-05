@@ -57,11 +57,20 @@ function updateSupport(world: World): void {
       continue;
     }
     const heal = s.support.heal / world.tps;
+    let worst: Entity | null = null;
     for (const u of world.entities) {
       if (!u.alive || u === s || u.kind !== 'unit' || u.owner !== s.owner || u.hp >= u.maxHp) continue;
       const dx = u.pos.x - s.pos.x;
       const dy = u.pos.y - s.pos.y;
-      if (dx * dx + dy * dy <= r2) u.hp = Math.min(u.maxHp, u.hp + heal);
+      if (dx * dx + dy * dy <= r2) {
+        if (!worst || u.hp / u.maxHp < worst.hp / worst.maxHp) worst = u;
+        u.hp = Math.min(u.maxHp, u.hp + heal);
+      }
+    }
+    // Darstellung (05.11.): höchstens einmal je Sekunde ein Heil-Ereignis zum am stärksten angeschlagenen Verband.
+    if (worst && world.tick - (s.healPulse ?? -1e9) >= world.tps) {
+      s.healPulse = world.tick;
+      world.emit({ type: 'heal', owner: s.owner, healer: s.id, unit: s.defId, target: worst.id, from: { x: s.pos.x, y: s.pos.y }, to: { x: worst.pos.x, y: worst.pos.y }, radius: s.support.radius });
     }
   }
 }

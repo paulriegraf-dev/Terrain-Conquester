@@ -486,7 +486,8 @@ function throwCharge(world: World, e: Entity, t: Entity, c: NonNullable<UnitDef[
     route: e.mover?.route ?? 'mid',
     charge: { target: t.id, damage: c.damage, radius: c.radius, weapon: { ...base, damage: c.damage } },
   });
-  world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: { x: t.pos.x, y: t.pos.y }, heavy: true });
+  const land = world.tick + Math.max(1, Math.round(c.flight * world.tps));
+  world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: { x: t.pos.x, y: t.pos.y }, heavy: true, shooter: e.id, target: t.id, unit: e.defId, group: 0, groups: 1, spawn: world.tick, land });
   // Keine Ladung mehr: zurück zur Kamikaze-Reichweite.
   if (e.charges <= 0 && e.weapon) e.weapon.def = { ...e.weapon.def, range: base.range };
 }
