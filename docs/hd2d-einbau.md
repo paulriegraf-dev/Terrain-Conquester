@@ -73,3 +73,17 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
 - Offen für Etappe 2: Bodenmarken als echte 3D-Overlays nach Leitfaden (statt der klassischen Zeichnung), Nebel über
   Bäumen/Figuren, Deko, PixelFX-Effekte, Auswahlrahmen an Figuren, Leistung bei sehr großen Gefechten,
   Perspektiv-Kamera wie im Mock-up.
+
+## Ziel ist das ganze Mock-up, nicht nur die Grafik (Nutzer, 05.11. abends)
+Die HD-2D-Ansicht übernimmt das Mock-up vollständig – Kamera, Gelände-Look, Overlays **und die besprochene Spiel-UI**
+(Variante C „Mischform“: schlanke Leiste unten, Kontext-Panel rechts beim gewählten Gebäude, Ansichtsleiste über der
+Minimap mit Zoomstufen Karte/Lanes/Mittel/Nah und Lanes Q/W/E, Markt-Anzeige mit Prozenten im HUD, Fronten je Lane,
+Ausbau je Fabrik mit Reitern, Routenwechsel mit pulsierendem Band, sichtbares Formen des Geländes). Etappe 1 ist nur die
+technische Grundlage (Szene, Figuren, Geschosse) in der alten Oberfläche und wird so nicht veröffentlicht.
+
+Weitere Etappen:
+- **Etappe 2 – Szene wie im Mock-up:** Perspektiv-Kamera mit Neigung je Zoomstufe und Tilt-Shift in der Nahsicht,
+  Einrasten auf ganze Pixelstufen, Deko, Fundamente, PixelFX, Nebel über Bäumen/Figuren, Overlays nach Leitfaden in 3D.
+- **Etappe 3 – Spiel-UI Variante C:** neue Oberfläche um die Szene (Leiste, Kontext-Panel, Ansichtsleiste, Markt-HUD,
+  Fronten, Ausbau-Reiter), angebunden an die echten Befehle; die klassische Oberfläche bleibt mit „Alte Version“.
+- Erst danach wird HD-2D Standard und `main` bekommt sie.
