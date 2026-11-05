@@ -37,7 +37,7 @@ import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
 import { Hd2dRenderer } from '../render/hd2d/renderer3d';
 import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
-import { HudC, VIEW_KEYS } from './hudC';
+import { HudC, PAN_KEYS, VIEW_KEYS } from './hudC';
 import { ROOT_TITLE } from './hud';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
@@ -181,9 +181,7 @@ export class Game {
       });
       const hudC = this.hudC;
       this.hud.onLog = (time, text, tone) => (text ? hudC.log(time, text, tone) : hudC.clearLog());
-      this.hud.shiftedKeys = VIEW_KEYS;
-      const kbd = doc.querySelector('#layer-influence kbd');
-      if (kbd) kbd.textContent = '⇧E';
+      this.hud.shiftedKey = (key, root) => PAN_KEYS.has(key) || (root && VIEW_KEYS.has(key));
     }
     // Schlussstein-Fenster (28.10. abends): Soldat und Karten in der Hinweiszone.
     this.keystones = new KeystoneZone({
@@ -775,6 +773,7 @@ export class Game {
       this.onBoardClick(ev.clientX, ev.clientY);
     });
     if (this.renderer instanceof Hd2dRenderer) this.renderer.leftDragAllowed = () => !this.view.swap;
+    if (this.renderer instanceof Hd2dRenderer) this.renderer.keysAllowed = () => !this.titleOpen && !this.menuOpen && !this.codexOpen && !this.lobbyOpen;
     c.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       if (this.view.wall) this.rotateWall();
@@ -905,7 +904,7 @@ export class Game {
       ev.preventDefault();
       return;
     }
-    // Variante C (Nutzer, 05.11.: „wie im Mock-up“): 1–4 Zoomstufen, Q/W/E Lanes, Tab nächste Lane. Im Hauptmenü des
+    // Variante C (Nutzer, 05.11.): 1–4 Zoomstufen, Tab nächste Lane, WASD navigiert. Im Hauptmenü des
     // Rasters gehen sie vor (dessen Befehle liegen dann auf Shift + Taste), in Untermenüs nur, wenn dort nichts darauf liegt.
     if (this.hudC) {
       if (key === 'tab') {
@@ -917,7 +916,8 @@ export class Game {
         ev.preventDefault();
         return;
       }
-      if (!shifted && this.hudC.frontKey(key)) {
+      // WASD navigiert (die Kamera liest die Tasten selbst); Befehle auf W/A/S/D gehen mit Shift.
+      if (!shifted && PAN_KEYS.has(key)) {
         ev.preventDefault();
         return;
       }

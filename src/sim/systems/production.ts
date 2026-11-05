@@ -147,6 +147,7 @@ function producePlayer(world: World, owner: PlayerId): void {
       if (!pos) continue; // alles zugestellt – nächsten Tick erneut versuchen
       const u = world.addUnit(owner, def, pos, pr.route);
       u.fromBuilding = building.id;
+      setMuster(world, u, building, pr.route);
       if (def.former) world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
       const birth = verbundOf(world, u);
       if (birth) u.verbundPrint = birth;
@@ -155,6 +156,7 @@ function producePlayer(world: World, owner: PlayerId): void {
         if (fpos) {
           const f = world.addUnit(owner, UNITS[mix!.unit], fpos, pr.route);
           f.fromBuilding = building.id;
+          setMuster(world, f, building, pr.route);
           world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
           units++;
         }
@@ -166,6 +168,35 @@ function producePlayer(world: World, owner: PlayerId): void {
     pr.blockedBy = 'none';
     units++;
   }
+}
+
+/**
+ * Sammelpunkt vor der Fabrik (rules.muster, Nutzer 05.11.): `distance` Kacheln vor der Fabrik in Richtung des
+ * Routen-Wegpunkts; liegt dort nichts Begehbares, entfällt das Sammeln.
+ */
+export function musterPoint(world: World, building: Entity, route: Route, profile: MoveProfile): Vec2 | null {
+  const r = building.rect!;
+  const c = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  const wp = world.map.waypoints[route];
+  const len = Math.sqrt((wp.x - c.x) * (wp.x - c.x) + (wp.y - c.y) * (wp.y - c.y)) || 1;
+  const dx = (wp.x - c.x) / len;
+  const dy = (wp.y - c.y) / len;
+  const reach = Math.max(r.w, r.h) / 2 + world.rules.muster.distance;
+  for (let d = reach; d >= Math.max(r.w, r.h) / 2 + 0.75; d -= 0.5) {
+    const x = c.x + dx * d;
+    const y = c.y + dy * d;
+    if (world.grid.isPassable(Math.floor(x), Math.floor(y), profile)) return { x, y };
+  }
+  return null;
+}
+
+function setMuster(world: World, u: Entity, building: Entity, route: Route): void {
+  const m = u.mover;
+  const rules = world.rules.muster;
+  if (!m || rules.maxSeconds <= 0) return;
+  const p = musterPoint(world, building, route, MOVE_PROFILES[m.profile]);
+  if (!p) return;
+  m.muster = { x: p.x, y: p.y, from: world.tick + Math.round(rules.minSeconds * world.tps), until: world.tick + Math.round(rules.maxSeconds * world.tps) };
 }
 
 /** Freie Kachel neben dem Gebäude, möglichst auf der Seite Richtung Routen-Wegpunkt. */

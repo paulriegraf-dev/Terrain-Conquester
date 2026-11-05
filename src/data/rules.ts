@@ -427,6 +427,12 @@ export interface Rules {
    * Achtung (05.11.): Mit `impact` ist `speed` ein Balance-Wert – langsamere Geschosse lassen mehr Schaden verfallen.
    */
   projectiles: { impact: boolean; speed: number; stagger: number; catch: number };
+  /**
+   * Sammeln vor der Fabrik (Nutzer, 05.11., Variante C): Neue Truppen laufen erst zu einem Punkt `distance` Kacheln vor
+   * ihrer Fabrik (Richtung Route), bleiben dort mindestens `minSeconds` und ziehen dann weiter – spätestens nach
+   * `maxSeconds`. So sieht man, zu welcher Fabrik/Lane sie gehören.
+   */
+  muster: { distance: number; minSeconds: number; maxSeconds: number };
 }
 
 export const RULES: Rules = {
@@ -604,6 +610,7 @@ export const RULES: Rules = {
   rushOrder: { perSecond: 1.5, min: 20, cooldownSeconds: 60, perPlayer: true },
   trackSeconds: 25,
   projectiles: { impact: true, speed: 25, stagger: 0.1, catch: 0.5 },
+  muster: { distance: 2, minSeconds: 2, maxSeconds: 6 },
   overtime: { at: 1200, shrinkNoMansLand: false, shrinkEvery: 60, doubleTerritory: false, fadeHomeAdvantage: false },
 };
 

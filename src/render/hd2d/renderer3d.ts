@@ -200,17 +200,20 @@ export class Hd2dRenderer {
       }
       left = null;
     });
+    // Navigieren (Nutzer, 05.11.): WASD oder Pfeiltasten gedrückt halten – die Kamera gleitet, solange die Taste
+    // gedrückt ist. Shift + Buchstabe bleibt den Befehlen (⇧W Erdwall, ⇧A Fronten …).
+    const PAN: Record<string, [number, number]> = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0], arrowup: [0, -1], arrowleft: [-1, 0], arrowdown: [0, 1], arrowright: [1, 0] };
     window.addEventListener('keydown', (ev) => {
       const tag = (ev.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const step = distFor(this.cam.z) * 0.12;
-      if (ev.key === 'ArrowLeft') this.cam.tcx -= step;
-      else if (ev.key === 'ArrowRight') this.cam.tcx += step;
-      else if (ev.key === 'ArrowUp') this.cam.tcz -= step;
-      else if (ev.key === 'ArrowDown') this.cam.tcz += step;
-      else return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      const k = ev.key.toLowerCase();
+      if (!PAN[k] || (ev.shiftKey && k.length === 1) || !this.keysAllowed()) return;
+      this.held.add(k);
       ev.preventDefault();
     });
+    window.addEventListener('keyup', (ev) => this.held.delete(ev.key.toLowerCase()));
+    window.addEventListener('blur', () => this.held.clear());
+    this.pan = PAN;
   }
 
   // ------------------------------------------------------------------ Schnittstelle wie Renderer (game.ts)
@@ -336,6 +339,21 @@ export class Hd2dRenderer {
     this.lastFrame = t;
     const c = this.cam;
     const k = Math.min(1, dt * 6);
+    // Gehaltene Navigationstasten: Tempo passend zur Zoomstufe (weit draußen schneller)
+    if (this.held.size) {
+      let vx = 0;
+      let vz = 0;
+      for (const key of this.held) {
+        const v = this.pan[key];
+        if (v) {
+          vx += v[0];
+          vz += v[1];
+        }
+      }
+      const sp = distFor(c.z) * 0.9 * dt;
+      c.tcx += vx * sp;
+      c.tcz += vz * sp * 1.2;
+    }
     c.z += (c.tz - c.z) * k;
     c.cx += (c.tcx - c.cx) * k;
     c.cz += (c.tcz - c.cz) * k;
@@ -379,6 +397,11 @@ export class Hd2dRenderer {
     const b = new THREE.Vector3(this.cam.cx + 1, 0, this.cam.cz).project(this.camera);
     return Math.abs(b.x - a.x) * 0.5 * this.width;
   }
+
+  /** game.ts: dürfen WASD/Pfeile gerade die Kamera bewegen? (nicht im Titel/Menü) */
+  keysAllowed: () => boolean = () => true;
+  private readonly held = new Set<string>();
+  private pan: Record<string, [number, number]> = {};
 
   /** game.ts: darf die linke Maustaste gerade verschieben? (nicht beim Gelände-Malen) */
   leftDragAllowed: () => boolean = () => true;

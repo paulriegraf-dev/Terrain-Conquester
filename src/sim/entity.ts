@@ -61,6 +61,8 @@ export interface MoverState {
   boost: number;
   /** Eigenes Ziel ohne Gegner (Terraformer: sein 2×2-Block) – sonst folgt die Einheit ihrer Route. */
   goal?: Vec2 | null;
+  /** Sammeln vor der Fabrik (rules.muster): Punkt, frühestes Weiterziehen, spätestes Weiterziehen (Ticks). */
+  muster?: { x: number; y: number; from: number; until: number } | null;
 }
 
 /** Was eine Fabrik gerade umbaut – währenddessen produziert sie nicht. */

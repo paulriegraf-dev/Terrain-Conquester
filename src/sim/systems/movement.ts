@@ -108,6 +108,14 @@ export function updateMovement(world: World): void {
         const look = normalize(aim.x - e.pos.x, aim.y - e.pos.y);
         if (look.x !== 0 || look.y !== 0) m.heading = look;
       }
+    } else if (m.muster && !m.goal) {
+      // Sammeln vor der Fabrik (rules.muster): hinlaufen, kurz stehen, dann der Route folgen.
+      const mu = m.muster;
+      const there = dist(e.pos, mu) <= 0.6;
+      if (world.tick >= mu.until || (there && world.tick >= mu.from) || !lineClear(world, e.pos, mu, profile, e.owner)) {
+        m.muster = null;
+        dir = flowDirection(world, e, profile, slots.get(e.id), near);
+      } else dir = there ? { x: 0, y: 0 } : steer(e, mu);
     } else if (m.goal) {
       // Eigenes Ziel (Terraformer: sein Block) – direkt hin, wenn der Weg frei ist, sonst der Route folgen.
       dir = lineClear(world, e.pos, m.goal, profile, e.owner) ? steer(e, m.goal) : flowDirection(world, e, profile, slots.get(e.id), near);
