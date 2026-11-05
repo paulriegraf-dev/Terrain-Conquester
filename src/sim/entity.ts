@@ -157,6 +157,8 @@ export interface Entity {
   lifespan?: { start: number; seconds: number; fresh: number; frenzy?: { at: number; fireRate: number; speed: number }; age: number };
   /** Betäubt bis zu diesem Tick (Notfallverlegung, Frostwelle): bewegt sich nicht und schießt nicht. */
   stunnedUntil?: number;
+  /** Darstellung: Tick des letzten Heil-Ereignisses (Unterstützer, höchstens eins je Sekunde). */
+  healPulse?: number;
   /** Gebremst bis Tick (Terra-Former: Matsch-Aura, Frost-Treffer) – Tempo × factor. */
   slow?: { until: number; factor: number };
   /** Sog (Moorschlund): wird bis Tick mit `speed` Kacheln/Tick zu (x, y) gezogen. */

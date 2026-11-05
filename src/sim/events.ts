@@ -33,7 +33,9 @@ export type SimEventData =
       land?: number;
       salvoShots?: number;
     }
-  | { type: 'death'; owner: PlayerId; kind: EntityKind; name: string; pos: Vec2 }
+  | { type: 'death'; owner: PlayerId; kind: EntityKind; name: string; pos: Vec2; entity?: number; unit?: string }
+  /** Unterstützer heilt (05.11., für die Darstellung): höchstens einmal je Sekunde, zum am stärksten angeschlagenen Verband. */
+  | { type: 'heal'; owner: PlayerId; healer: number; unit: string; target: number; from: Vec2; to: Vec2; radius: number }
   /** Myr-Kanone oder Katapult hat eine Drohne als Munition verbraucht. */
   | { type: 'ammo'; owner: PlayerId; from: Vec2; to: Vec2 }
   /** Schwarmgeist hat einen gefallenen Gegner in eine Drohne verwandelt. */
