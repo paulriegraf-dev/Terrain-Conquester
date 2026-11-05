@@ -3,10 +3,10 @@ import { flankFactor } from './flank';
 import { stationActive } from './sites';
 import { energyCap } from './economy';
 import { TERRAIN_INDEX } from '../../data/terrain';
-import type { UnitDef, UnitId } from '../../data/units';
+import type { UnitDef, UnitId, WeaponDef } from '../../data/units';
 import type { Entity } from '../entity';
 import { dist } from '../math';
-import type { PlayerId } from '../types';
+import type { PlayerId, Vec2 } from '../types';
 import type { FireStat, PendingProjectile, World } from '../world';
 import { controllerAt } from './influence';
 import { homeAdvantage, siegeMultiplier } from './front';
@@ -187,10 +187,12 @@ export function updateCombat(world: World): void {
       sacrificed.push(e);
     }
     const salvoStart = hits.length;
-    if (!def?.kamikaze) collect(w.acc, t, expected, damage, e.owner, hits, e.defId);
-    if (w.def.splash) splashHits(world, e, t, shots, factor, bonus, hits, blast);
+    // Schaden beim Einschlag (Standard seit 05.11.): Ziel, Fläche und Durchschuss werden erst beim Einschlag bestimmt.
+    const impact = world.rules.projectiles.impact && !def?.kamikaze;
+    if (!def?.kamikaze && !impact) collect(w.acc, t, expected, damage, e.owner, hits, e.defId);
+    if (w.def.splash && !impact) splashHits(world, e, t, shots, factor, bonus, hits, blast);
     // Durchschuss: der nächste Gegner hinter dem Ziel bekommt einen Teil der Schüsse ab.
-    if (w.def.pierce && t.kind === 'unit') {
+    if (w.def.pierce && t.kind === 'unit' && !impact) {
       const behind = nextBehind(world, e, t);
       if (behind) {
         const dmg = damagePerWound(world, e, behind);
@@ -207,7 +209,10 @@ export function updateCombat(world: World): void {
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer
     const heavy = e.kind === 'hq' || w.def.damage >= 30;
     if (def?.kamikaze) world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: aimPoint(e, t), heavy });
-    else fireSalvo(world, e, t, hits, salvoStart, expected, damage, shots + blastShots(blast, t), heavy);
+    else {
+      const payload = impact ? { shots: shots * factor, blast, bonus, wdef, dpw0: damagePerWound(world, e, t), wps0: woundsPerShot(wdef, defenseOf(world, t, e), bonus) } : undefined;
+      fireSalvo(world, e, t, hits, salvoStart, expected, damage, shots + blastShots(blast, t), heavy, payload);
+    }
   }
 
   for (const [squad, n] of consumed) {
@@ -226,7 +231,7 @@ const RUBBLE = TERRAIN_INDEX.rubble;
 /** Messung je Einheitenart (nur Statistik). */
 function fireStat(world: World, e: Entity): FireStat {
   const fire = world.players[e.owner].stats.fire;
-  return (fire[e.defId] ??= { salvos: 0, projectiles: 0, shots: 0, theory: 0, potential: 0, dealt: 0, lostInFlight: 0, blockedTicks: 0 });
+  return (fire[e.defId] ??= { salvos: 0, projectiles: 0, shots: 0, theory: 0, potential: 0, dealt: 0, lostInFlight: 0, caught: 0, blockedTicks: 0 });
 }
 
 /**
@@ -266,7 +271,7 @@ export function splitWounds(wounds: number, weights: number[]): number[] {
  * (Standard): Treffer bleiben, wie sie sind – an der Rechnung ändert sich nichts. Schaden beim Einschlag: die Treffer
  * fliegen als PendingProjectile mit und fallen zum Einschlag-Tick (Ziel tot → verfallen).
  */
-function fireSalvo(world: World, e: Entity, t: Entity, hits: Hit[], from: number, expected: number, damage: number, shots: number, heavy: boolean): void {
+function fireSalvo(world: World, e: Entity, t: Entity, hits: Hit[], from: number, expected: number, damage: number, shots: number, heavy: boolean, payload?: SalvoPayload): void {
   const w = e.weapon!;
   const weights = fireGroupWeights(e.models, aliveModels(e), w.def.fireGroups ?? 1);
   const at = aimPoint(e, t);
@@ -282,20 +287,33 @@ function fireSalvo(world: World, e: Entity, t: Entity, hits: Hit[], from: number
   st.projectiles += weights.length;
   st.shots += shots;
   st.theory += expected * damage;
-  const impact = world.rules.projectiles.impact;
-  if (impact) hits.length = from;
   weights.forEach((wt, g) => {
     const spawn = world.tick + g * step;
     const land = spawn + flight;
     let wounds = 0;
-    const own: PendingProjectile['hits'] = [];
     salvo.forEach((h, k) => {
-      const n = parts[k]![g]!;
-      if (n <= 0) return;
-      if (h.target === t) wounds += n;
-      own.push({ target: h.target.id, wounds: n, damage: h.damage });
+      if (h.target === t) wounds += parts[k]![g]!;
     });
-    if (impact && own.length > 0) world.projectiles.push({ land, attacker: e.owner, src: e.defId, hits: own });
+    if (payload) {
+      wounds = expected * wt;
+      world.projectiles.push({
+        land,
+        attacker: e.owner,
+        src: e.defId,
+        shooter: e.id,
+        target: t.id,
+        point: { x: at.x, y: at.y },
+        expected: expected * wt,
+        damage,
+        shots: payload.shots * wt,
+        blast: payload.blast,
+        bonus: payload.bonus,
+        wdef: payload.wdef,
+        dpw0: payload.dpw0,
+        wps0: payload.wps0,
+        share: wt,
+      });
+    }
     world.emit({
       type: 'shot',
       owner: e.owner,
@@ -316,7 +334,24 @@ function fireSalvo(world: World, e: Entity, t: Entity, hits: Hit[], from: number
   });
 }
 
-/** Schaden beim Einschlag: gelandete Geschosse werden zu Treffern (Ziel tot → verfällt, wird gezählt). */
+/** Was eine Salve für den Schaden beim Einschlag mitnimmt (Werte zum Zeitpunkt des Abfeuerns). */
+interface SalvoPayload {
+  /** Schüsse der Salve × Masse-/Munitionsfaktor (ohne Explosiv-Bonus). */
+  shots: number;
+  blast: number | undefined;
+  bonus: number;
+  wdef: WeaponDef;
+  /** Schaden je Wunde gegen das Ziel ohne Schützen-Boni und erwartete Wunden je Schuss gegen das Ziel – Bezug zum Umrechnen. */
+  dpw0: number;
+  wps0: number;
+}
+
+/**
+ * Schaden beim Einschlag (05.11., Standard): Zum Einschlag-Tick trifft das Geschoss sein Ziel, wenn es noch lebt. Ist es
+ * tot, trifft es einen Nachrücker: den nächsten Gegner am Einschlagpunkt (rules.projectiles.catch + Einheitenradius),
+ * neu gerechnet gegen dessen Rüstung und Panzerung. Steht dort niemand, verfällt der Schaden (Statistik lostInFlight).
+ * Fläche und Durchschuss werden erst jetzt bestimmt – wer dann im Radius steht, wird getroffen.
+ */
 function landProjectiles(world: World, hits: Hit[]): void {
   const keep: PendingProjectile[] = [];
   for (const p of world.projectiles) {
@@ -324,16 +359,64 @@ function landProjectiles(world: World, hits: Hit[]): void {
       keep.push(p);
       continue;
     }
-    for (const h of p.hits) {
-      const target = world.get(h.target);
-      if (target && target.alive) hits.push({ target, wounds: h.wounds, damage: h.damage, attacker: p.attacker, src: p.src });
-      else {
-        const fire = world.players[p.attacker].stats.fire[p.src];
-        if (fire) fire.lostInFlight += h.wounds * h.damage;
+    const shooter = world.get(p.shooter);
+    const live = shooter && shooter.alive && shooter.weapon ? shooter : undefined;
+    const acc = live ? live.weapon!.acc : new Map<number, number>();
+    const fire = world.players[p.attacker].stats.fire[p.src];
+    const target = world.get(p.target);
+    let struck: Entity | undefined = target && target.alive ? target : undefined;
+    let expected = p.expected;
+    let damage = p.damage;
+    if (!struck) {
+      struck = catchTarget(world, p.attacker, p.point);
+      if (struck) {
+        // Nachrücker: Verwunden/Rüstung und Schaden je Wunde gegen das neue Ziel umrechnen.
+        const wps = woundsPerShot(p.wdef, defenseOf(world, struck, live), p.bonus);
+        expected = p.wps0 > 0 ? (p.expected * wps) / p.wps0 : p.shots * wps;
+        if (live && p.dpw0 > 0) damage = (p.damage * damagePerWound(world, live, struck)) / p.dpw0;
+        if (fire) fire.caught += expected * damage;
+      } else if (fire) fire.lostInFlight += p.expected * p.damage;
+    }
+    if (struck && damage > 0 && expected > 0) collect(acc, struck, expected, damage, p.attacker, hits, p.src);
+    if (live && p.wdef.splash) {
+      for (const o of world.entities) {
+        if (o === struck || !o.alive || o.kind !== 'unit' || o.owner === p.attacker) continue;
+        if (dist(o.pos, p.point) - o.radius > p.wdef.splash) continue;
+        const dmg = damagePerWound(world, live, o);
+        if (dmg <= 0) continue;
+        const n = (p.shots + blastShots(p.blast, o) * p.share) * (live.tech?.eliteFx?.splashFull ? 1 : 0.5);
+        collect(acc, o, n * woundsPerShot(p.wdef, defenseOf(world, o, live), p.bonus), dmg, p.attacker, hits, p.src);
+        world.players[p.attacker].stats.splashHits++;
       }
     }
+    if (live && p.wdef.pierce && struck && struck.kind === 'unit') {
+      const behind = nextBehind(world, live, struck);
+      if (behind) {
+        const dmg = damagePerWound(world, live, behind);
+        if (dmg > 0) collect(acc, behind, p.shots * p.wdef.pierce * woundsPerShot(p.wdef, defenseOf(world, behind, live), p.bonus), dmg, p.attacker, hits, p.src);
+      }
+    }
+    if (live) trimAccumulator(acc, struck?.id ?? -1);
   }
   world.projectiles = keep;
+}
+
+/** Nachrücker am Einschlagpunkt: nächster lebender Gegner-Verband im Fangradius (bei Gleichstand die kleinere ID). */
+function catchTarget(world: World, attacker: PlayerId, point: Vec2): Entity | undefined {
+  const r = world.rules.projectiles.catch;
+  if (r <= 0) return undefined;
+  let best: Entity | undefined;
+  let bestD = Infinity;
+  for (const o of world.entities) {
+    if (!o.alive || o.kind !== 'unit' || o.owner === attacker) continue;
+    const d = dist(o.pos, point) - o.radius;
+    if (d > r) continue;
+    if (d < bestD || (d === bestD && best && o.id < best.id)) {
+      bestD = d;
+      best = o;
+    }
+  }
+  return best;
 }
 
 /** Treffer anwenden: je Wunde ein Modell, Überschuss verfällt; Statistik, Tod, Beute (auch für Ladungen und Felder). */

@@ -35,6 +35,9 @@ const unitInfo = new Map<number, [string, number, number]>();
 const terrainAt = new Map<number, Uint8Array>();
 const seenFlights = new Set<Flight>();
 let lastSeq = 0;
+// Seite je Spieler aus der Lage seines HQ beim Start (nicht aus der Spielernummer): Wer links startet, schaut nach rechts –
+// auch im Spiegel-Duell (gleiche Fraktion) und wenn Spieler 0 rechts startet.
+const sides: ('left' | 'right')[] = [];
 
 const { world } = runAiMatch({
   map,
@@ -53,6 +56,12 @@ const { world } = runAiMatch({
       if (seenFlights.has(f)) continue;
       seenFlights.add(f);
       flights.push([f.start, f.land, f.charge ? 'charge' : f.unit, f.from.x, f.from.y, f.to.x, f.to.y, f.models, f.owner]);
+    }
+    if (sides.length === 0) {
+      for (const p of w.players) {
+        const hq = w.entities.find((e) => e.kind === 'hq' && e.owner === p.id);
+        sides.push(hq && hq.pos.x > w.grid.width / 2 ? 'right' : 'left');
+      }
     }
     if (w.tick % SAMPLE === 0) {
       const row: number[] = [];
@@ -94,7 +103,10 @@ for (let y = 0; y < world.grid.height; y++) {
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 const buildings = world.entities
   .filter((e) => (e.kind === 'building' || e.kind === 'hq') && e.pos.x >= x0 - 2 && e.pos.x < x0 + CROP + 2)
-  .map((e) => [e.kind === 'hq' ? `hq:${world.players[e.owner].faction}` : e.name, e.owner, r2(e.pos.x - x0), r2(e.pos.y)]);
+  .map((e) => [e.kind === 'hq' ? `hq:${world.players[e.owner].faction.id}` : e.name, e.owner, r2(e.pos.x - x0), r2(e.pos.y)]);
+// Seite je Spieler aus der Lage seines HQ (nicht aus der Spielernummer): Wer links startet, schaut nach rechts – auch im
+// Spiegel-Duell (gleiche Fraktion) und wenn Spieler 0 rechts startet.
+
 const win = frames.filter((f) => f[0] >= t0 && f[0] <= t1);
 const ids = new Set<number>();
 for (const f of win) for (let i = 0; i < f[1].length; i += 4) ids.add(f[1][i]!);
@@ -115,6 +127,8 @@ const data = {
     width: CROP,
     height: world.grid.height,
     matchSeconds: world.tick / tps,
+    sides,
+    mirror: factions[0] === factions[1],
   },
   terrain,
   buildings,

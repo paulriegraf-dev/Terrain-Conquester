@@ -418,12 +418,15 @@ export interface Rules {
   overtime: OvertimeRules;
   /**
    * Geschosse (05.11., Feuergruppen): Jede Salve wird als sichtbare Geschosse ausgegeben (WeaponDef.fireGroups).
-   * `impact`: Schaden fällt erst beim Einschlag statt beim Abfeuern (Schalter für den Vergleich, Standard aus).
+   * `impact`: Schaden fällt erst beim Einschlag statt beim Abfeuern (Standard seit 05.11., Nutzer-Entscheid; aus = alt).
    * `speed`: Fluggeschwindigkeit in Kacheln/s – für alle Fraktionen gleich; bestimmt Flugzeit und Einschlag-Tick.
    * `stagger`: Teilt ein Modell seine Salve auf mehrere Geschosse auf (fireGroups > Modelle, Railgun-Batterie), starten
    * sie in diesem Abstand (s) nacheinander – Spawn- und Einschlag-Tick verschieben sich mit.
+   * `catch`: Ist das Ziel beim Einschlag tot, trifft das Geschoss den nächsten Gegner in diesem Abstand (Kacheln, plus
+   * dessen Radius) vom Einschlagpunkt – der Nachrücker (0 = aus, Schaden verfällt).
+   * Achtung (05.11.): Mit `impact` ist `speed` ein Balance-Wert – langsamere Geschosse lassen mehr Schaden verfallen.
    */
-  projectiles: { impact: boolean; speed: number; stagger: number };
+  projectiles: { impact: boolean; speed: number; stagger: number; catch: number };
 }
 
 export const RULES: Rules = {
@@ -600,7 +603,7 @@ export const RULES: Rules = {
   // HQ-Schlacht fast jede Minute an jeder Fabrik – Runden dauerten im Median 22:36 statt 18:00 ohne.
   rushOrder: { perSecond: 1.5, min: 20, cooldownSeconds: 60, perPlayer: true },
   trackSeconds: 25,
-  projectiles: { impact: false, speed: 25, stagger: 0.1 },
+  projectiles: { impact: true, speed: 25, stagger: 0.1, catch: 0.5 },
   overtime: { at: 1200, shrinkNoMansLand: false, shrinkEvery: 60, doubleTerritory: false, fadeHomeAdvantage: false },
 };
 

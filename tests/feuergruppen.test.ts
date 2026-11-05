@@ -109,3 +109,39 @@ describe('Feuergruppen: Modellverlust', () => {
     assert.equal(count(1), 1);
   });
 });
+
+describe('Schaden beim Einschlag: Nachrücker', () => {
+  // Ziel: Technogunner (kein Zerfall beim Tod wie die Battlesphäre, der sonst Drohnen am Einschlagpunkt hinterlässt).
+  const setup = (withNext: boolean) => {
+    const world = new World({ map: felsenpass, seed: 1, rules: calm, factions: ['technoclan', 'technoclan'] });
+    const gunner = world.addUnit(0, UNITS.colossus, { x: 18.5, y: 13.5 }, 'mid');
+    gunner.mover!.speed = 0;
+    gunner.vision = 12;
+    const first = world.addUnit(1, UNITS.gunner, { x: 21, y: 13.5 }, 'mid');
+    first.mover!.speed = 0;
+    first.weapon = undefined;
+    const next = withNext ? world.addUnit(1, UNITS.gunner, { x: 21.2, y: 13.6 }, 'mid') : undefined;
+    if (next) {
+      next.mover!.speed = 0;
+      next.weapon = undefined;
+      next.hp = 1e6;
+    }
+    // bis das erste Geschoss fliegt
+    for (let k = 0; k < 4 * world.tps && world.projectiles.length === 0; k++) stepTimes(world, 1);
+    assert.ok(world.projectiles.length > 0, 'Geschoss im Flug');
+    world.destroy(first, 0); // Ziel stirbt im Flug
+    const hpNext = next?.hp ?? 0;
+    stepTimes(world, world.tps);
+    return { world, next, hpNext, gunner };
+  };
+  it('ein Gegner am Einschlagpunkt bekommt den Treffer ab', () => {
+    const { world, next, hpNext, gunner } = setup(true);
+    // ganze Wunden treffen sofort, Bruchteile sammeln sich beim Schützen für dieses Ziel
+    assert.ok(next!.hp < hpNext || (gunner.weapon!.acc.get(next!.id) ?? 0) > 0, 'Nachrücker getroffen');
+    assert.ok((world.players[0].stats.fire.colossus?.caught ?? 0) > 0);
+  });
+  it('ohne Nachrücker verfällt der Schaden', () => {
+    const { world } = setup(false);
+    assert.ok((world.players[0].stats.fire.colossus?.lostInFlight ?? 0) > 0);
+  });
+});

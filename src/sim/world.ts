@@ -109,7 +109,20 @@ export interface PendingProjectile {
   land: number;
   attacker: PlayerId;
   src: string;
-  hits: { target: number; wounds: number; damage: number }[];
+  shooter: number;
+  target: number;
+  /** Einschlagpunkt (Zielpunkt beim Abfeuern) – Mitte für Fläche und Nachrücker. */
+  point: Vec2;
+  /** Anteil dieses Geschosses: erwartete Wunden und Schaden je Wunde gegen das Ziel (mit allen Schützen-Boni). */
+  expected: number;
+  damage: number;
+  shots: number;
+  blast: number | undefined;
+  bonus: number;
+  wdef: WeaponDef;
+  dpw0: number;
+  wps0: number;
+  share: number;
 }
 
 export interface Flight {
@@ -235,8 +248,10 @@ export interface FireStat {
   /** Ganze Wunden × Schaden, die beim Ziel ankamen (vor Überschuss), und davon tatsächlich angerichtet. */
   potential: number;
   dealt: number;
-  /** Schaden-beim-Einschlag: Wunden × Schaden, deren Ziel schon tot war. */
+  /** Schaden beim Einschlag: erwartete Wunden × Schaden, deren Ziel tot war und kein Nachrücker am Einschlagpunkt stand. */
   lostInFlight: number;
+  /** … und die stattdessen einen Nachrücker trafen (neu gerechnet). */
+  caught: number;
   /** Ticks bereit und Ziel in Reichweite, aber nicht gefeuert (betäubt, Bauschutz). */
   blockedTicks: number;
 }

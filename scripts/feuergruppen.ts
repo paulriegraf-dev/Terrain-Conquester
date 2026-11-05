@@ -82,7 +82,7 @@ if (mode === 'tabelle') {
         games++;
         for (const p of world.players) {
           for (const [id, f] of Object.entries(p.stats.fire)) {
-            const t = total.get(id) ?? { salvos: 0, projectiles: 0, shots: 0, theory: 0, potential: 0, dealt: 0, lostInFlight: 0, blockedTicks: 0 };
+            const t = total.get(id) ?? { salvos: 0, projectiles: 0, shots: 0, theory: 0, potential: 0, dealt: 0, lostInFlight: 0, caught: 0, blockedTicks: 0 };
             for (const k of Object.keys(t) as (keyof FireStat)[]) t[k] += f[k];
             total.set(id, t);
           }
