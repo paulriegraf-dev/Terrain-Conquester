@@ -2,14 +2,15 @@
  * Grafik-Modus (05.11., Wunsch des Nutzers): Mit der HD-2D-Darstellung bleibt die bisherige Ansicht als „Alte Version“
  * abrufbar – ein Knopf im Hauptmenü schaltet um und startet die Seite neu. Gemerkt wird die Wahl nur im Browser.
  *
- * Solange HD-2D eine Vorschau ist, bleibt „klassisch“ der Standard; der Knopf heißt dann „Neue Grafik (2,5D)“.
+ * Seit 05.11. (Etappen 1–3 fertig) ist die 2,5D-Darstellung (HD-2D) mit Spiel-UI Variante C der Standard; der Knopf
+ * „Alte Version (klassische Grafik)“ holt die bisherige Ansicht zurück (Wunsch des Nutzers: Backup bleibt spielbar).
  */
 export type GraphicsMode = 'classic' | 'hd2d';
 
-/** Etappe 1 der HD-2D-Darstellung ist spielbar (05.11.): Gelände, Gebäude, Einheiten, Geschosse; Bodenmarken als Textur. */
+/** 2,5D-Darstellung verfügbar (Etappen 1–3, 05.11.). */
 export const HD2D_AVAILABLE = true;
-/** Standard, solange HD-2D noch eine Vorschau ist (Etappe 2: Overlays in 3D, Feinschliff) – dann wird 'hd2d' Standard. */
-const DEFAULT_MODE: GraphicsMode = 'classic';
+/** Standard ohne gespeicherte Wahl. */
+const DEFAULT_MODE: GraphicsMode = 'hd2d';
 
 const KEY = 'tc-graphics';
 

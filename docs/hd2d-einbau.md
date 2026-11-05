@@ -135,4 +135,4 @@ Weitere Etappen:
   Einrasten auf ganze Pixelstufen, Deko, Fundamente, PixelFX, Nebel über Bäumen/Figuren, Overlays nach Leitfaden in 3D.
 - **Etappe 3 – Spiel-UI Variante C:** neue Oberfläche um die Szene (Leiste, Kontext-Panel, Ansichtsleiste, Markt-HUD,
   Fronten, Ausbau-Reiter), angebunden an die echten Befehle; die klassische Oberfläche bleibt mit „Alte Version“.
-- Erst danach wird HD-2D Standard und `main` bekommt sie.
+- Erst danach wird HD-2D Standard und `main` bekommt sie. **Erledigt 05.11. spät:** 2,5D ist Standard (`DEFAULT_MODE = 'hd2d'`), „Alte Version (klassische Grafik)“ im Hauptmenü schaltet zurück; die Wahl wird im Browser gemerkt.
