@@ -36,7 +36,7 @@ const distFor = (z: number): number => lerp(78, 9, z * z * 0.35 + z * 0.65);
 const zoomToCam = (zoom: number): number => Math.max(0, Math.min(1, 0.42 + Math.log2(zoom) * 0.4));
 /** Geländehöhe je Bodenart (Index wie TERRAIN_LIST: Wiese, Wald, Matsch, Schnee, Gebirge, Schlucht, Geröll, Erdwall, Ödland). */
 const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
-const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
+export const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
 /** Gebäude-Streifen: Index je Gebäudeart. */
 const BUILDING_INDEX: Record<string, number> = {
   'hq:technoclan': 0, 'hq:myriaden': 1, 'hq:terraformer': 2,
@@ -243,7 +243,12 @@ export class Hd2dRenderer {
     c.tcx = Math.max(this.viewX0, Math.min(this.viewX0 + this.viewCols, c.tcx));
     c.tcz = Math.max(0, Math.min(this.rows, c.tcz));
     const z = c.z;
-    const dist = distFor(z) * Math.max(0.45, Math.min(1.4, (this.viewCols / 60) * (1.6 / Math.max(1, this.camera.aspect))));
+    // Abstand an die Karte anpassen: Karte und Lanes zeigen die ganze Breite („contain“), ab Mittel füllt die Karte
+    // das Bild („cover“ – flache, breite Karten sonst mit leerem Rand oben und unten).
+    const fitW = (this.viewCols / 60) * (1.6 / Math.max(1, this.camera.aspect));
+    const fitH = this.rows / 40;
+    const cover = Math.max(0, Math.min(1, (z - 0.45) / 0.2));
+    const dist = distFor(z) * Math.max(0.45, Math.min(1.4, lerp(fitW, Math.min(fitW, fitH), cover)));
     const tilt = (lerp(64, 34, z) * Math.PI) / 180;
     this.camera.fov = lerp(34, 46, z);
     this.camera.position.set(c.cx, Math.sin(tilt) * dist, c.cz + Math.cos(tilt) * dist);
@@ -274,9 +279,10 @@ export class Hd2dRenderer {
     let dx = 0;
     const bottom = hit(0, -1);
     const top = hit(0, 1);
-    if (bottom && top && bottom.z - top.z >= this.rows) dz = this.rows / 2 - (bottom.z + top.z) / 2;
+    // Weit draußen (ganze Karte im Bild): mittig. Sonst hat der untere Rand Vorrang – oben sieht die Perspektive weit.
+    if (c.z < 0.5 && bottom && top && bottom.z - top.z >= this.rows) dz = this.rows / 2 - (bottom.z + top.z) / 2;
     else if (bottom && bottom.z > this.rows) dz = this.rows - bottom.z;
-    else if (top && top.z < -1.5) dz = -1.5 - top.z;
+    else if (top && top.z < -1.5) dz = Math.min(-1.5 - top.z, bottom ? this.rows - bottom.z : Infinity);
     const left = hit(-1, -1);
     const right = hit(1, -1);
     if (left && right) {
@@ -345,6 +351,75 @@ export class Hd2dRenderer {
     const a = new THREE.Vector3(this.cam.cx, 0, this.cam.cz).project(this.camera);
     const b = new THREE.Vector3(this.cam.cx + 1, 0, this.cam.cz).project(this.camera);
     return Math.abs(b.x - a.x) * 0.5 * this.width;
+  }
+
+  // ------------------------------------------------------------------ Ansicht (Etappe 3: Ansichtsleiste, Minimap)
+
+  /** Kameraziel auf einen Kartenpunkt (Kacheln) setzen – weich nachgeführt. */
+  focus(x: number, y: number): void {
+    this.cam.tcx = x;
+    this.cam.tcz = y;
+  }
+
+  /** Aktuelles Kameraziel (Kacheln). */
+  focusPoint(): Vec2 {
+    return { x: this.cam.tcx, y: this.cam.tcz };
+  }
+
+  /** Zoomstufe der Kamera (Karte / Lanes / Mittel / Nah). */
+  level(): ZoomLevel {
+    return this.zoomLevel();
+  }
+
+  /**
+   * Gebäude unter dem Mauszeiger nach seinem Bild (nicht nur nach der Grundfläche) – in der Schrägsicht ragen Gebäude
+   * über die Kacheln dahinter. Bei Überlappung gewinnt das vordere. null = keines.
+   */
+  structureAt(clientX: number, clientY: number): number | null {
+    const r = this.canvas.getBoundingClientRect();
+    if (r.width <= 0) return null;
+    this.camera.updateMatrixWorld();
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    let best: { id: number; y: number } | null = null;
+    const v = new THREE.Vector3();
+    for (const [id, obj] of this.structures) {
+      const sprites: THREE.Sprite[] = [];
+      obj.traverse((o) => {
+        if ((o as THREE.Sprite).isSprite) sprites.push(o as THREE.Sprite);
+      });
+      for (const sp of sprites) {
+        sp.updateMatrixWorld();
+        const pos = new THREE.Vector3().setFromMatrixPosition(sp.matrixWorld);
+        const sc = new THREE.Vector3().setFromMatrixScale(sp.matrixWorld);
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const fx of [-sp.center.x, 1 - sp.center.x]) for (const fy of [-sp.center.y, 1 - sp.center.y]) {
+          v.copy(pos).addScaledVector(right, fx * sc.x).addScaledVector(up, fy * sc.y).project(this.camera);
+          const px = r.left + ((v.x + 1) / 2) * r.width;
+          const py = r.top + ((1 - v.y) / 2) * r.height;
+          x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+        }
+        // Rand der Sprites ist meist durchsichtig: etwas enger greifen
+        const mx = (x1 - x0) * 0.12;
+        const my = (y1 - y0) * 0.08;
+        if (clientX < x0 + mx || clientX > x1 - mx || clientY < y0 + my || clientY > y1) continue;
+        if (!best || y1 > best.y) best = { id, y: y1 };
+      }
+    }
+    return best ? best.id : null;
+  }
+
+  /** Sichtbarer Bodenausschnitt als Viereck (Bildecken links oben, rechts oben, rechts unten, links unten). */
+  viewQuad(): Vec2[] | null {
+    this.camera.updateMatrixWorld();
+    const out: Vec2[] = [];
+    for (const [nx, ny] of [[-1, 1], [1, 1], [1, -1], [-1, -1]] as const) {
+      this.ray.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
+      const p = this.ray.ray.intersectPlane(this.groundPlane, new THREE.Vector3());
+      if (!p) return null;
+      out.push({ x: p.x, y: p.z });
+    }
+    return out;
   }
 
   draw(world: World, alpha: number, view: ViewState): void {
@@ -464,7 +539,64 @@ export class Hd2dRenderer {
     this.overlayMesh.renderOrder = 1;
     this.scene.add(this.overlayMesh);
     this.buildTrees(world, at);
+    this.buildRim(x0, cols, rows);
   }
+
+  private rim: THREE.Mesh | null = null;
+
+  /** Felsrand um die Karte (wie im Mock-up): dunkles Gestein statt Schwarz neben dem Spielfeld. */
+  private buildRim(x0: number, cols: number, rows: number): void {
+    if (this.rim) {
+      this.scene.remove(this.rim);
+      this.rim.geometry.dispose();
+    }
+    const M = 60;
+    const shape = new THREE.Shape();
+    shape.moveTo(x0 - M, -M);
+    shape.lineTo(x0 + cols + M, -M);
+    shape.lineTo(x0 + cols + M, rows + M);
+    shape.lineTo(x0 - M, rows + M);
+    shape.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(x0, 0);
+    hole.lineTo(x0, rows);
+    hole.lineTo(x0 + cols, rows);
+    hole.lineTo(x0 + cols, 0);
+    hole.closePath();
+    shape.holes.push(hole);
+    const geo = new THREE.ShapeGeometry(shape);
+    // Kachelbare Pixel-Felstextur (64 px = 2 Kacheln)
+    if (!this.rimTex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d')!;
+      const pal = ['#2c2f36', '#33363e', '#3b3e46', '#262930', '#41444c'];
+      for (let y = 0; y < 64; y += 2) for (let x = 0; x < 64; x += 2) {
+        const n = hash(x >> 3, y >> 3) * 0.6 + hash(x, y) * 0.4;
+        g.fillStyle = pal[Math.min(pal.length - 1, Math.floor(n * pal.length))]!;
+        g.fillRect(x, y, 2, 2);
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.magFilter = THREE.NearestFilter;
+      // Mipmaps gegen Moiré im flachen Blickwinkel (der Rand liegt weit hinten)
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.anisotropy = 4;
+      t.colorSpace = THREE.SRGBColorSpace;
+      this.rimTex = t;
+    }
+    // ShapeGeometry liegt in der xy-Ebene: UV = Weltkoordinaten / 2 (eine Textur je 2 Kacheln)
+    const uv = geo.attributes.uv!;
+    const pos = geo.attributes.position!;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / 2, pos.getY(i) / 2);
+    this.rim = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: this.rimTex, side: THREE.DoubleSide }));
+    // xy → xz: Drehung um x um +90° legt y auf z
+    this.rim.rotation.x = Math.PI / 2;
+    this.rim.position.y = -0.02;
+    this.scene.add(this.rim);
+  }
+
+  private rimTex: THREE.CanvasTexture | null = null;
 
   /** Boden aus den PixelLab-Kacheln (Variante N des Mock-ups), Übergänge verzahnt, Kanten mit Höhensprung schattiert. */
   private groundCanvas(world: World, at: (x: number, y: number) => number): HTMLCanvasElement {

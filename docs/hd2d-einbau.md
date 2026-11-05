@@ -89,6 +89,29 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
 - Offen: Einrasten auf ganze Pixelstufen (optional), Leistung bei sehr großen Gefechten messen, Auswahlrahmen an Figuren
   → mit Etappe 3 (UI).
 
+## Stand Etappe 3 (05.11.2026 nachts) – Spiel-UI Variante C
+Nur in der HD-2D-Ansicht (`body.ui-c`, `src/ui/hudC.ts`, CSS-Block „Variante C“ in `styles.css`); die klassische
+Oberfläche bleibt unverändert. Befehle, Knöpfe und Tasten kommen weiter aus `commands.ts` – die neue Oberfläche ordnet
+die bestehenden Bausteine nur neu an und ergänzt, was das Mock-up zusätzlich hat.
+- Szene über den ganzen Bildschirm, Felsrand um die Karte statt Schwarz. Karte/Lanes zeigen die ganze Breite, ab Mittel
+  füllt die Karte das Bild.
+- **HUD oben:** Energie (+Einkommen, Einheiten), Schlussstein (Uhr, nächstes Fenster; pulsiert bei offener Wahl, Klick
+  = Karten), Lanes (Gebietsanteil je Lane beider Seiten + Haltung, Umstellung orange; Klick = Fronten), Markt mit
+  Prozenten (Klick = Markt-Fenster), Zentrum (Halter in seiner Farbe, eigene Haltezeit).
+- **Befehlsleiste unten** (das Befehlsraster als Reihe) mit Knöpfen Markt / Späher / Schlusssteine / Lage, die die
+  bisherigen Panels als Fenster öffnen (Esc schließt). Hinweiszeile darüber.
+- **Kontext-Panel rechts**, sobald etwas gewählt ist (Auswahl-Info). Gebäude werden jetzt nach ihrem Bild getroffen,
+  nicht nur nach der Grundfläche.
+- **Ansichtsleiste + Minimap rechts unten:** Karte/Lanes/Mittel/Nah, Oben/Mitte/Unten, nächste Lane; Minimap mit
+  Gelände, Gebiet, Gebäuden, sichtbaren Einheiten, Nebel und Kamera-Ausschnitt; Klick/Ziehen springt.
+- **Kurzmeldungen links oben** (letzte drei, verblassen; Klick = ganzer Lagebericht).
+- **Tasten (Nutzer: „wie im Mock-up“):** 1–4 Zoomstufen, Q/W/E Lanes, Tab/Shift+Tab nächste Lane. Im Hauptmenü des
+  Befehlsrasters liegen Bauen, Erdwall und Verlegen dann auf **Shift + Taste** (⇧1–⇧3, ⇧W, ⇧Q), die Ebene Einfluss
+  auf ⇧E; das Raster zeigt die Tasten mit ⇧. In Untermenüs (Fronten, Gelände, HQ …) gelten deren Tasten wie bisher.
+- Tempo und Ebenen klein links unten, Forschung-Kurzwahl darunter.
+- Offen: Ausbau-Reiter je Fabrik und Routenwechsel-Band direkt im Kontext-Panel (heute über die Befehlsleiste), Tutorial
+  auf die neue Anordnung prüfen, Kleinbildschirme.
+
 ## Ziel ist das ganze Mock-up, nicht nur die Grafik (Nutzer, 05.11. abends)
 Die HD-2D-Ansicht übernimmt das Mock-up vollständig – Kamera, Gelände-Look, Overlays **und die besprochene Spiel-UI**
 (Variante C „Mischform“: schlanke Leiste unten, Kontext-Panel rechts beim gewählten Gebäude, Ansichtsleiste über der

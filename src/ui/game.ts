@@ -37,6 +37,8 @@ import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
 import { Hd2dRenderer } from '../render/hd2d/renderer3d';
 import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
+import { HudC, VIEW_KEYS } from './hudC';
+import { ROOT_TITLE } from './hud';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
 import { Hud } from './hud';
@@ -92,6 +94,8 @@ export class Game {
   private view: ViewState = createView('demo');
   /** Klassische Formen-Ansicht oder HD-2D (05.11.) – gleiche Schnittstelle. */
   private readonly renderer: Renderer | Hd2dRenderer;
+  /** Spiel-UI Variante C (nur HD-2D). */
+  private readonly hudC: HudC | null = null;
   private readonly hud: Hud;
   private speed = 1;
   private paused = false;
@@ -166,6 +170,21 @@ export class Game {
     }
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
+    if (this.renderer instanceof Hd2dRenderer) {
+      this.hudC = new HudC({
+        doc,
+        renderer: this.renderer,
+        getZoom: () => this.zoom,
+        setZoom: (z) => this.setZoom(z),
+        toggleKeystones: () => this.session.mode === 'play' && this.keystones.toggle(),
+        action: (a, d) => this.onAction(a, { ...d }),
+      });
+      const hudC = this.hudC;
+      this.hud.onLog = (time, text, tone) => (text ? hudC.log(time, text, tone) : hudC.clearLog());
+      this.hud.shiftedKeys = VIEW_KEYS;
+      const kbd = doc.querySelector('#layer-influence kbd');
+      if (kbd) kbd.textContent = '⇧E';
+    }
     // Schlussstein-Fenster (28.10. abends): Soldat und Karten in der Hinweiszone.
     this.keystones = new KeystoneZone({
       doc,
@@ -347,7 +366,7 @@ export class Game {
     const map = this.session?.world.map;
     if (!map) return;
     // Großer Bildschirm: Spielfeld füllt den freien Platz. Kleiner: nur nach Breite (Seite scrollt).
-    const stacked = !this.doc.body.classList.contains('start-mode') && window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
+    const stacked = !this.hudC && !this.doc.body.classList.contains('start-mode') && window.matchMedia('(max-width: 1100px), (max-height: 640px)').matches;
     this.renderer.resize(this.frameEl.clientWidth, stacked ? Infinity : this.frameEl.clientHeight, this.session.world, this.zoom);
     this.scrollEl.classList.toggle('zoomed', this.zoom > 1);
     const z = this.doc.getElementById('zoom-level');
@@ -439,6 +458,7 @@ export class Game {
     if (this.renderer.needsLayout(world)) this.resize();
     this.renderer.draw(world, alpha, this.view);
     this.hud.update({ session: this.session, view: this.view, speed: this.speed, paused: this.paused || sharedPause, sellArmed: this.hudSellArmed, online: this.session.lockstep ? { host: !!this.mp?.host } : null }, now);
+    this.hudC?.update(this.session.world, this.view, now);
     this.keystones.update(world, this.view.human, this.session.mode === 'play' && !this.session.prepActive, now);
     if (this.tutorial && !this.menuOpen) this.tutorial.update(now);
     this.updateStatusLine(world);
@@ -813,7 +833,10 @@ export class Game {
       }
       return;
     }
-    const structure = world.entities.find((e) => e.alive && e.rect && rectContains(e.rect, cell.x, cell.y));
+    // HD-2D: Gebäude nach ihrem Bild treffen (sie ragen in der Schrägsicht über die Kacheln dahinter).
+    const hitId = this.renderer instanceof Hd2dRenderer ? this.renderer.structureAt(clientX, clientY) : null;
+    const hit = hitId !== null ? world.get(hitId) : undefined;
+    const structure = (hit?.alive && hit.kind !== 'wall' ? hit : undefined) ?? world.entities.find((e) => e.alive && e.rect && rectContains(e.rect, cell.x, cell.y));
     this.view.menu = 'main';
     this.hudSellArmed = 0;
     if (structure && (human === null || structure.kind === 'hq' || world.isVisibleTo(human, structure))) {
@@ -831,7 +854,10 @@ export class Game {
   private onKey(ev: KeyboardEvent): void {
     const tag = (ev.target as HTMLElement | null)?.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-    const key = ev.key.toLowerCase();
+    let key = ev.key.toLowerCase();
+    // Variante C (HD-2D): Shift + Ziffer/Buchstabe = die Taste selbst (Shift+1 liefert sonst „!“).
+    const shifted = !!this.hudC && ev.shiftKey && /^(Digit|Key)/.test(ev.code);
+    if (shifted) key = ev.code.replace(/^(Digit|Key)/, '').toLowerCase();
     if (this.codexOpen) {
       if (key === 'escape' || key === 'f1') {
         ev.preventDefault();
@@ -873,6 +899,29 @@ export class Game {
     if (key === 'k' && this.session.mode === 'play' && this.keystones.toggle()) {
       ev.preventDefault();
       return;
+    }
+    // Variante C (Nutzer, 05.11.: „wie im Mock-up“): 1–4 Zoomstufen, Q/W/E Lanes, Tab nächste Lane. Im Hauptmenü des
+    // Rasters gehen sie vor (dessen Befehle liegen dann auf Shift + Taste), in Untermenüs nur, wenn dort nichts darauf liegt.
+    if (this.hudC) {
+      if (key === 'tab') {
+        ev.preventDefault();
+        this.hudC.key('tab', ev.shiftKey);
+        return;
+      }
+      if (key === 'escape' && this.hudC.closePop()) {
+        ev.preventDefault();
+        return;
+      }
+      if (!shifted && VIEW_KEYS.has(key)) {
+        const world = this.session.world;
+        const canAct = this.session.mode === 'play' && !world.result;
+        const set = commandsFor({ world, view: this.view, canAct, sellArmed: this.hudSellArmed });
+        const taken = set.title !== ROOT_TITLE && set.buttons.some((b) => b.key === key && !b.disabled);
+        if (!taken && this.hudC.key(key, false)) {
+          ev.preventDefault();
+          return;
+        }
+      }
     }
     const handled = ((): boolean => {
       // Tasten des aktuellen Befehlsrasters gehen vor (Fronten: Q–R und A–F liegen auf Ansichtstasten).
@@ -1070,6 +1119,7 @@ export class Game {
   }
 
   private onAction(action: string, data: DOMStringMap): void {
+    if (this.hudC?.handle(action, data)) return;
     const world = this.session.world;
     const sel = this.view.selected;
     const own = (): Entity | undefined => {
