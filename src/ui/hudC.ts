@@ -24,7 +24,9 @@ import type { Tone } from './hud';
 import { factoryPanel, type CtxTab } from './ctxPanel';
 
 /** Tasten der Ansichtsleiste (wie im Mock-up). */
-export const VIEW_KEYS: ReadonlySet<string> = new Set(['1', '2', '3', '4', 'q', 'w', 'e']);
+export const VIEW_KEYS: ReadonlySet<string> = new Set(['1', '2', '3', '4']);
+/** WASD navigiert (Nutzer, 05.11.); Befehle auf diesen Tasten gehen mit Shift. */
+export const PAN_KEYS: ReadonlySet<string> = new Set(['w', 'a', 's', 'd']);
 
 const LEVELS: readonly { id: ZoomLevel; name: string; key: string; zoom: number }[] = [
   // zoom = Wert für game.ts setZoom; die Kamera rechnet daraus ihre Stufe (zoomToCam).
@@ -33,10 +35,8 @@ const LEVELS: readonly { id: ZoomLevel; name: string; key: string; zoom: number 
   { id: 'mid', name: 'Mittel', key: '3', zoom: 1.65 },
   { id: 'near', name: 'Nah', key: '4', zoom: 2.5 },
 ];
-const LANE_KEY: Record<Route, string> = { top: 'q', mid: 'w', bottom: 'e' };
 const LANE_SHORT: Record<Route, string> = { top: 'O', mid: 'M', bottom: 'U' };
 const PART_SHORT: Record<string, string> = { arms: 'Waffen', wheels: 'Räder', plates: 'Platten' };
-const FRONT_KEYS = ['1234', 'qwer', 'asdf'];
 const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secure: '◎', push: '»' };
 export type Pop = 'market' | 'scout' | 'keystones' | 'log' | 'front';
 const POPS: readonly { id: Pop; name: string }[] = [
@@ -101,7 +101,7 @@ export class HudC {
     const hud = mk('div', 'c-hud', `
       <div class="c-cell"><span class="c-lbl">Energie</span><b data-k="energy">0</b><small data-k="income"></small><small class="c-units" data-k="units"></small></div>
       <button type="button" class="c-cell c-ks" data-action="c-keystones" title="Uhr und nächstes Schlussstein-Fenster – Klick zeigt deine Schlusssteine (Taste K wählt)"><span class="c-lbl">Schlussstein</span><b data-k="clock">0:00</b><small data-k="gate"></small></button>
-      <button type="button" class="c-cell" data-action="c-fronts" title="Frontlage je Lane (Anteil am Gebiet) und Haltung – Klick öffnet die Fronten (A)"><span class="c-lbl">Lanes</span><div class="c-lanes" data-k="lanes"></div></button>
+      <button type="button" class="c-cell" data-action="c-fronts" title="Frontlage je Lane (Anteil am Gebiet) und Haltung – Klick öffnet die Fronten (⇧A)"><span class="c-lbl">Lanes</span><div class="c-lanes" data-k="lanes"></div></button>
       <button type="button" class="c-cell" data-action="c-pop" data-pop="market" title="Markt (Lage von vor 5 s, Prozent = Änderung zu 20 s davor) – Klick öffnet den Markt"><span class="c-lbl">Markt</span><div class="c-mkt" data-k="market"></div></button>
       <div class="c-cell"><span class="c-lbl">Zentrum</span><b data-k="center">frei</b></div>`);
     // Kurzmeldungen
@@ -115,7 +115,7 @@ export class HudC {
     const view = mk('div', 'c-view', `
       <div class="c-viewbar" data-k="viewbar">
         ${LEVELS.map((l) => `<button type="button" data-action="c-level" data-level="${l.id}">${l.name}<small>${l.key}</small></button>`).join('')}
-        ${ROUTES.map((r) => `<button type="button" data-action="c-lane" data-route="${r}">${ROUTE_NAMES[r][0]!.toUpperCase()}${ROUTE_NAMES[r].slice(1)}<small>${LANE_KEY[r].toUpperCase()}</small></button>`).join('')}
+        ${ROUTES.map((r) => `<button type="button" data-action="c-lane" data-route="${r}">${ROUTE_NAMES[r][0]!.toUpperCase()}${ROUTE_NAMES[r].slice(1)}<small>&nbsp;</small></button>`).join('')}
         <button type="button" data-action="c-next">nächste<small>Tab</small></button>
       </div>
       <canvas class="c-mini" width="240" height="160" title="Minimap – Klick springt dorthin"></canvas>
@@ -224,17 +224,6 @@ export class HudC {
     return this.d.doc.body.dataset.pop === 'front';
   }
 
-  /** Tasten im Fronten-Fenster: Zeilen wie die Tastatur (1–4 Oben, Q–R Mitte, A–F Unten). true = erledigt. */
-  frontKey(key: string): boolean {
-    if (!this.frontOpen()) return false;
-    const row = FRONT_KEYS.findIndex((k) => k.includes(key));
-    if (row < 0) return false;
-    const stance = STANCES[FRONT_KEYS[row]!.indexOf(key)];
-    if (!stance) return false;
-    this.d.action('stance', { route: ROUTES[row]!, stance });
-    return true;
-  }
-
   private frontEl: HTMLElement | null = null;
   private frontSig = '';
 
@@ -269,13 +258,13 @@ export class HudC {
       else home[e.mover.route]++;
     }
     let html = `<div class="cf-title"><b>Fronten</b> · Haltung je Lane, Wechsel greift nach ${world.rules.front.stanceChangeSeconds} s<button type="button" class="cf-close" data-action="c-pop" data-pop="front" title="Schließen (Esc)">✕</button></div>`;
-    ROUTES.forEach((r, row) => {
+    ROUTES.forEach((r) => {
       const pend = p.pendingStance[r];
       html += `<span class="cf-lane">${ROUTE_NAMES[r][0]!.toUpperCase()}${ROUTE_NAMES[r].slice(1)}<small>${home[r]} hier${away[r] ? ` · ${away[r]} im Angriff` : ''}</small></span>`;
-      STANCES.forEach((st, col) => {
+      STANCES.forEach((st) => {
         const on = p.stance[r] === st;
         const pd = pend?.stance === st;
-        html += `<button type="button" class="cf-btn${on ? ' on' : ''}${pd ? ' pend' : ''}" data-action="stance" data-route="${r}" data-stance="${st}" ${canAct ? '' : 'disabled'} title="${esc(`${STANCE_NAMES[st]}: ${STANCE_TIP[st]}${on && pend ? ' – Klick bricht die laufende Umstellung ab' : ''}`)}"><span class="cf-g">${STANCE_GLYPH[st]}</span> ${STANCE_NAMES[st]}<kbd>${FRONT_KEYS[row]![col]!.toUpperCase()}</kbd></button>`;
+        html += `<button type="button" class="cf-btn${on ? ' on' : ''}${pd ? ' pend' : ''}" data-action="stance" data-route="${r}" data-stance="${st}" ${canAct ? '' : 'disabled'} title="${esc(`${STANCE_NAMES[st]}: ${STANCE_TIP[st]}${on && pend ? ' – Klick bricht die laufende Umstellung ab' : ''}`)}"><span class="cf-g">${STANCE_GLYPH[st]}</span> ${STANCE_NAMES[st]}</button>`;
       });
       html += `<span class="cf-cd">${pend ? `→ ${STANCE_GLYPH[pend.stance]} ${secs(pend.tick)} s` : ''}</span>`;
     });
@@ -293,11 +282,6 @@ export class HudC {
     const level = LEVELS.find((l) => l.key === key);
     if (level) {
       this.setLevel(level.id);
-      return true;
-    }
-    const lane = ROUTES.find((r) => LANE_KEY[r] === key);
-    if (lane) {
-      this.focusLane(lane);
       return true;
     }
     return false;

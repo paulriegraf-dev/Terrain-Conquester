@@ -123,6 +123,16 @@ die bestehenden Bausteine nur neu an und ergänzt, was das Mock-up zusätzlich h
 - Afterfix (Nutzer, 05.11.): kleine Bildschirme, Tutorial, Nebel am Boden; Leistung bei großen Gefechten nach der
   nächsten Etappe. Die Aktionsleiste wird später schöner (z. B. Konsole wie Warcraft 3) – dann 2–3 Varianten.
 
+## Steuerung nach dem ersten Anspielen (05.11. spät, Nutzer)
+- **Navigation:** WASD oder Pfeiltasten gedrückt halten (Tempo je Zoomstufe), linke Maustaste ziehen, mittlere Maustaste,
+  Minimap. Grundsatz des Nutzers: gespielt wird über Klicks, nicht über viele Tastenkürzel.
+- Tasten in der 2,5D-Ansicht: 1–4 Zoomstufen, Tab nächste Lane. Befehle auf W/A/S/D (Erdwall, Fronten, Stufe, Tarnen)
+  und im Hauptmenü auf 1–4 (Bauen) gehen mit **Shift**; das Raster zeigt sie mit ⇧. Lanes und Fronten nur per Klick.
+- **Fronten-Fenster** wie im Mock-up (HUD-Lanes, Knopf „Fronten“, ⇧A).
+- **Sammeln vor der Fabrik** (Variante C, Regel `rules.muster`, auch in der alten Ansicht): neue Truppen laufen erst
+  2 Kacheln vor ihre Fabrik Richtung Route, stehen dort mindestens 2 s (höchstens 6 s) und ziehen dann zur Grenze –
+  man sieht, zu welcher Fabrik/Lane sie gehören. Vergleich mit/ohne: `npx tsx scripts/experiment.ts nomuster …`.
+
 ## Leistung (05.11. spät, gemessen im KI-gegen-KI-Gefecht, 4×, ~10 min Spielzeit)
 Gemessen headless (Software-Grafik); entscheidend sind die JavaScript-Anteile je Bild:
 - Geländeänderung (Erdwall, Tausch, Beschwörung): vorher ganze Karte neu gemalt, Spitzen bis 100 ms → jetzt nur der

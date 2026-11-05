@@ -106,7 +106,7 @@ export class Hud {
    * Variante C (Nutzer, 05.11.): Im Hauptmenü des Befehlsrasters liegen 1–4 und Q/W/E auf der Ansicht (wie im Mock-up);
    * die Befehle dort wandern auf Shift + dieselbe Taste. Diese Tasten zeigt das Raster dann mit ⇧.
    */
-  shiftedKeys: ReadonlySet<string> | null = null;
+  shiftedKey: ((key: string, root: boolean) => boolean) | null = null;
 
   constructor(
     private readonly doc: Document,
@@ -525,7 +525,7 @@ export class Hud {
       .map((b) => {
         const data = Object.entries(b.data ?? {}).map(([k, v]) => ` data-${k}="${escapeHtml(v)}"`).join('');
         const short = b.cost !== undefined && energy < b.cost;
-        const shifted = !!this.shiftedKeys && set.title === ROOT_TITLE && this.shiftedKeys.has(b.key);
+        const shifted = !!this.shiftedKey && this.shiftedKey(b.key, set.title === ROOT_TITLE);
         const keyLabel = b.key === 'escape' ? 'Esc' : b.key === 'enter' ? '↵' : shifted ? `⇧${b.key}` : b.key;
         if (b.spacer) {
           return `<div class="cmd info" data-tip="${escapeHtml(b.tip)}"><span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.label)}</span></div>`;
