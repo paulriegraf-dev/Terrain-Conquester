@@ -2,7 +2,7 @@
  * Feuergruppen (05.11.): Übersicht und Messung.
  *
  *   npx tsx scripts/feuergruppen.ts tabelle                 Geschosse je Salve und je Sekunde je Einheit (Zielwert ≤ 2,5)
- *   npx tsx scripts/feuergruppen.ts messung 2 [impact]      je Paarung und Karte 2 Partien: Schaden theoretisch/geliefert,
+ *   npx tsx scripts/feuergruppen.ts messung 2 [fire]        je Paarung und Karte 2 Partien (Standard: Schaden beim Einschlag; fire = alt): Schaden theoretisch/geliefert,
  *                                                          Überschuss, im Flug verfallen, blockiert; Geschosse/s im Bild
  *
  * Geschosse/s im Bild: dichtester Bildausschnitt (16 × 10 Kacheln, ungefähr die mittlere Zoomstufe), gezählt über die
@@ -18,7 +18,7 @@ import { runAiMatch } from '../src/match';
 import { fireGroupWeights } from '../src/sim/systems/combat';
 import type { FireStat } from '../src/sim/world';
 
-const [mode = 'tabelle', perArg = '2', variant = 'fire'] = process.argv.slice(2);
+const [mode = 'tabelle', perArg = '2', variant = 'impact'] = process.argv.slice(2);
 const num = (x: number, d = 2): string => x.toFixed(d).replace('.', ',');
 const LIMIT = 2.5;
 
@@ -37,7 +37,7 @@ if (mode === 'tabelle') {
   }
 } else {
   const per = Math.max(1, Number(perArg));
-  const rules = variant === 'impact' ? { projectiles: { ...RULES.projectiles, impact: true } } : {};
+  const rules = variant === 'fire' ? { projectiles: { ...RULES.projectiles, impact: false } } : {};
   const pairs: [FactionId, FactionId][] = [['technoclan', 'myriaden'], ['technoclan', 'terraformer'], ['myriaden', 'terraformer']];
   const total = new Map<string, FireStat>();
   const rateNew: number[] = [];
@@ -92,12 +92,12 @@ if (mode === 'tabelle') {
     }
   }
   const pct = (a: number, b: number): string => (b > 0 ? `${num((100 * a) / b, 1)} %` : '–');
-  console.log(`Messung „${variant === 'impact' ? 'Schaden beim Einschlag' : 'Schaden beim Abfeuern'}“: ${games} Partien (${MAPS.length} Karten × 3 Paarungen × ${per})\n`);
-  console.log('| Einheit | Salven | Geschosse | Schüsse (alt sichtbar) | Schaden theoretisch | angekommen | angerichtet | Überschuss-Verlust | im Flug verfallen | blockiert (s) |');
-  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  console.log(`Messung „${variant === 'fire' ? 'Schaden beim Abfeuern (alt)' : 'Schaden beim Einschlag mit Nachrücker'}“: ${games} Partien (${MAPS.length} Karten × 3 Paarungen × ${per})\n`);
+  console.log('| Einheit | Salven | Geschosse | Schüsse (alt sichtbar) | Schaden theoretisch | angekommen | angerichtet | Überschuss-Verlust | im Flug verfallen | Nachrücker getroffen | blockiert (s) |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|');
   const name = (id: string): string => (UNITS[id as UnitId] ? UNITS[id as UnitId].name : id);
   for (const [id, f] of [...total].sort((a, b) => b[1].dealt - a[1].dealt)) {
-    console.log(`| ${name(id)} | ${f.salvos} | ${f.projectiles} | ${Math.round(f.shots)} | ${Math.round(f.theory)} | ${Math.round(f.potential)} (${pct(f.potential, f.theory)}) | ${Math.round(f.dealt)} | ${pct(f.potential - f.dealt, f.potential)} | ${pct(f.lostInFlight, f.potential + f.lostInFlight)} | ${num(f.blockedTicks / 20, 0)} |`);
+    console.log(`| ${name(id)} | ${f.salvos} | ${f.projectiles} | ${Math.round(f.shots)} | ${Math.round(f.theory)} | ${Math.round(f.potential)} (${pct(f.potential, f.theory)}) | ${Math.round(f.dealt)} | ${pct(f.potential - f.dealt, f.potential)} | ${pct(f.lostInFlight, f.theory)} | ${pct(f.caught, f.theory)} | ${num(f.blockedTicks / 20, 0)} |`);
   }
   const stat = (xs: number[]): string => {
     const s = [...xs].filter((x) => x > 0).sort((a, b) => a - b);

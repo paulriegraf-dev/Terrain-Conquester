@@ -5,3 +5,4 @@ Erzeugt aus den Rohdaten der Läufe (`damageBy`/`damageTo` je Spieler). Zusammen
 
 - `2026-10-25-u12-…`: aktueller Stand, 216 Partien (3 Paarungen × 6 Karten × 12).
 - `2026-10-25-u13-…`: Technoclan mit Schwer-Spam, 144 Partien (2 Paarungen × 6 Karten × 12).
+- `2026-11-05-feuergruppen.md`: Feuergruppen und Schaden beim Einschlag – Geschosse je Einheit, Vergleich alt/neu (216 Partien), Messung je Einheit.
