@@ -4,8 +4,9 @@
  * Simulation. Bodenmarken (Gebiet, Zonen, Stationen, Vorschauen, Nebel …) zeichnet der klassische Renderer im Modus
  * `overlayOnly` in ein eigenes Bild, das hier als Textur auf dem Gelände liegt.
  *
- * Kamera: orthografisch und schräg (Neigung ELEV). Damit bleibt die Abbildung Kachel ↔ Bildschirm linear – Scrollen,
- * Zoom, Mausklicks und die Bedienung von game.ts funktionieren wie mit der klassischen Ansicht.
+ * Kamera (Etappe 2): perspektivisch wie im Mock-up – Neigung und Brennweite je Zoomstufe (weit: steil und flach, nah:
+ * schräg mit Tilt-Shift), Verschieben mit mittlerer Maustaste oder Pfeiltasten, Zoom über das Mausrad bzw. die Zoom-
+ * Knöpfe von game.ts. Mausklicks treffen per Strahl das Gelände.
  * Die Darstellung liest nur; die Simulation bleibt unverändert.
  */
 import * as THREE from 'three';
@@ -25,15 +26,14 @@ import { MIRROR_COLORS, attackTime, facing, projectileShown } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES } from './sprites';
 import type { UnitSprite } from './sprites';
+import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
 
-/** Kameraneigung (Grad über dem Horizont): steil genug für Übersicht, flach genug für Höhe und Figuren. */
-const ELEV = (56 * Math.PI) / 180;
-const SIN = Math.sin(ELEV);
-const COS = Math.cos(ELEV);
-/** Rand oben (Kacheln) für hohe Figuren und Berge in der obersten Reihe, unten etwas Luft. */
-const TOP = 2.2;
-const BOTTOM = 0.4;
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+/** Kameraabstand je Zoom 0 … 1 (wie im Mock-up). */
+const distFor = (z: number): number => lerp(78, 9, z * z * 0.35 + z * 0.65);
+/** Zoom aus game.ts (0,6 … 3, 1 = Standard) → Kamerazoom 0 … 1. */
+const zoomToCam = (zoom: number): number => Math.max(0, Math.min(1, 0.42 + Math.log2(zoom) * 0.4));
 /** Geländehöhe je Bodenart (Index wie TERRAIN_LIST: Wiese, Wald, Matsch, Schnee, Gebirge, Schlucht, Geröll, Erdwall, Ödland). */
 const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
 const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
@@ -70,6 +70,11 @@ interface Shot {
   beam: boolean;
   heavy: boolean;
   color: string;
+  /** Mündungs- und Einschlag-Effekt (PixelFX), Blickrichtung des Schützen. */
+  impact?: PfxUse | null;
+  muzzle?: PfxUse | null;
+  fired?: boolean;
+  flip?: boolean;
 }
 
 interface Fx {
@@ -77,28 +82,49 @@ interface Fx {
   start: number;
   life: number;
   grow: number;
+  /** PixelFX: Bilder des Sheets, Bilder je Tick. Ohne = aufblitzender Kreis. */
+  frames?: THREE.Texture[];
+  rate?: number;
 }
 
 export class Hd2dRenderer {
   private readonly gl: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+  private readonly camera = new THREE.PerspectiveCamera(42, 1, 0.1, 600);
+  /** Kamera: Ziel (Kachelkoordinaten) und Zoom, jeweils mit weichem Nachführen. */
+  private readonly cam = { z: 0.42, tz: 0.42, cx: 0, cz: 0, tcx: 0, tcz: 0, init: false };
+  private readonly ray = new THREE.Raycaster();
+  private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private mouse: { x: number; y: number } | null = null;
+  private lastFrame = 0;
+  private width = 1;
+  private height = 1;
+  private readonly tiltTop: HTMLDivElement;
+  private readonly tiltBottom: HTMLDivElement;
   private readonly overlayCanvas = document.createElement('canvas');
   private readonly overlay: Renderer;
   private readonly overlayTex: THREE.CanvasTexture;
-  private tile = 16;
   private viewX0 = 0;
   private viewCols = 0;
   private rows = 0;
   private terrainKey = '';
   private ground: THREE.Mesh | null = null;
   private overlayMesh: THREE.Mesh | null = null;
-  private readonly trees = new THREE.Group();
+  private baseGround: HTMLCanvasElement | null = null;
+  private readonly groundComposite = document.createElement('canvas');
+  private footKey = '';
+  private bbMesh: THREE.Mesh | null = null;
+  private bbMat: THREE.ShaderMaterial | null = null;
+  private readonly fogCanvas = document.createElement('canvas');
+  private fogTex: THREE.CanvasTexture | null = null;
+  private fogTick = -1;
   private readonly structures = new Map<number, THREE.Object3D>();
   private readonly squads = new Map<number, Squad>();
   private readonly shots: Shot[] = [];
   private readonly fx: Fx[] = [];
-  private readonly flights = new Map<object, THREE.Sprite>();
+  private readonly pfxFrames = new Map<PfxName, THREE.Texture[]>();
+  private tps = 20;
+  private readonly flights = new Map<World['flights'][number], THREE.Sprite>();
   private lastSeq = 0;
   private worldRef: World | null = null;
   private readonly images = new Map<string, HTMLImageElement>();
@@ -114,8 +140,50 @@ export class Hd2dRenderer {
     const sun = new THREE.DirectionalLight('#ffe9c4', 1.6);
     sun.position.set(-20, 32, 14);
     this.scene.add(sun);
-    this.scene.add(this.trees);
     for (const src of [...Object.values(UNIT_SHEETS), ...Object.values(TILESETS), BUILDINGS_SHEET]) this.image(src);
+    this.scene.fog = new THREE.Fog('#0b0d12', 140, 260);
+    // Tilt-Shift (Nahsicht): unscharfe Streifen oben und unten wie im Mock-up.
+    const strip = (top: boolean): HTMLDivElement => {
+      const d = document.createElement('div');
+      d.style.cssText = `position:absolute;left:0;right:0;${top ? 'top:0' : 'bottom:0'};height:22%;pointer-events:none;opacity:0;transition:opacity .4s;` +
+        `backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);mask-image:linear-gradient(${top ? 'to bottom' : 'to top'},#000,transparent);-webkit-mask-image:linear-gradient(${top ? 'to bottom' : 'to top'},#000,transparent);z-index:2`;
+      return d;
+    };
+    this.loadPfx();
+    this.tiltTop = strip(true);
+    this.tiltBottom = strip(false);
+    const host = canvas.parentElement;
+    if (host) {
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      host.append(this.tiltTop, this.tiltBottom);
+    }
+    // Verschieben: mittlere Maustaste ziehen, Pfeiltasten; Mausposition für Zoom zum Zeiger.
+    let drag: { x: number; y: number; cx: number; cz: number } | null = null;
+    canvas.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 1) return;
+      ev.preventDefault();
+      drag = { x: ev.clientX, y: ev.clientY, cx: this.cam.tcx, cz: this.cam.tcz };
+    });
+    window.addEventListener('pointermove', (ev) => {
+      // Nur über der Szene merken: Zoom per Knopf (Maus unter dem Bild) soll nicht zum Kartenrand ziehen.
+      this.mouse = ev.target === canvas ? { x: ev.clientX, y: ev.clientY } : null;
+      if (!drag) return;
+      const k = (distFor(this.cam.z) / Math.max(1, this.height)) * 1.2;
+      this.cam.tcx = drag.cx - (ev.clientX - drag.x) * k;
+      this.cam.tcz = drag.cz - (ev.clientY - drag.y) * k * 1.4;
+    });
+    window.addEventListener('pointerup', () => (drag = null));
+    window.addEventListener('keydown', (ev) => {
+      const tag = (ev.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const step = distFor(this.cam.z) * 0.12;
+      if (ev.key === 'ArrowLeft') this.cam.tcx -= step;
+      else if (ev.key === 'ArrowRight') this.cam.tcx += step;
+      else if (ev.key === 'ArrowUp') this.cam.tcz -= step;
+      else if (ev.key === 'ArrowDown') this.cam.tcz += step;
+      else return;
+      ev.preventDefault();
+    });
   }
 
   // ------------------------------------------------------------------ Schnittstelle wie Renderer (game.ts)
@@ -133,28 +201,127 @@ export class Hd2dRenderer {
 
   resize(availableWidth: number, availableHeight: number, world: World, zoom = 1): void {
     const { x0, cols } = Renderer.visibleColumns(world);
+    const first = !this.cam.init || this.viewCols !== cols || this.viewX0 !== x0;
     this.viewX0 = x0;
     this.viewCols = cols;
     this.rows = world.map.height;
-    const hTiles = this.rows * SIN + TOP + BOTTOM;
-    const fit = Math.min(availableWidth / cols, availableHeight / hTiles);
-    this.tile = Math.max(5, Math.min(zoom > 1 ? 72 : 40, Math.floor(Math.min(40, fit) * zoom)));
-    const w = this.tile * cols;
-    const h = Math.round(this.tile * hTiles);
+    const w = Math.max(200, Math.floor(availableWidth));
+    const h = Math.max(160, Math.floor(Number.isFinite(availableHeight) ? availableHeight : w * 0.56));
+    this.width = w;
+    this.height = h;
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
-    this.gl.setPixelRatio(Math.min(this.tile >= 40 ? 1 : 2, window.devicePixelRatio || 1));
+    this.gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.gl.setSize(w, h, false);
-    const cz = this.rows / 2;
-    this.camera.left = -cols / 2;
-    this.camera.right = cols / 2;
-    this.camera.top = (this.rows / 2) * SIN + TOP;
-    this.camera.bottom = -((this.rows / 2) * SIN + BOTTOM);
-    this.camera.position.set(x0 + cols / 2, 100 * SIN, cz + 100 * COS);
-    this.camera.rotation.set(-ELEV, 0, 0);
-    this.camera.updateProjectionMatrix();
-    this.overlay.resize(Math.min(32, Math.max(12, this.tile)) * cols, Infinity, world, 1);
+    this.camera.aspect = w / h;
+    // Zoom von game.ts: Kamerazoom; beim Hineinzoomen ein Stück zum Mauszeiger hin.
+    const tz = zoomToCam(zoom);
+    if (!first && tz > this.cam.tz + 1e-3 && this.mouse) {
+      const p = this.groundHit(this.mouse.x, this.mouse.y);
+      if (p) {
+        this.cam.tcx += (p.x - this.cam.tcx) * 0.35;
+        this.cam.tcz += (p.y - this.cam.tcz) * 0.35;
+      }
+    }
+    this.cam.tz = tz;
+    if (first) {
+      this.cam.z = tz;
+      this.cam.cx = this.cam.tcx = x0 + cols / 2;
+      this.cam.cz = this.cam.tcz = this.rows / 2;
+      this.cam.init = true;
+    }
+    this.applyCamera();
+    // Bodenmarken: eigenes Bild in Kachelauflösung 24 px (gerastert genug, klein genug).
+    this.overlay.resize(24 * cols, Infinity, world, 1);
     this.terrainKey = '';
+  }
+
+  /** Kamera wie im Mock-up: Abstand, Neigung (64° weit … 34° nah), Brennweite, Nebel und Tilt-Shift je Zoom. */
+  private applyCamera(): void {
+    const c = this.cam;
+    // Ziel innerhalb der sichtbaren Karte halten
+    c.tcx = Math.max(this.viewX0, Math.min(this.viewX0 + this.viewCols, c.tcx));
+    c.tcz = Math.max(0, Math.min(this.rows, c.tcz));
+    const z = c.z;
+    const dist = distFor(z) * Math.max(0.45, Math.min(1.4, (this.viewCols / 60) * (1.6 / Math.max(1, this.camera.aspect))));
+    const tilt = (lerp(64, 34, z) * Math.PI) / 180;
+    this.camera.fov = lerp(34, 46, z);
+    this.camera.position.set(c.cx, Math.sin(tilt) * dist, c.cz + Math.cos(tilt) * dist);
+    this.camera.lookAt(c.cx, 0, c.cz);
+    this.camera.updateProjectionMatrix();
+    this.keepInsideMap();
+    const fog = this.scene.fog as THREE.Fog;
+    fog.near = lerp(140, 22, z) * (dist / distFor(z));
+    fog.far = lerp(260, 46, z) * (dist / distFor(z));
+    const ts = Math.max(0, (z - 0.5) / 0.5);
+    this.tiltTop.style.opacity = this.tiltBottom.style.opacity = String(ts);
+    const blur = `blur(${(2 + 4 * z).toFixed(1)}px)`;
+    this.tiltTop.style.backdropFilter = this.tiltBottom.style.backdropFilter = blur;
+  }
+
+  /**
+   * Bildränder bleiben über der Karte (kein Schwarz neben dem Spielfeld): Mitte des unteren/oberen bzw. linken/rechten
+   * Bildrands gegen y = 0 schneiden und das Ziel so weit verschieben, wie der Rand übersteht.
+   */
+  private keepInsideMap(): void {
+    const c = this.cam;
+    this.camera.updateMatrixWorld();
+    const hit = (nx: number, ny: number): THREE.Vector3 | null => {
+      this.ray.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
+      return this.ray.ray.intersectPlane(this.groundPlane, new THREE.Vector3());
+    };
+    let dz = 0;
+    let dx = 0;
+    const bottom = hit(0, -1);
+    const top = hit(0, 1);
+    if (bottom && top && bottom.z - top.z >= this.rows) dz = this.rows / 2 - (bottom.z + top.z) / 2;
+    else if (bottom && bottom.z > this.rows) dz = this.rows - bottom.z;
+    else if (top && top.z < -1.5) dz = -1.5 - top.z;
+    const left = hit(-1, -1);
+    const right = hit(1, -1);
+    if (left && right) {
+      const x0 = this.viewX0;
+      const x1 = this.viewX0 + this.viewCols;
+      if (right.x - left.x >= x1 - x0) dx = (x0 + x1) / 2 - (left.x + right.x) / 2;
+      else if (left.x < x0) dx = x0 - left.x;
+      else if (right.x > x1) dx = x1 - right.x;
+    }
+    if (Math.abs(dx) < 1e-3 && Math.abs(dz) < 1e-3) return;
+    c.cx += dx;
+    c.cz += dz;
+    c.tcx += dx;
+    c.tcz += dz;
+    this.camera.position.x += dx;
+    this.camera.position.z += dz;
+    this.camera.updateMatrixWorld();
+  }
+
+  /** Weiches Nachführen von Zoom und Ziel (jedes Bild). */
+  private stepCamera(): void {
+    const t = performance.now();
+    const dt = this.lastFrame ? Math.min(0.05, (t - this.lastFrame) / 1000) : 0.016;
+    this.lastFrame = t;
+    const c = this.cam;
+    const k = Math.min(1, dt * 6);
+    c.z += (c.tz - c.z) * k;
+    c.cx += (c.tcx - c.cx) * k;
+    c.cz += (c.tcz - c.cz) * k;
+    this.applyCamera();
+  }
+
+  /** Bodenpunkt (Kachelkoordinaten) unter einer Bildschirmposition – Strahl gegen das Gelände, sonst gegen y = 0. */
+  private groundHit(clientX: number, clientY: number): Vec2 | null {
+    const r = this.canvas.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return null;
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1));
+    this.ray.setFromCamera(ndc, this.camera);
+    if (this.ground) {
+      const hit = this.ray.intersectObject(this.ground, false)[0];
+      if (hit) return { x: hit.point.x, y: hit.point.z };
+    }
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const p = new THREE.Vector3();
+    return this.ray.ray.intersectPlane(plane, p) ? { x: p.x, y: p.z } : null;
   }
 
   cellAt(clientX: number, clientY: number, world: World): { x: number; y: number } | null {
@@ -165,24 +332,23 @@ export class Hd2dRenderer {
   }
 
   pointAt(clientX: number, clientY: number, _world: World): Vec2 {
-    const r = this.canvas.getBoundingClientRect();
-    const sx = ((clientX - r.left) / r.width) * this.viewCols;
-    const sy = ((clientY - r.top) / r.height) * (this.rows * SIN + TOP + BOTTOM);
-    return { x: this.viewX0 + sx, y: (sy - TOP) / SIN };
+    return this.groundHit(clientX, clientY) ?? { x: -1, y: -1 };
   }
 
   clientOf(x: number, y: number, _world: World): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect();
-    const hTiles = this.rows * SIN + TOP + BOTTOM;
-    return { x: r.left + ((x - this.viewX0) / this.viewCols) * r.width, y: r.top + ((TOP + y * SIN) / hTiles) * r.height };
+    const v = new THREE.Vector3(x, 0, y).project(this.camera);
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
   }
 
   tileOnScreen(): number {
-    const r = this.canvas.getBoundingClientRect();
-    return r.width / Math.max(1, this.viewCols);
+    const a = new THREE.Vector3(this.cam.cx, 0, this.cam.cz).project(this.camera);
+    const b = new THREE.Vector3(this.cam.cx + 1, 0, this.cam.cz).project(this.camera);
+    return Math.abs(b.x - a.x) * 0.5 * this.width;
   }
 
   draw(world: World, alpha: number, view: ViewState): void {
+    this.tps = world.tps;
     if (this.worldRef !== world) {
       this.worldRef = world;
       this.clearDynamic();
@@ -190,12 +356,15 @@ export class Hd2dRenderer {
       this.terrainKey = '';
     }
     const now = world.tick + alpha;
+    this.stepCamera();
     this.ensureTerrain(world);
     this.overlay.draw(world, alpha, view);
     this.overlayTex.needsUpdate = true;
     const visibleTo = (e: Entity): boolean => !view.fog || view.human === null || world.isVisibleTo(view.human, e);
+    this.updateFogMap(world, view);
     this.processEvents(world, now);
     this.drawStructures(world, view, visibleTo);
+    this.updateFootprints(world, visibleTo);
     this.drawUnits(world, alpha, now, visibleTo);
     this.drawFlights(world, alpha);
     this.updateShots(now, view);
@@ -270,7 +439,12 @@ export class Hd2dRenderer {
       pos.setZ(i, h);
     }
     geo.computeVertexNormals();
-    const tex = new THREE.CanvasTexture(this.groundCanvas(world, at));
+    this.baseGround = this.groundCanvas(world, at);
+    this.groundComposite.width = this.baseGround.width;
+    this.groundComposite.height = this.baseGround.height;
+    this.groundComposite.getContext('2d')!.drawImage(this.baseGround, 0, 0);
+    this.footKey = '';
+    const tex = new THREE.CanvasTexture(this.groundComposite);
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = THREE.NearestFilter;
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -361,44 +535,184 @@ export class Hd2dRenderer {
     return c;
   }
 
-  /** Bäume auf Wald (und vereinzelt Wiese/Schnee/Ödland) als Billboards aus dem Deko-Atlas. */
+  /**
+   * Bäume und Deko (Etappe 2, aus dem Mock-up): alle als Billboards in EINEM Zeichenaufruf, Deko-Dichte je Zoom
+   * (Nahsicht voll, ganze Karte keine), im Nebel abgedunkelt.
+   */
   private buildTrees(world: World, at: (x: number, y: number) => number): void {
-    for (const c of [...this.trees.children]) {
-      this.trees.remove(c);
-      ((c as THREE.Sprite).material as THREE.SpriteMaterial).dispose();
+    if (this.bbMesh) {
+      this.scene.remove(this.bbMesh);
+      this.bbMesh.geometry.dispose();
+      this.bbMesh = null;
     }
-    const atlas = this.image(TILESETS.tiles2);
-    if (!this.ready(atlas)) return;
-    const forest = [0, 1, 2, 0, 1, 2, 4, 4];
-    const add = (i: number, x: number, y: number, sc: number): void => {
-      const tex = this.frame(TILESETS.tiles2, i * 64, 32, 64);
-      if (!tex) return;
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
-      const size = (64 / 36) * sc;
-      s.scale.set(size, size, 1);
-      s.center.set(0.5, 0.06);
-      s.position.set(x, HEIGHT[at(Math.floor(x), Math.floor(y))] ?? 0, y);
-      this.trees.add(s);
+    const atlasImg = this.image(TILESETS.tiles2);
+    if (!this.ready(atlasImg)) return;
+    if (!this.bbMat) {
+      const atlas = new THREE.Texture(atlasImg);
+      atlas.magFilter = THREE.NearestFilter;
+      atlas.minFilter = THREE.NearestFilter;
+      // Eigener Shader ohne Farbraum-Umrechnung: Textur roh lesen, roh ausgeben (wie im Mock-up).
+      atlas.colorSpace = THREE.NoColorSpace;
+      atlas.needsUpdate = true;
+      this.fogTex = new THREE.CanvasTexture(this.fogCanvas);
+      this.fogTex.magFilter = THREE.LinearFilter;
+      this.bbMat = new THREE.ShaderMaterial({
+        vertexShader: BB_VS,
+        fragmentShader: BB_FS,
+        uniforms: { map: { value: atlas }, fogMap: { value: this.fogTex }, fogOn: { value: 0 }, density: { value: 1 }, area: { value: new THREE.Vector4(0, 0, 1, 1) } },
+      });
+    }
+    const P: number[] = [];
+    const C: number[] = [];
+    const U: number[] = [];
+    const S: number[] = [];
+    const L: number[] = [];
+    const I: number[] = [];
+    let n = 0;
+    const add = (x: number, y: number, z: number, w: number, h: number, ux: number, uy: number, uw: number, uh: number, lod: number): void => {
+      const u0 = ux / 1024;
+      const v0 = 1 - (uy + uh) / 224;
+      for (const [cx, cy] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]] as const) {
+        P.push(x, y, z);
+        C.push(cx, cy);
+        U.push(u0, v0, uw / 1024, uh / 224);
+        S.push(w, h);
+        L.push(lod);
+      }
+      I.push(n, n + 1, n + 2, n, n + 2, n + 3);
+      n += 4;
     };
+    const tree = (i: number, x: number, y: number, z: number, sc: number): void => {
+      const s = (64 / 36) * sc;
+      add(x, y - s * 0.06, z, s, s, i * 64, 32, 64, 64, 0);
+    };
+    const deco = (i: number, x: number, y: number, z: number, sc: number, lod: number): void => {
+      const s = (32 / 84) * sc;
+      add(x, y - s * 0.12, z, s, s, (i % 32) * 32, 96 + Math.floor(i / 32) * 32, 32, 32, lod);
+    };
+    // Deko je Bodenart (Mock-up-Index) – Sim-Index → Mock-up-Index
+    const MOCK = [0, 1, 2, 3, 4, 5, 8, 6, 7];
+    const DECO: Record<number, number[]> = {
+      0: [0, 0, 0, 0, 1, 1, 1, 6, 6, 2, 3, 35, 61, 4, 20], 1: [8, 9, 10, 11, 12, 13, 14, 15, 33, 34, 36, 42, 43, 44, 55, 58, 59, 32],
+      2: [16, 17, 18, 19, 38, 40, 50, 51, 16, 17], 3: [22, 24, 25, 47], 4: [22, 23, 24, 25, 41, 47, 60], 5: [41, 22, 20, 21],
+      6: [20, 21, 25, 29, 30, 26], 8: [20, 21, 21, 22, 25, 41, 26, 31, 20], 7: [5, 27, 28, 48, 49, 52, 57, 63, 26, 5],
+    };
+    const PER_TILE: Record<number, number> = { 0: 0.9, 1: 0.7, 2: 0.8, 3: 0.3, 4: 0.25, 5: 0.3, 6: 0.3, 7: 0.7, 8: 0.8 };
+    const FOREST = [0, 1, 2, 0, 1, 2, 4, 4];
     for (let y = 0; y < this.rows; y++) {
       for (let x = this.viewX0; x < this.viewX0 + this.viewCols; x++) {
-        const t = at(x, y);
-        const r = hash(x * 3 + 1, y * 5 + 2);
+        const st = at(x, y);
+        const t = MOCK[st] ?? 0;
+        let k = 0;
+        const R = (): number => hash(x * 13 + k++, y * 7 + st);
+        const pk = (a: number[]): number => a[Math.floor(R() * a.length) % a.length]!;
+        const h = st === 4 ? 0.25 : (HEIGHT[st] ?? 0);
         if (t === 1) {
-          if (r < 0.7) add(forest[Math.floor(hash(x, y + 9) * forest.length)]!, x + 0.3 + hash(x + 1, y) * 0.4, y + 0.3 + hash(x, y + 1) * 0.4, 0.85 + r * 0.3);
+          if (R() < 0.7) tree(pk(FOREST), x + 0.3 + R() * 0.4, h, y + 0.3 + R() * 0.4, 0.85 + R() * 0.3);
           else {
-            add(forest[Math.floor(hash(x + 4, y) * forest.length)]!, x + 0.2 + hash(x + 2, y) * 0.3, y + 0.2, 0.7);
-            add(forest[Math.floor(hash(x + 5, y) * forest.length)]!, x + 0.6, y + 0.6 + hash(x, y + 2) * 0.3, 0.7);
+            tree(pk(FOREST), x + 0.15 + R() * 0.3, h, y + 0.15 + R() * 0.3, 0.65 + R() * 0.15);
+            tree(pk(FOREST), x + 0.55 + R() * 0.3, h, y + 0.55 + R() * 0.3, 0.65 + R() * 0.15);
           }
-        } else if (t === 0 && r < 0.025) add(4, x + 0.5, y + 0.5, 0.8);
-        else if (t === 3 && r < 0.1) add(11, x + 0.5, y + 0.5, 0.8);
-        else if (t === 8 && r < 0.08) add(8, x + 0.5, y + 0.5, 0.75);
+          if (R() < 0.08) tree(pk([15, 10]), x + R(), h, y + R(), 0.6);
+        }
+        if (t === 0 && R() < 0.025) tree(4, x + 0.5, h, y + 0.5, 0.8 + R() * 0.2);
+        if (t === 3 && R() < 0.12) tree(11, x + 0.5, h, y + 0.5, 0.8 + R() * 0.2);
+        if (t === 7 && R() < 0.08) tree(pk([8, 9]), x + 0.5, h, y + 0.5, 0.75);
+        const per = PER_TILE[t] ?? 0;
+        const cnt = Math.floor(per) + (R() < per % 1 ? 1 : 0);
+        const list = DECO[t];
+        if (list) for (let j = 0; j < cnt; j++) deco(pk(list), x + 0.1 + R() * 0.8, h, y + 0.1 + R() * 0.8, 0.8 + R() * 0.4, 0.02 + R() * 0.98);
       }
     }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('corner', new THREE.Float32BufferAttribute(C, 2));
+    g.setAttribute('uvr', new THREE.Float32BufferAttribute(U, 4));
+    g.setAttribute('sz', new THREE.Float32BufferAttribute(S, 2));
+    g.setAttribute('lod', new THREE.Float32BufferAttribute(L, 1));
+    g.setIndex(I);
+    (this.bbMat.uniforms.area!.value as THREE.Vector4).set(this.viewX0, 0, this.viewCols, this.rows);
+    this.bbMesh = new THREE.Mesh(g, this.bbMat);
+    this.bbMesh.frustumCulled = false;
+    this.scene.add(this.bbMesh);
     void world;
   }
 
+  /** Nebel für Bäume und Deko: Sichtkarte des Spielers (alle paar Ticks). */
+  private updateFogMap(world: World, view: ViewState): void {
+    if (!this.bbMat || !this.fogTex) return;
+    const on = view.fog && view.human !== null;
+    this.bbMat.uniforms.fogOn!.value = on ? 1 : 0;
+    this.bbMat.uniforms.density!.value = Math.max(0, Math.min(1, (this.cam.z - 0.12) / 0.6));
+    if (!on || world.tick === this.fogTick) return;
+    if (world.tick - this.fogTick < 5 && world.tick > this.fogTick) return;
+    this.fogTick = world.tick;
+    const c = this.fogCanvas;
+    if (c.width !== this.viewCols || c.height !== this.rows) {
+      c.width = this.viewCols;
+      c.height = this.rows;
+    }
+    const g = c.getContext('2d')!;
+    const img = g.createImageData(this.viewCols, this.rows);
+    const vis = world.players[view.human!].vision;
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.viewCols; x++) {
+        const i = (y * this.viewCols + x) * 4;
+        img.data[i + 3] = vis.isVisible(this.viewX0 + x, y) ? 0 : 200;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    this.fogTex.needsUpdate = true;
+  }
+
   // ------------------------------------------------------------------ Gebäude
+
+  /**
+   * Fundamente (Leitfaden): fraktionstypischer Boden unter jedem sichtbaren Gebäude, Rand verzahnt mit dem Gelände –
+   * Technoclan Beton, Myriaden bronzefarbene Erde, Terra-Former Erde mit Moos.
+   */
+  private updateFootprints(world: World, visibleTo: (e: Entity) => boolean): void {
+    if (!this.baseGround || !this.ground) return;
+    const list = world.entities.filter((e) => e.alive && e.rect && (e.kind === 'building' || e.kind === 'hq') && (e.kind === 'hq' || visibleTo(e)));
+    const key = list.map((e) => e.id).join(',');
+    if (key === this.footKey) return;
+    this.footKey = key;
+    const TP = 32;
+    const g = this.groundComposite.getContext('2d')!;
+    g.drawImage(this.baseGround, 0, 0);
+    const CW = this.groundComposite.width;
+    const CH = this.groundComposite.height;
+    const img = g.getImageData(0, 0, CW, CH);
+    const d = img.data;
+    const FOOT: Record<FactionId, number[][]> = {
+      technoclan: [[66, 70, 80], [82, 86, 96], [54, 58, 68], [96, 100, 108]],
+      myriaden: [[112, 86, 54], [132, 102, 62], [92, 70, 44], [150, 118, 70]],
+      terraformer: [[86, 70, 46], [70, 94, 50], [100, 82, 54], [58, 80, 42]],
+    };
+    for (const e of list) {
+      const r = e.rect!;
+      const pal = FOOT[world.players[e.owner].faction.id];
+      const cx = (r.x + r.w / 2 - this.viewX0) * TP;
+      const cy = (r.y + r.h / 2) * TP;
+      const R = (Math.max(r.w, r.h) / 2) * TP * 1.05;
+      for (let py = Math.max(0, Math.floor(cy - R * 1.4)); py < Math.min(CH, cy + R * 1.4); py++) {
+        for (let px = Math.max(0, Math.floor(cx - R * 1.4)); px < Math.min(CW, cx + R * 1.4); px++) {
+          const dx = (px - cx) / (R * 1.25);
+          const dy = (py - cy) / (R * 1.1);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0.75 + 0.4 * vnoise(px, py)) continue;
+          const c = pal[Math.floor(hash(px >> 1, py >> 1) * pal.length)]!;
+          const a = dist < 0.55 ? 0.92 : 0.55;
+          const i = (py * CW + px) * 4;
+          d[i] = d[i]! * (1 - a) + c[0]! * a;
+          d[i + 1] = d[i + 1]! * (1 - a) + c[1]! * a;
+          d[i + 2] = d[i + 2]! * (1 - a) + c[2]! * a;
+        }
+      }
+    }
+    g.putImageData(img, 0, 0);
+    ((this.ground.material as THREE.MeshLambertMaterial).map as THREE.Texture).needsUpdate = true;
+  }
 
   private drawStructures(world: World, view: ViewState, visibleTo: (e: Entity) => boolean): void {
     const seen = new Set<number>();
@@ -605,7 +919,10 @@ export class Hd2dRenderer {
       if (ev.type === 'shot' && ev.land !== undefined && ev.shooter !== undefined) this.spawnShot(world, ev, now);
       else if (ev.type === 'shot') this.burst(new THREE.Vector3(ev.to.x, 0.4, ev.to.y), '#ffb02a', 0.9, now, world.tps * 0.4);
       else if (ev.type === 'heal') this.spawnHeal(ev.from, ev.to, now, world.tps);
-      else if (ev.type === 'death' && ev.kind === 'unit') this.burst(new THREE.Vector3(ev.pos.x, 0.3, ev.pos.y), '#9a8a7a', 0.8, now, world.tps * 0.6);
+      else if (ev.type === 'death' && ev.kind === 'unit') {
+        const g = new THREE.Vector3(ev.pos.x, this.heightAt(world, ev.pos.x, ev.pos.y), ev.pos.y);
+        if (!this.playPfx({ name: 'dirt', lift: 0, scale: 0.6 }, g, false, now)) this.burst(g, '#9a8a7a', 0.8, now, world.tps * 0.6);
+      }
     }
   }
 
@@ -641,6 +958,11 @@ export class Hd2dRenderer {
     }
     const to = new THREE.Vector3(ev.to.x, this.heightAt(world, ev.to.x, ev.to.y) + 0.45, ev.to.y);
     const spawn = ev.spawn ?? ev.tick;
+    const fxDef = SHOT_PFX[spr?.attack.projectile ?? ''];
+    const flip = to.x < from.x;
+    const impact: PfxUse | null = fxDef ? fxDef.impact ?? null : { name: FACTION_SPARK[faction], lift: 20 };
+    // Bodennahe Einschläge (Explosion, Erde) am Boden unter dem Ziel, Funken auf Trefferhöhe.
+    if (impact && impact.lift === 0) to.y -= 0.45;
     const land = Math.max(spawn + 1, ev.land!);
     let obj: THREE.Object3D;
     if (look.beam) {
@@ -659,7 +981,7 @@ export class Hd2dRenderer {
     }
     obj.visible = false;
     this.scene.add(obj);
-    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color });
+    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color, impact, flip, muzzle: fxDef?.muzzle ?? null });
   }
 
   private spawnHeal(from: Vec2, to: Vec2, now: number, tps: number): void {
@@ -667,7 +989,7 @@ export class Hd2dRenderer {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.scale.set(0.35, 0.35, 1);
     this.scene.add(s);
-    this.shots.push({ obj: s, from: new THREE.Vector3(from.x, 0.7, from.y), to: new THREE.Vector3(to.x, 0.6, to.y), spawn: now, land: now + tps * 0.5, arc: 0.4, beam: false, heavy: false, color: '#6ff0d0' });
+    this.shots.push({ obj: s, from: new THREE.Vector3(from.x, 0.7, from.y), to: new THREE.Vector3(to.x, 0.6, to.y), spawn: now, land: now + tps * 0.5, arc: 0.4, beam: false, heavy: false, color: '#6ff0d0', impact: { name: 'heal_cyan', lift: 0, scale: 0.5 } });
   }
 
   private updateShots(now: number, view: ViewState): void {
@@ -677,6 +999,10 @@ export class Hd2dRenderer {
       if (now < p.spawn) continue;
       const shown = projectileShown(zoom, p.heavy, k + Math.floor(p.spawn));
       const f = Math.min(1, (now - p.spawn) / (p.land - p.spawn));
+      if (!p.fired) {
+        p.fired = true;
+        if (shown && p.muzzle && zoom !== 'map') this.playPfx(p.muzzle, p.from, !!p.flip, now);
+      }
       if (p.beam) {
         p.obj.visible = shown;
         const m = (p.obj as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -699,7 +1025,50 @@ export class Hd2dRenderer {
     mat.dispose();
     if ((p.obj as THREE.Mesh).geometry) (p.obj as THREE.Mesh).geometry.dispose();
     this.shots.splice(k, 1);
-    if (shown) this.burst(p.to, p.heavy ? '#ffb02a' : p.color, p.heavy ? 0.9 : 0.35, now, p.heavy ? 8 : 5);
+    if (!shown) return;
+    if (p.impact && this.playPfx(p.impact, p.to, !!p.flip, now)) return;
+    this.burst(p.to, p.heavy ? '#ffb02a' : p.color, p.heavy ? 0.9 : 0.35, now, p.heavy ? 8 : 5);
+  }
+
+  /** PixelFX-Sheets in Einzelbilder zerlegen (einmal, nach dem Laden der Bilder). */
+  private loadPfx(): void {
+    for (const [name, d] of Object.entries(PFX) as [PfxName, (typeof PFX)[PfxName]][]) {
+      const img = new Image();
+      img.onload = () => {
+        const frames: THREE.Texture[] = [];
+        for (let i = 0; i < d.n; i++) {
+          const c = document.createElement('canvas');
+          c.width = d.fw;
+          c.height = d.fh;
+          c.getContext('2d')!.drawImage(img, (i % d.cols) * d.fw, Math.floor(i / d.cols) * d.fh, d.fw, d.fh, 0, 0, d.fw, d.fh);
+          const t = new THREE.CanvasTexture(c);
+          t.magFilter = THREE.NearestFilter;
+          t.minFilter = THREE.NearestFilter;
+          t.colorSpace = THREE.SRGBColorSpace;
+          frames.push(t);
+        }
+        this.pfxFrames.set(name, frames);
+      };
+      img.src = d.src;
+    }
+  }
+
+  /** PixelFX-Effekt abspielen (wie `pfxPlay` im Mock-up): Bezugspunkt `pos`, `lift` Effekt-Pixel über dem Fußpunkt. */
+  private playPfx(use: PfxUse, pos: THREE.Vector3, flip: boolean, now: number): boolean {
+    const d = PFX[use.name];
+    const frames = this.pfxFrames.get(use.name);
+    if (!frames) return false;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: frames[0], transparent: true, depthWrite: false }));
+    const k = use.scale ?? 1;
+    s.center.set(d.px / d.fw, 1 - d.py / d.fh);
+    s.scale.set((d.fw / 32) * k * (flip ? -1 : 1), (d.fh / 32) * k, 1);
+    s.position.copy(pos);
+    s.position.y -= (use.lift / 32) * k;
+    s.renderOrder = 9;
+    this.scene.add(s);
+    const rate = d.fps / this.tps;
+    this.fx.push({ obj: s, start: now, life: d.n / rate, grow: 0, frames, rate });
+    return true;
   }
 
   /** Einschlag/Explosion: aufblitzender Kreis, der wächst und verblasst. */
@@ -720,6 +1089,14 @@ export class Hd2dRenderer {
         this.scene.remove(f.obj);
         f.obj.material.dispose();
         this.fx.splice(k, 1);
+        continue;
+      }
+      if (f.frames) {
+        const i = Math.min(f.frames.length - 1, Math.floor((now - f.start) * (f.rate ?? 1)));
+        if (f.obj.material.map !== f.frames[i]) {
+          f.obj.material.map = f.frames[i]!;
+          f.obj.material.needsUpdate = true;
+        }
         continue;
       }
       const sc = f.grow * (0.4 + 0.8 * a);
@@ -751,7 +1128,9 @@ export class Hd2dRenderer {
     }
     for (const [f, s] of this.flights) {
       if (live.has(f)) continue;
-      this.burst(s.position.clone(), '#ffb02a', 0.8, now, 8);
+      const g = new THREE.Vector3(f.to.x, 0, f.to.y);
+      const big = f.charge ? 'pboom_mag' : 'dirt';
+      if (!this.playPfx({ name: big, lift: 0, scale: f.charge ? 0.8 : 0.7 }, g, false, now)) this.burst(s.position.clone(), '#ffb02a', 0.8, now, 8);
       this.scene.remove(s);
       s.material.dispose();
       this.flights.delete(f);
@@ -759,7 +1138,8 @@ export class Hd2dRenderer {
   }
 
   private zoomLevel(): ZoomLevel {
-    return this.tile >= 30 ? 'near' : this.tile >= 18 ? 'mid' : this.tile >= 10 ? 'lanes' : 'map';
+    const z = this.cam.z;
+    return z >= 0.85 ? 'near' : z >= 0.55 ? 'mid' : z >= 0.25 ? 'lanes' : 'map';
   }
 
   private clearDynamic(): void {
@@ -775,6 +1155,16 @@ export class Hd2dRenderer {
     this.flights.clear();
   }
 }
+
+/** Billboard-Shader (aus dem Mock-up): Ecke je Vertex in Kamerarichtung aufspannen, Deko nach Zoom ausdünnen, Nebel. */
+const BB_VS = `attribute vec2 corner;attribute vec4 uvr;attribute vec2 sz;attribute float lod;
+uniform float density;varying vec2 vUv;varying vec2 vW;
+void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);mv.xy+=vec2(corner.x*sz.x,corner.y*sz.y);
+gl_Position=projectionMatrix*mv;vUv=uvr.xy+vec2(corner.x+0.5,corner.y)*uvr.zw;vW=position.xz;
+if(lod>density)gl_Position=vec4(2.0,2.0,2.0,1.0);}`;
+const BB_FS = `uniform sampler2D map;uniform sampler2D fogMap;uniform float fogOn;uniform vec4 area;varying vec2 vUv;varying vec2 vW;
+void main(){vec4 c=texture2D(map,vUv);if(c.a<0.5)discard;vec2 w=vec2((vW.x-area.x)/area.z,1.0-(vW.y-area.y)/area.w);
+float f=fogOn*texture2D(fogMap,w).a;gl_FragColor=vec4(mix(c.rgb*0.92,vec3(0.024,0.031,0.055),f*0.85),1.0);}`;
 
 /** Deterministischer Pseudo-Zufall je Kachel (0 … 1) – gleiche Karte, gleiches Bild. */
 function hash(a: number, b: number): number {

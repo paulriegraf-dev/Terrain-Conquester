@@ -161,7 +161,10 @@ export class Renderer {
     }
     if (view.prep && view.human !== null) this.drawPrepArea(world, view.human);
 
-    if (view.influence) this.drawInfluence(world);
+    if (view.influence) {
+      if (overlay) this.drawTerritoryB(world, view.fog ? view.human : null);
+      else this.drawInfluence(world);
+    }
     this.drawTracks(world, view);
     this.drawFormed(world, view);
     this.drawBuildZones(world, view);
@@ -175,7 +178,7 @@ export class Renderer {
     const visibleTo = (e: Entity): boolean =>
       !view.fog || view.human === null || world.isVisibleTo(view.human, e);
     for (const e of world.entities) {
-      if (e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
+      if (!overlay && e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
     }
     this.drawNetworks(world, alpha, visibleTo);
     this.drawVerbund(world, visibleTo);
@@ -930,6 +933,61 @@ export class Renderer {
       ctx.fillStyle = withAlpha(PALETTE.player[owner], Math.abs(v) * (strong ? 0.16 : 0.08));
       ctx.fillRect(x * t, y * t, t, t);
     }
+  }
+
+  /**
+   * Gebiet & Grenze nach Grafik-Leitfaden Stil B (HD-2D, 05.11.): kachelgenaue Stufenlinie mit dunkler Kontur, Fläche
+   * gerastert – am Rand kräftig, innen schwach, kein Leuchten. Mit Nebel nur das eigene Gebiet; umkämpft gestrichelt.
+   */
+  private drawTerritoryB(world: World, viewer: PlayerId | null): void {
+    const ctx = this.ctx;
+    const t = this.tile;
+    const w = world.map.width;
+    const h = world.map.height;
+    const owner = (x: number, y: number): PlayerId | null => (x < 0 || y < 0 || x >= w || y >= h ? null : controllerAt(world, y * w + x));
+    const step = Math.max(2, Math.round(t / 8));
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = owner(x, y);
+        if (o === null || (viewer !== null && o !== viewer)) continue;
+        // Abstand zur Grenze (0 = Randkachel) – innen schwächer
+        let edge = 3;
+        for (let d = 1; d <= 2 && edge === 3; d++) {
+          if (owner(x - d, y) !== o || owner(x + d, y) !== o || owner(x, y - d) !== o || owner(x, y + d) !== o) edge = d - 1;
+        }
+        const a = edge === 0 ? 0.34 : edge === 1 ? 0.18 : 0.08;
+        ctx.fillStyle = withAlpha(PALETTE.player[o], a);
+        for (let py = 0; py < t; py += step) {
+          for (let px = ((py / step) % 2) * step; px < t; px += step * 2) ctx.fillRect(x * t + px, y * t + py, step, step);
+        }
+      }
+    }
+    const line = (x0: number, y0: number, x1: number, y1: number, color: string, width: number, dash: number[]): void => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(x0 * t, y0 * t);
+      ctx.lineTo(x1 * t, y1 * t);
+      ctx.stroke();
+    };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = owner(x, y);
+        if (o === null || (viewer !== null && o !== viewer)) continue;
+        const contested = !!world.contested[y * w + x];
+        const dash = contested ? [t * 0.25, t * 0.2] : [];
+        const sides: [number, number, number, number, number, number][] = [
+          [x - 1, y, x, y, x, y + 1], [x + 1, y, x + 1, y, x + 1, y + 1], [x, y - 1, x, y, x + 1, y], [x, y + 1, x, y + 1, x + 1, y + 1],
+        ];
+        for (const [nx, ny, ax, ay, bx, by] of sides) {
+          if (owner(nx, ny) === o) continue;
+          line(ax, ay, bx, by, 'rgba(8,10,14,0.85)', Math.max(2, t * 0.16), dash);
+          line(ax, ay, bx, by, PALETTE.player[o], Math.max(1, t * 0.07), dash);
+        }
+      }
+    }
+    ctx.setLineDash([]);
   }
 
   /** Spuren im Schnee: Gegner sieht sie, auch wenn die Einheiten längst weg sind. */

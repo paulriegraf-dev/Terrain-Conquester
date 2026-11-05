@@ -74,6 +74,21 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
   Bäumen/Figuren, Deko, PixelFX-Effekte, Auswahlrahmen an Figuren, Leistung bei sehr großen Gefechten,
   Perspektiv-Kamera wie im Mock-up.
 
+## Stand Etappe 2 (05.11.2026 spät)
+- **Kamera wie im Mock-up:** Perspektive, Neigung 64° (weit) bis 34° (nah), Brennweite und Abstand je Zoom, Tiefennebel,
+  Tilt-Shift-Unschärfe oben/unten in der Nahsicht; weiches Nachführen. Zoom über die bisherigen Knöpfe/Mausrad (in der
+  Szene zum Mauszeiger hin), Verschieben mit mittlerer Maustaste oder Pfeiltasten; die Bildränder bleiben über der Karte.
+  Mausklicks treffen per Strahl das Gelände.
+- **Bäume und Deko** als gemeinsamer Billboard-Shader (ein Zeichenaufruf), Deko dünnt beim Herauszoomen aus; Nebel des
+  Krieges färbt Bäume/Deko ab.
+- **Gebiet im Stil B des Leitfadens** (gerasterte Füllung zum Rand hin dichter, Stufenrand mit dunkler Kontur,
+  umkämpft gestrichelt, mit Nebel nur das eigene Gebiet); klassische Gebäudezeichnung entfällt unter den Sprites.
+- **Fundamente:** fraktionstypischer Boden unter jedem sichtbaren Gebäude (Beton / bronzene Erde / Erde mit Moos).
+- **PixelFX** aus dem Mock-up (`assets/hd2d/pfx`, `src/render/hd2d/pfx.ts`): Mündungsfeuer und Einschläge je
+  Geschoss-Optik, Explosionen, Erde bei Würfen/Sprüngen und Toden, Heilung. Mündungsfeuer entfällt in der Kartenansicht.
+- Offen: Einrasten auf ganze Pixelstufen (optional), Leistung bei sehr großen Gefechten messen, Auswahlrahmen an Figuren
+  → mit Etappe 3 (UI).
+
 ## Ziel ist das ganze Mock-up, nicht nur die Grafik (Nutzer, 05.11. abends)
 Die HD-2D-Ansicht übernimmt das Mock-up vollständig – Kamera, Gelände-Look, Overlays **und die besprochene Spiel-UI**
 (Variante C „Mischform“: schlanke Leiste unten, Kontext-Panel rechts beim gewählten Gebäude, Ansichtsleiste über der
