@@ -1339,3 +1339,24 @@ body.ui-c .console-info { width: 320px; max-height: calc(100vh - 400px); }
 .cx-pips span { color: var(--c-text); margin-left: 6px; }
 .cx-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 4px; }
 .cx-note { margin: 0; font-size: 0.74rem; color: var(--c-muted); }
+
+/* Fronten-Fenster (Variante C, wie im Mock-up) */
+.c-front { display: none; }
+body.ui-c[data-pop="front"] .c-front {
+  position: fixed; left: 50%; bottom: 66px; transform: translateX(-50%); z-index: 28;
+  display: grid; grid-template-columns: auto repeat(4, auto) 64px; gap: 4px 5px; align-items: center; padding: 8px 10px;
+  background: var(--c-panel); border: 1px solid var(--c-line); border-radius: 4px; backdrop-filter: blur(3px); color: var(--c-text);
+}
+.cf-title { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--c-muted); }
+.cf-title b { color: var(--c-accent); font-weight: 600; }
+.cf-close { margin-left: auto; padding: 0 6px; font: inherit; color: var(--c-muted); background: none; border: 1px solid var(--c-line); border-radius: 3px; cursor: pointer; }
+.cf-lane { display: grid; font-size: 0.8rem; padding-right: 6px; }
+.cf-lane small { font-family: var(--font-data); font-size: 0.6rem; color: var(--c-muted); }
+.cf-btn { display: flex; align-items: center; gap: 4px; padding: 4px 8px; font: inherit; font-size: 0.76rem; color: var(--c-text); background: rgba(24, 32, 42, 0.9); border: 1px solid rgba(127, 224, 255, 0.16); border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.cf-btn .cf-g { color: var(--c-accent); }
+.cf-btn kbd { margin-left: 2px; font-size: 0.6rem; }
+.cf-btn.on { border-color: var(--c-accent); background: rgba(127, 224, 255, 0.18); }
+.cf-btn.pend { border: 1px dashed var(--warn); animation: c-pulse 1s infinite; }
+.cf-btn:disabled { opacity: 0.45; cursor: default; }
+.cf-cd { font-family: var(--font-data); font-size: 0.68rem; color: var(--warn); }
+body.ui-c[data-pop] .tip-text, body.ui-c[data-pop] .tip-hover { display: none; }

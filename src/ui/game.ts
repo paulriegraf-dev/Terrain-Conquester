@@ -769,7 +769,12 @@ export class Game {
       this.view.hover = null;
       this.view.hoverPoint = null;
     });
-    c.addEventListener('click', (ev) => this.onBoardClick(ev.clientX, ev.clientY));
+    c.addEventListener('click', (ev) => {
+      // HD-2D: Ziehen mit der linken Maustaste verschiebt die Karte – das ist kein Klick aufs Feld.
+      if (this.renderer instanceof Hd2dRenderer && this.renderer.consumeDrag()) return;
+      this.onBoardClick(ev.clientX, ev.clientY);
+    });
+    if (this.renderer instanceof Hd2dRenderer) this.renderer.leftDragAllowed = () => !this.view.swap;
     c.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       if (this.view.wall) this.rotateWall();
@@ -909,6 +914,10 @@ export class Game {
         return;
       }
       if (key === 'escape' && this.hudC.closePop()) {
+        ev.preventDefault();
+        return;
+      }
+      if (!shifted && this.hudC.frontKey(key)) {
         ev.preventDefault();
         return;
       }

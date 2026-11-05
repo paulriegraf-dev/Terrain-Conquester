@@ -201,7 +201,7 @@ function mainCommands(ctx: CommandContext): CommandSet {
 }
 
 const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secure: '◎', push: '»' };
-const STANCE_TIP: Record<Stance, string> = {
+export const STANCE_TIP: Record<Stance, string> = {
   defend: 'Truppen bleiben in der Basis und fangen Eindringlinge im eigenen Gebiet ab',
   hold: 'Truppen stehen an der eigenen Grenze und eilen Eindringlingen in der Nähe entgegen',
   secure: 'Truppen ziehen zur Station dieser Lane und halten sie im Halbkreis, gestaffelt nach Reichweite (ohne Station wie Halten)',
