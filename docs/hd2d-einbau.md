@@ -57,3 +57,19 @@ Die Darstellung liest `world.entities`, `world.flights`, `world.projectiles` und
 6. Leistung: großer Drohnen-Kampf (Ausschnitt Myr–TF im Mock-up: 147 Verbände) flüssig halten (Sprite-Pool, gemeinsame
    Materialien).
 7. `HD2D_AVAILABLE = true`, Knopf „Alte Version“ erscheint.
+
+## Stand Etappe 1 (05.11.2026 abends)
+- `src/render/hd2d/renderer3d.ts` (`Hd2dRenderer`, gleiche Schnittstelle wie `Renderer`): Three.js 0.160, orthografische
+  Schrägkamera (56°), dadurch bleiben Scrollen, Zoom und Mausklicks wie gehabt.
+- Gelände aus `world.grid`: PixelLab-Boden (Variante N des Mock-ups), verzahnte Übergänge, Höhen (Gebirge, Schlucht,
+  Erdwall), Bäume als Billboards; wird bei Geländeänderungen neu gebaut.
+- Gebäude und HQs als Sprites (Täuschung beachtet), Erdwälle als Körper.
+- Einheiten: eine Figur je lebendem Modell, Stehen/Laufen/Angriff nach `anim.ts` (Ausholen nach Ladezustand, reihum in
+  der Feuergruppe), Blickrichtung nach Startseite, Teamfarbe im Spiegel-Duell, Lebensbalken.
+- Geschosse aus den `shot`-Ereignissen (Start-/Einschlag-Tick), Strahlen, Bögen, Einschläge; Heilung, Tod, Würfe/Sprünge.
+- Bodenmarken: der klassische Renderer im Modus `overlayOnly` zeichnet Gebiet, Zonen, Stationen, Wege, Netzlinien,
+  Fundamente, Vorschauen und Nebel in ein Bild, das als Textur auf dem Gelände liegt.
+- Umschalten im Hauptmenü („Neue Grafik (HD-2D, Vorschau)“ / „Alte Version“), Standard bleibt vorerst klassisch.
+- Offen für Etappe 2: Bodenmarken als echte 3D-Overlays nach Leitfaden (statt der klassischen Zeichnung), Nebel über
+  Bäumen/Figuren, Deko, PixelFX-Effekte, Auswahlrahmen an Figuren, Leistung bei sehr großen Gefechten,
+  Perspektiv-Kamera wie im Mock-up.

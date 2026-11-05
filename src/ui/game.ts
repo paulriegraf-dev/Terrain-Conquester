@@ -35,6 +35,7 @@ import { SITE_NAMES, siteActiveText } from '../sim/systems/sites';
 import { STATIONS } from '../data/stations';
 import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
+import { Hd2dRenderer } from '../render/hd2d/renderer3d';
 import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
@@ -89,7 +90,8 @@ const FLOW_CYCLE: (MoveProfileId | null)[] = [null, 'foot', 'wheels', 'tracks', 
 export class Game {
   private session!: Session;
   private view: ViewState = createView('demo');
-  private readonly renderer: Renderer;
+  /** Klassische Formen-Ansicht oder HD-2D (05.11.) – gleiche Schnittstelle. */
+  private readonly renderer: Renderer | Hd2dRenderer;
   private readonly hud: Hud;
   private speed = 1;
   private paused = false;
@@ -155,8 +157,8 @@ export class Game {
     private readonly frameEl: HTMLElement,
     private readonly doc: Document,
   ) {
-    // Grafik-Modus (05.11.): bis die HD-2D-Darstellung fertig ist, gibt es nur die klassische Ansicht.
-    this.renderer = new Renderer(canvas);
+    // Grafik-Modus (05.11.): klassische Ansicht oder HD-2D – gewählt im Hauptmenü, gilt ab dem Neustart der Seite.
+    this.renderer = graphicsMode() === 'hd2d' ? new Hd2dRenderer(canvas) : new Renderer(canvas);
     const gfx = doc.getElementById('btn-graphics');
     if (gfx) {
       gfx.hidden = !HD2D_AVAILABLE;

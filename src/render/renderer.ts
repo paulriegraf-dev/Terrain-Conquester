@@ -55,7 +55,15 @@ export class Renderer {
   private viewX0 = 0;
   private viewCols = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  /**
+   * `overlayOnly` (05.11., HD-2D): nur Bodenmarken zeichnen – Gebiet, Bauzonen, Stationen, Wege, Netzlinien, Gebäude-
+   * Fundamente, Vorschauen, Nebel – auf transparentem Grund. Gelände, Einheiten, Flugobjekte und Effekte zeichnet dann
+   * die HD-2D-Darstellung selbst; dieses Bild legt sie als Textur auf ihr Gelände.
+   */
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly opts: { overlayOnly?: boolean } = {},
+  ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D nicht verfügbar');
     this.ctx = ctx;
@@ -141,9 +149,16 @@ export class Renderer {
     const ctx = this.ctx;
     const t = this.tile;
     // Gesperrter Rückraum liegt links außerhalb des Bildes: alles um viewX0 Spalten verschieben.
+    const overlay = !!this.opts.overlayOnly;
+    if (overlay) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, -this.viewX0 * t * this.dpr, 0);
-    this.drawTerrain(world, view);
-    ctx.drawImage(this.terrainLayer, 0, 0, world.map.width * t, world.map.height * t);
+    if (!overlay) {
+      this.drawTerrain(world, view);
+      ctx.drawImage(this.terrainLayer, 0, 0, world.map.width * t, world.map.height * t);
+    }
     if (view.prep && view.human !== null) this.drawPrepArea(world, view.human);
 
     if (view.influence) this.drawInfluence(world);
@@ -164,15 +179,17 @@ export class Renderer {
     }
     this.drawNetworks(world, alpha, visibleTo);
     this.drawVerbund(world, visibleTo);
-    for (const e of world.entities) {
-      if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
+    if (!overlay) {
+      for (const e of world.entities) {
+        if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
+      }
     }
     this.drawNetBadges(world, alpha, visibleTo);
     this.drawShields(world, alpha, visibleTo);
     this.drawFusions(world, view);
-    this.drawFlights(world, alpha, view);
+    if (!overlay) this.drawFlights(world, alpha, view);
     this.drawSwaps(world, view);
-    this.drawEffects(world, view);
+    if (!overlay) this.drawEffects(world, view);
     this.drawWallTimers(world, view);
     this.drawRallies(world, view);
     if (view.fog && view.human !== null) this.drawFog(world, view.human, view.prep);
