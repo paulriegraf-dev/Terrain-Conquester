@@ -277,7 +277,7 @@ export interface PlayerState {
    * Laufende Forschung (24.10.: zentral, parallel zur Produktion, gilt für die Einheitenart in allen Fabriken).
    * Höchstens rules.researchSlots gleichzeitig.
    */
-  labs: { upgrade: string; startTick: number; doneTick: number }[];
+  labs: { upgrade: string; startTick: number; doneTick: number; cost?: number }[];
   /** HQ-Zweige: erreichte Stufe je Zweig (siehe data/hq.ts). */
   hq: Record<HqPathId, number>;
   energy: number;

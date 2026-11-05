@@ -9,3 +9,9 @@ declare module '*.png' {
   const url: string;
   export default url;
 }
+
+/** HD-2D-Grafik (05.11.): verlustfrei als WebP (kleiner als PNG), ebenfalls als data:-URL eingebettet. */
+declare module '*.webp' {
+  const url: string;
+  export default url;
+}

@@ -34,6 +34,8 @@ export type Command =
    * Fabriken). `entityId` ist optional und wird nicht mehr gebraucht.
    */
   | { type: 'research'; upgrade: string; entityId?: number }
+  /** Laufende Forschung abbrechen – volle Erstattung (Spiel-UI Variante C, Ausbau-Reiter, 05.11.). */
+  | { type: 'cancelResearch'; upgrade: string }
   /** HQ-Zweig eine Stufe ausbauen (Aufklärung, Markt, Gelände – siehe data/hq.ts). */
   | { type: 'hqUpgrade'; path: HqPathId }
   /** Haltung einer Route: halten (an der Gebietsgrenze) oder vorstoßen (bis zum gegnerischen HQ). Greift verzögert. */

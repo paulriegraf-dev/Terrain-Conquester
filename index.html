@@ -27,7 +27,7 @@
         <button type="button" class="tp-btn" data-action="mp-open">Mehrspieler</button>
         <button type="button" class="tp-btn" data-action="codex" title="Grundlagen, Einheiten, Konter und Gelände (F1)">Übersicht</button>
         <button type="button" class="tp-btn" data-action="tp-page" data-page="options">Optionen</button>
-        <button type="button" class="tp-btn" id="btn-graphics" data-action="graphics-toggle" title="Zwischen neuer HD-2D-Grafik und der alten Ansicht wechseln – die Seite startet neu" hidden>Alte Version (klassische Grafik)</button>
+        <button type="button" class="tp-btn" id="btn-graphics" data-action="graphics-toggle" title="Zwischen neuer 2,5D-Grafik und der alten Ansicht wechseln – die Seite startet neu" hidden>Alte Version (klassische Grafik)</button>
         <p class="tp-record" id="tp-record" hidden></p>
       </div>
       <div class="tp-page" data-page="single" hidden>
@@ -268,7 +268,7 @@
     </section>
 
     <aside class="side" id="rail" aria-label="Lage">
-      <section class="panel energy-panel">
+      <section class="panel energy-panel" id="panel-energy">
         <div class="energy">
           <span class="panel-title" id="energy-title">Energie</span>
           <span class="energy-value" id="energy-value">0</span>
@@ -283,23 +283,23 @@
         <p class="units-breakdown" id="units-breakdown"></p>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="panel-market">
         <h2 class="panel-title" title="Lage von vor 5 s. Punkt: grün entspannt … rot sehr knapp. Prozent = Änderung zu 20 s davor. Teure Bauteile bremsen passende Fabriken und verteuern neue. Bestellen treibt einen Preis 30 s lang hoch (auch für dich); 60 % kommen nach 45 s zurück, nie über das Maximum. Der HQ-Zweig Markt macht Bestellungen billiger und stärker.">Markt <span class="panel-meta">vor 5 s ⓘ</span></h2>
         <ul class="market" id="market-list"></ul>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="panel-scout">
         <h2 class="panel-title" title="Späher melden die grobe Stärke des Gegners je Route – auch im Nebel – und welche Panzerung vorherrscht. Der Bericht zeigt den Stand beim Losschicken.">Spähbericht <span class="panel-meta" id="scout-meta"></span></h2>
         <ul class="scout" id="scout-list"></ul>
         <button type="button" class="btn-mini scout-btn" id="scout-btn" data-action="scout">Späher losschicken</button>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="panel-keystones">
         <h2 class="panel-title" title="Deine Schlusssteine und die erspähten des Gegners. Das nächste Fenster siehst du an der Uhr; Taste K wählt.">Schlusssteine <span class="panel-meta" id="keystone-meta"></span></h2>
         <ul class="scout" id="keystone-list"></ul>
       </section>
 
-      <section class="panel log-panel">
+      <section class="panel log-panel" id="panel-log">
         <h2 class="panel-title">Lagebericht</h2>
         <ol class="log" id="log-list"></ol>
       </section>

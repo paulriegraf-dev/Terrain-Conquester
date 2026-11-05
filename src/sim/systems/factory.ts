@@ -179,7 +179,20 @@ export function startResearch(world: World, owner: PlayerId, upgradeId: string):
   if (!c.ok) return c;
   pay(world, owner, c.cost);
   world.players[owner].stats.decisions++;
-  world.players[owner].labs.push({ upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps) });
+  world.players[owner].labs.push({ upgrade: upgradeId, startTick: world.tick, doneTick: world.tick + Math.round(c.seconds * world.tps), cost: c.cost });
+  return { ok: true };
+}
+
+/** Laufende Forschung abbrechen: Platz frei, volle Erstattung des gezahlten Preises (Mock-up-Entscheid „Ausbau je Fabrik“). */
+export function cancelResearch(world: World, owner: PlayerId, upgradeId: string): CommandResult {
+  const p = world.players[owner];
+  const i = p.labs.findIndex((l) => l.upgrade === upgradeId);
+  if (i < 0) return { ok: false, reason: 'Diese Forschung läuft nicht' };
+  const lab = p.labs[i]!;
+  p.labs.splice(i, 1);
+  const back = lab.cost ?? 0;
+  p.energy = Math.min(world.rules.maxEnergy, p.energy + back);
+  p.stats.energySpent -= back;
   return { ok: true };
 }
 

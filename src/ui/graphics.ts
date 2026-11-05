@@ -2,22 +2,25 @@
  * Grafik-Modus (05.11., Wunsch des Nutzers): Mit der HD-2D-Darstellung bleibt die bisherige Ansicht als „Alte Version“
  * abrufbar – ein Knopf im Hauptmenü schaltet um und startet die Seite neu. Gemerkt wird die Wahl nur im Browser.
  *
- * Solange es die HD-2D-Darstellung noch nicht gibt (`HD2D_AVAILABLE`), ist „klassisch“ die einzige Ansicht und der
- * Knopf bleibt verborgen.
+ * Seit 05.11. (Etappen 1–3 fertig) ist die 2,5D-Darstellung (HD-2D) mit Spiel-UI Variante C der Standard; der Knopf
+ * „Alte Version (klassische Grafik)“ holt die bisherige Ansicht zurück (Wunsch des Nutzers: Backup bleibt spielbar).
  */
 export type GraphicsMode = 'classic' | 'hd2d';
 
-/** Wird true, sobald src/render/hd2d eine spielbare Darstellung hat. */
-export const HD2D_AVAILABLE = false;
+/** 2,5D-Darstellung verfügbar (Etappen 1–3, 05.11.). */
+export const HD2D_AVAILABLE = true;
+/** Standard ohne gespeicherte Wahl. */
+const DEFAULT_MODE: GraphicsMode = 'hd2d';
 
 const KEY = 'tc-graphics';
 
 export function graphicsMode(): GraphicsMode {
   if (!HD2D_AVAILABLE) return 'classic';
   try {
-    return globalThis.localStorage?.getItem(KEY) === 'classic' ? 'classic' : 'hd2d';
+    const v = globalThis.localStorage?.getItem(KEY);
+    return v === 'classic' || v === 'hd2d' ? v : DEFAULT_MODE;
   } catch {
-    return 'hd2d';
+    return DEFAULT_MODE;
   }
 }
 
@@ -33,5 +36,5 @@ export function switchGraphics(mode: GraphicsMode): void {
 
 /** Beschriftung des Knopfs im Hauptmenü. */
 export function graphicsButtonLabel(mode: GraphicsMode): string {
-  return mode === 'hd2d' ? 'Alte Version (klassische Grafik)' : 'Neue Grafik (HD-2D)';
+  return mode === 'hd2d' ? 'Alte Version (klassische Grafik)' : 'Neue Grafik (2,5D)';
 }

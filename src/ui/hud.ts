@@ -84,6 +84,9 @@ const byId = <T extends HTMLElement = HTMLElement>(doc: Document, id: string): T
  * rechts die Lageleiste (Energie, Markt, Lagebericht, Ansicht).
  * Es zeigt nur an und meldet Klicks als „Aktionen“ – den Spielzustand ändert es nie.
  */
+/** Titel des Hauptmenüs im Befehlsraster (commands.ts, mainCommands). */
+export const ROOT_TITLE = 'Befehle';
+
 export class Hud {
   private readonly el;
   private lastFrame = 0;
@@ -97,6 +100,13 @@ export class Hud {
   private hoverTip: string | null = null;
   /** Die zuletzt angezeigten Befehle – game.ts nutzt sie für die Tastenkürzel. */
   commands: CommandButton[] = [];
+  /** Spiel-UI Variante C (HD-2D): Meldungen auch an die Kurzmeldungen links oben. */
+  onLog: ((time: string, text: string, tone: Tone) => void) | null = null;
+  /**
+   * Variante C (Nutzer, 05.11.): Im Hauptmenü des Befehlsrasters liegen 1–4 und Q/W/E auf der Ansicht (wie im Mock-up);
+   * die Befehle dort wandern auf Shift + dieselbe Taste. Diese Tasten zeigt das Raster dann mit ⇧.
+   */
+  shiftedKeys: ReadonlySet<string> | null = null;
 
   constructor(
     private readonly doc: Document,
@@ -515,7 +525,8 @@ export class Hud {
       .map((b) => {
         const data = Object.entries(b.data ?? {}).map(([k, v]) => ` data-${k}="${escapeHtml(v)}"`).join('');
         const short = b.cost !== undefined && energy < b.cost;
-        const keyLabel = b.key === 'escape' ? 'Esc' : b.key === 'enter' ? '↵' : b.key;
+        const shifted = !!this.shiftedKeys && set.title === ROOT_TITLE && this.shiftedKeys.has(b.key);
+        const keyLabel = b.key === 'escape' ? 'Esc' : b.key === 'enter' ? '↵' : shifted ? `⇧${b.key}` : b.key;
         if (b.spacer) {
           return `<div class="cmd info" data-tip="${escapeHtml(b.tip)}"><span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.label)}</span></div>`;
         }
@@ -593,6 +604,7 @@ export class Hud {
 
   log(seconds: number, text: string, tone: Tone = 'info'): void {
     this.logEntries.unshift({ time: clock(seconds), text, tone });
+    this.onLog?.(clock(seconds), text, tone);
     this.logEntries.length = Math.min(this.logEntries.length, 30);
     this.el.log.innerHTML = this.logEntries
       .map((e) => `<li data-tone="${e.tone}"><time>${e.time}</time><span>${escapeHtml(e.text)}</span></li>`)
@@ -601,6 +613,7 @@ export class Hud {
 
   clearLog(): void {
     this.logEntries.length = 0;
+    this.onLog?.('', '', 'info');
     this.el.log.innerHTML = '';
     this.infoSig = '';
     this.gridSig = '';

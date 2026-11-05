@@ -16,7 +16,7 @@ import { buy } from './purchases';
 import { setRally } from './rally';
 import { DISGUISE } from '../../data/abilities';
 import { placeOrder } from './market';
-import { convertFactory, mergeBroods, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
+import { cancelResearch, convertFactory, mergeBroods, levelUp, rushOrder, rushRoute, selectUnit, startResearch } from './factory';
 import { triggerEmergency } from './emergency';
 import { orderScout } from './scout';
 import { routeChangeSeconds } from './sites';
@@ -121,6 +121,8 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       if (typeof b === 'string') return fail(b);
       return levelUp(world, b);
     }
+    case 'cancelResearch':
+      return cancelResearch(world, player, cmd.upgrade);
     case 'research':
       // Seit 24.10. zentral: die Fabrik-ID ist nur noch ein Hinweis aus alten Replays.
       return startResearch(world, player, cmd.upgrade);

@@ -55,7 +55,15 @@ export class Renderer {
   private viewX0 = 0;
   private viewCols = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  /**
+   * `overlayOnly` (05.11., HD-2D): nur Bodenmarken zeichnen – Gebiet, Bauzonen, Stationen, Wege, Netzlinien, Gebäude-
+   * Fundamente, Vorschauen, Nebel – auf transparentem Grund. Gelände, Einheiten, Flugobjekte und Effekte zeichnet dann
+   * die HD-2D-Darstellung selbst; dieses Bild legt sie als Textur auf ihr Gelände.
+   */
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly opts: { overlayOnly?: boolean } = {},
+  ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D nicht verfügbar');
     this.ctx = ctx;
@@ -141,12 +149,22 @@ export class Renderer {
     const ctx = this.ctx;
     const t = this.tile;
     // Gesperrter Rückraum liegt links außerhalb des Bildes: alles um viewX0 Spalten verschieben.
+    const overlay = !!this.opts.overlayOnly;
+    if (overlay) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, -this.viewX0 * t * this.dpr, 0);
-    this.drawTerrain(world, view);
-    ctx.drawImage(this.terrainLayer, 0, 0, world.map.width * t, world.map.height * t);
+    if (!overlay) {
+      this.drawTerrain(world, view);
+      ctx.drawImage(this.terrainLayer, 0, 0, world.map.width * t, world.map.height * t);
+    }
     if (view.prep && view.human !== null) this.drawPrepArea(world, view.human);
 
-    if (view.influence) this.drawInfluence(world);
+    if (view.influence) {
+      if (overlay) this.drawTerritoryB(world, view.fog ? view.human : null);
+      else this.drawInfluence(world);
+    }
     this.drawTracks(world, view);
     this.drawFormed(world, view);
     this.drawBuildZones(world, view);
@@ -160,19 +178,21 @@ export class Renderer {
     const visibleTo = (e: Entity): boolean =>
       !view.fog || view.human === null || world.isVisibleTo(view.human, e);
     for (const e of world.entities) {
-      if (e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
+      if (!overlay && e.alive && e.kind !== 'unit' && e.kind !== 'wall' && (e.kind === 'hq' || visibleTo(e))) this.drawStructure(world, e, view);
     }
     this.drawNetworks(world, alpha, visibleTo);
     this.drawVerbund(world, visibleTo);
-    for (const e of world.entities) {
-      if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
+    if (!overlay) {
+      for (const e of world.entities) {
+        if (e.alive && e.kind === 'unit' && visibleTo(e)) this.drawUnit(world, e, alpha, world.tick);
+      }
     }
     this.drawNetBadges(world, alpha, visibleTo);
     this.drawShields(world, alpha, visibleTo);
     this.drawFusions(world, view);
-    this.drawFlights(world, alpha, view);
+    if (!overlay) this.drawFlights(world, alpha, view);
     this.drawSwaps(world, view);
-    this.drawEffects(world, view);
+    if (!overlay) this.drawEffects(world, view);
     this.drawWallTimers(world, view);
     this.drawRallies(world, view);
     if (view.fog && view.human !== null) this.drawFog(world, view.human, view.prep);
@@ -913,6 +933,110 @@ export class Renderer {
       ctx.fillStyle = withAlpha(PALETTE.player[owner], Math.abs(v) * (strong ? 0.16 : 0.08));
       ctx.fillRect(x * t, y * t, t, t);
     }
+  }
+
+  /**
+   * Gebiet & Grenze nach Grafik-Leitfaden Stil B (HD-2D, 05.11.): kachelgenaue Stufenlinie mit dunkler Kontur, Fläche
+   * gerastert – am Rand kräftig, innen schwach, kein Leuchten. Mit Nebel nur das eigene Gebiet; umkämpft gestrichelt.
+   */
+  private terrCache: { canvas: HTMLCanvasElement; key: string } | null = null;
+
+  /**
+   * Gebiet Stil B, zwischengespeichert (Etappe 3, Leistung): Gebiet ändert sich nur, wenn sich Besitz oder „umkämpft“
+   * einer Kachel ändert – dann neu zeichnen, sonst nur das fertige Bild einsetzen (vorher ~14 ms je Bild).
+   */
+  private drawTerritoryB(world: World, viewer: PlayerId | null): void {
+    const t = this.tile;
+    const w = world.map.width;
+    const h = world.map.height;
+    let key = `${t}|${this.dpr}|${viewer}|`;
+    let acc = 0;
+    for (let i = 0; i < w * h; i++) {
+      const o = controllerAt(world, i);
+      acc = (Math.imul(acc, 31) + (o === null ? 0 : o + 1) * 2 + (world.contested[i] ? 1 : 0)) | 0;
+    }
+    key += acc;
+    if (!this.terrCache || this.terrCache.key !== key) {
+      const c = this.terrCache?.canvas ?? document.createElement('canvas');
+      c.width = Math.ceil(w * t * this.dpr);
+      c.height = Math.ceil(h * t * this.dpr);
+      const g = c.getContext('2d')!;
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      g.clearRect(0, 0, w * t, h * t);
+      this.paintTerritoryB(g, world, viewer);
+      this.terrCache = { canvas: c, key };
+    }
+    this.ctx.drawImage(this.terrCache.canvas, 0, 0, w * t, h * t);
+  }
+
+  private paintTerritoryB(ctx: CanvasRenderingContext2D, world: World, viewer: PlayerId | null): void {
+    const t = this.tile;
+    const w = world.map.width;
+    const h = world.map.height;
+    const owner = (x: number, y: number): PlayerId | null => (x < 0 || y < 0 || x >= w || y >= h ? null : controllerAt(world, y * w + x));
+    const step = Math.max(2, Math.round(t / 8));
+    // Raster-Kacheln je Spieler und Stärke einmal vorzeichnen, dann nur noch einsetzen (statt ~30 Rechtecke je Kachel).
+    const stamps = new Map<string, HTMLCanvasElement>();
+    const stamp = (o: PlayerId, a: number): HTMLCanvasElement => {
+      const k = `${o}|${a}`;
+      let c = stamps.get(k);
+      if (!c) {
+        c = document.createElement('canvas');
+        c.width = Math.ceil(t * this.dpr);
+        c.height = Math.ceil(t * this.dpr);
+        const g = c.getContext('2d')!;
+        g.scale(this.dpr, this.dpr);
+        g.fillStyle = withAlpha(PALETTE.player[o], a);
+        for (let py = 0; py < t; py += step) {
+          for (let px = ((py / step) % 2) * step; px < t; px += step * 2) g.fillRect(px, py, step, step);
+        }
+        stamps.set(k, c);
+      }
+      return c;
+    };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = owner(x, y);
+        if (o === null || (viewer !== null && o !== viewer)) continue;
+        // Abstand zur Grenze (0 = Randkachel) – innen schwächer
+        let edge = 3;
+        for (let d = 1; d <= 2 && edge === 3; d++) {
+          if (owner(x - d, y) !== o || owner(x + d, y) !== o || owner(x, y - d) !== o || owner(x, y + d) !== o) edge = d - 1;
+        }
+        const a = edge === 0 ? 0.34 : edge === 1 ? 0.18 : 0.08;
+        ctx.drawImage(stamp(o, a), x * t, y * t, t, t);
+      }
+    }
+    // Grenzlinien gesammelt: je Spieler ein Pfad durchgezogen, einer gestrichelt (umkämpft) – Kontur, dann Farbe.
+    const paths: Record<string, { o: PlayerId; dashed: boolean; segs: number[] }> = {};
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = owner(x, y);
+        if (o === null || (viewer !== null && o !== viewer)) continue;
+        const dashed = !!world.contested[y * w + x];
+        const key = `${o}|${dashed}`;
+        const P = (paths[key] ??= { o, dashed, segs: [] });
+        if (owner(x - 1, y) !== o) P.segs.push(x, y, x, y + 1);
+        if (owner(x + 1, y) !== o) P.segs.push(x + 1, y, x + 1, y + 1);
+        if (owner(x, y - 1) !== o) P.segs.push(x, y, x + 1, y);
+        if (owner(x, y + 1) !== o) P.segs.push(x, y + 1, x + 1, y + 1);
+      }
+    }
+    for (const P of Object.values(paths)) {
+      ctx.beginPath();
+      for (let i = 0; i < P.segs.length; i += 4) {
+        ctx.moveTo(P.segs[i]! * t, P.segs[i + 1]! * t);
+        ctx.lineTo(P.segs[i + 2]! * t, P.segs[i + 3]! * t);
+      }
+      ctx.setLineDash(P.dashed ? [t * 0.25, t * 0.2] : []);
+      ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+      ctx.lineWidth = Math.max(2, t * 0.16);
+      ctx.stroke();
+      ctx.strokeStyle = PALETTE.player[P.o];
+      ctx.lineWidth = Math.max(1, t * 0.07);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
   }
 
   /** Spuren im Schnee: Gegner sieht sie, auch wenn die Einheiten längst weg sind. */
