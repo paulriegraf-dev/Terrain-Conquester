@@ -218,6 +218,14 @@ export class Hd2dRenderer {
     });
     window.addEventListener('keyup', (ev) => this.held.delete(ev.key.toLowerCase()));
     window.addEventListener('blur', () => this.held.clear());
+    // Alt gedrückt halten: Waffen-/Rüstungszeichen an allen Verbänden (Nutzer 06.11., Mini-Symbole Variante C)
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Alt') { this.altHeld = true; ev.preventDefault(); }
+    });
+    window.addEventListener('keyup', (ev) => {
+      if (ev.key === 'Alt') { this.altHeld = false; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', () => (this.altHeld = false));
     this.pan = PAN;
   }
 
@@ -418,6 +426,13 @@ export class Hd2dRenderer {
   /** game.ts: dürfen WASD/Pfeile gerade die Kamera bewegen? (nicht im Titel/Menü) */
   keysAllowed: () => boolean = () => true;
   private readonly held = new Set<string>();
+  private altHeld = false;
+  /** Reichweitenring des Verbands unter der Maus (Nutzer 06.11.). */
+  private rangeRing: THREE.Mesh | null = null;
+  /** Eigene Gebäude unter Beschuss: Zeitpunkt (Tick) des letzten Treffers – für Warnzeichen am Bildrand. */
+  private readonly attacked = new Map<number, number>();
+  private readonly edgeMarks = new Map<number, HTMLElement>();
+  private humanRef: number | null = null;
   private pan: Record<string, [number, number]> = {};
 
   /** game.ts: darf die linke Maustaste gerade verschieben? (nicht beim Gelände-Malen) */
@@ -522,7 +537,9 @@ export class Hd2dRenderer {
     this.processEvents(world, now);
     this.drawStructures(world, view, visibleTo);
     this.updateFootprints(world, visibleTo);
-    this.drawUnits(world, alpha, now, visibleTo);
+    this.humanRef = view.human;
+    this.drawUnits(world, alpha, now, visibleTo, view);
+    this.updateEdgeWarnings(world, now);
     this.drawFlights(world, alpha);
     this.updateShots(now, view);
     this.updateRouteBands(world, view);
@@ -1041,9 +1058,26 @@ export class Hd2dRenderer {
     return hq ? hq.pos.x > world.map.width / 2 : owner === 1;
   }
 
-  private drawUnits(world: World, alpha: number, now: number, visibleTo: (e: Entity) => boolean): void {
+  private drawUnits(world: World, alpha: number, now: number, visibleTo: (e: Entity) => boolean, view: ViewState): void {
     const mirror = world.players[0].faction.id === world.players[1].faction.id;
     const stamp = world.tick;
+    // Verband unter der Maus: Reichweitenring + Zeichen (Nutzer 06.11.)
+    let hovered: Entity | null = null;
+    const hp = view.hoverPoint;
+    if (hp && !view.build) {
+      let bestD = Infinity;
+      for (const e of world.entities) {
+        if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
+        // Die Figuren stehen aufrecht: Der Bodenpunkt unter der Maus liegt beim Zeigen auf den Körper hinter dem Verband.
+        const dx = hp.x - e.pos.x;
+        const dy = hp.y - e.pos.y;
+        const w = Math.max(0.7, e.radius + 0.45);
+        if (Math.abs(dx) > w || dy < -1.5 || dy > 0.5) continue;
+        const d = Math.hypot(dx, dy + 0.5);
+        if (d < bestD) { bestD = d; hovered = e; }
+      }
+    }
+    this.updateRangeRing(world, hovered, alpha);
     // Lesbarkeit je Zoom (Nutzer 06.11., Varianten B + C): Karte/Lanes Verbandssymbole, Mittel höchstens 3 Figuren mit
     // Modellzahl, Nah alle Figuren.
     const level = this.zoomLevel();
@@ -1088,8 +1122,9 @@ export class Hd2dRenderer {
       }
       // Modellzahl, wenn ausgedünnt (Mittel)
       // Kein „×Zahl“-Schild mehr (Nutzer 06.11.: wirkte unruhig); die Zahl steht in Karte/Lanes im Symbol.
-      const thinned = false;
-      sq.badge.visible = thinned;
+      // Stattdessen Mini-Zeichen Rüstung › Waffe (Nutzer 06.11., Variante C): nur unter der Maus, mit Alt oder in Mittel.
+      const showChip = hovered === e || this.altHeld || level === 'mid';
+      sq.badge.visible = showChip;
       const moveDx = e.pos.x - e.prev.x;
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
       const right = this.startsRight(world, e.owner);
@@ -1140,15 +1175,19 @@ export class Hd2dRenderer {
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
       const top = this.heightAt(world, x, y) + (asIcons ? 0.35 + (level === 'map' ? 1.05 : 0.8) : spr.fly + size * 0.95);
-      if (thinned) {
-        const bk = `${alive}|${sideColor}`;
+      if (showChip) {
+        const armor = UNITS[e.defId as UnitId]?.armor;
+        const shape = spr.fly > 0.2 ? 'tri' : armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
+        const wt = e.weapon?.def.type ?? 'none';
+        const bk = `${shape}|${wt}|${sideColor}`;
         if (bk !== sq.badgeKey) {
-          (sq.badge.material as THREE.SpriteMaterial).map = this.badgeTexture(alive, sideColor);
+          (sq.badge.material as THREE.SpriteMaterial).map = this.chipTexture(shape, wt, sideColor);
           (sq.badge.material as THREE.SpriteMaterial).needsUpdate = true;
           sq.badgeKey = bk;
         }
-        sq.badge.position.set(x + 0.55, top + 0.12, y);
-        sq.badge.scale.set(0.62, 0.35, 1);
+        const k = asIcons ? (level === 'map' ? 1.5 : 1.15) : 0.8;
+        sq.badge.position.set(x, top + 0.2 * k + 0.08, y);
+        sq.badge.scale.set(k, k / 2, 1);
       }
       sq.hpBack.position.set(x, top, y);
       sq.hp.position.set(x - (1 - share) * 0.35, top, y + 0.001);
@@ -1249,29 +1288,134 @@ export class Hd2dRenderer {
     return t;
   }
 
-  /** Zahl der Modelle als kleines Schild (Mittel: Figuren ausgedünnt, Nutzer 06.11., Variante B). */
-  private badgeTexture(count: number, color: string): THREE.CanvasTexture {
-    const key = `b|${color}|${count}`;
+  /**
+   * Mini-Zeichen über dem Verband (Nutzer 06.11., Variante C): links die eigene Rüstung als Form in der Seitenfarbe
+   * (● Infanterie, ◆ leicht, ■ schwer, ▲ Flieger), rechts im orangen Fadenkreuz, wogegen die Waffe stark ist
+   * (Splitter → ●, Kanone → ◆, Durchschlag → ■, Belagerung → Gebäude, Gewehr → ✱ Allrounder).
+   */
+  private chipTexture(shape: string, weapon: string, color: string): THREE.CanvasTexture {
+    const key = `chip|${shape}|${weapon}|${color}`;
     const hit = this.iconTex.get(key);
     if (hit) return hit;
     const c = document.createElement('canvas');
-    c.width = 32;
-    c.height = 18;
+    c.width = 48;
+    c.height = 24;
     const g = c.getContext('2d')!;
-    g.fillStyle = 'rgba(8,12,20,.85)';
-    g.fillRect(0, 0, 32, 18);
+    g.fillStyle = 'rgba(8,12,20,.82)';
+    g.beginPath();
+    g.roundRect(0.5, 0.5, 47, 23, 5);
+    g.fill();
+    const draw = (sh: string, cx: number, cy: number, r: number): void => {
+      g.beginPath();
+      if (sh === 'circle') g.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
+      else if (sh === 'diamond') { g.moveTo(cx, cy - r); g.lineTo(cx + r, cy); g.lineTo(cx, cy + r); g.lineTo(cx - r, cy); g.closePath(); }
+      else if (sh === 'tri') { g.moveTo(cx, cy - r); g.lineTo(cx + r, cy + r * 0.8); g.lineTo(cx - r, cy + r * 0.8); g.closePath(); }
+      else if (sh === 'house') { g.moveTo(cx, cy - r); g.lineTo(cx + r, cy - r * 0.1); g.lineTo(cx + r * 0.75, cy - r * 0.1); g.lineTo(cx + r * 0.75, cy + r * 0.8); g.lineTo(cx - r * 0.75, cy + r * 0.8); g.lineTo(cx - r * 0.75, cy - r * 0.1); g.lineTo(cx - r, cy - r * 0.1); g.closePath(); }
+      else g.rect(cx - r * 0.75, cy - r * 0.75, r * 1.5, r * 1.5);
+    };
+    // Rüstung
     g.fillStyle = color;
-    g.fillRect(0, 0, 3, 18);
-    g.fillStyle = '#fff';
-    g.font = 'bold 12px monospace';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(`×${count}`, 18, 10);
+    g.strokeStyle = '#0b0f16';
+    g.lineWidth = 2;
+    draw(shape, 12, 12, 7);
+    g.fill();
+    g.stroke();
+    // Pfeil
+    g.fillStyle = 'rgba(255,255,255,.55)';
+    g.beginPath(); g.moveTo(21, 9); g.lineTo(25, 12); g.lineTo(21, 15); g.closePath(); g.fill();
+    // Waffe: Ziel im Fadenkreuz
+    const TARGET: Record<string, string> = { splinter: 'circle', cannon: 'diamond', pierce: 'square', siege: 'house' };
+    g.strokeStyle = '#ff9a3c';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.arc(36, 12, 9, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo(36, 1); g.lineTo(36, 4); g.moveTo(36, 20); g.lineTo(36, 23); g.moveTo(25, 12); g.lineTo(28, 12); g.moveTo(44, 12); g.lineTo(47, 12); g.stroke();
+    const tgt = TARGET[weapon];
+    g.fillStyle = '#ff9a3c';
+    if (tgt) { draw(tgt, 36, 12, 5); g.fill(); }
+    else if (weapon !== 'none') { g.font = 'bold 13px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('✱', 36, 13); }
     const t = new THREE.CanvasTexture(c);
     t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.LinearFilter;
     t.colorSpace = THREE.SRGBColorSpace;
     this.iconTex.set(key, t);
     return t;
+  }
+
+  /** Reichweitenring (Waffenreichweite) unter dem Verband an der Maus. */
+  private updateRangeRing(world: World, e: Entity | null, alpha: number): void {
+    const range = e?.weapon?.def.range ?? 0;
+    if (!e || range <= 0) {
+      if (this.rangeRing) this.rangeRing.visible = false;
+      return;
+    }
+    if (!this.rangeRing) {
+      const geo = new THREE.RingGeometry(0.975, 1, 96);
+      const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthTest: false, side: THREE.DoubleSide });
+      this.rangeRing = new THREE.Mesh(geo, mat);
+      this.rangeRing.rotation.x = -Math.PI / 2;
+      this.rangeRing.renderOrder = 4;
+      this.scene.add(this.rangeRing);
+    }
+    const mirror = world.players[0].faction.id === world.players[1].faction.id;
+    const fid = world.players[e.owner].faction.id;
+    (this.rangeRing.material as THREE.MeshBasicMaterial).color.set(mirror && this.startsRight(world, e.owner) ? MIRROR_COLORS[fid] : FACTION_COLOR[fid]);
+    const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
+    const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+    const r = range + e.radius;
+    this.rangeRing.position.set(x, Math.max(0, this.heightAt(world, x, y)) + 0.08, y);
+    this.rangeRing.scale.set(r, r, 1);
+    this.rangeRing.visible = true;
+  }
+
+  /**
+   * Warnzeichen am Bildrand (Nutzer 06.11.): Wird ein eigenes Gebäude außerhalb des Bildes beschossen, zeigt ein roter
+   * Pfeil am Rand in seine Richtung (3 s nach dem letzten Treffer). Klick springt hin.
+   */
+  private updateEdgeWarnings(world: World, now: number): void {
+    const canvas = this.gl.domElement;
+    const r = canvas.getBoundingClientRect();
+    const keep = world.tps * 3;
+    const v = new THREE.Vector3();
+    for (const [id, at] of this.attacked) {
+      const b = world.get(id);
+      let el = this.edgeMarks.get(id);
+      const stale = now - at > keep || !b || !b.alive;
+      if (stale) this.attacked.delete(id);
+      let show = false;
+      if (!stale && b) {
+        v.set(b.pos.x, this.heightAt(world, b.pos.x, b.pos.y) + 0.5, b.pos.y).project(this.camera);
+        const behind = v.z > 1;
+        let nx = behind ? -v.x : v.x;
+        let ny = behind ? -v.y : v.y;
+        const inside = !behind && Math.abs(nx) <= 0.95 && Math.abs(ny) <= 0.95;
+        if (!inside) {
+          show = true;
+          const m = Math.max(Math.abs(nx), Math.abs(ny)) || 1;
+          nx /= m; ny /= m;
+          const px = r.left + ((nx * 0.94 + 1) / 2) * r.width;
+          const py = r.top + ((1 - ny * 0.9) / 2) * r.height;
+          if (!el) {
+            el = document.createElement('button');
+            (el as HTMLButtonElement).type = 'button';
+            el.className = 'edge-warn';
+            el.title = 'Gebäude unter Beschuss – Klick springt hin';
+            el.innerHTML = '<i>➤</i>';
+            const bx = b.pos.x, by = b.pos.y;
+            el.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); ev.preventDefault(); this.focus(bx, by); });
+            document.body.append(el);
+            this.edgeMarks.set(id, el);
+          }
+          el.style.left = `${px}px`;
+          el.style.top = `${py}px`;
+          (el.firstElementChild as HTMLElement).style.transform = `rotate(${Math.atan2(-ny, nx)}rad)`;
+        }
+      }
+      if (!show && el) {
+        el.remove();
+        this.edgeMarks.delete(id);
+      }
+    }
+    for (const [id, el] of this.edgeMarks) if (!this.attacked.has(id)) { el.remove(); this.edgeMarks.delete(id); }
   }
 
   private ensureSprites(sq: Squad, n: number): void {
@@ -1308,6 +1452,10 @@ export class Hd2dRenderer {
     for (const ev of world.events) {
       if (ev.seq <= this.lastSeq) continue;
       this.lastSeq = ev.seq;
+      if (ev.type === 'shot' && ev.target !== undefined && this.humanRef !== null && ev.owner !== this.humanRef) {
+        const t = world.get(ev.target);
+        if (t && t.kind === 'building' && t.owner === this.humanRef) this.attacked.set(t.id, now);
+      }
       if (ev.type === 'shot' && ev.land !== undefined && ev.shooter !== undefined) this.spawnShot(world, ev, now);
       else if (ev.type === 'shot') this.burst(new THREE.Vector3(ev.to.x, 0.4, ev.to.y), '#ffb02a', 0.9, now, world.tps * 0.4);
       else if (ev.type === 'heal') this.spawnHeal(ev.from, ev.to, now, world.tps);

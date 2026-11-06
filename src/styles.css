@@ -1398,3 +1398,14 @@ body.ui-c:not(.c-sel) .tip-text { bottom: 52px; }
 body.ui-c:not(.c-sel) .tip-hover { bottom: 76px; }
 /* Route steht schon im Kontext-Panel (mit Countdown) – im Raster nicht doppelt; Tasten O/M/U bleiben. */
 body.ui-c .c-dock .cmd[data-action="route"] { display: none; }
+
+/* Warnzeichen am Bildrand: eigenes Gebäude außerhalb des Bildes unter Beschuss (Nutzer 06.11.) */
+.edge-warn { position: fixed; z-index: 24; width: 34px; height: 34px; margin: -17px 0 0 -17px; padding: 0; border-radius: 50%; border: 2px solid #ff5f6d; background: rgba(40, 8, 12, 0.85); color: #ff5f6d; cursor: pointer; box-shadow: 0 0 12px rgba(255, 95, 109, 0.6); animation: edge-pulse 0.8s ease-in-out infinite alternate; }
+.edge-warn i { display: block; font-style: normal; font-size: 16px; line-height: 30px; }
+@keyframes edge-pulse { from { box-shadow: 0 0 4px rgba(255, 95, 109, 0.4); } to { box-shadow: 0 0 16px rgba(255, 95, 109, 0.95); } }
+/* Nur eine wichtige Zahl gleichzeitig: Zuwachs und Einheiten erst beim Überfahren der Energie (Nutzer 06.11.) */
+body.ui-c .c-energy { position: relative; }
+body.ui-c .c-energy small { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; opacity: 0; pointer-events: none; padding: 2px 6px; background: var(--c-panel); border: 1px solid var(--c-line); border-radius: 3px; transition: opacity 0.12s; }
+body.ui-c .c-energy small[data-k="income"] { top: calc(100% + 4px); }
+body.ui-c .c-energy small.c-units { top: calc(100% + 26px); }
+body.ui-c .c-energy:hover small { opacity: 1; }
