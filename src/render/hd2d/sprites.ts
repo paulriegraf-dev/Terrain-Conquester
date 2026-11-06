@@ -82,3 +82,24 @@ export const PROJECTILES: Readonly<Record<string, ProjectileLook>> = {
   avalanche: { texture: 'snowball', arc: 1, heavy: true }, snowball: { texture: 'snowball', arc: 1 }, blade: { texture: 'blade', additive: true },
   dart: { texture: 'dart' }, heal: { texture: 'orb', additive: true },
 };
+
+/**
+ * Mock-up 2 (Nutzer 06.11.): Die großen, detailreichen Figuren bilden im Gedränge einen Klumpen. Zum Vergleich die alten,
+ * schlichten Technoclan-Figuren (32 px, etwa eine Kachel) für Hover Scout, Technogunner, Scharfschützen und Plasmawerfer,
+ * mit einfacher Pixel-Animation (Atmen, Wippen, Rückstoß). Umschaltbar im Menü; Standard bleibt „neu“.
+ */
+export const OLD_TC_KEY = 'tc-old-technoclan';
+const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
+  sniper: { faction: 'technoclan', sheet: 'units/old_sniper.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.42, 0.36]], projectile: 'rail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  plasma: { faction: 'technoclan', sheet: 'units/old_plasma.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.46, 0.5]], projectile: 'pglob' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  hoverscout: { faction: 'technoclan', sheet: 'units/old_hoverscout.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0.15, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.4, 0.3]], projectile: 'bolt' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  gunner: { faction: 'technoclan', sheet: 'units/old_gunner.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.44, 0.36]], projectile: 'gshot' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+};
+export function oldTechnoclan(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(OLD_TC_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+if (oldTechnoclan()) Object.assign(UNIT_SPRITES, OLD_TC);

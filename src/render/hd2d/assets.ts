@@ -1,5 +1,9 @@
 /** HD-2D-Bilder (05.11.): werden beim Bauen als Data-URL eingebettet (esbuild-Loader für .png/.webp; Sheets verlustfrei als WebP). */
 import u_battery from '../../../assets/sprites/units/battery.webp';
+import o_gunner from '../../../assets/sprites/units/old_gunner.png';
+import o_hoverscout from '../../../assets/sprites/units/old_hoverscout.png';
+import o_plasma from '../../../assets/sprites/units/old_plasma.png';
+import o_sniper from '../../../assets/sprites/units/old_sniper.png';
 import u_bomber from '../../../assets/sprites/units/bomber.webp';
 import u_breaker from '../../../assets/sprites/units/breaker.webp';
 import u_catapult from '../../../assets/sprites/units/catapult.webp';
@@ -35,6 +39,11 @@ import tiles3 from '../../../assets/hd2d/tiles3.webp';
 import buildings from '../../../assets/hd2d/buildings.webp';
 
 export const UNIT_SHEETS: Readonly<Record<string, string>> = {
+  // Mock-up 2 (06.11.): alte, schlichte Technoclan-Figuren (32 px) mit einfacher Pixel-Animation
+  'units/old_gunner.png': o_gunner,
+  'units/old_hoverscout.png': o_hoverscout,
+  'units/old_plasma.png': o_plasma,
+  'units/old_sniper.png': o_sniper,
   'units/battery.webp': u_battery,
   'units/bomber.webp': u_bomber,
   'units/breaker.webp': u_breaker,

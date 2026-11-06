@@ -1,3 +1,4 @@
+import { OLD_TC_KEY, oldTechnoclan } from '../render/hd2d/sprites';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import type { AiLevel } from '../ai/simpleAi';
 import { BUILDINGS } from '../data/buildings';
@@ -166,6 +167,11 @@ export class Game {
     if (gfx) {
       gfx.hidden = !HD2D_AVAILABLE;
       gfx.textContent = graphicsButtonLabel(graphicsMode());
+    }
+    const oldTc = doc.getElementById('btn-oldtc');
+    if (oldTc) {
+      oldTc.hidden = graphicsMode() !== 'hd2d';
+      oldTc.textContent = `Technoclan-Figuren: ${oldTechnoclan() ? 'alt (Mock-up 2)' : 'neu'}`;
     }
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
@@ -1255,6 +1261,15 @@ export class Game {
       case 'music-toggle':
         this.music.setEnabled(!this.music.enabled);
         this.syncMusicButtons();
+        break;
+      case 'oldtc-toggle':
+        // Mock-up 2 (06.11.): alte Technoclan-Figuren ein/aus, gilt ab Neustart der Seite.
+        try {
+          localStorage.setItem(OLD_TC_KEY, oldTechnoclan() ? '0' : '1');
+        } catch {
+          // ohne Speicher kein Umschalten
+        }
+        location.reload();
         break;
       case 'graphics-toggle':
         // Alte Version / neue Grafik (05.11.): umschalten und neu starten.
