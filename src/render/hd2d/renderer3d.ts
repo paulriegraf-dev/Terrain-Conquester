@@ -35,6 +35,8 @@ const distFor = (z: number): number => lerp(78, 9, z * z * 0.35 + z * 0.65);
 /** Zoom aus game.ts (0,6 … 3, 1 = Standard) → Kamerazoom 0 … 1. */
 const zoomToCam = (zoom: number): number => Math.max(0, Math.min(1, 0.42 + Math.log2(zoom) * 0.4));
 /** Geländehöhe je Bodenart (Index wie TERRAIN_LIST: Wiese, Wald, Matsch, Schnee, Gebirge, Schlucht, Geröll, Erdwall, Ödland). */
+/** Darstellungsgröße der Figuren (06.11.: 0,88 statt 1 gegen Pixelbrei im Nah-Gefecht). */
+const FIGURE_SCALE = 0.88;
 const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
 export const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
 /** Gebäude-Streifen: Index je Gebäudeart. */
@@ -1081,6 +1083,8 @@ export class Hd2dRenderer {
     }
     this.updateRangeRing(world, hovered, alpha);
     this.updateTargetLines(world, hovered, alpha, visibleTo);
+    const lv = this.zoomLevel();
+    const disp = lv === 'map' || lv === 'lanes' ? null : this.separate(world, alpha, visibleTo);
     // Lesbarkeit je Zoom (Nutzer 06.11., Varianten B + C): Karte/Lanes Verbandssymbole, Mittel höchstens 3 Figuren mit
     // Modellzahl, Nah alle Figuren.
     const level = this.zoomLevel();
@@ -1096,8 +1100,9 @@ export class Hd2dRenderer {
         this.squads.set(e.id, sq);
       }
       sq.seen = stamp;
-      const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
-      const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+      const dp = disp?.get(e.id);
+      const x = dp ? dp.x : e.prev.x + (e.pos.x - e.prev.x) * alpha;
+      const y = dp ? dp.y : e.prev.y + (e.pos.y - e.prev.y) * alpha;
       const alive = Math.max(1, Math.min(aliveModels(e), e.models));
       // Figuren je Verband (Nutzer 06.11., Variante A – nur Darstellung): Technoclan und Myriaden höchstens 2, Terra-Former 3,
       // Myr-Drohnen als Schwarm alle. Eine Figur verschwindet erst, wenn weniger Modelle leben als gezeigt werden.
@@ -1134,7 +1139,8 @@ export class Hd2dRenderer {
       const right = this.startsRight(world, e.owner);
       const target = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
       const team = mirror && right ? MIRROR_COLORS[world.players[e.owner].faction.id] : null;
-      const size = (spr.cell / 32) * spr.scale;
+      // Figuren etwas kleiner (Nutzer 06.11., Nah-Gefecht): weniger Überdeckung im Gedränge.
+      const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
       const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) : 0;
       sq.walk += moving ? 0.016 * 60 * (UNITS[e.defId as UnitId]?.speed ?? 1) * 0.15 : 0;
       for (let i = 0; i < sq.sprites.length; i++) {
@@ -1346,6 +1352,63 @@ export class Hd2dRenderer {
   }
 
   private targetLines: THREE.Mesh | null = null;
+  /** Geglättete Bild-Versätze je Verband (nur Darstellung). */
+  private readonly sepOff = new Map<number, { x: number; y: number }>();
+
+  /**
+   * Nah-Gefecht lesbar (Nutzer 06.11., Replay): Verbände, deren Figuren sich im Bild überdecken, rücken in der Darstellung
+   * auseinander – Gegner mit sichtbarer Lücke, eigene enger. Nur Bild, die Simulation bleibt gleich; der Versatz ist
+   * begrenzt und gleitet, damit nichts springt.
+   */
+  private separate(world: World, alpha: number, visibleTo: (e: Entity) => boolean): Map<number, { x: number; y: number }> {
+    const us: { e: Entity; x: number; y: number; r: number; tx: number; ty: number }[] = [];
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
+      const spr = UNIT_SPRITES[e.defId as UnitId];
+      if (!spr) continue;
+      const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
+      const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) : 0;
+      const r = e.defId === 'drone' ? 0.3 : Math.max(0.3, size * 0.28 + spread * 0.35);
+      us.push({ e, x: e.prev.x + (e.pos.x - e.prev.x) * alpha, y: e.prev.y + (e.pos.y - e.prev.y) * alpha, r, tx: 0, ty: 0 });
+    }
+    const MAX = 0.9;
+    for (let it = 0; it < 3; it++) {
+      for (let i = 0; i < us.length; i++) {
+        const a = us[i]!;
+        for (let j = i + 1; j < us.length; j++) {
+          const b = us[j]!;
+          const foe = a.e.owner !== b.e.owner;
+          const want = (a.r + b.r) * (foe ? 1.05 : 0.95);
+          const dx = (b.x + b.tx) - (a.x + a.tx);
+          const dy = ((b.y + b.ty) - (a.y + a.ty)) * 1.4; // Bild ist in y gestaucht: senkrechte Nähe zählt mehr
+          if (Math.abs(dx) >= want || Math.abs(dy) >= want) continue;
+          const d = Math.hypot(dx, dy);
+          if (d >= want) continue;
+          const push = (want - d) * 0.5;
+          const nx = d > 1e-4 ? dx / d : (a.e.id < b.e.id ? -1 : 1);
+          const ny = d > 1e-4 ? dy / d / 1.4 : 0;
+          a.tx -= nx * push; a.ty -= ny * push;
+          b.tx += nx * push; b.ty += ny * push;
+        }
+      }
+      for (const u of us) {
+        const m = Math.hypot(u.tx, u.ty);
+        if (m > MAX) { u.tx *= MAX / m; u.ty *= MAX / m; }
+      }
+    }
+    const out = new Map<number, { x: number; y: number }>();
+    const seen = new Set<number>();
+    for (const u of us) {
+      const prev = this.sepOff.get(u.e.id) ?? { x: 0, y: 0 };
+      prev.x += (u.tx - prev.x) * 0.12;
+      prev.y += (u.ty - prev.y) * 0.12;
+      this.sepOff.set(u.e.id, prev);
+      seen.add(u.e.id);
+      out.set(u.e.id, { x: u.x + prev.x, y: u.y + prev.y });
+    }
+    for (const id of this.sepOff.keys()) if (!seen.has(id)) this.sepOff.delete(id);
+    return out;
+  }
 
   /**
    * Wer greift wen an (Nutzer 06.11.): Unter der Maus zeigt eine orange Linie zum Ziel des Verbands, rote Linien kommen von
