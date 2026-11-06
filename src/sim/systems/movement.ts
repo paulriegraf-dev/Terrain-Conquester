@@ -8,6 +8,7 @@ import type { PlayerId, Vec2 } from '../types';
 import { otherPlayer } from '../types';
 import type { World } from '../world';
 import { MAX_UNIT_RADIUS, aimPoint, rangeTo } from './targeting';
+import { UNITS, type UnitId } from '../../data/units';
 import { SpatialGrid } from '../spatial';
 import { controllerAt } from './influence';
 import { dist, rectCenter } from '../math';
@@ -46,7 +47,8 @@ export function updateMovement(world: World): void {
   const deploySpacing = world.rules.formation.deploySpacing;
   // Nachbarn fürs Gedränge über ein Raster (Positionen vom Tick-Anfang) statt alle Paare zu prüfen.
   const near = separationIndex(world);
-  const reach = Math.max(2 * MAX_UNIT_RADIUS, deploySpacing);
+  const sp = world.rules.formation.squadSpace;
+  const reach = Math.max(2 * MAX_UNIT_RADIUS, deploySpacing, sp.infantry, sp.light, sp.heavy, sp.swarm);
   for (const e of world.entities) {
     if (!e.alive || !e.mover) continue;
     if (e.stunnedUntil !== undefined && world.tick < e.stunnedUntil) continue; // betäubt (Notfallverlegung)
@@ -136,9 +138,19 @@ export function updateMovement(world: World): void {
     // Gedränge auflösen (gegen alle beweglichen Einheiten, Freund wie Feind).
     let px = 0;
     let py = 0;
+    // Vorrücken zum Ziel (Ziel gewählt, noch nicht in Reichweite): durch eigene Einheiten mit größerer Reichweite hindurch.
+    const myRange = e.weapon?.def.range ?? 0;
+    const advancing = !!target && target.alive && !!e.weapon && rangeTo(e, target) > myRange;
+    const space = world.rules.formation.squadSpace;
+    const mySpace = space[unitArmor(e)];
     near.forEachNear(nx, ny, reach, (o) => {
       if (o === e || !o.alive || !o.mover) return;
       let minD = e.radius + o.radius;
+      if (o.owner === e.owner) {
+        if (advancing && (o.weapon?.def.range ?? 0) > myRange) return; // durchlassen: der Fernkämpfer weicht aus
+        // Eigene Verbände verteilen sich (Lesbarkeit, 06.11.).
+        minD = Math.max(minD, (mySpace + space[unitArmor(o)]) / 2);
+      }
       // Ausgeschwärmte Truppen halten mehr Abstand zueinander (gegen Flächenschaden).
       if (o.owner === e.owner && (m.deployed || o.mover.deployed)) minD = Math.max(minD, deploySpacing);
       const dx = nx - o.prev.x; // Tick-Anfang, damit die Reihenfolge keine Seite bevorzugt
@@ -324,6 +336,13 @@ function separationIndex(world: World): SpatialGrid {
 
 /** Ab dieser Entfernung zum Formationsplatz geht es direkt dorthin (vorher über den Weg). */
 const SLOT_STEER_RANGE = 7;
+
+/** Rüstungsklasse einer Einheit (für den Platz je Verband). */
+function unitArmor(e: Entity): 'infantry' | 'light' | 'heavy' | 'swarm' {
+  if (e.defId === 'drone') return 'swarm';
+  const a = UNITS[e.defId as UnitId]?.armor;
+  return a === 'heavy' || a === 'light' ? a : 'infantry';
+}
 
 /** Ab diesem Abstand zum Commander schließt ein Begleiter mit vollem Tempo auf. */
 const ESCORT_GAP = 3;

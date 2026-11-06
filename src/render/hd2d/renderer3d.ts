@@ -1025,7 +1025,9 @@ export class Hd2dRenderer {
     const tex = this.frame(BUILDINGS_SHEET, idx * 80, 0, 80);
     if (!tex) return null;
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
-    const size = (80 / 32) * (e.kind === 'hq' ? 1.3 : 1) * Math.max(0.8, Math.min(1.2, r.w / 2));
+    // Bild passend zum Fundament (Nutzer 06.11.): kaum breiter als die Grundfläche, damit man sieht, wo das Gebäude
+    // endet und wie weit Truppen davor stehen (vorher 2,5 Kacheln für 2×2, HQ 3,9 für 3×3).
+    const size = r.w * (e.kind === 'hq' ? 1.15 : 1.1);
     s.scale.set(e.owner === 1 ? -size : size, size, 1);
     s.center.set(0.5, 0.12);
     s.position.set(cx, 0.02, cy + r.h * 0.25);
@@ -1100,7 +1102,9 @@ export class Hd2dRenderer {
         sh.visible = vis;
         if (!vis) continue;
         const o = OFFSETS[i]!;
-        const mx = x + o[0] * spread;
+        // Figuren stehen neben und hinter dem Verbandspunkt, nie davor (Richtung Gegner) – sonst wirkt die Reichweite kürzer.
+        const fwd = right ? -1 : 1;
+        const mx = x - Math.abs(o[0]) * spread * fwd;
         const my = y + o[1] * spread * 0.8;
         const h = this.heightAt(world, mx, my) + spr.fly;
         s.position.set(mx, h, my);

@@ -130,6 +130,12 @@ export interface FormationRules {
   deployRadius: number;
   /** Mindestabstand zwischen ausgeschwärmten eigenen Einheiten (gegen Flächenschaden). */
   deploySpacing: number;
+  /**
+   * Platz je Verband nach Rüstungsklasse (Nutzer 06.11., Lesbarkeit): eigene Verbände halten mindestens den Mittelwert
+   * beider Werte Abstand zueinander, damit sie sich zur Linie verteilen statt optisch übereinander zu stehen.
+   * Wer mit kürzerer Reichweite zu seinem Ziel vorrückt, darf durch eigene Fernkämpfer hindurch (die weichen aus).
+   */
+  squadSpace: { infantry: number; light: number; heavy: number; /** Myr-Drohnen: Schwarm, dicht (Fusion zur Brechstange). */ swarm: number };
 }
 
 /**
@@ -535,14 +541,16 @@ export const RULES: Rules = {
     { seconds: 150, speed: 1.1 },
   ],
   formation: {
-    spacing: 1.0,
+    // 06.11. (Nutzer, Lesbarkeit): Plätze weiter auseinander (vorher 1,0 / 0,9), passend zu squadSpace.
+    spacing: 1.4,
     slotsPerRow: 7,
-    rowDepth: 0.9,
+    rowDepth: 1.3,
     backRowRange: 3.5,
     rangeOffset: 2.5,
     maxDepth: 4,
     deployRadius: 10,
     deploySpacing: 1.4,
+    squadSpace: { infantry: 1.1, light: 1.3, heavy: 1.6, swarm: 0.6 },
   },
   // 25.10. abends (Nutzer, Versuch): keine Schadensminderung mehr im eigenen Gebiet (vorher 0,75) – gegen Turtle-Spiel; Heilung bleibt.
   homeDamageTaken: 1,
