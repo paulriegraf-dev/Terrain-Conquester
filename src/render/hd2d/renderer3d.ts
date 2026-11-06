@@ -1078,6 +1078,7 @@ export class Hd2dRenderer {
       }
     }
     this.updateRangeRing(world, hovered, alpha);
+    this.updateTargetLines(world, hovered, alpha, visibleTo);
     // Lesbarkeit je Zoom (Nutzer 06.11., Varianten B + C): Karte/Lanes Verbandssymbole, Mittel höchstens 3 Figuren mit
     // Modellzahl, Nah alle Figuren.
     const level = this.zoomLevel();
@@ -1122,8 +1123,9 @@ export class Hd2dRenderer {
       }
       // Modellzahl, wenn ausgedünnt (Mittel)
       // Kein „×Zahl“-Schild mehr (Nutzer 06.11.: wirkte unruhig); die Zahl steht in Karte/Lanes im Symbol.
-      // Stattdessen Mini-Zeichen Rüstung › Waffe (Nutzer 06.11., Variante C): nur unter der Maus, mit Alt oder in Mittel.
-      const showChip = hovered === e || this.altHeld || level === 'mid';
+      // Stattdessen Mini-Zeichen Rüstung › Waffe (Nutzer 06.11., Variante C): nur unter der Maus (dazu sein Ziel und wer ihn
+      // beschießt) oder mit Alt – nicht mehr dauerhaft in Mittel (wirkte im Gefecht zu voll).
+      const showChip = hovered === e || this.altHeld || (hovered !== null && hovered.weapon?.targetId === e.id) || (hovered !== null && e.weapon?.targetId === hovered.id);
       sq.badge.visible = showChip;
       const moveDx = e.pos.x - e.prev.x;
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
@@ -1339,6 +1341,54 @@ export class Hd2dRenderer {
     t.colorSpace = THREE.SRGBColorSpace;
     this.iconTex.set(key, t);
     return t;
+  }
+
+  private targetLines: THREE.Mesh | null = null;
+
+  /**
+   * Wer greift wen an (Nutzer 06.11.): Unter der Maus zeigt eine orange Linie zum Ziel des Verbands, rote Linien kommen von
+   * allen sichtbaren Gegnern, die ihn gerade beschießen.
+   */
+  private updateTargetLines(world: World, h: Entity | null, alpha: number, visibleTo: (e: Entity) => boolean): void {
+    if (!this.targetLines) {
+      const g = new THREE.BufferGeometry();
+      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthTest: false, side: THREE.DoubleSide });
+      this.targetLines = new THREE.Mesh(g, mat);
+      this.targetLines.renderOrder = 8;
+      this.targetLines.frustumCulled = false;
+      this.scene.add(this.targetLines);
+    }
+    const P: number[] = [];
+    const C: number[] = [];
+    const at = (e: Entity): [number, number, number] => {
+      const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
+      const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+      return [x, Math.max(0, this.heightAt(world, x, y)) + 0.35, y];
+    };
+    // Flaches Band (WebGL-Linien sind nur 1 px breit): zwei Dreiecke je Strecke, am Ziel spitz zulaufend.
+    const seg = (a: Entity, b: Entity, col: [number, number, number]): void => {
+      const A = at(a);
+      const B = at(b);
+      const dx = B[0] - A[0];
+      const dz = B[2] - A[2];
+      const L = Math.hypot(dx, dz) || 1;
+      const w = 0.16;
+      const nx = (-dz / L) * w;
+      const nz = (dx / L) * w;
+      const k = 0.35; // am Ziel schmaler: zeigt die Richtung
+      P.push(A[0] + nx, A[1], A[2] + nz, A[0] - nx, A[1], A[2] - nz, B[0] + nx * k, B[1], B[2] + nz * k,
+        A[0] - nx, A[1], A[2] - nz, B[0] - nx * k, B[1], B[2] - nz * k, B[0] + nx * k, B[1], B[2] + nz * k);
+      for (let i = 0; i < 6; i++) C.push(...col);
+    };
+    if (h) {
+      const t = h.weapon?.targetId ? world.get(h.weapon.targetId) : undefined;
+      if (t?.alive && visibleTo(t)) seg(h, t, [1, 0.6, 0.24]);
+      for (const o of world.entities) if (o.alive && o.kind === 'unit' && o.owner !== h.owner && o.weapon?.targetId === h.id && visibleTo(o)) seg(o, h, [1, 0.3, 0.33]);
+    }
+    const g = this.targetLines.geometry;
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    this.targetLines.visible = P.length > 0;
   }
 
   /** Reichweitenring (Waffenreichweite) unter dem Verband an der Maus. */
