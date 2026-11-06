@@ -306,10 +306,13 @@ export class Hd2dRenderer {
     let dx = 0;
     const bottom = hit(0, -1);
     const top = hit(0, 1);
-    // Weit draußen (ganze Karte im Bild): mittig. Sonst hat der untere Rand Vorrang – oben sieht die Perspektive weit.
+    const mid = hit(0, 0);
+    // Weit draußen (ganze Karte im Bild): mittig. Sonst: unterer Bildrand nicht unter die Karte, und die Bildmitte darf
+    // bis an den oberen Kartenrand – den oberen Bildrand nicht begrenzen (in der Schrägsicht sieht er weit über die Karte
+    // hinaus; vorher kam man dadurch in Mittel/Nah nicht an die obere Lane, Nutzer 06.11.). Oben zeigt sich der Felsrand.
     if (c.z < 0.5 && bottom && top && bottom.z - top.z >= this.rows) dz = this.rows / 2 - (bottom.z + top.z) / 2;
-    else if (bottom && bottom.z > this.rows) dz = this.rows - bottom.z;
-    else if (top && top.z < -1.5) dz = Math.min(-1.5 - top.z, bottom ? this.rows - bottom.z : Infinity);
+    else if (bottom && bottom.z > this.rows + 0.5) dz = this.rows + 0.5 - bottom.z;
+    else if (mid && mid.z < 1) dz = 1 - mid.z;
     const left = hit(-1, -1);
     const right = hit(1, -1);
     if (left && right) {
@@ -1405,7 +1408,9 @@ export class Hd2dRenderer {
     const ly = world.map.waypoints[route].y;
     const cx = world.map.width / 2;
     const dir = cx >= sx ? 1 : -1;
-    const pts: [number, number][] = [[sx + dir * (r.w / 2 + 0.3), sy], [sx + dir * 2.5, (sy + ly) / 2], [sx + dir * 4.5, ly], [cx - dir * 2.5, ly]];
+    // Bis zur Lane und ein Stück an ihr entlang (höchstens 10 Kacheln, nicht über die Kartenmitte).
+    const endX = dir > 0 ? Math.min(cx - 2.5, sx + 14) : Math.max(cx + 2.5, sx - 14);
+    const pts: [number, number][] = [[sx + dir * (r.w / 2 + 0.3), sy], [sx + dir * 2.5, (sy + ly) / 2], [sx + dir * 4.5, ly], [endX, ly]];
     const out: [number, number][] = [];
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i]!;
@@ -1494,7 +1499,10 @@ export class Hd2dRenderer {
         }
         const sel = e.id === selId;
         const curMat = b.cur.material as THREE.MeshBasicMaterial;
-        curMat.opacity = sel ? 0.95 : 0.5;
+        // Nur die gewählte Fabrik zeigt ihr Band (Nutzer 06.11.: alle Bänder zugleich wirkten wie seltsame Linien quer
+        // über die Karte); laufende Umstellungen bleiben für jede eigene Fabrik sichtbar.
+        b.cur.visible = sel || !!pr.pendingRoute;
+        curMat.opacity = sel ? 0.9 : 0.45;
         curMat.map!.offset.x -= dt * (FLOW[world.players[me].stance[pr.route]] ?? 0.6);
         if (b.pend && pr.pendingRoute) {
           const pm = b.pend.material as THREE.MeshBasicMaterial;

@@ -833,6 +833,8 @@ export class Renderer {
       [BUILD_ZONE.front]: { fill: `rgba(232,176,74,${strong ? 0.16 : 0.06})`, line: `rgba(232,176,74,${strong ? 0.9 : 0.5})`, dash: [t * 0.3, t * 0.2] },
     };
     // Niemandsland: dunkel schraffiert – hier wächst kein Einfluss, hier treffen sich die Fronten.
+    // In der 2,5D-Ansicht nicht: in der Schrägsicht wurden daraus Streifen quer über die Karte (Nutzer 06.11.).
+    if (!this.opts.overlayOnly) {
     ctx.save();
     ctx.strokeStyle = 'rgba(10,14,12,0.35)';
     ctx.lineWidth = Math.max(1, t * 0.08);
@@ -846,6 +848,7 @@ export class Renderer {
     }
     ctx.stroke();
     ctx.restore();
+    }
     for (const zone of [BUILD_ZONE.base, BUILD_ZONE.front] as const) {
       const st = style[zone];
       ctx.fillStyle = st.fill;
