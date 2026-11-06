@@ -136,6 +136,17 @@ export function siteOfRoute(world: World, route: Route): SiteDef | null {
   return null;
 }
 
+/**
+ * Ziel der Haltung „Sichern“: die Station der Lane. Die Mitte hat keine Station – dort sammeln sich sichernde Verbände
+ * um die Kartenmitte, auch wenn sie dafür in die gegnerische Hälfte müssen (Nutzer 06.11.: ersetzt die „Stellung“).
+ */
+export function secureAnchor(world: World, route: Route): { pos: Vec2 } | null {
+  const site = siteOfRoute(world, route);
+  if (site) return site;
+  if (route === 'mid') return { pos: world.map.def.center ?? world.map.waypoints.mid };
+  return null;
+}
+
 /** Wirksam? Besitzer gesetzt und kein Gegner näher als contestRadius. */
 function updateStations(world: World): void {
   const rules = world.rules.sites;

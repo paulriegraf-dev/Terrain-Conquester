@@ -1,5 +1,5 @@
 import { SLIT } from './visibility';
-import { siteOfRoute } from './sites';
+import { secureAnchor } from './sites';
 import type { Entity, EntityKind } from '../entity';
 import { closestPointInRect, dist, distToRect } from '../math';
 import type { PlayerId, Vec2 } from '../types';
@@ -253,7 +253,7 @@ export function updateTargeting(world: World): void {
     // Halten und Verteidigen: nicht übers Niemandsland nachsetzen (nur Front-Truppen jagen weiter).
     const order = e.mover ? unitOrder(world, e) : 'push';
     const holding = !!e.mover && order !== 'push';
-    const secureSite = order === 'secure' && e.mover ? siteOfRoute(world, e.mover.route) : null;
+    const secureSite = order === 'secure' && e.mover ? secureAnchor(world, e.mover.route) : null;
     // Schützen mit Rechteck (das HQ) messen ihre Reichweite ab dem Rand, nicht ab der Mitte.
     const halfW = e.rect ? e.rect.w / 2 : 0;
     const halfH = e.rect ? e.rect.h / 2 : 0;

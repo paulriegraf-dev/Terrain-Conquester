@@ -1409,3 +1409,5 @@ body.ui-c .c-energy small { position: absolute; left: 50%; transform: translateX
 body.ui-c .c-energy small[data-k="income"] { top: calc(100% + 4px); }
 body.ui-c .c-energy small.c-units { top: calc(100% + 26px); }
 body.ui-c .c-energy:hover small { opacity: 1; }
+/* Keine Tastenkürzel für Befehle (Nutzer 06.11.): Tasten an den Knöpfen ausblenden. */
+body.ui-c .cmd .key { display: none; }

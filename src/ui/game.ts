@@ -38,7 +38,6 @@ import { Renderer } from '../render/renderer';
 import { Hd2dRenderer } from '../render/hd2d/renderer3d';
 import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
 import { HudC, PAN_KEYS, VIEW_KEYS } from './hudC';
-import { ROOT_TITLE } from './hud';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
 import { Hud } from './hud';
@@ -900,7 +899,7 @@ export class Game {
     if (this.lobbyOpen) return;
     // Taste K (28.10. abends): Schlussstein-Karten öffnen/schließen – solange eine Wahl offen ist, vor dem Befehlsraster
     // (sonst „Umwidmen“ an der Fabrik).
-    if (key === 'k' && this.session.mode === 'play' && this.keystones.toggle()) {
+    if (key === 'k' && !this.hudC && this.session.mode === 'play' && this.keystones.toggle()) {
       ev.preventDefault();
       return;
     }
@@ -916,25 +915,22 @@ export class Game {
         ev.preventDefault();
         return;
       }
-      // WASD navigiert (die Kamera liest die Tasten selbst); Befehle auf W/A/S/D gehen mit Shift.
-      if (!shifted && PAN_KEYS.has(key)) {
+      // WASD navigiert (die Kamera liest die Tasten selbst).
+      if (PAN_KEYS.has(key)) {
         ev.preventDefault();
         return;
       }
-      if (!shifted && VIEW_KEYS.has(key)) {
-        const world = this.session.world;
-        const canAct = this.session.mode === 'play' && !world.result;
-        const set = commandsFor({ world, view: this.view, canAct, sellArmed: this.hudSellArmed });
-        const taken = set.title !== ROOT_TITLE && set.buttons.some((b) => b.key === key && !b.disabled);
-        if (!taken && this.hudC.key(key, false)) {
-          ev.preventDefault();
-          return;
-        }
+      if (VIEW_KEYS.has(key) && this.hudC.key(key, false)) {
+        ev.preventDefault();
+        return;
       }
+      // Nutzer 06.11.: Keine Tastenkürzel für Fabriken, Bauen und Befehle – alles per Klick. Es bleiben Navigation
+      // (WASD/Pfeile, 1–4, Tab, Zoom), Esc, Leertaste (Anhalten) und H (Konter-Tafel).
+      if (!['escape', ' ', 'h', '+', '=', '-', '0'].includes(key)) return;
     }
     const handled = ((): boolean => {
       // Tasten des aktuellen Befehlsrasters gehen vor (Fronten: Q–R und A–F liegen auf Ansichtstasten).
-      if (key !== 'escape' && key !== ' ') {
+      if (key !== 'escape' && key !== ' ' && !this.hudC) {
         const world = this.session.world;
         const canAct = this.session.mode === 'play' && !world.result;
         const button = commandsFor({ world, view: this.view, canAct, sellArmed: this.hudSellArmed }).buttons.find((b) => b.key === key && !b.disabled);

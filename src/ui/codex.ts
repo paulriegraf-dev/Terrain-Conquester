@@ -401,7 +401,7 @@ function basicsTab(): string {
   ])}
   ${section('Fronten: vier Haltungen je Lane', [
     '<b>Verteidigen</b>: Truppen bleiben an der Basis und fangen Eindringlinge ab. <b>Halten</b>: an der eigenen Grenze, gestaffelt nach Reichweite.',
-    '<b>Sichern</b>: zur Station der Lane, im Halbkreis darum (ohne Station wie Halten). <b>Front</b>: bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff.',
+    '<b>Sichern</b>: zur Station der Lane, im Halbkreis darum; in der Mitte um die Kartenmitte, auch in der gegnerischen Hälfte. <b>Front</b>: bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff.',
     `Eine neue Haltung greift nach ${sec(r.front.stanceChangeSeconds)}.`,
   ])}
   ${section('Gelände', [

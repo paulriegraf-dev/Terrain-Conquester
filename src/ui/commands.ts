@@ -71,7 +71,18 @@ export interface CommandContext {
 const ROUTE_GLYPH = { top: '↑', mid: '→', bottom: '↓' } as const;
 const ROUTE_KEY = { top: 'o', mid: 'm', bottom: 'u' } as const;
 
+/**
+ * Erstmal im Hintergrund (Nutzer 06.11.: „cleanes simples Gameplay, alles mit Mausklicks“): Produktions-Pause, Tarnen und
+ * Stellung werden nicht angezeigt. Die Stellung ersetzt „Sichern“ auf der Mitte (sammelt um die Kartenmitte).
+ */
+const HIDDEN_COMMANDS: ReadonlySet<string> = new Set(['pause', 'disguise-menu', 'rally']);
+
 export function commandsFor(ctx: CommandContext): CommandSet {
+  const set = commandsForAll(ctx);
+  return set.buttons.some((b) => HIDDEN_COMMANDS.has(b.id)) ? { ...set, buttons: set.buttons.filter((b) => !HIDDEN_COMMANDS.has(b.id)) } : set;
+}
+
+function commandsForAll(ctx: CommandContext): CommandSet {
   const { world, view } = ctx;
   const sel = view.selected;
   if (sel?.kind === 'pad') return outpostCommands(ctx, sel.padId);
@@ -204,7 +215,7 @@ const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secur
 export const STANCE_TIP: Record<Stance, string> = {
   defend: 'Truppen bleiben in der Basis und fangen Eindringlinge im eigenen Gebiet ab',
   hold: 'Truppen stehen an der eigenen Grenze und eilen Eindringlingen in der Nähe entgegen',
-  secure: 'Truppen ziehen zur Station dieser Lane und halten sie im Halbkreis, gestaffelt nach Reichweite (ohne Station wie Halten)',
+  secure: 'Truppen ziehen zur Station dieser Lane und halten sie im Halbkreis, gestaffelt nach Reichweite; in der Mitte sammeln sie sich um die Kartenmitte – auch in der gegnerischen Hälfte',
   push: 'Truppen ziehen über die Mitte bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff',
 };
 

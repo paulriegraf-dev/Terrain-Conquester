@@ -13,7 +13,7 @@ import { SpatialGrid } from '../spatial';
 import { controllerAt } from './influence';
 import { dist, rectCenter } from '../math';
 import type { Stance } from '../world';
-import { barrierSlow, siteOfRoute, stationActive } from './sites';
+import { barrierSlow, secureAnchor, stationActive } from './sites';
 import { assignSlots, cellX, updateDeployment } from './formation';
 import { waveLeader } from './hero';
 import type { Slot } from './formation';
@@ -244,7 +244,7 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
   const cy = Math.floor(e.pos.y);
   const here = world.grid.index(cx, cy);
   let order = unitOrder(world, e);
-  const site = order === 'secure' ? siteOfRoute(world, m.route) : null;
+  const site = order === 'secure' ? secureAnchor(world, m.route) : null;
   if (order === 'secure' && !site) order = 'hold'; // keine Station auf dieser Lane: wie Halten
   let next: number;
   if (order === 'secure' && site) {

@@ -11,7 +11,7 @@ import type { PlayerId, Route, Vec2 } from '../types';
 import { PLAYERS, ROUTES } from '../types';
 import type { Stance, World } from '../world';
 import { controllerAt } from './influence';
-import { siteOfRoute } from './sites';
+import { secureAnchor } from './sites';
 
 /**
  * Formationen – sie folgen der Haltung, es gibt nichts einzeln zu steuern:
@@ -49,7 +49,7 @@ export function assignSlots(world: World, order: (e: Entity) => Stance): Map<num
     for (const r of ROUTES) {
       const groups: Record<'hold' | 'defend' | 'secure', [Entity[], Entity[]]> = { hold: [[], []], defend: [[], []], secure: [[], []] };
       const rallies = new Map<string, { at: Vec2; rows: [Entity[], Entity[]] }>();
-      const site = siteOfRoute(world, r);
+      const site = secureAnchor(world, r);
       for (const e of world.entities) {
         if (!e.alive || e.kind !== 'unit' || e.owner !== p || !e.mover || e.mover.route !== r) continue;
         let o = order(e);
