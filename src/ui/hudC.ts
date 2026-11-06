@@ -7,6 +7,7 @@
  * - Knöpfe Markt / Späher / Schlusssteine / Lage öffnen die bisherigen Panels als Fenster über der Leiste.
  * Liest nur den Spielzustand; Befehle laufen wie gehabt über game.ts.
  */
+import { ICONS, type IconName } from './icons';
 import { MARKET_LEVELS, PART_IDS, PARTS } from '../data/market';
 import { TERRAIN_LIST } from '../data/terrain';
 import { FACTION_COLOR, type Hd2dRenderer } from '../render/hd2d/renderer3d';
@@ -38,6 +39,8 @@ const LEVELS: readonly { id: ZoomLevel; name: string; key: string; zoom: number 
 const LANE_SHORT: Record<Route, string> = { top: 'O', mid: 'M', bottom: 'U' };
 const PART_SHORT: Record<string, string> = { arms: 'Waffen', wheels: 'Räder', plates: 'Platten' };
 const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secure: '◎', push: '»' };
+const STANCE_ICON: Record<Stance, IconName> = { defend: 'defend', hold: 'hold', secure: 'shield', push: 'push' };
+const LANE_NAME: Record<Route, string> = { top: 'Oben', mid: 'Mitte', bottom: 'Unten' };
 export type Pop = 'market' | 'scout' | 'keystones' | 'log' | 'front';
 const POPS: readonly { id: Pop; name: string }[] = [
   { id: 'market', name: 'Markt' },
@@ -99,12 +102,12 @@ export class HudC {
     const frame = doc.getElementById('board-frame') ?? doc.body;
     // HUD oben
     const hud = mk('div', 'c-hud', `
-      <div class="c-cell c-energy"><span class="c-lbl">Energie</span><b data-k="energy">0</b><small data-k="income"></small><small class="c-units" data-k="units"></small></div>
-      <div class="c-cell c-clock"><span class="c-lbl">Zeit</span><b data-k="clock">0:00</b></div>
+      <div class="c-cell c-energy" title="Energie"><span class="c-lbl">Energie</span><span class="c-ico">${ICONS.bolt}</span><b data-k="energy">0</b><small data-k="income"></small><small class="c-units" data-k="units"></small></div>
+      <div class="c-cell c-clock" title="Spielzeit"><span class="c-lbl">Zeit</span><span class="c-ico">${ICONS.clock}</span><b data-k="clock">0:00</b></div>
       <button type="button" class="c-cell c-ks" data-action="c-keystones" title="Uhr und nächstes Schlussstein-Fenster – Klick zeigt deine Schlusssteine (Taste K wählt)"><span class="c-lbl">Schlussstein</span><small data-k="gate"></small></button>
       <button type="button" class="c-cell" data-action="c-fronts" title="Frontlage je Lane (Anteil am Gebiet) und Haltung – Klick öffnet die Fronten (⇧A)"><span class="c-lbl">Lanes</span><div class="c-lanes" data-k="lanes"></div></button>
       <button type="button" class="c-cell" data-action="c-pop" data-pop="market" title="Markt (Lage von vor 5 s, Prozent = Änderung zu 20 s davor) – Klick öffnet den Markt"><span class="c-lbl">Markt</span><div class="c-mkt" data-k="market"></div></button>
-      <div class="c-cell"><span class="c-lbl">Zentrum</span><b data-k="center">frei</b></div>`);
+      <div class="c-cell c-center" title="Kartenmitte: wer sie hält"><span class="c-lbl">Zentrum</span><span class="c-ico">${ICONS.target}</span><b data-k="center">frei</b></div>`);
     // Kurzmeldungen
     const feed = mk('ol', 'c-feed');
     feed.title = 'Lagebericht – Klick öffnet alle Meldungen';
@@ -392,7 +395,8 @@ export class HudC {
       // Nur Lane + Haltung (Nutzer 06.11.: der Gebietsanteil je Lane braucht man nicht – die Zelle ist der Shortcut zu den Fronten).
       void share;
       void foe;
-      return `<span class="c-ln">${LANE_SHORT[r]}</span><span class="c-sg${pend ? ' pend' : ''}" title="${STANCE_NAMES[st]}${pend ? ` → ${STANCE_NAMES[pend.stance]} in ${left} s` : ''}">${STANCE_GLYPH[pend ? pend.stance : st]}</span><span class="c-sn">${STANCE_NAMES[pend ? pend.stance : st]}${pend ? ` ${left} s` : ''}</span>`;
+      const shown = pend ? pend.stance : st;
+      return `<span class="c-ln">${LANE_SHORT[r]}</span><span class="c-sg${pend ? ' pend' : ''}" data-stance="${shown}" title="${LANE_NAME[r]}: ${STANCE_NAMES[st]}${pend ? ` → ${STANCE_NAMES[pend.stance]} in ${left} s` : ''}">${ICONS[STANCE_ICON[shown]]}</span><span class="c-sn">${STANCE_NAMES[pend ? pend.stance : st]}${pend ? ` ${left} s` : ''}</span>`;
     }).join('');
     set(this.el.lanes, lanes, true);
     // Markt

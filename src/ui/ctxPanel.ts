@@ -9,18 +9,54 @@
 import type { BuildingId } from '../data/buildings';
 import { UNITS } from '../data/units';
 import type { Entity } from '../sim/entity';
+import { BUILDINGS_SHEET, UNIT_SHEETS } from '../render/hd2d/assets';
+import { BUILDING_INDEX } from '../render/hd2d/renderer3d';
+import { UNIT_SPRITES } from '../render/hd2d/sprites';
+import { factorySpeed } from '../sim/systems/production';
+import { ICONS } from './icons';
 import { checkLevelUp, checkResearch, researchableUnitsOf, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { routeChangeSeconds } from '../sim/systems/sites';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
 import type { World } from '../sim/world';
 
 export type CtxTab = 'level' | 'gear' | 'special';
-const TABS: readonly { id: CtxTab; name: string }[] = [
-  { id: 'level', name: 'Stufe' },
-  { id: 'gear', name: 'Ausrüstung' },
-  { id: 'special', name: 'Spezial' },
+const TABS: readonly { id: CtxTab; name: string; icon: string }[] = [
+  { id: 'level', name: 'Stufe', icon: ICONS.level },
+  { id: 'gear', name: 'Ausrüstung', icon: ICONS.armor },
+  { id: 'special', name: 'Spezial', icon: ICONS.spark },
 ];
-const ROUTE_GLYPH = { top: '↑', mid: '→', bottom: '↓' } as const;
+const ROUTE_ICON = { top: ICONS.up, mid: ICONS.right, bottom: ICONS.down } as const;
+
+/**
+ * Kopf des Kontext-Panels (UI-Look C, Nutzer 06.11.): Gebäudebild, Stufen-Balken, die Figur, die gerade gebaut wird,
+ * mit Fortschritt und Restzeit – statt der langen Textinfo.
+ */
+function header(world: World, e: Entity): string {
+  const pr = e.producer!;
+  const p = world.players[e.owner];
+  const fb = p.faction.buildings[e.defId as BuildingId]!;
+  const key = e.kind === 'hq' ? `hq:${p.faction.id}` : `${p.faction.id}:${e.defId}`;
+  const bi = BUILDING_INDEX[key];
+  const P = 52;
+  const bport = bi === undefined ? '' : `background-image:url(${BUILDINGS_SHEET});background-size:${14 * P}px ${P}px;background-position:-${bi * P}px 0`;
+  const spr = UNIT_SPRITES[pr.unit];
+  const U = 34;
+  let uport = '';
+  if (spr) {
+    const cols = Math.max(spr.frames.idle, spr.frames.walk, spr.frames.attack);
+    const k = U / spr.cell;
+    uport = `background-image:url(${UNIT_SHEETS[spr.sheet] ?? ''});background-size:${cols * spr.cell * k}px ${3 * spr.cell * k}px;background-position:0 0`;
+  }
+  const maxLevel = fb.levels ?? fb.tiers.length;
+  const pips = Array.from({ length: maxLevel }, (_, i) => `<i class="${i < pr.level ? 'f' : ''}"></i>`).join('');
+  const tps = world.tps;
+  const job = pr.job;
+  const left = job ? Math.max(0, Math.ceil((job.doneTick - world.tick) / tps)) : Math.max(0, Math.ceil((pr.intervalTicks - pr.progress) / factorySpeed(world, e) / tps));
+  const share = job ? Math.min(1, (world.tick - job.startTick) / Math.max(1, job.doneTick - job.startTick)) : Math.min(1, pr.progress / Math.max(1, pr.intervalTicks));
+  const what = job ? (job.kind === 'level' ? `Ausbau auf Stufe ${job.level}` : job.kind === 'retool' ? `Umrüsten auf ${UNITS[job.unit].name}` : 'Umbau') : `Nächster ${UNITS[pr.unit].name}`;
+  return `<div class="cx-head"><span class="cx-port" style="${bport}" title="${esc(fb.name)}"></span><div class="cx-name"><b>${esc(fb.name)}</b><span class="cx-lv" title="Stufe ${pr.level} von ${maxLevel}">${pips}</span></div></div>` +
+    `<div class="cx-prod" title="${esc(`${what} in ${left} s`)}"><span class="cx-uport" style="${uport}" title="${esc(UNITS[pr.unit].name)}"></span><div class="cx-prog${job ? ' job' : ''}"><i style="width:${Math.round(share * 100)}%"></i></div><span class="cx-left">${left} s</span></div>`;
+}
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 
 function esc(s: string): string {
@@ -66,14 +102,14 @@ export function factoryPanel(world: World, e: Entity, tab: CtxTab, canAct: boole
     const pend = pr.pendingRoute === r;
     const cls = `cx-route${cur ? ' on' : ''}${pend ? ' pend' : ''}`;
     if (pend) {
-      return `<button type="button" class="${cls}" data-action="route-rush" data-route="${r}" title="Umstellung läuft – Klick: sofort für ${world.rules.routeRushCost} Energie" ${canAct && p.energy >= world.rules.routeRushCost ? '' : 'disabled'}>${ROUTE_GLYPH[r]} ${ROUTE_NAMES[r]}<small>in ${secs(pr.routeChangeTick)} s · sofort ${world.rules.routeRushCost}</small></button>`;
+      return `<button type="button" class="${cls}" data-action="route-rush" data-route="${r}" title="Umstellung läuft – Klick: sofort für ${world.rules.routeRushCost} Energie" ${canAct && p.energy >= world.rules.routeRushCost ? '' : 'disabled'}>${ROUTE_ICON[r]}<small>${secs(pr.routeChangeTick)} s · ${world.rules.routeRushCost} ⚡</small></button>`;
     }
     const tip = cur ? (pr.pendingRoute ? 'Klick: Umstellung abbrechen, Nachschub bleibt hier' : 'Aktueller Marschbefehl') : `Marschbefehl ${ROUTE_NAMES[r]} – greift ${pr.produced === 0 ? 'sofort' : `nach ${routeSecs} s`}; bis dahin läuft der Nachschub über die alte Lane. Für Späher sichtbar.`;
-    return `<button type="button" class="${cls}" data-action="route" data-route="${r}" title="${esc(tip)}" ${canAct ? '' : 'disabled'}>${ROUTE_GLYPH[r]} ${ROUTE_NAMES[r]}<small>${cur ? (pr.pendingRoute ? 'aktiv · Klick bricht ab' : 'aktiv') : pr.produced === 0 ? 'sofort' : `${routeSecs} s`}</small></button>`;
+    return `<button type="button" class="${cls}" data-action="route" data-route="${r}" title="${esc(tip)}" ${canAct ? '' : 'disabled'}>${ROUTE_ICON[r]}<small>${cur ? (pr.pendingRoute ? 'abbrechen' : ROUTE_NAMES[r]) : pr.produced === 0 ? 'sofort' : `${routeSecs} s`}</small></button>`;
   }).join('');
 
   // Reiter
-  const tabs = TABS.map((t) => `<button type="button" class="cx-tab${t.id === tab ? ' on' : ''}" data-action="c-tab" data-tab="${t.id}">${t.name}</button>`).join('');
+  const tabs = TABS.map((t) => `<button type="button" class="cx-tab${t.id === tab ? ' on' : ''}" data-action="c-tab" data-tab="${t.id}" title="${t.name}">${t.icon}<span>${t.name}</span></button>`).join('');
   let body = '';
   if (tab === 'level') {
     const maxLevel = fb.levels ?? fb.tiers.length;
@@ -126,6 +162,6 @@ export function factoryPanel(world: World, e: Entity, tab: CtxTab, canAct: boole
     if (!body) body = `<p class="cx-note">${tab === 'gear' ? 'Diese Fabrik hat keine Ausrüstung.' : 'Für diese Fabrik ist kein Spezial-Ausbau offen.'} Schlusssteine wählst du im Schlussstein-Fenster (K).</p>`;
   }
   const slots = `${p.labs.length}/${world.rules.researchSlots} Forschungen laufen`;
-  return `<div class="cx-sec">Route</div><div class="cx-routes">${routes}</div>` +
+  return header(world, e) + `<div class="cx-sec">Route</div><div class="cx-routes">${routes}</div>` +
     `<div class="cx-sec">Ausbau <span class="cx-slots">${slots}</span></div><div class="cx-tabs">${tabs}</div><div class="cx-body">${body}</div>`;
 }

@@ -1,3 +1,4 @@
+import { cmdIcon } from './icons';
 import { OLD_TC_KEY, oldTechnoclan } from '../render/hd2d/sprites';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import type { AiLevel } from '../ai/simpleAi';
@@ -186,6 +187,7 @@ export class Game {
       });
       const hudC = this.hudC;
       this.hud.onLog = (time, text, tone) => (text ? hudC.log(time, text, tone) : hudC.clearLog());
+      this.hud.icon = cmdIcon;
       this.hud.shiftedKey = (key, root) => PAN_KEYS.has(key) || (root && VIEW_KEYS.has(key));
     }
     // Schlussstein-Fenster (28.10. abends): Soldat und Karten in der Hinweiszone.
@@ -2277,7 +2279,7 @@ export class Game {
     if (!h) {
       this.hud.setStatus(
         this.session.mode === 'play'
-          ? 'Leertaste Pause · E N G V F Ansichts-Ebenen · Esc zurück'
+          ? (this.hudC ? '' : 'Leertaste Pause · E N G V F Ansichts-Ebenen · Esc zurück')
           : this.session.mode === 'replay'
             ? 'Replay: Nebel aus, du siehst beide Seiten.'
             : 'Vorschau läuft – starte eine eigene Runde.',

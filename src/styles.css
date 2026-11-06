@@ -1411,3 +1411,120 @@ body.ui-c .c-energy small.c-units { top: calc(100% + 26px); }
 body.ui-c .c-energy:hover small { opacity: 1; }
 /* Keine Tastenkürzel für Befehle (Nutzer 06.11.): Tasten an den Knöpfen ausblenden. */
 body.ui-c .cmd .key { display: none; }
+
+/* ===================================================================================================================
+   UI-Look C „Pixel-Rahmen“ (Nutzer 06.11.): kantige Doppelrahmen, gestufte Knopfkanten, Zeichen statt Text,
+   Pixel-Balken. Nur in der 2,5D-Oberfläche (body.ui-c).
+   =================================================================================================================== */
+body.ui-c {
+  --px-bg: #1b2233;
+  --px-dark: #0a0d14;
+  --px-rim: #5b6b8c;
+  --px-btn: #2b3550;
+  --px-btn-hi: #4a5a80;
+  --px-btn-lo: #161c2b;
+  --px-gold: #ffd23f;
+  --px-gold-lo: #a07c00;
+  --px-gold-hi: #fff2a8;
+}
+.ic { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: square; stroke-linejoin: miter; vertical-align: -0.14em; }
+.ic-fill { fill: currentColor; stroke: none; }
+/* Rahmen: dunkel – hell – dunkel, dazu harter Schatten */
+body.ui-c .c-hud, body.ui-c .hq-bars, body.ui-c .brand .menu-btn, body.ui-c .view-panel, body.ui-c .console-grid-wrap,
+body.ui-c .c-dock .console-info, body.ui-c .c-view, body.ui-c .rs-row, body.ui-c .side > .panel, body.ui-c[data-pop="front"] .c-front {
+  background: var(--px-bg);
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 0 0 3px var(--px-dark), 0 0 0 6px var(--px-rim), 0 0 0 9px var(--px-dark), 5px 8px 0 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: none;
+}
+body.ui-c .c-dock { gap: 18px; right: 21px; bottom: 19px; }
+body.ui-c .c-hud { top: 19px; }
+body.ui-c .topbar { inset: 19px 21px auto 21px; }
+body.ui-c .view-panel { left: 21px; bottom: 83px; }
+body.ui-c .rs-row { left: 21px; bottom: 19px; }
+body.ui-c:not(.c-sel) .console-grid-wrap { bottom: 19px; }
+/* Knöpfe: gestufte Kanten */
+body.ui-c .cmd, body.ui-c .cx-route, body.ui-c .cx-unit, body.ui-c .cx-tab, body.ui-c .cx-btn, body.ui-c .c-viewbar button,
+body.ui-c .c-pop-btn, body.ui-c .view-panel .seg-btn, body.ui-c .view-panel .chip, body.ui-c .cf-btn, body.ui-c .brand .menu-btn {
+  background: var(--px-btn);
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset -3px -3px 0 var(--px-btn-lo), inset 3px 3px 0 var(--px-btn-hi);
+  color: var(--c-text);
+}
+body.ui-c .cmd:hover:not(:disabled), body.ui-c .cx-route:hover:not(:disabled), body.ui-c .cx-unit:hover:not(:disabled),
+body.ui-c .c-viewbar button:hover, body.ui-c .cx-tab:hover { background: #34406a; }
+body.ui-c .cmd[aria-pressed="true"], body.ui-c .cx-route.on, body.ui-c .cx-unit.on, body.ui-c .cx-tab.on, body.ui-c .c-viewbar button.on,
+body.ui-c .view-panel .seg-btn[aria-pressed="true"], body.ui-c .c-pop-btn[aria-pressed="true"], body.ui-c .cf-btn.on {
+  background: var(--px-gold);
+  color: #1b1400;
+  box-shadow: inset -3px -3px 0 var(--px-gold-lo), inset 3px 3px 0 var(--px-gold-hi);
+}
+body.ui-c .c-viewbar button.on small, body.ui-c .cx-route.on small, body.ui-c .cx-unit.on small { color: #3a2c00; }
+body.ui-c .cmd:disabled { opacity: 0.35; }
+body.ui-c .cmd .cost { color: var(--px-gold); }
+body.ui-c .cmd[aria-pressed="true"] .cost { color: #3a2c00; }
+/* Bauleiste ohne Auswahl: nur Zeichen + Kosten, Name als Hinweis */
+body.ui-c:not(.c-sel) .cmd { width: 50px; min-width: 50px; height: 46px; padding: 0; display: grid; place-items: center; }
+body.ui-c:not(.c-sel) .cmd .lbl { display: none; }
+body.ui-c:not(.c-sel) .cmd .glyph { font-size: 1.4rem; }
+body.ui-c:not(.c-sel) .cmd .cost { top: auto; bottom: 3px; right: 5px; font-size: 0.6rem; }
+body.ui-c:not(.c-sel) .command-grid { gap: 6px; }
+body.ui-c:not(.c-sel) .tip-text { bottom: 74px; }
+body.ui-c:not(.c-sel) .tip-hover { bottom: 98px; }
+/* Raster in der Auswahl: Zeichen groß, Name klein */
+body.ui-c .c-dock .cmd { height: 56px; }
+body.ui-c .c-dock .cmd .glyph { font-size: 1.45rem; }
+body.ui-c .c-dock .cmd .lbl { font-size: 0.56rem; color: var(--c-muted); }
+body.ui-c .c-dock .cmd[aria-pressed="true"] .lbl { color: #3a2c00; }
+/* Oberer Streifen: Zeichen statt Beschriftung */
+body.ui-c .c-hud .c-lbl { display: none; }
+body.ui-c .c-cell { grid-auto-flow: column; align-items: center; gap: 7px; padding: 6px 16px; border-left: 3px solid var(--px-dark); }
+body.ui-c .c-cell:first-child { border-left: 0; }
+body.ui-c .c-ico { display: grid; place-items: center; font-size: 1.15rem; color: var(--c-muted); }
+body.ui-c .c-energy .c-ico { color: var(--px-gold); font-size: 1.5rem; filter: drop-shadow(0 0 4px rgba(255, 210, 63, 0.45)); }
+body.ui-c .c-energy b { font-family: var(--font-display); font-size: 1.55rem; color: var(--px-gold); text-shadow: 2px 2px 0 #7a5a00; }
+body.ui-c .c-clock b, body.ui-c .c-center b { font-family: var(--font-display); font-size: 1.1rem; text-shadow: 2px 2px 0 #000; }
+body.ui-c .c-lanes { display: flex; gap: 6px; grid-template-columns: none; }
+body.ui-c .c-lanes .c-ln, body.ui-c .c-lanes .c-sn { display: none; }
+body.ui-c .c-sg { width: 32px; height: 32px; display: grid; place-items: center; font-size: 1.1rem; background: var(--px-dark); box-shadow: inset -3px -3px 0 #2b3550, inset 3px 3px 0 #000; }
+body.ui-c .c-sg[data-stance="secure"] { color: #9be37b; }
+body.ui-c .c-sg[data-stance="push"] { color: #ff9a3c; }
+body.ui-c .c-sg[data-stance="hold"] { color: #7fe0ff; }
+body.ui-c .c-sg[data-stance="defend"] { color: #c6a0ff; }
+body.ui-c .c-sg.pend { animation: c-pulse 1s infinite; }
+body.ui-c .c-energy small { font-family: var(--font-data); }
+/* HQ-Balken: Pixel-Segmente */
+body.ui-c .hq-bars { padding: 8px 10px; }
+body.ui-c .hq-bars .bar { height: 10px; background: var(--px-dark); border-radius: 0; }
+body.ui-c .hq-bars .bar i { border-radius: 0; background-image: repeating-linear-gradient(90deg, transparent 0 6px, rgba(0, 0, 0, 0.45) 6px 8px); }
+/* Kontext-Panel (Auswahl) im Pixel-Stil */
+body.ui-c .c-dock .console-info { padding: 12px; }
+body.ui-c .console-info:has(.cx:not([hidden])) > .console-title,
+body.ui-c .console-info:has(.cx:not([hidden])) > .console-body { display: none; }
+body.ui-c .cx:not([hidden]) { border-top: 0; padding-top: 0; margin-top: 0; gap: 8px; }
+.cx-head { display: flex; gap: 10px; align-items: center; }
+.cx-port { width: 52px; height: 52px; flex: 0 0 52px; image-rendering: pixelated; background-color: var(--px-dark, #0a0d14); box-shadow: 0 0 0 3px #0a0d14, 0 0 0 5px #5b6b8c; }
+.cx-name { display: grid; gap: 6px; }
+.cx-name b { font-family: var(--font-display); font-size: 0.95rem; font-weight: 400; letter-spacing: 0.02em; }
+.cx-lv { display: flex; gap: 3px; }
+.cx-lv i { width: 16px; height: 7px; background: #0a0d14; }
+.cx-lv i.f { background: #ffd23f; box-shadow: inset -2px -2px 0 #a07c00; }
+.cx-prod { display: flex; align-items: center; gap: 8px; }
+.cx-uport { width: 34px; height: 34px; flex: 0 0 34px; image-rendering: pixelated; }
+.cx-prod .cx-prog { flex: 1; height: 8px; margin: 0; background: #0a0d14; border-radius: 0; }
+.cx-prod .cx-prog i { background: repeating-linear-gradient(90deg, #7fe0ff 0 6px, #4fa8d0 6px 8px); }
+.cx-prod .cx-prog.job i { background: repeating-linear-gradient(90deg, #ffd23f 0 6px, #a07c00 6px 8px); }
+.cx-left { font-family: var(--font-data); font-size: 0.72rem; color: var(--c-muted); min-width: 30px; text-align: right; }
+body.ui-c .cx-routes { gap: 5px; }
+body.ui-c .cx-route { padding: 6px 2px 4px; font-size: 1.05rem; }
+body.ui-c .cx-route small { font-size: 0.55rem; }
+body.ui-c .cx-tabs { border-bottom: 0; gap: 5px; }
+body.ui-c .cx-tab { flex: 1; display: grid; place-items: center; padding: 6px 0; font-size: 1rem; }
+body.ui-c .cx-tab span { display: none; }
+body.ui-c .cx-item { background: #141a28; border: 0; border-radius: 0; box-shadow: inset 0 0 0 2px #0a0d14; }
+body.ui-c .cx-sec { font-family: var(--font-display); }
+body.ui-c .cx-pips { display: none; }
+/* Hinweiszeilen */
+body.ui-c .tip-text, body.ui-c .tip-hover { border-radius: 0; background: rgba(10, 13, 20, 0.85); box-shadow: 0 0 0 2px #0a0d14; }

@@ -40,7 +40,7 @@ const FIGURE_SCALE = 0.88;
 const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
 export const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
 /** Gebäude-Streifen: Index je Gebäudeart. */
-const BUILDING_INDEX: Record<string, number> = {
+export const BUILDING_INDEX: Record<string, number> = {
   'hq:technoclan': 0, 'hq:myriaden': 1, 'hq:terraformer': 2,
   'technoclan:barracks': 3, 'technoclan:workshop': 4, 'technoclan:foundry': 5,
   'myriaden:barracks': 6, 'myriaden:workshop': 7, 'myriaden:foundry': 8,

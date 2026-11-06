@@ -107,6 +107,8 @@ export class Hud {
    * die Befehle dort wandern auf Shift + dieselbe Taste. Diese Tasten zeigt das Raster dann mit ⇧.
    */
   shiftedKey: ((key: string, root: boolean) => boolean) | null = null;
+  /** UI-Look C (06.11.): Zeichen statt Textglyphe je Befehls-id (2,5D-Oberfläche). */
+  icon?: (id: string) => string | null;
 
   constructor(
     private readonly doc: Document,
@@ -532,7 +534,7 @@ export class Hud {
         }
         return `<button type="button" data-cmd="${escapeHtml(b.id)}" class="cmd${b.danger ? ' danger' : ''}${short ? ' short' : ''}${b.pending ? ' pending' : ''}" data-action="${b.action}"${data} data-tip="${escapeHtml(b.tip)}" aria-pressed="${!!b.pressed}" aria-label="${escapeHtml(b.label)} (${keyLabel})" ${b.disabled ? 'disabled' : ''}>
           <span class="key">${keyLabel}</span>${b.cost !== undefined ? `<span class="cost">${b.cost}</span>` : ''}
-          <span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.pending ?? b.label)}</span></button>`;
+          <span class="glyph">${this.icon?.(b.id) ?? escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.pending ?? b.label)}</span></button>`;
       })
       .join('');
     const sig = set.title + html;
@@ -591,7 +593,7 @@ export class Hud {
     } else if (canAct && view.menu === 'disguise') {
       text = `Täuschung: Typ und Route wählen, dann ↵ (${DISGUISE.cost} Energie, ${DISGUISE.duration} s).`;
     } else if (canAct) {
-      text = 'Befehl wählen – jeder Knopf zeigt seine Taste. Gebäude anklicken für Marschbefehle.';
+      text = this.icon ? '' : 'Befehl wählen – jeder Knopf zeigt seine Taste. Gebäude anklicken für Marschbefehle.';
     }
     const sig = `${warn}|${text}`;
     if (sig === this.tipSig) return;
