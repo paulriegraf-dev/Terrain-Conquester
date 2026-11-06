@@ -639,6 +639,7 @@ export class Hd2dRenderer {
           }
           pos.needsUpdate = true;
           this.ground.geometry.computeVertexNormals();
+          overlayFade(this.ground.geometry, cols * 4 + 1, rows * 4 + 1);
         }
         this.buildTrees(world, at);
         return;
@@ -657,6 +658,7 @@ export class Hd2dRenderer {
       pos.setZ(i, h);
     }
     geo.computeVertexNormals();
+    overlayFade(geo, cols * SEG + 1, rows * SEG + 1);
     this.baseGround = this.groundCanvas(world, at);
     this.groundComposite.width = this.baseGround.width;
     this.groundComposite.height = this.baseGround.height;
@@ -676,7 +678,7 @@ export class Hd2dRenderer {
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.set(x0 + cols / 2, 0, rows / 2);
     this.scene.add(this.ground);
-    this.overlayMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.overlayTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    this.overlayMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.overlayTex, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     this.overlayMesh.rotation.x = -Math.PI / 2;
     this.overlayMesh.position.copy(this.ground.position);
     this.overlayMesh.renderOrder = 1;
@@ -1108,7 +1110,7 @@ export class Hd2dRenderer {
       sq.icon.visible = asIcons;
       if (asIcons) {
         const armor = UNITS[e.defId as UnitId]?.armor;
-        const shape = spr.fly > 0.2 ? 'tri' : armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
+        const shape = armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
         const key = `${shape}|${sideColor}|${alive}`;
         if (key !== sq.iconKey) {
           (sq.icon.material as THREE.SpriteMaterial).map = this.iconTexture(shape, sideColor, alive);
@@ -1179,7 +1181,7 @@ export class Hd2dRenderer {
       const top = this.heightAt(world, x, y) + (asIcons ? 0.35 + (level === 'map' ? 1.05 : 0.8) : spr.fly + size * 0.95);
       if (showChip) {
         const armor = UNITS[e.defId as UnitId]?.armor;
-        const shape = spr.fly > 0.2 ? 'tri' : armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
+        const shape = armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
         const wt = e.weapon?.def.type ?? 'none';
         const bk = `${shape}|${wt}|${sideColor}`;
         if (bk !== sq.badgeKey) {
@@ -1962,6 +1964,30 @@ function vnoise(px: number, py: number): number {
 }
 
 /** Übergänge (aus dem Mock-up): höherrangiges ebenes Gelände greift mit pixeligem Rauschen in die Nachbarkachel. */
+/**
+ * Bodenmarken (Gebiet, Grenzen, Zonen) nicht über Felswände und Schluchtkanten ziehen (Replay 06.11.: Streifen an den
+ * Felsen): Ecken, an denen die Höhe springt oder die hoch/tief liegen, bekommen Deckkraft 0 (Farbattribut mit Alpha).
+ */
+function overlayFade(geo: THREE.BufferGeometry, w: number, h: number): void {
+  const pos = geo.attributes.position!;
+  const col = new Float32Array(pos.count * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const z = pos.getZ(i);
+      let a = Math.abs(z) > 0.3 ? 0 : 1;
+      for (let dy = -1; dy <= 1 && a; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (Math.abs(pos.getZ(ny * w + nx) - z) > 0.3) { a = 0; break; }
+      }
+      col.set([1, 1, 1, a], i * 4);
+    }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+}
+
 function blendEdges(g: CanvasRenderingContext2D, cols: number, rows: number, at: (x: number, y: number) => number, box?: { x0: number; y0: number; x1: number; y1: number }): void {
   const TP = 32;
   // Nur ein Ausschnitt (Etappe 3, Leistung): Bild des Ausschnitts plus eine Kachel Rand lesen, nur im Ausschnitt schreiben.
