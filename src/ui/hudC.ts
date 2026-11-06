@@ -121,8 +121,17 @@ export class HudC {
       </div>
       <canvas class="c-mini" width="240" height="160" title="Minimap – Klick springt dorthin"></canvas>
       <span class="c-mini-cap"></span>`);
-    frame.append(hud, feed, view);
+    // Konsole C (Nutzer 06.11.): Auswahl-Info + Befehlsraster rechts unten als ein Block über der Ansichtsleiste;
+    // ohne Auswahl bleibt nur die schmale Bauzeile unten Mitte.
+    const dock = mk('div', 'c-dock');
+    const info = doc.querySelector('.console-info');
+    if (info) dock.append(info);
+    dock.append(view);
+    frame.append(hud, feed, dock);
+    this.dock = dock;
     const gridWrap = doc.querySelector('.console-grid-wrap');
+    this.gridWrap = gridWrap as HTMLElement | null;
+    this.gridHome = gridWrap?.parentElement ?? null;
     (gridWrap ?? frame).append(pops);
     const q = (k: string): HTMLElement => (hud.querySelector(`[data-k="${k}"]`) ?? view.querySelector(`[data-k="${k}"]`)) as HTMLElement;
     this.el = {
@@ -149,6 +158,10 @@ export class HudC {
   }
 
   private worldRef: World | null = null;
+  private dock: HTMLElement;
+  private gridWrap: HTMLElement | null;
+  private gridHome: HTMLElement | null;
+  private docked = false;
   private ctxTab: CtxTab = 'level';
   private ctxSig = '';
   private ctxEl: HTMLElement | null = null;
@@ -344,6 +357,11 @@ export class HudC {
   update(world: World, view: ViewState, now: number): void {
     this.worldRef = world;
     this.d.doc.body.classList.toggle('c-sel', !!view.selected);
+    if (this.docked !== !!view.selected && this.gridWrap && this.gridHome) {
+      this.docked = !!view.selected;
+      if (this.docked) this.dock.insertBefore(this.gridWrap, this.dock.querySelector('.c-view'));
+      else this.gridHome.append(this.gridWrap);
+    }
     this.drawMiniFrame(world);
     if (now - this.last < 200) return;
     this.updateCtx(world, view);

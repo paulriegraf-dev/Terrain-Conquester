@@ -1374,3 +1374,27 @@ body.ui-c .c-energy .c-lbl { color: #ffd23f; }
 /* Lanes: nur Haltung je Lane */
 body.ui-c .c-lanes { grid-template-columns: auto auto auto; gap: 1px 6px; }
 .c-sn { font-family: var(--font-body); font-size: 0.66rem; color: var(--c-text); text-align: left; }
+
+/* Konsole C (Nutzer 06.11.): ohne Auswahl schmale Bauzeile unten Mitte; mit Auswahl Info + Raster rechts unten. */
+.c-dock { display: none; }
+body.ui-c .c-dock { position: fixed; right: 12px; bottom: 10px; z-index: 26; width: 300px; display: flex; flex-direction: column; gap: 6px; }
+body.ui-c.start-mode .c-dock .console-info, body.ui-c.start-mode .c-dock .console-grid-wrap { display: none; }
+body.ui-c .c-dock .c-view { position: static; width: auto; }
+body.ui-c .c-dock .console-info { position: static; width: auto; max-height: 42vh; }
+body.ui-c .c-dock .console-grid-wrap { position: static; transform: none; width: auto; flex-direction: column; align-items: stretch; padding: 8px; }
+body.ui-c .c-dock .command-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+body.ui-c .c-dock .cmd { width: auto; min-width: 0; height: 58px; padding: 14px 2px 3px; display: grid; justify-items: center; align-content: center; gap: 1px; }
+body.ui-c .c-dock .cmd .glyph { font-size: 1.35rem; }
+body.ui-c .c-dock .cmd .lbl { font-size: 0.6rem; max-width: 64px; }
+body.ui-c .c-dock .cmd .key { color: #ffd23f; }
+body.ui-c .c-dock .c-pops { border-left: 0; padding-left: 0; padding-top: 6px; border-top: 1px solid var(--c-line); flex-wrap: wrap; }
+/* Bauzeile ohne Auswahl: flacher, Glyphe und Name nebeneinander */
+body.ui-c:not(.c-sel) .console-grid-wrap { padding: 4px 5px; }
+body.ui-c:not(.c-sel) .cmd { height: 32px; padding: 0 8px 0 22px; display: flex; align-items: center; gap: 5px; }
+body.ui-c:not(.c-sel) .cmd .key { top: 50%; transform: translateY(-50%); color: #ffd23f; }
+body.ui-c:not(.c-sel) .cmd .cost { top: auto; bottom: 1px; right: 3px; font-size: 0.55rem; }
+body.ui-c:not(.c-sel) .cmd .lbl { font-size: 0.68rem; max-width: 90px; color: var(--c-text); }
+body.ui-c:not(.c-sel) .tip-text { bottom: 52px; }
+body.ui-c:not(.c-sel) .tip-hover { bottom: 76px; }
+/* Route steht schon im Kontext-Panel (mit Countdown) – im Raster nicht doppelt; Tasten O/M/U bleiben. */
+body.ui-c .c-dock .cmd[data-action="route"] { display: none; }
