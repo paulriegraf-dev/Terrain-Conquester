@@ -165,3 +165,27 @@ Weitere Etappen:
 - **Lesbarkeit:** Silhouette vor Detail (Größe/Figur je Klasse nachschärfen), Reichweite beim Hover als Ring. Schadens-/Rüstungsklassen sind durch Fraktions-Eigenheiten verschwommen – übergangsweise Mini-Symbole über den Truppen (Waffe ≠ Rüstung).
 - **Upgrades:** qualitativ und sichtbar statt „+5 %“; Upgrades von Technoclan und Terra-Former (teils Myriaden) nochmal genau durchsehen. Etwas Ausprägung/Energie-Senke durch Forschung ist gewollt.
 - **Später:** Höhe durch „Geröll“ stapeln (teurer, Vorteil von oben, Einheiten können nicht gerade herunter), Rampe zum Erdwall, damit Einheiten vom Wall schießen. Schneeballschutz später prüfen. Karten sind Platzhalter, noch nicht handgebaut.
+
+## Figuren-Stil (Nutzer 06.11.): alte Technoclan-Figuren sind Basis und Stilgrundlage
+Grobe Figuren auf feiner Welt („wie Wandering Sword“). Begründung aus dem Vergleich im Replay: Die neuen 48-px-Figuren
+lagen in der Helligkeit fast auf dem Boden (#353543/#40444f), mit schwarzem Umriss – im Gefecht ein dunkler Klumpen.
+Die alten 32-px-Figuren liegen 1–2 Stufen heller und sind einzeln lesbar. Standard im Spiel seit 06.11.; der neue
+Satz bleibt über „Technoclan-Figuren“ im Hauptmenü abrufbar.
+
+Style-Guide für alle weiteren Figuren:
+1. **Größe nach Klasse (48-px-Zelle):** Infanterie und Held 32 px hoch, leichte Einheiten 32–40 px, schwere 44–48 px.
+   Infanterie ≈ 1 Kachel, schwere höchstens 1,5 Kacheln.
+2. **Farben:** 6–8 je Figur – ein Umriss, 3–4 Fraktionstöne, 1–2 Akzente. Keine Verläufe, kein Anti-Aliasing am Rand.
+3. **Umriss:** durchgehend 1 px, Technoclan einheitlich #150520 (nicht Schwarz). Innenlinien nur zur Flächentrennung.
+4. **Helligkeit:** Hauptton mindestens zwei Stufen heller als der Boden (Technoclan #7d5287–#a07cb3). Test: Bild in
+   Graustufen – jede Figur hebt sich von Boden und Nachbarn ab. Schwere dürfen dunkler sein, dann mit breiten hellen Platten.
+5. **Akzent = Kennung:** je Einheit genau einer an fester Stelle – Grün Gunner, Cyan Scharfschütze, Türkis Plasmawerfer,
+   Rot Hover, Weiß Heiler, Gold Held (einziger Gold-Akzent im Technoclan).
+6. **Silhouette:** als schwarze Fläche erkennbar; Unterschiede aus Form (Helm, Waffenlänge, Haltung, Breite), nicht aus Details.
+7. **Animation:** Stehen 2–4 Bilder (1-px-Atmen), Laufen 6–8, Angriff 6–8 mit Ausholen, gehaltenem Mündungsfeuer (1–2
+   Bilder) und Rückstoß 1–2 px. Je mehr Einheiten im Bild, desto weniger Bilder und größere Posenunterschiede.
+   Geschosse separat, in Figur-Pixelgröße, mit dunklem Rand.
+8. **Fahrzeuge:** Rumpf-Block, Turm-Block, Ketten/Beine als einfache Wiederholung; höchstens drei Leuchtpunkte als 2×2-Blöcke.
+
+Andere Fraktionen: Myriaden bleiben (hell, Gold/Messing – starkes Gegenpaar zu Lila; Drohnen dunkler als die Hauptfiguren).
+Terra-Former: 32-px-Regel zwingend (3 Figuren je Verband), Fraktionsfarbe warm-neutral (Ocker/Oliv).

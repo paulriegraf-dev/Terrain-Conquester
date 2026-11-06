@@ -103,9 +103,10 @@ const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
 };
 export function oldTechnoclan(): boolean {
   try {
-    return globalThis.localStorage?.getItem(OLD_TC_KEY) === '1';
+    // Seit 06.11. Standard (Nutzer: alte Technoclan-Figuren sind Basis und Stilgrundlage); „neu“ bleibt abrufbar.
+    return globalThis.localStorage?.getItem(OLD_TC_KEY) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 if (oldTechnoclan()) Object.assign(UNIT_SPRITES, OLD_TC);
