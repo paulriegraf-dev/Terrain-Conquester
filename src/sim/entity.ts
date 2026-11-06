@@ -48,6 +48,8 @@ export interface MoverState {
   deployed: boolean;
   /** Welle: folgt diesem Commander (Entity-ID; 0 = keinem) – überholt ihn nicht. */
   escortId: number;
+  /** Warten auf die Front (06.11.): Tick, in dem dieser Fernkämpfer zuletzt auf einen Tank gewartet hat – Tanks laufen durch ihn hindurch. */
+  waitTick?: number;
   /** Zählt Ticks, in denen die Einheit beim Verfolgen kaum vorankommt. */
   stuckTicks: number;
   /** Bis zu diesem Tick nur Ziele in Waffenreichweite angreifen (nach Steckenbleiben). */
