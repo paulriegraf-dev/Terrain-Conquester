@@ -1546,3 +1546,8 @@ body.ui-c .rs-btn small { position: absolute; bottom: -2px; left: 0; right: 0; t
 body.ui-c .rs-btn.rs-run { box-shadow: inset -3px -3px 0 var(--px-btn-lo), inset 3px 3px 0 var(--px-btn-hi), 0 0 0 2px var(--good); }
 body.ui-c .rs-btn.rs-dim { opacity: 0.4; }
 body.ui-c .view-panel .seg-btn[data-speed="0"] { display: none !important; }
+/* Zu wenig Energie (Nutzer 06.11.): Kosten rot statt gelb – Bauleiste, Befehle, Ausbau, Route */
+body.ui-c .cmd.short .cost, body.ui-c .cmd.short:disabled .cost { color: #ff5f6d; }
+body.ui-c .cmd.short { opacity: 0.7; }
+.cx-btn.short { color: #ff5f6d !important; }
+body.ui-c .cx-route:disabled small { color: #ff5f6d; }

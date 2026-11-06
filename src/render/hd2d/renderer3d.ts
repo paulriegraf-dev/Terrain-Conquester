@@ -1084,11 +1084,11 @@ export class Hd2dRenderer {
     this.updateRangeRing(world, hovered, alpha);
     this.updateTargetLines(world, hovered, alpha, visibleTo);
     const lv = this.zoomLevel();
-    const disp = lv === 'map' || lv === 'lanes' ? null : this.separate(world, alpha, visibleTo);
+    const disp = lv === 'map' ? null : this.separate(world, alpha, visibleTo);
     // Lesbarkeit je Zoom (Nutzer 06.11., Varianten B + C): Karte/Lanes Verbandssymbole, Mittel höchstens 3 Figuren mit
     // Modellzahl, Nah alle Figuren.
     const level = this.zoomLevel();
-    const asIcons = level === 'map' || level === 'lanes';
+    const asIcons = level === 'map'; // Nutzer 06.11.: Lanes zeigt Figuren, nur die Karte Symbole
     const maxFigures = level === 'mid' ? 3 : Infinity;
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;

@@ -64,12 +64,16 @@ function esc(s: string): string {
 }
 
 /** Eine Ausbau-Zeile: Name, Effekt, Kosten/Dauer oder Sperrgrund, Fortschritt + Abbrechen, Knopf. */
-function item(o: { name: string; sub?: string; desc: string; cost?: number; seconds?: number; reason?: string; done?: boolean; progress?: number | null; left?: number; action?: string; data?: Record<string, string>; cancel?: string; canAct: boolean }): string {
+function item(o: { short?: boolean; name: string; sub?: string; desc: string; cost?: number; seconds?: number; reason?: string; done?: boolean; progress?: number | null; left?: number; action?: string; data?: Record<string, string>; cancel?: string; canAct: boolean }): string {
+  // Zu wenig Energie (Nutzer 06.11.): Kosten trotzdem zeigen – rot statt gelb – statt des Sperrtexts.
+  const poor = o.reason ? /^Zu wenig Energie \((\d+)/.exec(o.reason) : null;
+  if (poor) o = { ...o, cost: Number(poor[1]), reason: undefined, short: true, canAct: false };
   const attrs = Object.entries(o.data ?? {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
   let right = '';
   if (o.done) right = '<span class="cx-done">✓</span>';
   else if (o.progress !== null && o.progress !== undefined) right = o.cancel ? `<button type="button" class="cx-btn cx-cancel" data-action="research-cancel" data-upgrade="${esc(o.cancel)}" ${o.canAct ? '' : 'disabled'} title="Abbrechen – volle Erstattung">✕</button>` : '';
   else if (o.action) right = `<button type="button" class="cx-btn" data-action="${o.action}"${attrs} ${o.canAct && !o.reason ? '' : 'disabled'}>${o.cost !== undefined ? `${o.cost} ⚡` : 'Start'}</button>`;
+  if (o.short && right.includes('cx-btn')) right = right.replace('class="cx-btn"', 'class="cx-btn short"');
   const meta = o.done
     ? 'erledigt'
     : o.progress !== null && o.progress !== undefined

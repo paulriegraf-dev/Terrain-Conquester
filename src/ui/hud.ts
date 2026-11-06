@@ -526,14 +526,17 @@ export class Hud {
     const html = set.buttons
       .map((b) => {
         const data = Object.entries(b.data ?? {}).map(([k, v]) => ` data-${k}="${escapeHtml(v)}"`).join('');
-        const short = b.cost !== undefined && energy < b.cost;
+        // Zu wenig Energie (Nutzer 06.11.): auch gesperrte Knöpfe zeigen ihre Kosten – dann rot.
+        const poor = b.cost === undefined ? /Zu wenig Energie \((\d+)/.exec(b.tip) : null;
+        const cost = b.cost ?? (poor ? Number(poor[1]) : undefined);
+        const short = cost !== undefined && energy < cost;
         const shifted = !!this.shiftedKey && this.shiftedKey(b.key, set.title === ROOT_TITLE);
         const keyLabel = b.key === 'escape' ? 'Esc' : b.key === 'enter' ? '↵' : shifted ? `⇧${b.key}` : b.key;
         if (b.spacer) {
           return `<div class="cmd info" data-tip="${escapeHtml(b.tip)}"><span class="glyph">${escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.label)}</span></div>`;
         }
         return `<button type="button" data-cmd="${escapeHtml(b.id)}" class="cmd${b.danger ? ' danger' : ''}${short ? ' short' : ''}${b.pending ? ' pending' : ''}" data-action="${b.action}"${data} data-tip="${escapeHtml(b.tip)}" aria-pressed="${!!b.pressed}" aria-label="${escapeHtml(b.label)} (${keyLabel})" ${b.disabled ? 'disabled' : ''}>
-          <span class="key">${keyLabel}</span>${b.cost !== undefined ? `<span class="cost">${b.cost}</span>` : ''}
+          <span class="key">${keyLabel}</span>${cost !== undefined ? `<span class="cost">${cost}</span>` : ''}
           <span class="glyph">${this.icon?.(b.id) ?? escapeHtml(b.glyph)}</span><span class="lbl">${escapeHtml(b.pending ?? b.label)}</span></button>`;
       })
       .join('');
