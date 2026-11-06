@@ -399,7 +399,7 @@ export class Hud {
     };
     const cell = (cls: string, attrs: string, letter: string, name: string, open: number, run: number | null, tip: string): string =>
       `<button type="button" class="rs-btn${run !== null ? ' rs-run' : ''}${open === 0 && run === null ? ' rs-dim' : ''} ${cls}" data-action="research-shortcut" ${attrs} title="${escapeHtml(tip)}" ${canAct ? '' : 'disabled'}>` +
-      (open > 0 ? `<span class="rs-n">${open}</span>` : '') + `<i>${escapeHtml(letter)}</i><span class="rs-name">${escapeHtml(name)}</span>${run !== null ? `<small>⚙ ${run} s</small>` : ''}</button>`;
+      (open > 0 ? `<span class="rs-n">${open}</span>` : '') + `<i>${letter.startsWith('<svg') ? letter : escapeHtml(letter)}</i><span class="rs-name">${escapeHtml(name)}</span>${run !== null ? `<small>⚙ ${run} s</small>` : ''}</button>`;
     const isOpen = (id: string): boolean => !p.research.includes(id) && !researching(world, me, id);
     const runIn = (ids: readonly string[]): number | null => {
       const l = p.labs.find((x) => ids.includes(x.upgrade));
@@ -418,7 +418,7 @@ export class Hud {
       const bu = visibleBuildingUpgrades(p.faction, b, p.research).filter((u) => isOpen(u.id));
       const ids = [...p.faction.upgrades.filter((u) => !u.keystone && unitsOf.includes(u.unit)).map((u) => u.id), ...allBuildingIds(b)];
       const names = [...ups.map((u) => `${u.name} (${UNITS[u.unit].name})`), ...bu.map((u) => u.name)];
-      return cell('', `data-building="${b}" data-full="1"`, fb.letter, fb.name, ups.length + bu.length, runIn(ids),
+      return cell('', `data-building="${b}" data-full="1"`, this.icon?.(`build-${b}`) ?? fb.letter, fb.name, ups.length + bu.length, runIn(ids),
         `${fb.name}: ${names.length ? names.join(', ') : 'nichts offen'}. Klick = Forschungsmenü dieser Fabrikart (wie R).`);
     });
     const html = buildingsBtns.join('');

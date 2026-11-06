@@ -1528,3 +1528,21 @@ body.ui-c .cx-sec { font-family: var(--font-display); }
 body.ui-c .cx-pips { display: none; }
 /* Hinweiszeilen */
 body.ui-c .tip-text, body.ui-c .tip-hover { border-radius: 0; background: rgba(10, 13, 20, 0.85); box-shadow: 0 0 0 2px #0a0d14; }
+
+/* Fenster links unten ausgedünnt (Nutzer 06.11.): nur noch Tempo (ohne Pause-Knopf – Leertaste bleibt), Zoom steht in der
+   Ansichtsleiste, Debug-Ebenen nur noch per Taste (H Konter-Tafel). Forschung-Kurzwahl als Zeichen mit Zähler. */
+body.ui-c .view-panel { width: auto; padding: 5px; bottom: 19px; display: flex; }
+body.ui-c .view-panel .seg-row.zoom-row, body.ui-c .view-panel .layers, body.ui-c .view-panel .panel-title,
+body.ui-c .view-panel [data-speed="0"] { display: none; }
+body.ui-c .view-panel #speed-group { display: flex; gap: 5px; }
+body.ui-c .view-panel .seg-btn { width: 36px; height: 30px; padding: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 0.75rem; }
+body.ui-c .rs-row { left: 21px; bottom: 76px; max-width: none; padding: 5px; gap: 5px; }
+body.ui-c .rs-btn { position: relative; width: 38px; height: 34px; padding: 0; justify-content: center; border-radius: 0; border: 0;
+  background: var(--px-btn); box-shadow: inset -3px -3px 0 var(--px-btn-lo), inset 3px 3px 0 var(--px-btn-hi); font-size: 1.1rem; }
+body.ui-c .rs-btn i { display: grid; place-items: center; font-style: normal; }
+body.ui-c .rs-btn .rs-name { display: none; }
+body.ui-c .rs-btn .rs-n { position: absolute; top: -6px; right: -6px; border-radius: 0; background: var(--px-gold); box-shadow: 0 0 0 2px var(--px-dark); }
+body.ui-c .rs-btn small { position: absolute; bottom: -2px; left: 0; right: 0; text-align: center; font-size: 0.5rem; }
+body.ui-c .rs-btn.rs-run { box-shadow: inset -3px -3px 0 var(--px-btn-lo), inset 3px 3px 0 var(--px-btn-hi), 0 0 0 2px var(--good); }
+body.ui-c .rs-btn.rs-dim { opacity: 0.4; }
+body.ui-c .view-panel .seg-btn[data-speed="0"] { display: none !important; }
