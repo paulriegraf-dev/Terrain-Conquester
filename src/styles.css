@@ -1360,3 +1360,17 @@ body.ui-c[data-pop="front"] .c-front {
 .cf-btn:disabled { opacity: 0.45; cursor: default; }
 .cf-cd { font-family: var(--font-data); font-size: 0.68rem; color: var(--warn); }
 body.ui-c[data-pop] .tip-text, body.ui-c[data-pop] .tip-hover { display: none; }
+
+/* Spiel-UI reduziert (Nutzer 06.11.): so wenig wie möglich im Bild. Ausgeblendet (Mechaniken laufen im Hintergrund weiter):
+   Minimap, Lagebericht (Kurzmeldungen + „Lage“), Markt (HUD + Knopf), Schlusssteine (HUD, Knopf, Karten), Gebietsanteil. */
+body.ui-c .c-mini, body.ui-c .c-mini-cap,
+body.ui-c .c-feed, body.ui-c .c-pop-btn[data-pop="log"],
+body.ui-c .c-hud [data-pop="market"], body.ui-c .c-pop-btn[data-pop="market"],
+body.ui-c .c-ks, body.ui-c .c-pop-btn[data-pop="keystones"], body.ui-c .ks-zone,
+body.ui-c #territory-line { display: none !important; }
+/* Energie sofort erkennbar */
+body.ui-c .c-energy b { color: #ffd23f; font-size: 1.3rem; text-shadow: 0 0 8px rgba(255, 210, 63, 0.35); }
+body.ui-c .c-energy .c-lbl { color: #ffd23f; }
+/* Lanes: nur Haltung je Lane */
+body.ui-c .c-lanes { grid-template-columns: auto auto auto; gap: 1px 6px; }
+.c-sn { font-family: var(--font-body); font-size: 0.66rem; color: var(--c-text); text-align: left; }

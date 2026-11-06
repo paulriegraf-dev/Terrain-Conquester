@@ -267,7 +267,16 @@ export class Hd2dRenderer {
     }
     this.applyCamera();
     // Bodenmarken: eigenes Bild in Kachelauflösung 24 px (gerastert genug, klein genug).
+    const ow = this.overlayCanvas.width;
+    const oh = this.overlayCanvas.height;
     this.overlay.resize(24 * cols, Infinity, world, 1);
+    // Ändert sich die Größe des Bodenmarken-Bilds (z. B. Windows-Skalierung 125 %: doppelte Pixeldichte), muss die
+    // Textur neu angelegt werden – sonst nimmt WebGL nur den alten Ausschnitt und Nebel, Gebiet und Bauvorschau liegen
+    // gestaucht und versetzt auf der Karte (Nutzer 06.11.: kein Nebel oben, Platzieren 2–3 Kacheln daneben).
+    if (this.overlayCanvas.width !== ow || this.overlayCanvas.height !== oh) {
+      this.overlayTex.dispose();
+      this.overlayTex.needsUpdate = true;
+    }
     this.terrainKey = '';
   }
 

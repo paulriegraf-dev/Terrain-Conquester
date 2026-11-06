@@ -99,8 +99,9 @@ export class HudC {
     const frame = doc.getElementById('board-frame') ?? doc.body;
     // HUD oben
     const hud = mk('div', 'c-hud', `
-      <div class="c-cell"><span class="c-lbl">Energie</span><b data-k="energy">0</b><small data-k="income"></small><small class="c-units" data-k="units"></small></div>
-      <button type="button" class="c-cell c-ks" data-action="c-keystones" title="Uhr und nächstes Schlussstein-Fenster – Klick zeigt deine Schlusssteine (Taste K wählt)"><span class="c-lbl">Schlussstein</span><b data-k="clock">0:00</b><small data-k="gate"></small></button>
+      <div class="c-cell c-energy"><span class="c-lbl">Energie</span><b data-k="energy">0</b><small data-k="income"></small><small class="c-units" data-k="units"></small></div>
+      <div class="c-cell c-clock"><span class="c-lbl">Zeit</span><b data-k="clock">0:00</b></div>
+      <button type="button" class="c-cell c-ks" data-action="c-keystones" title="Uhr und nächstes Schlussstein-Fenster – Klick zeigt deine Schlusssteine (Taste K wählt)"><span class="c-lbl">Schlussstein</span><small data-k="gate"></small></button>
       <button type="button" class="c-cell" data-action="c-fronts" title="Frontlage je Lane (Anteil am Gebiet) und Haltung – Klick öffnet die Fronten (⇧A)"><span class="c-lbl">Lanes</span><div class="c-lanes" data-k="lanes"></div></button>
       <button type="button" class="c-cell" data-action="c-pop" data-pop="market" title="Markt (Lage von vor 5 s, Prozent = Änderung zu 20 s davor) – Klick öffnet den Markt"><span class="c-lbl">Markt</span><div class="c-mkt" data-k="market"></div></button>
       <div class="c-cell"><span class="c-lbl">Zentrum</span><b data-k="center">frei</b></div>`);
@@ -370,7 +371,10 @@ export class HudC {
       const st = p.stance[r];
       const pend = p.pendingStance[r];
       const left = pend ? Math.max(0, Math.ceil((pend.tick - world.tick) / world.tps)) : 0;
-      return `<span class="c-ln">${LANE_SHORT[r]}</span><span class="c-lb"><i style="width:${Math.round(share[r][0] * 100)}%;background:${sideColor(world, me)}"></i><i class="c-foe" style="width:${Math.round(share[r][1] * 100)}%;background:${sideColor(world, foe)}"></i></span><span class="c-sg${pend ? ' pend' : ''}" title="${STANCE_NAMES[st]}${pend ? ` → ${STANCE_NAMES[pend.stance]} in ${left} s` : ''}">${STANCE_GLYPH[pend ? pend.stance : st]}</span>`;
+      // Nur Lane + Haltung (Nutzer 06.11.: der Gebietsanteil je Lane braucht man nicht – die Zelle ist der Shortcut zu den Fronten).
+      void share;
+      void foe;
+      return `<span class="c-ln">${LANE_SHORT[r]}</span><span class="c-sg${pend ? ' pend' : ''}" title="${STANCE_NAMES[st]}${pend ? ` → ${STANCE_NAMES[pend.stance]} in ${left} s` : ''}">${STANCE_GLYPH[pend ? pend.stance : st]}</span><span class="c-sn">${STANCE_NAMES[pend ? pend.stance : st]}${pend ? ` ${left} s` : ''}</span>`;
     }).join('');
     set(this.el.lanes, lanes, true);
     // Markt
