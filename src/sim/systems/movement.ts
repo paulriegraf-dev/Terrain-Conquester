@@ -64,7 +64,9 @@ export function updateMovement(world: World): void {
     // Welle: auf dem Marsch im Tempo des Commanders (im Kampf frei).
     const lead = escortLeader(world, e);
     const base = lead && !(target && target.alive) ? escortSpeed(world, e, lead)
-      : !(target && target.alive) && !m.goal && !m.muster ? tankWait(world, e, near) : m.speed;
+      // Warten auf die Front gilt auf dem Marsch UND beim Heranlaufen an ein noch nicht erreichbares Ziel (dort überholten
+      // die Fernkämpfer bisher ihre Tanks); in Reichweite bleibt ohnehin jeder stehen.
+      : !m.goal && !m.muster && (!(target && target.alive) || rangeTo(e, target) > e.weapon!.def.range) ? tankWait(world, e, near) : m.speed;
     const rush = rushFactor(world, e); // Myr-Drohnen: Nachschub nahe der Basis schneller, Ansturm
     // Stationen (25.10. abends): Windtal beschleunigt die eigene Lane, alle Tempo-Boni zusammen höchstens speedCap;
     // das Sperrwerk bremst Gegner, mit Gelände und Feldern aber nie unter barrier.floor.
