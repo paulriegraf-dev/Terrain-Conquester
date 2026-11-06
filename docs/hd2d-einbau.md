@@ -157,3 +157,11 @@ Weitere Etappen:
 - **Etappe 3 – Spiel-UI Variante C:** neue Oberfläche um die Szene (Leiste, Kontext-Panel, Ansichtsleiste, Markt-HUD,
   Fronten, Ausbau-Reiter), angebunden an die echten Befehle; die klassische Oberfläche bleibt mit „Alte Version“.
 - Erst danach wird HD-2D Standard und `main` bekommt sie. **Erledigt 05.11. spät:** 2,5D ist Standard (`DEFAULT_MODE = 'hd2d'`), „Alte Version (klassische Grafik)“ im Hauptmenü schaltet zurück; die Wahl wird im Browser gemerkt.
+
+## Vermerke des Nutzers (06.11.2026)
+- **Konsole:** Variante C (Befehle nur bei Auswahl, rechts unten; ohne Auswahl nur eine schmale Bauzeile). Raster-Tasten bleiben Merkbuchstaben, damit WASD frei bleibt.
+- **UI-Elemente allgemein erneuern:** ästhetischer, weniger „nur Text“; dürfen sich komplett vom bisherigen Stil lösen.
+- **UI/Kamera:** Strategie-Zoom „Karte“ als Makro-Ansicht, Warnsignale am Bildrand statt Textmeldungen, nur eine wichtige Zahl gleichzeitig (Rest beim Hover).
+- **Lesbarkeit:** Silhouette vor Detail (Größe/Figur je Klasse nachschärfen), Reichweite beim Hover als Ring. Schadens-/Rüstungsklassen sind durch Fraktions-Eigenheiten verschwommen – übergangsweise Mini-Symbole über den Truppen (Waffe ≠ Rüstung).
+- **Upgrades:** qualitativ und sichtbar statt „+5 %“; Upgrades von Technoclan und Terra-Former (teils Myriaden) nochmal genau durchsehen. Etwas Ausprägung/Energie-Senke durch Forschung ist gewollt.
+- **Später:** Höhe durch „Geröll“ stapeln (teurer, Vorteil von oben, Einheiten können nicht gerade herunter), Rampe zum Erdwall, damit Einheiten vom Wall schießen. Schneeballschutz später prüfen. Karten sind Platzhalter, noch nicht handgebaut.
