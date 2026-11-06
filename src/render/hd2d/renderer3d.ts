@@ -1062,7 +1062,11 @@ export class Hd2dRenderer {
       const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
       const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
       const alive = Math.max(1, Math.min(aliveModels(e), e.models));
-      const n = asIcons ? 0 : Math.max(1, Math.min(alive, OFFSETS.length, maxFigures));
+      // Figuren je Verband (Nutzer 06.11., Variante A – nur Darstellung): Technoclan und Myriaden höchstens 2, Terra-Former 3,
+      // Myr-Drohnen als Schwarm alle. Eine Figur verschwindet erst, wenn weniger Modelle leben als gezeigt werden.
+      const fac = world.players[e.owner].faction.id;
+      const figureCap = e.defId === 'drone' ? Infinity : fac === 'terraformer' ? 3 : 2;
+      const n = asIcons ? 0 : Math.max(1, Math.min(alive, OFFSETS.length, maxFigures, figureCap));
       this.ensureSprites(sq, Math.max(1, n));
       const sideColor = mirror && this.startsRight(world, e.owner) ? MIRROR_COLORS[world.players[e.owner].faction.id] : FACTION_COLOR[world.players[e.owner].faction.id];
       // Symbol (Karte/Lanes)
@@ -1083,7 +1087,8 @@ export class Hd2dRenderer {
         sq.icon.scale.set(k, k, 1);
       }
       // Modellzahl, wenn ausgedünnt (Mittel)
-      const thinned = !asIcons && alive > n;
+      // Kein „×Zahl“-Schild mehr (Nutzer 06.11.: wirkte unruhig); die Zahl steht in Karte/Lanes im Symbol.
+      const thinned = false;
       sq.badge.visible = thinned;
       const moveDx = e.pos.x - e.prev.x;
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
