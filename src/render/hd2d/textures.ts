@@ -24,6 +24,11 @@ const P: Record<string, [number, number, Painter]> = {
   boom: [16, 16, (x) => { x.fillStyle = '#ff5a1a'; x.fillRect(2, 4, 12, 8); x.fillRect(4, 2, 8, 12); x.fillStyle = '#ffb02a'; x.fillRect(4, 5, 8, 6); x.fillStyle = '#fff2a0'; x.fillRect(6, 6, 4, 4); }],
   flashC: [12, 12, (x, c) => { x.fillStyle = c; x.fillRect(5, 0, 2, 12); x.fillRect(0, 5, 12, 2); x.fillRect(3, 3, 6, 6); x.fillStyle = '#fff'; x.fillRect(5, 5, 2, 2); }],
   plasma: [10, 10, (x) => { x.fillStyle = '#7a3ad0'; x.fillRect(1, 2, 8, 6); x.fillRect(2, 1, 6, 8); x.fillStyle = '#d07bff'; x.fillRect(3, 3, 4, 4); x.fillStyle = '#fff'; x.fillRect(4, 4, 2, 2); }],
+  // Mock-up 2: grobe Geschosse mit dunklem Rand (wie die alten Technoclan-Figuren)
+  oshot: [8, 5, (x) => { x.fillStyle = '#2a1030'; x.fillRect(0, 0, 8, 5); x.fillStyle = '#ff8a1a'; x.fillRect(1, 1, 6, 3); x.fillStyle = '#fff0a0'; x.fillRect(4, 1, 3, 3); }],
+  obolt: [7, 5, (x) => { x.fillStyle = '#10203a'; x.fillRect(0, 0, 7, 5); x.fillStyle = '#4fd8ff'; x.fillRect(1, 1, 5, 3); x.fillStyle = '#ffffff'; x.fillRect(4, 2, 2, 1); }],
+  oglob: [9, 9, (x) => { x.fillStyle = '#1e0a30'; x.fillRect(2, 0, 5, 9); x.fillRect(0, 2, 9, 5); x.fillRect(1, 1, 7, 7); x.fillStyle = '#9a3ae0'; x.fillRect(2, 1, 5, 7); x.fillRect(1, 2, 7, 5); x.fillStyle = '#e09bff'; x.fillRect(3, 3, 3, 3); x.fillStyle = '#ffffff'; x.fillRect(4, 3, 1, 1); }],
+  orail: [16, 4, (x) => { x.fillStyle = '#0c2a3a'; x.fillRect(0, 0, 16, 4); x.fillStyle = '#4fe8ff'; x.fillRect(1, 1, 15, 2); x.fillStyle = '#ffffff'; x.fillRect(9, 1, 7, 2); }],
   flash: [16, 16, (x, c) => { x.fillStyle = c; x.globalAlpha = 0.5; x.fillRect(2, 2, 12, 12); x.globalAlpha = 1; x.fillRect(5, 1, 6, 14); x.fillRect(1, 5, 14, 6); x.fillStyle = '#ffffff'; x.fillRect(6, 6, 4, 4); }],
 };
 

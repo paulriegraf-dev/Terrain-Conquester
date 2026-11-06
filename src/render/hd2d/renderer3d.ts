@@ -1611,7 +1611,11 @@ export class Hd2dRenderer {
         from = model.position.clone().add(new THREE.Vector3(m[0] * dir * spr.scale, m[1] * spr.scale, 0));
       }
     }
-    const to = new THREE.Vector3(ev.to.x, this.heightAt(world, ev.to.x, ev.to.y) + 0.45, ev.to.y);
+    // Ziel dort treffen, wo es gezeichnet wird (Bild-Versatz im Nah-Gefecht, separate()).
+    const off = ev.target !== undefined ? this.sepOff.get(ev.target) : undefined;
+    const tx = ev.to.x + (off?.x ?? 0);
+    const ty = ev.to.y + (off?.y ?? 0);
+    const to = new THREE.Vector3(tx, this.heightAt(world, tx, ty) + 0.45, ty);
     const spawn = ev.spawn ?? ev.tick;
     const fxDef = SHOT_PFX[spr?.attack.projectile ?? ''];
     const flip = to.x < from.x;
@@ -1630,7 +1634,8 @@ export class Hd2dRenderer {
       const tex = projectileTexture(look.texture ?? 'tracer', color);
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: look.additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
       const img = tex.image as HTMLCanvasElement;
-      s.scale.set(img.width / 22, img.height / 22, 1);
+      const px = look.px ?? 22;
+      s.scale.set(img.width / px, img.height / px, 1);
       if (to.x < from.x) s.material.rotation = Math.PI;
       obj = s;
     }

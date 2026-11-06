@@ -66,6 +66,8 @@ export interface ProjectileLook {
   arc?: number;
   additive?: boolean;
   heavy?: boolean;
+  /** Bildpunkte je Kachel (Standard 22). Die alten Technoclan-Geschosse nehmen die Punktgröße der alten Figuren. */
+  px?: number;
 }
 
 export const PROJECTILES: Readonly<Record<string, ProjectileLook>> = {
@@ -81,6 +83,9 @@ export const PROJECTILES: Readonly<Record<string, ProjectileLook>> = {
   grow: { texture: 'orb', additive: true }, smash: { texture: 'stone', arc: 0.5 }, cannon: { texture: 'shell', heavy: true },
   avalanche: { texture: 'snowball', arc: 1, heavy: true }, snowball: { texture: 'snowball', arc: 1 }, blade: { texture: 'blade', additive: true },
   dart: { texture: 'dart' }, heal: { texture: 'orb', additive: true },
+  // Mock-up 2 (06.11.): grobe Geschosse passend zu den alten Technoclan-Figuren (dunkler Rand wie die Figuren)
+  oshot: { texture: 'oshot', px: 30 }, obolt: { texture: 'obolt', px: 30 }, oglob: { texture: 'oglob', arc: 0.3, px: 30 },
+  orail: { texture: 'orail', px: 30, heavy: true },
 };
 
 /**
@@ -90,10 +95,11 @@ export const PROJECTILES: Readonly<Record<string, ProjectileLook>> = {
  */
 export const OLD_TC_KEY = 'tc-old-technoclan';
 const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
-  sniper: { faction: 'technoclan', sheet: 'units/old_sniper.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.42, 0.36]], projectile: 'rail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
-  plasma: { faction: 'technoclan', sheet: 'units/old_plasma.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.46, 0.5]], projectile: 'pglob' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
-  hoverscout: { faction: 'technoclan', sheet: 'units/old_hoverscout.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0.15, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.4, 0.3]], projectile: 'bolt' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
-  gunner: { faction: 'technoclan', sheet: 'units/old_gunner.png', cell: 32, frames: { idle: 4, walk: 6, attack: 6 }, scale: 1.1, fly: 0, attack: { dur: 1.2, hits: [0.2], muzzles: [[0.44, 0.36]], projectile: 'gshot' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  // 48-px-Zellen (alte 32-px-Figur mittig unten), Laufen/Angriff mit PixelLab v3 aus der alten Figur animiert (06.11.)
+  sniper: { faction: 'technoclan', sheet: 'units/old_sniper.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.33], muzzles: [[0.39, 0.36]], projectile: 'orail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  plasma: { faction: 'technoclan', sheet: 'units/old_plasma.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.17], muzzles: [[0.44, 0.58]], projectile: 'oglob' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  hoverscout: { faction: 'technoclan', sheet: 'units/old_hoverscout.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0.15, attack: { dur: 1.2, hits: [0.33], muzzles: [[0.36, 0.36]], projectile: 'obolt' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  gunner: { faction: 'technoclan', sheet: 'units/old_gunner.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.11], muzzles: [[0.41, 0.33]], projectile: 'oshot' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
 };
 export function oldTechnoclan(): boolean {
   try {

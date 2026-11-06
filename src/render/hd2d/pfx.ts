@@ -57,6 +57,11 @@ export interface PfxUse {
  * Darstellung die Funken der Fraktion.
  */
 export const SHOT_PFX: Readonly<Record<string, { muzzle?: PfxUse; impact?: PfxUse }>> = {
+  // Mock-up 2: Mündungsfeuer steckt in der Angriffsanimation der alten Figuren, nur Einschlag
+  oshot: { impact: { name: 'spark_orange', lift: 20, scale: 0.55 } },
+  obolt: { impact: { name: 'spark_cyan', lift: 20, scale: 0.5 } },
+  orail: { impact: { name: 'spark_cyan', lift: 20, scale: 0.6 } },
+  oglob: { impact: { name: 'pboom_purple', lift: 0, scale: 0.4 } },
   gshot: { muzzle: { name: 'muzzle_orange', lift: 26, scale: 0.8 }, impact: { name: 'spark_orange', lift: 20 } },
   bolt: { muzzle: { name: 'muzzle_cyan', lift: 26, scale: 0.6 }, impact: { name: 'spark_cyan', lift: 20 } },
   rail: { muzzle: { name: 'muzzle_cyan', lift: 26, scale: 0.7 }, impact: { name: 'spark_cyan', lift: 20 } },
