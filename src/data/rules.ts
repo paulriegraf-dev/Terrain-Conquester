@@ -432,7 +432,7 @@ export interface Rules {
    * ihrer Fabrik (Richtung Route), bleiben dort mindestens `minSeconds` und ziehen dann weiter – spätestens nach
    * `maxSeconds`. So sieht man, zu welcher Fabrik/Lane sie gehören.
    */
-  muster: { distance: number; minSeconds: number; maxSeconds: number };
+  muster: { distance: number; minSeconds: number; maxSeconds: number; pauseAging?: boolean };
 }
 
 export const RULES: Rules = {

@@ -12,6 +12,8 @@ export function updateLifespans(world: World): void {
   for (const e of world.entities) {
     const life = e.lifespan;
     if (!life || !e.alive) continue;
+    // Sammeln vor der Fabrik (rules.muster.pauseAging): beim Warten altert die Lebensuhr nicht.
+    if (world.rules.muster.pauseAging && e.mover?.muster) continue;
     carers ??= world.entities.filter((o) => o.alive && o.support?.slowAging !== undefined);
     let rate = 1;
     for (const c of carers) {
