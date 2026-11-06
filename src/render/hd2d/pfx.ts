@@ -61,6 +61,7 @@ export const SHOT_PFX: Readonly<Record<string, { muzzle?: PfxUse; impact?: PfxUs
   oshot: { impact: { name: 'spark_orange', lift: 20, scale: 0.55 } },
   obolt: { impact: { name: 'spark_cyan', lift: 20, scale: 0.5 } },
   orail: { impact: { name: 'spark_cyan', lift: 20, scale: 0.6 } },
+  oshell: { impact: { name: 'boom', lift: 0, scale: 0.55 } },
   oglob: { impact: { name: 'pboom_purple', lift: 0, scale: 0.4 } },
   gshot: { muzzle: { name: 'muzzle_orange', lift: 26, scale: 0.8 }, impact: { name: 'spark_orange', lift: 20 } },
   bolt: { muzzle: { name: 'muzzle_cyan', lift: 26, scale: 0.6 }, impact: { name: 'spark_cyan', lift: 20 } },

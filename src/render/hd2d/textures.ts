@@ -29,6 +29,7 @@ const P: Record<string, [number, number, Painter]> = {
   obolt: [7, 5, (x) => { x.fillStyle = '#10203a'; x.fillRect(0, 0, 7, 5); x.fillStyle = '#4fd8ff'; x.fillRect(1, 1, 5, 3); x.fillStyle = '#ffffff'; x.fillRect(4, 2, 2, 1); }],
   oglob: [9, 9, (x) => { x.fillStyle = '#1e0a30'; x.fillRect(2, 0, 5, 9); x.fillRect(0, 2, 9, 5); x.fillRect(1, 1, 7, 7); x.fillStyle = '#9a3ae0'; x.fillRect(2, 1, 5, 7); x.fillRect(1, 2, 7, 5); x.fillStyle = '#e09bff'; x.fillRect(3, 3, 3, 3); x.fillStyle = '#ffffff'; x.fillRect(4, 3, 1, 1); }],
   orail: [16, 4, (x) => { x.fillStyle = '#0c2a3a'; x.fillRect(0, 0, 16, 4); x.fillStyle = '#4fe8ff'; x.fillRect(1, 1, 15, 2); x.fillStyle = '#ffffff'; x.fillRect(9, 1, 7, 2); }],
+  oshell: [9, 7, (x) => { x.fillStyle = '#2a1030'; x.fillRect(0, 1, 9, 5); x.fillRect(1, 0, 7, 7); x.fillStyle = '#ff7a1a'; x.fillRect(1, 2, 7, 3); x.fillRect(2, 1, 5, 5); x.fillStyle = '#ffe066'; x.fillRect(5, 2, 2, 2); }],
   flash: [16, 16, (x, c) => { x.fillStyle = c; x.globalAlpha = 0.5; x.fillRect(2, 2, 12, 12); x.globalAlpha = 1; x.fillRect(5, 1, 6, 14); x.fillRect(1, 5, 14, 6); x.fillStyle = '#ffffff'; x.fillRect(6, 6, 4, 4); }],
 };
 

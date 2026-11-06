@@ -1,6 +1,10 @@
 /** HD-2D-Bilder (05.11.): werden beim Bauen als Data-URL eingebettet (esbuild-Loader für .png/.webp; Sheets verlustfrei als WebP). */
 import u_battery from '../../../assets/sprites/units/battery.webp';
+import o_battery from '../../../assets/sprites/units/old_battery.png';
+import o_colossus from '../../../assets/sprites/units/old_colossus.png';
+import o_commander from '../../../assets/sprites/units/old_commander.png';
 import o_gunner from '../../../assets/sprites/units/old_gunner.png';
+import o_nanomedic from '../../../assets/sprites/units/old_nanomedic.png';
 import o_hoverscout from '../../../assets/sprites/units/old_hoverscout.png';
 import o_plasma from '../../../assets/sprites/units/old_plasma.png';
 import o_sniper from '../../../assets/sprites/units/old_sniper.png';
@@ -40,7 +44,11 @@ import buildings from '../../../assets/hd2d/buildings.webp';
 
 export const UNIT_SHEETS: Readonly<Record<string, string>> = {
   // Mock-up 2 (06.11.): alte, schlichte Technoclan-Figuren (32 px) mit einfacher Pixel-Animation
+  'units/old_battery.png': o_battery,
+  'units/old_colossus.png': o_colossus,
+  'units/old_commander.png': o_commander,
   'units/old_gunner.png': o_gunner,
+  'units/old_nanomedic.png': o_nanomedic,
   'units/old_hoverscout.png': o_hoverscout,
   'units/old_plasma.png': o_plasma,
   'units/old_sniper.png': o_sniper,
