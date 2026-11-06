@@ -187,3 +187,32 @@ KI gegen KI, beide mit hqGuard 8, 16 Partien je Paar (96 gesamt):
 | neue Wall-KI (gap 45, max 9) | 36 | 24 | 28 | 8 | 15,6 min |
 
 Unterschied im Rauschen (±7 je 52 Partien). TF–TC (Paar 3) bleibt in beiden Varianten mit 7/16 offenen Partien auffällig → nächster Punkt: TF-Spätspiel.
+
+## 06.11. Front: Reichweiten nach Rolle + Warten auf die Front
+
+Wunsch des Nutzers: Tanks weniger Reichweite (landen vorn), Schadensausteiler weiter hinten.
+
+- Reichweiten: Frontbrecher 3,5 → 2,5, Hainhüter 3 → 2,5, Koloss 3,1 → 2,8, Halmläufer 3 → 3,5, Frostwächter 2,5 → 3,5.
+- `rules.formation.wait`: Fernkämpfer (Reichweite > 3, kein Held) im Vorstoß gehen auf 0,8 × Tanktempo, solange sie nicht mindestens
+  1 Kachel hinter dem vordersten eigenen Tank ihrer Route (≤ 8 Kacheln entfernt) sind – auf dem Marsch und beim Heranlaufen an ein
+  Ziel außer Reichweite. Wartende und Tanks laufen durcheinander hindurch. Hover Scout und Steppenjäger ausgenommen.
+
+Front-Reihenfolge (12 Partien, je Probe: Lane mit Tank und Fernkämpfer, Gegner ≤ 6 Kacheln; Anteil „vorderste ist Tank“):
+
+| Stand | TC | Myr | TF |
+|---|---|---|---|
+| vorher | 65 % | 98 % | 44 % |
+| nur Reichweiten | 68 % | 98 % | 40 % |
+| Reichweiten + Warten | 73 % | 95 % | 44 % |
+
+TF bleibt bei gut 40 %: Ihre Tanks werden gerufen und sind langsam (0,6), meist mehr als 8 Kacheln hinter den Wächtern.
+
+KI gegen KI, 16 Partien je Paar (96):
+
+| Stand | TC | Myr | TF | offen | Median |
+|---|---|---|---|---|---|
+| vorher (761560e) | 45 | 29 | 16 | 6 | 16,8 min |
+| neu | 48 | 26 | 12 | 10 | 15,2 min |
+
+Auffällig schon VOR dieser Änderung: Am 04.11. stand es 36 : 24 : 28. Seitdem (Feuergruppen/Schaden beim Einschlag, Sammeln vor
+der Fabrik, Abstand je Rüstungsklasse) ist der Technoclan deutlich stärker geworden (TC–Myr 26 : 6), die Terra-Former schwächer.

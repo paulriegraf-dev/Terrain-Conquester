@@ -136,6 +136,13 @@ export interface FormationRules {
    * Wer mit kürzerer Reichweite zu seinem Ziel vorrückt, darf durch eigene Fernkämpfer hindurch (die weichen aus).
    */
   squadSpace: { infantry: number; light: number; heavy: number; /** Myr-Drohnen: Schwarm, dicht (Fusion zur Brechstange). */ swarm: number };
+  /**
+   * Warten auf die Front (Nutzer 06.11.): Ein Fernkämpfer im Vorstoß, der ohne Ziel VOR dem vordersten eigenen Tank seiner
+   * Route läuft, geht langsamer, bis der Tank vorne ist – so kommen Tanks zuerst an den Gegner. Tank = schwer, kein Held,
+   * Reichweite ≤ `tankRange`. Gezählt werden nur Tanks bis `look` Kacheln entfernt (sonst läuft jeder für sich);
+   * gebremst wird, bis der Fernkämpfer `lead` Kacheln hinter dem Tank ist, auf `factor` × Tempo des Tanks.
+   */
+  wait: { on: boolean; tankRange: number; look: number; lead: number; factor: number; /** Flitzer zum Pushen, warten nie. */ exempt: string[] };
 }
 
 /**
@@ -551,6 +558,8 @@ export const RULES: Rules = {
     deployRadius: 10,
     deploySpacing: 1.4,
     squadSpace: { infantry: 1.1, light: 1.3, heavy: 1.6, swarm: 0.6 },
+    // 06.11. (Nutzer): Fernkämpfer warten auf ihre Tanks; Hover Scout und Steppenjäger ausgenommen.
+    wait: { on: true, tankRange: 3, look: 8, lead: 1, factor: 0.8, exempt: ['hoverscout', 'specialMeadow'] },
   },
   // 25.10. abends (Nutzer, Versuch): keine Schadensminderung mehr im eigenen Gebiet (vorher 0,75) – gegen Turtle-Spiel; Heilung bleibt.
   homeDamageTaken: 1,

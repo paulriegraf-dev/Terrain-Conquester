@@ -393,7 +393,7 @@ const RAW: Record<UnitId, UnitInput> = {
   colossus: {
     id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 400, toughness: 9, save: 3,
     speed: 1.15, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 10.2,
-    weapon: { shots: 3, cooldown: 2, range: 3.1, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
+    weapon: { shots: 3, cooldown: 2, range: 2.8, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
     shape: 'square', letter: 'K', role: 'Schwerer Kampfpanzer: stark gegen leichte Fahrzeuge und Gebäude',
   },
 
@@ -519,7 +519,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardMeadow: {
     id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 5.5,
-    weapon: { shots: 2, cooldown: 1.0, range: 3, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle', fireGroups: 2 },
+    weapon: { shots: 2, cooldown: 1.0, range: 3.5, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle', fireGroups: 2 },
     ground: 'meadow', groundBonus: { speed: 1.3 },
     shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
   },
@@ -545,7 +545,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialForest: {
     id: 'specialForest', name: 'Hainhüter', armor: 'heavy', hp: 290, toughness: 8, save: 3,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.45, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 1, cooldown: 1.5, range: 3, skill: 4, strength: 8, ap: 1, damage: 15, type: 'rifle' },
+    weapon: { shots: 1, cooldown: 1.5, range: 2.5, skill: 4, strength: 8, ap: 1, damage: 15, type: 'rifle' },
     ground: 'forest', shapeshift: true,
     root: { after: 10, gap: 3, seconds: 4, hitBonus: 1, immune: 10 },
     shape: 'square', letter: 'H', role: 'Langsamer Tank – verwurzelt Schwere nach 10 s Beschuss (alle treffen sie dann besser); Gestaltwandler: auf jedem Boden der Bonus des Wächters dieser Art',
@@ -573,7 +573,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardSnow: {
     id: 'wardSnow', name: 'Frostwächter', armor: 'infantry', hp: 120, models: 4, toughness: 4, save: 4,
     speed: 0.9, move: 'foot', part: 'wheels', radius: 0.32, vision: 6, spawnInterval: 5.5,
-    weapon: { shots: 1, cooldown: 1.2, range: 2.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle', fireGroups: 2 },
+    weapon: { shots: 1, cooldown: 1.2, range: 3.5, skill: 4, strength: 4, ap: 0, damage: 8, type: 'rifle', fireGroups: 2 },
     hitSlow: { seconds: 1.5, factor: 0.75 }, shieldAura: { radius: 2.5, factor: 0.85 },
     ground: 'snow', groundBonus: { hitSlow: { seconds: 2, factor: 0.55 } },
     shape: 'circle', letter: 'f', role: 'Unterstützung im Kern: bremst Getroffene, schirmt Nachbarn leicht ab (−15 % Schaden); auf Schnee bremst er stärker',
@@ -600,7 +600,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialRubble: {
     id: 'specialRubble', name: 'Frontbrecher', armor: 'heavy', hp: 420, toughness: 9, save: 3,
     speed: 0.6, move: 'tracks', part: 'plates', radius: 0.5, vision: 6, spawnInterval: 0, summoned: true,
-    weapon: { shots: 1, cooldown: 2.5, range: 3.5, skill: 3, strength: 8, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
+    weapon: { shots: 1, cooldown: 2.5, range: 2.5, skill: 3, strength: 8, ap: 3, damage: 80, type: 'cannon', anti: { heavy: 2 }, structureDamage: 1.5, splash: 0.8 },
     ground: 'rubble', groundBonus: { save: 1 },
     shape: 'diamond', letter: 'F', role: 'Frontbrecher: schwer und langsam, hoher Einzelschaden, wenige Angriffe, leichte Fläche – auf Geröll Rüstung +1',
   },

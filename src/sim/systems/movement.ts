@@ -63,7 +63,10 @@ export function updateMovement(world: World): void {
     const target = e.weapon && e.weapon.targetId ? world.get(e.weapon.targetId) : undefined;
     // Welle: auf dem Marsch im Tempo des Commanders (im Kampf frei).
     const lead = escortLeader(world, e);
-    const base = lead && !(target && target.alive) ? escortSpeed(world, e, lead) : m.speed;
+    const base = lead && !(target && target.alive) ? escortSpeed(world, e, lead)
+      // Warten auf die Front gilt auf dem Marsch UND beim Heranlaufen an ein noch nicht erreichbares Ziel (dort überholten
+      // die Fernkämpfer bisher ihre Tanks); in Reichweite bleibt ohnehin jeder stehen.
+      : !m.goal && !m.muster && (!(target && target.alive) || rangeTo(e, target) > e.weapon!.def.range) ? tankWait(world, e, near) : m.speed;
     const rush = rushFactor(world, e); // Myr-Drohnen: Nachschub nahe der Basis schneller, Ansturm
     // Stationen (25.10. abends): Windtal beschleunigt die eigene Lane, alle Tempo-Boni zusammen höchstens speedCap;
     // das Sperrwerk bremst Gegner, mit Gelände und Feldern aber nie unter barrier.floor.
@@ -148,6 +151,9 @@ export function updateMovement(world: World): void {
       let minD = e.radius + o.radius;
       if (o.owner === e.owner) {
         if (advancing && (o.weapon?.def.range ?? 0) > myRange) return; // durchlassen: der Fernkämpfer weicht aus
+        // Warten auf die Front: wartender Fernkämpfer und Tank laufen durcheinander hindurch, damit der Tank vor kommt.
+        const waits = (x: Entity): boolean => x.mover!.waitTick !== undefined && x.mover!.waitTick >= world.tick - 1;
+        if ((waits(o) && !waits(e) && isTank(world, e)) || (waits(e) && isTank(world, o))) return;
         // Eigene Verbände verteilen sich (Lesbarkeit, 06.11.).
         minD = Math.max(minD, (mySpace + space[unitArmor(o)]) / 2);
       }
@@ -398,6 +404,36 @@ function escortSpeed(world: World, e: Entity, lead: Entity): number {
   if (lead.breaker && ahead > ESCORT_LEAD) return pace * 0.5;
   if (dist(e.pos, lead.prev) > ESCORT_GAP) return m.speed;
   return ahead > ESCORT_LEAD ? pace * 0.5 : pace;
+}
+
+/**
+ * Warten auf die Front (rules.formation.wait, Nutzer 06.11.): Fernkämpfer im Vorstoß gehen langsamer, solange sie
+ * vor dem vordersten eigenen Tank ihrer Route sind. Ohne Tank in der Nähe läuft jeder in seinem Tempo.
+ */
+function tankWait(world: World, e: Entity, near: SpatialGrid): number {
+  const m = e.mover!;
+  const W = world.rules.formation.wait;
+  const range = e.weapon?.def.range ?? 0;
+  if (!W.on || range <= W.tankRange || W.exempt.includes(e.defId) || UNITS[e.defId as UnitId]?.hero) return m.speed;
+  if (unitOrder(world, e) !== 'push') return m.speed;
+  const enemyHq = rectCenter(world.map.hq[otherPlayer(e.owner)]);
+  const mine = dist(e.pos, enemyHq);
+  let front: Entity | null = null;
+  let frontD = Infinity;
+  near.forEachNear(e.pos.x, e.pos.y, W.look, (o) => {
+    if (o.owner !== e.owner || !o.alive || !o.mover || o.mover.route !== m.route || !isTank(world, o)) return;
+    if (dist(o.prev, e.pos) > W.look) return;
+    const d = dist(o.prev, enemyHq);
+    if (d < frontD) { frontD = d; front = o; }
+  });
+  if (!front || mine >= frontD + W.lead) return m.speed;
+  m.waitTick = world.tick;
+  return Math.min(m.speed, (front as Entity).mover!.speed * W.factor);
+}
+
+/** Tank im Sinne der Warte-Regel: schwer, kein Held, Reichweite höchstens rules.formation.wait.tankRange. */
+function isTank(world: World, e: Entity): boolean {
+  return !!e.mover && unitArmor(e) === 'heavy' && (e.weapon?.def.range ?? Infinity) <= world.rules.formation.wait.tankRange && !UNITS[e.defId as UnitId]?.hero;
 }
 
 /** Direkt auf einen Punkt zu; dort angekommen stehen bleiben. */
