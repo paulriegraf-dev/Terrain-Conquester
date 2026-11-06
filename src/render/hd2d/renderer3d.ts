@@ -58,6 +58,11 @@ interface Squad {
   shots: number[];
   walk: number;
   seen: number;
+  /** Verbandssymbol (Karte/Lanes) und Zahl der Modelle (Mittel, wenn Figuren ausgedünnt). */
+  icon: THREE.Sprite;
+  badge: THREE.Sprite;
+  iconKey: string;
+  badgeKey: string;
 }
 
 interface Shot {
@@ -1005,6 +1010,11 @@ export class Hd2dRenderer {
   private drawUnits(world: World, alpha: number, now: number, visibleTo: (e: Entity) => boolean): void {
     const mirror = world.players[0].faction.id === world.players[1].faction.id;
     const stamp = world.tick;
+    // Lesbarkeit je Zoom (Nutzer 06.11., Varianten B + C): Karte/Lanes Verbandssymbole, Mittel höchstens 3 Figuren mit
+    // Modellzahl, Nah alle Figuren.
+    const level = this.zoomLevel();
+    const asIcons = level === 'map' || level === 'lanes';
+    const maxFigures = level === 'mid' ? 3 : Infinity;
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
       const spr = UNIT_SPRITES[e.defId as UnitId];
@@ -1017,8 +1027,30 @@ export class Hd2dRenderer {
       sq.seen = stamp;
       const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
       const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
-      const n = Math.max(1, Math.min(aliveModels(e), e.models, OFFSETS.length));
-      this.ensureSprites(sq, n);
+      const alive = Math.max(1, Math.min(aliveModels(e), e.models));
+      const n = asIcons ? 0 : Math.max(1, Math.min(alive, OFFSETS.length, maxFigures));
+      this.ensureSprites(sq, Math.max(1, n));
+      const sideColor = mirror && this.startsRight(world, e.owner) ? MIRROR_COLORS[world.players[e.owner].faction.id] : FACTION_COLOR[world.players[e.owner].faction.id];
+      // Symbol (Karte/Lanes)
+      sq.icon.visible = asIcons;
+      if (asIcons) {
+        const armor = UNITS[e.defId as UnitId]?.armor;
+        const shape = spr.fly > 0.2 ? 'tri' : armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
+        const key = `${shape}|${sideColor}|${alive}`;
+        if (key !== sq.iconKey) {
+          (sq.icon.material as THREE.SpriteMaterial).map = this.iconTexture(shape, sideColor, alive);
+          (sq.icon.material as THREE.SpriteMaterial).needsUpdate = true;
+          sq.iconKey = key;
+        }
+        const ix = e.prev.x + (e.pos.x - e.prev.x) * alpha;
+        const iy = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+        const k = level === 'map' ? 1.9 : 1.4;
+        sq.icon.position.set(ix, this.heightAt(world, ix, iy) + 0.35, iy);
+        sq.icon.scale.set(k, k, 1);
+      }
+      // Modellzahl, wenn ausgedünnt (Mittel)
+      const thinned = !asIcons && alive > n;
+      sq.badge.visible = thinned;
       const moveDx = e.pos.x - e.prev.x;
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
       const right = this.startsRight(world, e.owner);
@@ -1031,6 +1063,7 @@ export class Hd2dRenderer {
         const s = sq.sprites[i]!;
         const sh = sq.shadows[i]!;
         const vis = i < n;
+        void sideColor;
         s.visible = vis;
         sh.visible = vis;
         if (!vis) continue;
@@ -1065,7 +1098,17 @@ export class Hd2dRenderer {
       }
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
-      const top = this.heightAt(world, x, y) + spr.fly + size * 0.95;
+      const top = this.heightAt(world, x, y) + (asIcons ? 0.35 + (level === 'map' ? 1.05 : 0.8) : spr.fly + size * 0.95);
+      if (thinned) {
+        const bk = `${alive}|${sideColor}`;
+        if (bk !== sq.badgeKey) {
+          (sq.badge.material as THREE.SpriteMaterial).map = this.badgeTexture(alive, sideColor);
+          (sq.badge.material as THREE.SpriteMaterial).needsUpdate = true;
+          sq.badgeKey = bk;
+        }
+        sq.badge.position.set(x + 0.55, top + 0.12, y);
+        sq.badge.scale.set(0.62, 0.35, 1);
+      }
       sq.hpBack.position.set(x, top, y);
       sq.hp.position.set(x - (1 - share) * 0.35, top, y + 0.001);
       sq.hp.scale.set(0.7 * share, 0.07, 1);
@@ -1111,8 +1154,83 @@ export class Hd2dRenderer {
     back.renderOrder = 5;
     const hp = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#7ee07b', depthTest: false }));
     hp.renderOrder = 6;
-    this.scene.add(back, hp);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0 };
+    const icon = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false }));
+    icon.renderOrder = 7;
+    icon.visible = false;
+    const badge = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false }));
+    badge.renderOrder = 7;
+    badge.visible = false;
+    this.scene.add(back, hp, icon, badge);
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '' };
+  }
+
+  private readonly iconTex = new Map<string, THREE.CanvasTexture>();
+
+  /**
+   * Verbandssymbol (Nutzer 06.11., Variante C): in Karte/Lanes statt der Pixelfiguren ein kleines Zeichen wie in der alten
+   * Grafik – Kreis Infanterie, Raute leicht, Quadrat schwer, Dreieck fliegend – in der Seitenfarbe, mit Modellzahl.
+   */
+  private iconTexture(shape: string, color: string, count: number): THREE.CanvasTexture {
+    const key = `${shape}|${color}|${count}`;
+    const hit = this.iconTex.get(key);
+    if (hit) return hit;
+    const c = document.createElement('canvas');
+    c.width = 32;
+    c.height = 32;
+    const g = c.getContext('2d')!;
+    g.fillStyle = color;
+    g.strokeStyle = '#0b0f16';
+    g.lineWidth = 3;
+    g.beginPath();
+    if (shape === 'circle') g.arc(16, 16, 11, 0, Math.PI * 2);
+    else if (shape === 'diamond') {
+      g.moveTo(16, 3); g.lineTo(29, 16); g.lineTo(16, 29); g.lineTo(3, 16); g.closePath();
+    } else if (shape === 'tri') {
+      g.moveTo(16, 3); g.lineTo(29, 27); g.lineTo(3, 27); g.closePath();
+    } else g.rect(5, 5, 22, 22);
+    g.stroke();
+    g.fill();
+    if (count > 1) {
+      g.font = 'bold 13px monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(0,0,0,.85)';
+      g.strokeText(String(count), 16, shape === 'tri' ? 19 : 17);
+      g.fillStyle = '#ffffff';
+      g.fillText(String(count), 16, shape === 'tri' ? 19 : 17);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.LinearFilter;
+    t.colorSpace = THREE.SRGBColorSpace;
+    this.iconTex.set(key, t);
+    return t;
+  }
+
+  /** Zahl der Modelle als kleines Schild (Mittel: Figuren ausgedünnt, Nutzer 06.11., Variante B). */
+  private badgeTexture(count: number, color: string): THREE.CanvasTexture {
+    const key = `b|${color}|${count}`;
+    const hit = this.iconTex.get(key);
+    if (hit) return hit;
+    const c = document.createElement('canvas');
+    c.width = 32;
+    c.height = 18;
+    const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(8,12,20,.85)';
+    g.fillRect(0, 0, 32, 18);
+    g.fillStyle = color;
+    g.fillRect(0, 0, 3, 18);
+    g.fillStyle = '#fff';
+    g.font = 'bold 12px monospace';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(`×${count}`, 18, 10);
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter;
+    t.colorSpace = THREE.SRGBColorSpace;
+    this.iconTex.set(key, t);
+    return t;
   }
 
   private ensureSprites(sq: Squad, n: number): void {
@@ -1129,7 +1247,7 @@ export class Hd2dRenderer {
   }
 
   private removeSquad(sq: Squad): void {
-    for (const o of [...sq.sprites, ...sq.shadows, sq.hp, sq.hpBack]) {
+    for (const o of [...sq.sprites, ...sq.shadows, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
       this.scene.remove(o);
       ((o as THREE.Mesh).material as THREE.Material).dispose();
     }
