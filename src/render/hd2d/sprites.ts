@@ -100,10 +100,12 @@ const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
   plasma: { faction: 'technoclan', sheet: 'units/old_plasma.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.17], muzzles: [[0.44, 0.58]], projectile: 'oglob' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
   hoverscout: { faction: 'technoclan', sheet: 'units/old_hoverscout.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0.15, attack: { dur: 1.2, hits: [0.33], muzzles: [[0.36, 0.36]], projectile: 'obolt' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
   gunner: { faction: 'technoclan', sheet: 'units/old_gunner.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.11], muzzles: [[0.41, 0.33]], projectile: 'oshot' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
-  // Neu im alten Stil (06.11., Nutzer-Wahl: Heiler 15, Commander 1, Koloss 3, Batterie 8; PixelLab-Tag terrain-conquester-tc-alt)
+  // Neu im alten Stil (06.11., Nutzer-Wahl: Heiler 15, Commander 1, Koloss 3, Batterie 8; PixelLab-Tag terrain-conquester-tc-alt).
+  // 07.11.: Koloss mit Doppelkanone und Reaktorkern, Batterie mit Doppel-Railgun und Spulen (Merkmale der feinen Fassung;
+  // PixelLab-Zustände 8bb505d0 / a778242a).
   nanomedic: { faction: 'technoclan', sheet: 'units/old_nanomedic.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.6, hits: [0.25], muzzles: [[0.31, 0.72]], projectile: 'heal' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
   commander: { faction: 'technoclan', sheet: 'units/old_commander.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.17], muzzles: [[0.28, 0.8]], projectile: 'obolt' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
-  colossus: { faction: 'technoclan', sheet: 'units/old_colossus.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.6, hits: [0.25], muzzles: [[0.66, 1.1]], projectile: 'oshell' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
+  colossus: { faction: 'technoclan', sheet: 'units/old_colossus.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.8, hits: [0.25, 0.7], muzzles: [[0.7, 1.15], [0.7, 1.0]], projectile: 'oshell' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
   battery: { faction: 'technoclan', sheet: 'units/old_battery.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.8, hits: [0.25], muzzles: [[0.69, 1.15]], projectile: 'orail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
 };
 export function oldTechnoclan(): boolean {
