@@ -39,8 +39,9 @@ export class FlowField {
     private readonly grid: Grid,
     sources: readonly number[],
     private readonly profile: MoveProfile,
+    mult?: ArrayLike<number>,
   ) {
-    this.dist = computeDistances(grid, sources, profile);
+    this.dist = computeDistances(grid, sources, profile, mult);
   }
 
   distanceAt(x: number, y: number): number {
@@ -68,7 +69,7 @@ export class FlowField {
   }
 }
 
-function computeDistances(grid: Grid, sources: readonly number[], profile: MoveProfile): Float64Array {
+function computeDistances(grid: Grid, sources: readonly number[], profile: MoveProfile, mult?: ArrayLike<number>): Float64Array {
   const w = grid.width;
   const dist = new Float64Array(w * grid.height).fill(Infinity);
   const heap = new MinHeap();
@@ -82,14 +83,14 @@ function computeDistances(grid: Grid, sources: readonly number[], profile: MoveP
     if (d > dist[i]!) continue;
     const x = i % w;
     const y = (i - x) / w;
-    const costHere = grid.moveCost(i, profile);
+    const costHere = grid.moveCost(i, profile) * (mult ? mult[i]! : 1);
     for (const [dx, dy] of NEIGHBORS) {
       if (!canStep(grid, x, y, dx, dy, profile)) continue;
       const n = i + dy * w + dx;
       // Ganzzahlige Schritte (gerade 10, schräg 14, Kosten in Zehnteln): gleich lange Wege sind exakt gleich lang –
       // sonst entscheiden Rundungsreste je nach Reihenfolge, und gespiegelte Seiten liefen verschieden (Nachtrag G.3a).
       const step = dx !== 0 && dy !== 0 ? 14 : 10;
-      const nd = d + Math.round((step * (costHere + grid.moveCost(n, profile)) * 10) / 2);
+      const nd = d + Math.round((step * (costHere + grid.moveCost(n, profile) * (mult ? mult[n]! : 1)) * 10) / 2);
       if (nd < dist[n]!) {
         dist[n] = nd;
         heap.push(n, nd);
@@ -111,6 +112,8 @@ export class FlowFieldCache {
   constructor(
     private readonly grid: Grid,
     private readonly targets: ReadonlyMap<string, readonly number[]>,
+    /** Kostenaufschlag je Kachel für einzelne Ziele (Faktor, 1 = keiner). */
+    private readonly multipliers: ReadonlyMap<string, ArrayLike<number>> = new Map(),
   ) {}
 
   keys(): string[] {
@@ -127,7 +130,7 @@ export class FlowFieldCache {
     if (!field) {
       const sources = this.targets.get(target);
       if (!sources) throw new Error(`Unbekanntes Flussfeld-Ziel: ${target}`);
-      field = new FlowField(this.grid, sources, profile);
+      field = new FlowField(this.grid, sources, profile, this.multipliers.get(target));
       this.fields.set(key, field);
     }
     return field;

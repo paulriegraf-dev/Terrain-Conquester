@@ -5,7 +5,7 @@ import { UNITS } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import type { MoveProfile } from '../../data/movement';
 import type { Entity } from '../entity';
-import { waypointKey } from '../keys';
+import { laneKey, waypointKey } from '../keys';
 import { rectCenter } from '../math';
 import type { PlayerId, Route, Vec2 } from '../types';
 import { PLAYERS, ROUTES } from '../types';
@@ -227,7 +227,7 @@ function validTarget(
  * Kachel nicht mehr zum eigenen Gebiet gehört.
  */
 export function holdAnchor(world: World, p: PlayerId, r: Route): Anchor | null {
-  const field = world.fields.get(waypointKey(r), MOVE_PROFILES.foot);
+  const field = world.fields.get(world.rules.laneGuide.enabled ? laneKey(r) : waypointKey(r), MOVE_PROFILES.foot);
   const start = startCell(world, p, r);
   if (start < 0) return null;
   const w = world.grid.width;
@@ -254,12 +254,18 @@ export function holdAnchor(world: World, p: PlayerId, r: Route): Anchor | null {
 export function defendAnchor(world: World, p: PlayerId, r: Route): Anchor | null {
   const hq = rectCenter(world.map.hq[p]);
   const wp = world.map.waypoints[r];
-  const dir = normalized(wp.x - hq.x, wp.y - hq.y);
   const rally = world.rules.influence.hqRadius * 0.6;
+  const spread = world.rules.laneGuide.enabled ? world.rules.laneGuide.defendSpread : 0;
+  // Spurführung (7.11.): Sammelpunkt je Lane seitlich versetzt (oben/mitte/unten), nicht alle mittig vor dem HQ.
+  const lateral = Math.sign(wp.y - hq.y) * Math.min(spread, Math.abs(wp.y - hq.y));
+  const fx = p === 0 ? 1 : -1;
   for (let d = rally; d >= 2; d -= 0.5) {
-    const x = hq.x + dir.x * d;
-    const y = hq.y + dir.y * d;
-    if (world.grid.isPassable(cellX(world, p, x), Math.floor(y), MOVE_PROFILES.foot)) return { pos: { x, y }, dir };
+    const k = d / rally;
+    const x = spread > 0 ? hq.x + fx * d : hq.x + normalized(wp.x - hq.x, wp.y - hq.y).x * d;
+    const y = spread > 0 ? hq.y + lateral * k : hq.y + normalized(wp.x - hq.x, wp.y - hq.y).y * d;
+    if (world.grid.isPassable(cellX(world, p, x), Math.floor(y), MOVE_PROFILES.foot)) {
+      return { pos: { x, y }, dir: spread > 0 ? { x: fx, y: 0 } : normalized(wp.x - hq.x, wp.y - hq.y) };
+    }
   }
   return null;
 }

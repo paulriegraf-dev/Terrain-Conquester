@@ -14,8 +14,8 @@ import { MOVE_PROFILES } from '../data/movement';
 import type { SimEvent, SimEventData } from './events';
 import { FlowFieldCache, rectCells } from './flowfield';
 import { Grid } from './grid';
-import { hqKey, waypointKey } from './keys';
-import { BUILD_ZONE, parseMap, waypointCells, zoneAt } from './map';
+import { hqKey, laneKey, waypointKey } from './keys';
+import { BUILD_ZONE, laneMultiplier, parseMap, waypointCells, zoneAt } from './map';
 import type { MapDef, PadDef, ParsedMap } from './map';
 import { inBaseZone } from './placement';
 import { rectCenter } from './math';
@@ -530,7 +530,16 @@ export class World {
     const targets = new Map<string, number[]>();
     for (const r of ROUTES) targets.set(waypointKey(r), waypointCells(this.map, r));
     for (const p of PLAYERS) targets.set(hqKey(p), rectCells(this.grid, this.map.hq[p]));
-    this.fields = new FlowFieldCache(this.grid, targets);
+    // Lane-Felder (7.11.): gleiche Ziele wie die Wegpunkte, aber mit Aufschlag außerhalb des eigenen Bandes.
+    const lane = new Map<string, Uint8Array>();
+    const lg = this.rules.laneGuide;
+    if (lg.enabled) {
+      for (const r of ROUTES) {
+        targets.set(laneKey(r), waypointCells(this.map, r));
+        lane.set(laneKey(r), laneMultiplier(this.map, r, lg.bandHalf, lg.penalty, this.rules.influence.hqRadius + 2));
+      }
+    }
+    this.fields = new FlowFieldCache(this.grid, targets, lane);
 
     const cells = this.map.width * this.map.height;
     this.influence = new Float64Array(cells);

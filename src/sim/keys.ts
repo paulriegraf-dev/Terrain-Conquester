@@ -9,3 +9,8 @@ export function waypointKey(route: Route): string {
 export function hqKey(p: PlayerId): string {
   return `hq:${p}`;
 }
+
+/** Flussfeld zum Routen-Wegpunkt mit Aufschlag auf Kacheln außerhalb des eigenen Lane-Bandes (Halten, Sichern). */
+export function laneKey(route: Route): string {
+  return `lane:${route}`;
+}

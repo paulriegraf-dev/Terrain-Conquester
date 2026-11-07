@@ -310,6 +310,24 @@ export function waypointCells(map: ParsedMap, route: Route): number[] {
   return [y * map.width + x - 1, y * map.width + x];
 }
 
+/**
+ * Kostenfaktor je Kachel für das Lane-Feld (Spurführung 7.11.): `penalty` außerhalb des Bandes `bandHalf` um den Routen-Wegpunkt,
+ * außer im Umkreis `freeRadius` um eines der HQs (dort ist die Basis, von der aus alle Lanes erreichbar sind).
+ */
+export function laneMultiplier(map: ParsedMap, route: Route, bandHalf: number, penalty: number, freeRadius: number): Uint8Array {
+  const out = new Uint8Array(map.width * map.height).fill(1);
+  const wy = map.waypoints[route].y;
+  const hqs = [map.hq[0], map.hq[1]].map((r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 }));
+  for (let y = 0; y < map.height; y++) {
+    if (Math.abs(y + 0.5 - wy) <= bandHalf) continue;
+    for (let x = 0; x < map.width; x++) {
+      if (hqs.some((h) => (x + 0.5 - h.x) ** 2 + (y + 0.5 - h.y) ** 2 <= freeRadius * freeRadius)) continue;
+      out[y * map.width + x] = penalty;
+    }
+  }
+  return out;
+}
+
 /** Bounding-Box einer Zellmenge – muss ein lückenloses Rechteck sein. */
 function solidRect(cells: number[], width: number, label: string): CellRect {
   if (cells.length === 0) throw new Error(`${label}: nicht gefunden`);

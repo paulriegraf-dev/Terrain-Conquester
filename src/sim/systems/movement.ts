@@ -3,8 +3,9 @@ import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
 import { TERRAIN_LIST } from '../../data/terrain';
 import type { Entity } from '../entity';
-import { hqKey, waypointKey } from '../keys';
-import type { PlayerId, Vec2 } from '../types';
+import { hqKey, laneKey, waypointKey } from '../keys';
+import type { PlayerId, Route, Vec2 } from '../types';
+import type { FlowField } from '../flowfield';
 import { otherPlayer } from '../types';
 import type { World } from '../world';
 import { MAX_UNIT_RADIUS, aimPoint, rangeTo } from './targeting';
@@ -93,6 +94,9 @@ export function updateMovement(world: World): void {
     const fusion = e.fuse !== undefined ? world.fusions.find((f) => f.id === e.fuse) : undefined;
     if (fusion) {
       dir = dist(e.pos, fusion.center) > 0.35 ? steer(e, fusion.center) : { x: 0, y: 0 };
+    } else if (target && target.alive && !retreating && ignoresOffLaneTarget(world, e, target)) {
+      // Spurführung (7.11.): Gegner einer anderen Lane werden unterwegs nicht verfolgt – weitermarschieren, nebenbei schießen.
+      dir = flowDirection(world, e, profile, slots.get(e.id), near);
     } else if (target && target.alive && !retreating) {
       // Mit den Positionen vom Tick-Anfang rechnen (prev) – sonst hätte die Seite, die später
       // drankommt, einen Vorteil, weil sie schon die neuen Positionen der anderen sieht.
@@ -244,6 +248,42 @@ export function unitOrder(world: World, e: Entity): Stance {
   return stance;
 }
 
+/** Flussfeld für Halten und Sichern: über das Band der eigenen Lane (Spurführung 7.11.), sonst wie der Routen-Wegpunkt. */
+function laneField(world: World, route: Route, profile: MoveProfile): FlowField {
+  return world.fields.get(world.rules.laneGuide.enabled ? laneKey(route) : waypointKey(route), profile);
+}
+
+/** Einheit im Band der eigenen Lane oder im Umkreis des eigenen HQs (Basis)? Nur von dort geht es per Luftlinie zum Platz. */
+function onOwnLane(world: World, e: Entity): boolean {
+  if (!world.rules.laneGuide.enabled) return true;
+  if (inLaneBand(world, e.mover!.route, e.pos.y)) return true;
+  return dist(e.pos, rectCenter(world.map.hq[e.owner])) <= world.rules.influence.hqRadius + 2;
+}
+
+/** Liegt der Punkt im Band der Lane `route` (Abstand zum Routen-Wegpunkt in y höchstens bandHalf)? */
+function inLaneBand(world: World, route: Route, y: number): boolean {
+  return Math.abs(y - world.map.waypoints[route].y) <= world.rules.laneGuide.bandHalf;
+}
+
+/**
+ * Soll diese Einheit das Ziel unterwegs ignorieren (7.11.)? Gilt für Halten und Sichern (nicht im Angriff, nicht beim Verteidigen):
+ * Ein Gegner in einer anderen Lane wird nicht verfolgt; zurückgeschossen wird nur, wenn er auf die Einheit zielt oder näher
+ * als blockRadius steht (steht „direkt im Weg“). Haltende Verbände stellen weiter Eindringlinge rund ums eigene HQ.
+ */
+function ignoresOffLaneTarget(world: World, e: Entity, target: Entity): boolean {
+  const lg = world.rules.laneGuide;
+  if (!lg.enabled || !lg.ignoreOffLane || target.kind !== 'unit') return false;
+  const order = unitOrder(world, e);
+  if (order !== 'hold' && order !== 'secure') return false;
+  const route = e.mover!.route;
+  if (inLaneBand(world, route, target.pos.y)) return false;
+  if (target.weapon?.targetId === e.id) return false; // beschossen: zurückschießen
+  if (dist(e.pos, target.pos) <= lg.blockRadius) return false; // steht direkt im Weg
+  // Haltende Truppen helfen weiter gegen Eindringlinge im Umkreis des eigenen HQs; wer sichert, marschiert zur Station.
+  if (order === 'secure') return true;
+  return dist(target.pos, rectCenter(world.map.hq[e.owner])) > world.rules.influence.hqRadius + 2;
+}
+
 function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot | undefined, near: SpatialGrid): Vec2 {
   const m = e.mover!;
   const cx = cellX(world, e.owner, e.pos.x);
@@ -259,11 +299,11 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     const reach = world.rules.sites.contestRadius + 2;
     const foe = nearestNear(world, e, near, site.pos, reach);
     if (foe) return normalize(foe.prev.x - e.pos.x, foe.prev.y - e.pos.y);
-    if (slot && (dist(e.pos, slot.target) <= SLOT_STEER_RANGE || dist(e.pos, site.pos) <= reach) && lineClear(world, e.pos, slot.target, profile, e.owner)) {
+    if (slot && (dist(e.pos, slot.target) <= SLOT_STEER_RANGE || dist(e.pos, site.pos) <= reach) && onOwnLane(world, e) && lineClear(world, e.pos, slot.target, profile, e.owner)) {
       return steer(e, slot.target);
     }
     if (dist(e.pos, site.pos) <= 1.5) return { x: 0, y: 0 };
-    next = world.fields.get(waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
+    next = laneField(world, m.route, profile).next(cx, cy, e.owner === 1);
   } else if (order === 'defend') {
     // Verteidigen: in der Basis bleiben (Ring um das eigene HQ in Richtung der Route)
     // und Eindringlingen im ganzen eigenen Gebiet entgegeneilen.
@@ -290,11 +330,11 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     const mine = controllerAt(world, here) === e.owner;
     if (!mine && !world.contested[here]) {
       next = world.fields.get(hqKey(e.owner), profile).next(cx, cy, e.owner === 1); // zurück ins eigene Gebiet
-    } else if (slot && dist(e.pos, slot.target) <= SLOT_STEER_RANGE && lineClear(world, e.pos, slot.target, profile, e.owner)) {
+    } else if (slot && dist(e.pos, slot.target) <= SLOT_STEER_RANGE && onOwnLane(world, e) && lineClear(world, e.pos, slot.target, profile, e.owner)) {
       // Formation: Platz in der Linie entlang der Grenze einnehmen (gestaffelt nach Reichweite).
       return steer(e, slot.target);
     } else {
-      next = world.fields.get(waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
+      next = laneField(world, m.route, profile).next(cx, cy, e.owner === 1);
       if (next >= 0 && controllerAt(world, next) !== e.owner) return { x: 0, y: 0 };
     }
   } else {

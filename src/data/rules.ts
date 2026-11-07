@@ -296,6 +296,13 @@ export interface Rules {
   front: FrontRules;
   formation: FormationRules;
   /**
+   * Spurführung (7.11., Nutzer): Halten und Sichern laufen über das Band der EIGENEN Lane (Kosten-Aufschlag `penalty` für Kacheln
+   * außerhalb des Bandes `bandHalf` um den Routen-Wegpunkt; rund um die HQs frei) – nicht per Luftlinie durch eine andere Lane.
+   * Unterwegs jagt keine Einheit Gegner einer anderen Lane (`ignoreOffLane`), sie schießt nur zurück, wenn sie beschossen wird
+   * oder der Gegner näher als `blockRadius` steht. `defendSpread`: Verteidigen-Sammelpunkt je Lane so weit seitlich vom HQ versetzt.
+   */
+  laneGuide: { enabled: boolean; bandHalf: number; penalty: number; ignoreOffLane: boolean; blockRadius: number; defendSpread: number };
+  /**
    * Fabriken: Umrüsten auf eine andere freigeschaltete Einheit dauert so lange (Sekunden, Produktion pausiert).
    * Seit 24.10. bleibt der Fortschritt dabei anteilig erhalten.
    */
@@ -519,6 +526,7 @@ export const RULES: Rules = {
     { at: 480, name: 'Eskalation', energyMult: 1, hqDamageMult: 1, hint: 'Belagerungsturm wirkt ab jetzt.' },
     { at: 660, name: 'Entscheidung', energyMult: 1, hqDamageMult: 1, hint: 'Wer durchkommt, kann das HQ nehmen – es wehrt sich nicht selbst.' },
   ],
+  laneGuide: { enabled: true, bandHalf: 3.5, penalty: 6, ignoreOffLane: true, blockRadius: 2.5, defendSpread: 5 },
   influence: {
     every: 10,
     unitRadius: 2.5,
