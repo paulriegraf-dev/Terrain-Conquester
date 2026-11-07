@@ -64,6 +64,11 @@ interface Squad {
   icon: THREE.Sprite;
   badge: THREE.Sprite;
   iconKey: string;
+  /** Blickrichtung und Rückwärtsgehen (Nutzer 07.11., Variante C): Richtung, zurückgelegter Rückweg, letzter Tick. */
+  dir: 1 | -1 | 0;
+  back: number;
+  backward: boolean;
+  tick: number;
   badgeKey: string;
 }
 
@@ -1135,6 +1140,30 @@ export class Hd2dRenderer {
       const showChip = hovered === e || this.altHeld || (hovered !== null && hovered.weapon?.targetId === e.id) || (hovered !== null && e.weapon?.targetId === hovered.id);
       sq.badge.visible = showChip;
       const moveDx = e.pos.x - e.prev.x;
+      // Rückwärtsgehen (Nutzer 07.11., Variante C): kurze Rückschritte (bis 1,5 Kacheln) oder mit Gegner im Visier – Blick
+      // bleibt zum Gegner, Laufanimation läuft rückwärts; längerer Rückzug – umdrehen und normal laufen.
+      if (sq.tick !== world.tick) {
+        sq.tick = world.tick;
+        const enemyDir: 1 | -1 = this.startsRight(world, e.owner) ? -1 : 1;
+        if (sq.dir === 0) sq.dir = enemyDir;
+        if (Math.abs(moveDx) > 0.001) {
+          if (Math.sign(moveDx) === enemyDir) {
+            sq.back = 0;
+            sq.backward = false;
+            sq.dir = enemyDir;
+          } else {
+            sq.back += Math.abs(moveDx);
+            const engaged = !!e.weapon?.targetId;
+            sq.backward = engaged || sq.back < 1.5;
+            sq.dir = sq.backward ? enemyDir : (-enemyDir as 1 | -1);
+          }
+        } else if (Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.002) {
+          // Stehen: nach kurzer Zeit wieder zum Gegner schauen
+          sq.back = Math.max(0, Math.min(sq.back, 1.5) - 0.08);
+          sq.backward = false;
+          if (sq.back === 0) sq.dir = enemyDir;
+        }
+      }
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
       const right = this.startsRight(world, e.owner);
       const target = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
@@ -1161,7 +1190,7 @@ export class Hd2dRenderer {
         sh.position.set(mx, this.heightAt(world, mx, my) + 0.02, my);
         if (team) (sh.material as THREE.MeshBasicMaterial).color.set(team);
         const pose = this.pose(e, sq, spr, i, n, now, world.tps);
-        const dir = pose.attacking && target ? facing(right, { targetDx: target.pos.x - e.pos.x }) : facing(right, { moveDx: moving ? moveDx : 0 });
+        const dir = pose.attacking && target ? facing(right, { targetDx: target.pos.x - e.pos.x }) : sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
         let row = 0;
         let frame = 0;
         if (pose.attacking) {
@@ -1170,6 +1199,7 @@ export class Hd2dRenderer {
         } else if (moving) {
           row = 1;
           frame = Math.floor(sq.walk + i * 3) % spr.frames.walk;
+          if (sq.backward) frame = spr.frames.walk - 1 - frame;
         } else {
           row = 0;
           frame = Math.floor(now / 3.3 + i * 2) % spr.frames.idle;
@@ -1251,7 +1281,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '' };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, backward: false, tick: -1 };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();
