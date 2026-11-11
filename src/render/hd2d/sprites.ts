@@ -108,7 +108,22 @@ const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
   colossus: { faction: 'technoclan', sheet: 'units/old_colossus.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.8, hits: [0.25, 0.7], muzzles: [[0.7, 1.15], [0.7, 1.0]], projectile: 'oshell' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
   battery: { faction: 'technoclan', sheet: 'units/old_battery.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.8, hits: [0.25], muzzles: [[0.69, 1.15]], projectile: 'orail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
 };
+/**
+ * Mock-up 3 (Nutzer 11.11.): die feinen, „neuen“ Technoclan-Figuren verkleinert (80 / 70 / 60 %) – zum Vergleich mit den
+ * alten, groben Figuren. Hat Vorrang vor dem alten Satz; Mündungen skalieren mit (Renderer multipliziert `scale`).
+ */
+export const NEW_SMALL_KEY = 'tc-new-small';
+export const NEW_SMALL_STEPS = [0.8, 0.7, 0.6] as const;
+export function newSmallFactor(): number | null {
+  try {
+    const v = Number(globalThis.localStorage?.getItem(NEW_SMALL_KEY));
+    return (NEW_SMALL_STEPS as readonly number[]).includes(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 export function oldTechnoclan(): boolean {
+  if (newSmallFactor() !== null) return false;
   try {
     // Seit 06.11. Standard (Nutzer: alte Technoclan-Figuren sind Basis und Stilgrundlage); „neu“ bleibt abrufbar.
     return globalThis.localStorage?.getItem(OLD_TC_KEY) !== '0';
@@ -117,3 +132,9 @@ export function oldTechnoclan(): boolean {
   }
 }
 if (oldTechnoclan()) Object.assign(UNIT_SPRITES, OLD_TC);
+else {
+  const f = newSmallFactor();
+  if (f !== null) {
+    for (const s of Object.values(UNIT_SPRITES)) if (s && s.faction === 'technoclan') s.scale *= f;
+  }
+}

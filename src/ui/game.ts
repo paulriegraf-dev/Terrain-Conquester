@@ -1,5 +1,5 @@
 import { cmdIcon } from './icons';
-import { OLD_TC_KEY, oldTechnoclan } from '../render/hd2d/sprites';
+import { NEW_SMALL_KEY, NEW_SMALL_STEPS, OLD_TC_KEY, newSmallFactor, oldTechnoclan } from '../render/hd2d/sprites';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import type { AiLevel } from '../ai/simpleAi';
 import { BUILDINGS } from '../data/buildings';
@@ -173,6 +173,12 @@ export class Game {
     if (oldTc) {
       oldTc.hidden = graphicsMode() !== 'hd2d';
       oldTc.textContent = `Technoclan-Figuren: ${oldTechnoclan() ? 'alt (Mock-up 2)' : 'neu'}`;
+    }
+    const newSmall = doc.getElementById('btn-newsmall');
+    if (newSmall) {
+      newSmall.hidden = graphicsMode() !== 'hd2d';
+      const f = newSmallFactor();
+      newSmall.textContent = `Neue Figuren verkleinert: ${f === null ? 'aus' : `${Math.round(f * 100)} %`}`;
     }
     this.music = new Music(doc);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
@@ -1268,6 +1274,19 @@ export class Game {
         // Mock-up 2 (06.11.): alte Technoclan-Figuren ein/aus, gilt ab Neustart der Seite.
         try {
           localStorage.setItem(OLD_TC_KEY, oldTechnoclan() ? '0' : '1');
+        } catch {
+          // ohne Speicher kein Umschalten
+        }
+        location.reload();
+        break;
+      case 'newsmall-toggle':
+        // Mock-up 3 (11.11.): neue Technoclan-Figuren verkleinert – aus → 80 → 70 → 60 → aus, gilt ab Neustart.
+        try {
+          const f = newSmallFactor();
+          const i = f === null ? -1 : NEW_SMALL_STEPS.indexOf(f as (typeof NEW_SMALL_STEPS)[number]);
+          const next = NEW_SMALL_STEPS[i + 1];
+          if (next === undefined) localStorage.removeItem(NEW_SMALL_KEY);
+          else localStorage.setItem(NEW_SMALL_KEY, String(next));
         } catch {
           // ohne Speicher kein Umschalten
         }
