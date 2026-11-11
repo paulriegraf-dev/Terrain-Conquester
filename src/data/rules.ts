@@ -38,6 +38,11 @@ export interface EmergencyRules {
   depth: number;
   /** So lange (Sekunden) muss die Bedrängnis halten; ohne sinkt die Uhr doppelt so schnell. */
   seconds: number;
+  /**
+   * 11.11. (Nutzer): Bedrängt ist man auch ohne Stärkevergleich, wenn mindestens `minEnemy` Gegner im
+   * Tiefenbereich stehen und das HQ beschossen wird oder in den letzten `lossSeconds` ein eigenes Gebäude fiel.
+   */
+  lossSeconds: number;
   /** Gegner im aufgegebenen Abschnitt (und so viele Kacheln drumherum) sind so lange betäubt. */
   stunSeconds: number;
   stunMargin: number;
@@ -619,7 +624,8 @@ export const RULES: Rules = {
   shaping: { prepExtra: 3, homeCost: 0.67, homeSeconds: 0.67 },
   // Notfallverlegung (22.10., Entwurf des Nutzers): doppelt so stark, 25 s, einmal je Flügel.
   emergency: {
-    ratio: 2, minEnemy: 3, depth: 1.5, seconds: 25, stunSeconds: 4, stunMargin: 3,
+    ratio: 2, minEnemy: 3, depth: 1.5, seconds: 20, lossSeconds: 30, // 11.11.: 20 s statt 25, auch bei HQ-Beschuss/Gebäudeverlust
+     stunSeconds: 4, stunMargin: 3,
     bonusSeconds: 30, bonusProduction: 1.5, bonusDamageTaken: 0.75, shieldSeconds: 10,
     // 11.11. (Nutzer): nur eine Notfallverlegung je Partie und Seite (vorher 2), weiter nur per Knopf.
     maxUses: 1,

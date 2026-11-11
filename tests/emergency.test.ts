@@ -89,6 +89,38 @@ describe('Notfallverlegung', () => {
     assert.equal(checkEmergency(world, 0).ok, false);
   });
 
+  it('11.11.: bei HQ-Beschuss auch trotz eigener Truppen – nach 20 s, aber nie von selbst', () => {
+    const { world, barracks } = setup();
+    intruders(world, 4);
+    for (let k = 0; k < 3; k++) {
+      const u = world.addUnit(0, UNITS.sniper, { x: R + 3.5, y: 6.5 + k * 0.5 }, 'mid');
+      u.mover!.speed = 0;
+      u.weapon = undefined;
+    }
+    const rect = { ...barracks.rect! };
+    for (let s = 0; s < world.rules.emergency.seconds + 2; s++) {
+      world.hq(0)!.combatTick = world.tick; // HQ wird beschossen
+      stepTimes(world, world.tps);
+    }
+    assert.equal(world.rules.emergency.seconds, 20);
+    assert.equal(checkEmergency(world, 0).ok, true);
+    assert.deepEqual(barracks.rect, rect, 'nicht automatisch verlegt');
+    assert.equal(world.players[0].emergency.used.length, 0);
+  });
+
+  it('11.11.: nach Gebäudeverlust auch trotz eigener Truppen', () => {
+    const { world } = setup();
+    intruders(world, 4);
+    for (let k = 0; k < 3; k++) {
+      const u = world.addUnit(0, UNITS.sniper, { x: R + 3.5, y: 6.5 + k * 0.5 }, 'mid');
+      u.mover!.speed = 0;
+      u.weapon = undefined;
+    }
+    world.players[0].emergency.lostTick = world.tick;
+    stepTimes(world, (world.rules.emergency.seconds + 1) * world.tps);
+    assert.equal(checkEmergency(world, 0).ok, true);
+  });
+
   it('verlegt den Abschnitt in den Rückraum: Fabrik behält Stufe und Einheit, alter Platz wird Geröll, Gegner sind betäubt', () => {
     const { world, barracks } = setup();
     barracks.producer!.level = 2;
