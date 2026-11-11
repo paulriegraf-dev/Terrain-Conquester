@@ -36,11 +36,11 @@ interface Rec {
 
 function play(mode: string, mapId: string, pair: number, g: number, factions: FactionId[], variant?: string): Rec {
   const seed = seedOf(pair, g);
-  const world = new World({ map: getMap(mapId), seed, factions });
+  const world = new World({ map: getMap(mapId), seed, factions: factions as [FactionId, FactionId] });
   const ais = [0, 1].map((p) => new SimpleAi(p as 0 | 1, aiSeed(seed, p as 0 | 1), 'normal'));
   const fullKnowledge = variant === 'B1' || variant === 'B3';
   const bonus = variant === 'B2' ? 0 : variant === 'B3' ? 1 : -1; // Seite mit +20 % Energie: B2 → Seite 0, B3 → Seite 1
-  const bonusSide = variant === 'B2' ? 0 : variant === 'B3' ? 1 : -1;
+  const bonusSide: number = variant === 'B2' ? 0 : variant === 'B3' ? 1 : -1;
   void bonus;
   if (fullKnowledge) {
     const orig = world.isVisibleTo.bind(world);
