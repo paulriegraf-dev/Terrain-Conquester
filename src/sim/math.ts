@@ -39,3 +39,8 @@ export function rectCenter(r: CellRect): Vec2 {
 export function rectContains(r: CellRect, cx: number, cy: number): boolean {
   return cx >= r.x && cx < r.x + r.w && cy >= r.y && cy < r.y + r.h;
 }
+
+/** 16 feste Richtungen (Einheitsvektoren, je 22,5°) – als Zahlen, nicht über Math.cos/sin (Determinismus über Browser). */
+export const RING16: readonly (readonly [number, number])[] = [
+  [1.0, 0.0], [0.92388, 0.382683], [0.707107, 0.707107], [0.382683, 0.92388], [0.0, 1.0], [-0.382683, 0.92388], [-0.707107, 0.707107], [-0.92388, 0.382683], [-1.0, 0.0], [-0.92388, -0.382683], [-0.707107, -0.707107], [-0.382683, -0.92388], [-0.0, -1.0], [0.382683, -0.92388], [0.707107, -0.707107], [0.92388, -0.382683],
+];

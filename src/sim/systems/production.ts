@@ -1,4 +1,5 @@
 import { surgeFactor } from './purchases';
+import { RING16 } from '../math';
 import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
 import { UNITS } from '../../data/units';
@@ -35,7 +36,8 @@ export function updateProduction(world: World): void {
  */
 export function productionSpeed(world: World, owner: PlayerId, part: PartId): number {
   const boost = world.tick < world.players[owner].emergency.bonusUntil ? world.rules.emergency.bonusProduction : 1;
-  return (boost * (world.phase.productionMult ?? 1) * synergyProduction(world, owner)) / productionFactor(world, owner, part);
+  const siege = hqUnderAttack(world, owner) ? world.rules.hqSiege.production : 1; // 07.11.: belagertes HQ
+  return (boost * siege * (world.phase.productionMult ?? 1) * synergyProduction(world, owner)) / productionFactor(world, owner, part);
 }
 
 /** Einspielen (24.10.): Faktor einer Fabrik, die schon eine Weile bei derselben Einheit bleibt (1 = noch nicht). */
@@ -190,10 +192,59 @@ export function musterPoint(world: World, building: Entity, route: Route, profil
   return null;
 }
 
+/** Wird das HQ von p gerade beschossen (Treffer in den letzten rules.hqSiege.window Sekunden)? */
+export function hqUnderAttack(world: World, p: PlayerId): boolean {
+  const hq = world.hq(p);
+  return !!hq && hq.combatTick !== undefined && world.tick - hq.combatTick <= world.rules.hqSiege.window * world.tps;
+}
+
+/**
+ * Sammelpunkt hinter dem belagerten HQ (07.11.): auf einem Ring um das HQ der begehbare Punkt, der am weitesten von der Mitte
+ * der Angreifer weg liegt (am liebsten genau dahinter); null, wenn nichts begehbar ist.
+ */
+function siegeGatherPoint(world: World, p: PlayerId, profile: MoveProfile): Vec2 | null {
+  const r = world.map.hq[p];
+  const c = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  const reach = Math.max(r.w, r.h) / 2 + world.rules.hqSiege.back;
+  let fx = 0, fy = 0, n = 0;
+  for (const e of world.entities) {
+    if (!e.alive || e.kind !== 'unit' || e.owner === p) continue;
+    if ((e.pos.x - c.x) ** 2 + (e.pos.y - c.y) ** 2 > 14 * 14) continue;
+    fx += e.pos.x; fy += e.pos.y; n++;
+  }
+  // Ohne Angreifer in der Nähe: weg von der Kartenmitte.
+  const foe = n > 0 ? { x: fx / n, y: fy / n } : { x: world.map.width / 2, y: c.y };
+  let best: Vec2 | null = null;
+  let bestD = -Infinity;
+  for (const [ux, uy] of RING16) {
+    const x = c.x + ux * reach;
+    const y = c.y + uy * reach;
+    if (x < 0 || y < 0 || x >= world.map.width || y >= world.map.height || !world.grid.isPassable(Math.floor(x), Math.floor(y), profile)) continue;
+    const d = (x - foe.x) ** 2 + (y - foe.y) ** 2;
+    if (d > bestD) { bestD = d; best = { x, y }; }
+  }
+  return best;
+}
+
 function setMuster(world: World, u: Entity, building: Entity, route: Route): void {
   const m = u.mover;
   const rules = world.rules.muster;
-  if (!m || rules.maxSeconds <= 0) return;
+  if (!m) return;
+  // Belagertes HQ (07.11.): hinter dem HQ sammeln und gemeinsam losschlagen (Gruppe alle gatherSeconds).
+  const S = world.rules.hqSiege;
+  if (S.gatherSeconds > 0 && hqUnderAttack(world, u.owner) && !UNITS[u.defId as UnitId]?.former) {
+    const pl = world.players[u.owner];
+    if (!pl.siegeGather || world.tick >= pl.siegeGather.release) {
+      const pt = siegeGatherPoint(world, u.owner, MOVE_PROFILES[m.profile]);
+      pl.siegeGather = pt ? { x: pt.x, y: pt.y, release: world.tick + Math.round(S.gatherSeconds * world.tps) } : null;
+    }
+    const g = pl.siegeGather;
+    if (g) {
+      m.muster = { x: g.x, y: g.y, from: g.release, until: g.release, gather: true };
+      return;
+    }
+  }
+  if (rules.maxSeconds <= 0) return;
   const p = musterPoint(world, building, route, MOVE_PROFILES[m.profile]);
   if (!p) return;
   m.muster = { x: p.x, y: p.y, from: world.tick + Math.round(rules.minSeconds * world.tps), until: world.tick + Math.round(rules.maxSeconds * world.tps) };

@@ -13,6 +13,10 @@ import type { BuildingId } from '../../data/buildings';
 import { buildingUpgradeLevel } from './factory';
 import { mudOnHit } from './mud';
 import { controllerAt } from './influence';
+import { MOVE_PROFILES } from '../../data/movement';
+import { RING16 } from '../math';
+import { lineClear } from './movement';
+import { assess } from './emergency';
 import {
   hasSynergy, laneOfRow, mudClutchRate, mudLeash, synergyCamouflage, synergyPower, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
 } from './synergy';
@@ -655,6 +659,38 @@ function retreatTarget(world: World, e: Entity): Vec2 | null {
 }
 
 /**
+ * Ausweichen bei bedrängter Basis (07.11., Nutzer): Punkt 4–9 Kacheln entfernt, nicht nach vorn, begehbar und auf freier Linie
+ * erreichbar, an dem kein Gegner in retreatRadius + 1 steht – der mit dem größten Abstand zum nächsten Gegner; bei Gleichstand
+ * der weiter außen (weiter weg von der Kartenmitte in y). Null, wenn es keinen gibt.
+ */
+function evadeTarget(world: World, e: Entity): Vec2 | null {
+  const r = world.rules.terraform;
+  const dir = forward(world, e.owner);
+  const foes: Entity[] = [];
+  for (const o of world.entities) if (o.alive && o.owner !== e.owner && o.kind === 'unit' && o.weapon && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= 16 * 16) foes.push(o);
+  if (foes.length === 0) return null;
+  const profile = MOVE_PROFILES[e.mover!.profile];
+  const midY = world.map.height / 2;
+  let best: Vec2 | null = null;
+  let bestScore = -Infinity;
+  for (const rad of [4, 6.5, 9]) {
+    for (const [ux, uy] of RING16) {
+      const x = e.pos.x + ux * rad;
+      const y = e.pos.y + uy * rad;
+      if (x < 0.5 || y < 0.5 || x > world.map.width - 0.5 || y > world.map.height - 0.5) continue;
+      if ((x - e.pos.x) * dir > 0.5) continue; // nie nach vorn
+      if (!world.grid.isPassable(Math.floor(x), Math.floor(y), profile) || !lineClear(world, e.pos, { x, y }, profile, e.owner)) continue;
+      let near = Infinity;
+      for (const o of foes) near = Math.min(near, Math.sqrt((o.pos.x - x) ** 2 + (o.pos.y - y) ** 2));
+      if (near <= r.retreatRadius + 1) continue;
+      const score = near + 0.25 * Math.abs(y - midY);
+      if (score > bestScore) { bestScore = score; best = { x, y }; }
+    }
+  }
+  return best;
+}
+
+/**
  * Terraformer (Umbau 23.10.): Ritual auf einem fertigen Block → sonst die nächste Kachel in der Umgebung umformen
  * (er bleibt dafür stehen) → sonst ein Stück vorrücken (beim Halten nicht über die Grenze hinaus).
  */
@@ -776,7 +812,8 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   // Frontabstand: nach dem Sprint – Gegner in retreatRadius ohne Wächter dazwischen → 3 Kacheln zurück (alle 10 Ticks geprüft).
   // 27.10.: Rückzug auch über die Hälfte des Weges – bis zum nächsten Gebäude oder größeren Wächter-Verband, nicht nur 3 Kacheln.
   if (rules.frontGap > 0 && (world.tick + e.id) % 10 === 0 && exposed(world, e)) {
-    const back = retreatTarget(world, e);
+    // 07.11.: Basis bedrängt → weit nach außen ausweichen (nicht zum Gebäude, an dem die Angreifer stehen).
+    const back = (rules.evadeBase && assess(world, p).enemy >= world.rules.emergency.minEnemy ? evadeTarget(world, e) : null) ?? retreatTarget(world, e);
     tf.retreat = back ? { x: back.x, y: back.y, until: world.tick + Math.round(rules.retreatSeconds * world.tps) } : null;
     if (back) {
       tf.workCell = -1;

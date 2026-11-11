@@ -12,7 +12,7 @@ import { MAX_UNIT_RADIUS, aimPoint, rangeTo } from './targeting';
 import { UNITS, type UnitId } from '../../data/units';
 import { SpatialGrid } from '../spatial';
 import { controllerAt } from './influence';
-import { dist, rectCenter } from '../math';
+import { dist, distToRect, rectCenter } from '../math';
 import type { Stance } from '../world';
 import { barrierSlow, secureAnchor, stationActive } from './sites';
 import { assignSlots, cellX, updateDeployment } from './formation';
@@ -120,8 +120,22 @@ export function updateMovement(world: World): void {
     } else if (m.muster && !m.goal) {
       // Sammeln vor der Fabrik (rules.muster): hinlaufen, kurz stehen, dann der Route folgen.
       const mu = m.muster;
-      const there = dist(e.pos, mu) <= 0.6;
-      if (world.tick >= mu.until || (there && world.tick >= mu.from) || !lineClear(world, e.pos, mu, profile, e.owner)) {
+      const there = dist(e.pos, mu) <= (mu.gather ? 1.5 : 0.6);
+      const clear = lineClear(world, e.pos, mu, profile, e.owner);
+      if (mu.gather && world.tick < mu.until && !clear) {
+        // Sammeln hinter dem belagerten HQ (07.11.): ohne freie Linie erst Richtung HQ (über die eigene Lane), dann hin.
+        const r = world.map.hq[e.owner];
+        if (distToRect(e.pos, r) <= 1.5) {
+          // Am HQ angekommen: außen herum zum Sammelpunkt (Tangente in seine Richtung).
+          const c = rectCenter(r);
+          const ox = e.pos.x - c.x, oy = e.pos.y - c.y;
+          const t1 = { x: -oy, y: ox };
+          const side = t1.x * (mu.x - e.pos.x) + t1.y * (mu.y - e.pos.y) >= 0 ? 1 : -1;
+          dir = normalize(t1.x * side + ox * 0.3, t1.y * side + oy * 0.3);
+        } else dir = flowStep(world, e, homeField(world, e, profile));
+      } else if (mu.gather && world.tick < mu.until) {
+        dir = there ? { x: 0, y: 0 } : steer(e, mu);
+      } else if (world.tick >= mu.until || (there && world.tick >= mu.from) || !clear) {
         m.muster = null;
         dir = flowDirection(world, e, profile, slots.get(e.id), near);
       } else dir = there ? { x: 0, y: 0 } : steer(e, mu);
@@ -251,6 +265,14 @@ export function unitOrder(world: World, e: Entity): Stance {
 /** Flussfeld für Halten und Sichern: über das Band der eigenen Lane (Spurführung 7.11.), sonst wie der Routen-Wegpunkt. */
 function laneField(world: World, route: Route, profile: MoveProfile): FlowField {
   return world.fields.get(world.rules.laneGuide.enabled ? laneKey(route) : waypointKey(route), profile);
+}
+
+/** Ein Schritt entlang eines Flussfelds (Richtung zur nächsten Kachel; steht, wenn es keine gibt). */
+function flowStep(world: World, e: Entity, field: FlowField): Vec2 {
+  const next = field.next(cellX(world, e.owner, e.pos.x), Math.floor(e.pos.y), e.owner === 1);
+  if (next < 0) return { x: 0, y: 0 };
+  const w = world.grid.width;
+  return normalize((next % w) + 0.5 - e.pos.x, Math.floor(next / w) + 0.5 - e.pos.y);
 }
 
 /** Feld zum eigenen HQ – mit Spurführung über das Band der eigenen Lane (11.11.). */

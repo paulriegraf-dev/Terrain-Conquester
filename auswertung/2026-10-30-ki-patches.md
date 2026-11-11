@@ -216,3 +216,24 @@ KI gegen KI, 16 Partien je Paar (96):
 
 Auffällig schon VOR dieser Änderung: Am 04.11. stand es 36 : 24 : 28. Seitdem (Feuergruppen/Schaden beim Einschlag, Sammeln vor
 der Fabrik, Abstand je Rüstungsklasse) ist der Technoclan deutlich stärker geworden (TC–Myr 26 : 6), die Terra-Former schwächer.
+
+## 11.11. – Basis-Comeback (Zweig basis-comeback)
+
+Auf Pauls Wunsch nach der Partie vom 07.11.:
+- Ziel bleibt gesperrt: Wer ein Gebäude oder das HQ in Reichweite angreift, wechselt nicht auf Einheiten. Frisch aus der Fabrik
+  (4 s) zählen Einheiten nur nachrangig, Terra-Former ebenso.
+- HQ unter Beschuss: Fabriken produzieren ×1,5. Neue Einheiten sammeln sich hinter dem HQ, auf der vom Angreifer abgewandten Seite,
+  und rücken alle 10 s gemeinsam aus.
+- Bedrohte Terra-Former weichen bei Druck aufs HQ seitlich auf freie Außenfelder aus statt nach vorn.
+- Notfallverlegung: nur noch einmal je Partie und Seite, weiter nur per Knopf.
+
+Replay 07.11. mit gleichen Befehlen: 4 statt 18 tote Terra-Former, das HQ steht bei 578 s noch.
+
+KI gegen KI, 16 Partien je Paar (96), Daten ki-bcB / ki-bcN:
+
+| Stand | TC | Myr | TF | offen | Median |
+|---|---|---|---|---|---|
+| vorher (a11acb4) | 41 | 26 | 16 | 13 | 14,8 min |
+| neu | 40 | 30 | 19 | 7 | 15,2 min |
+
+Im Rauschen (±7). Leicht weniger offene Partien.

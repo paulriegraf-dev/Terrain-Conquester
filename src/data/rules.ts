@@ -375,6 +375,8 @@ export interface Rules {
    */
   terraform: {
     formSeconds: number; ritualSeconds: number; wasteSeconds: number; storeByLevel: readonly number[]; workRadius: number; startRadius: number; blockSide: number; ritualFirst: boolean; anyLineBlock: boolean; workPerSummon: number; stepAfterSummon: number; sprintOnSpawn: boolean; sprintWindow: number; formSecondsRoots: number; rootsStoreAtLevel: boolean; stripeSeconds: number; stripeLevel2: number; stripeLevel3: number; frontGap: number; retreatRadius: number; retreatSeconds: number; retreatGroup: number; retreatSpeed: number; maxPerFactory: number; lineSpeed: Record<string, number>; poolFree: number; poolDecay: number; poolFloor: number; poolStrong: number; advanceStep: number; frontOffset: number; cautionRadius: number; standoff: number; cautionMemory: number;
+    /** 07.11. (Nutzer): Ist die eigene Basis bedrängt, weicht ein bedrohter Terraformer weit nach außen aus (weg von den Angreifern, an den Rand) statt zum nächsten Gebäude – dort ruft er weiter. */
+    evadeBase: boolean;
     preparedRadius: number; maxSummons: number; summonEvery: number; gorgeSeek: number; gorgeFactor: number; every: number; everyLevel2: number; level3Hp: number; tempoStep: number; summonNeedsRoom: boolean; lineResearch: boolean; seekGround: number;
   };
   /**
@@ -413,6 +415,20 @@ export interface Rules {
    */
   targetFocus: number;
   focusReach: number;
+  /**
+   * Zielwahl an der Basis (07.11., Nutzer – Replay Felsenpass: 110 von 160 Schlammmonstern fielen in den ersten 8 s):
+   * - `structureLock`: Wer ein Gebäude oder das HQ in Reichweite beschießt, bleibt dabei, bis es fällt – keine Jagd auf jede
+   *   frisch gebaute Einheit; so werden Gegenstoß und das Abfangen der Angreifer möglich.
+   * - `freshSeconds`: Frisch gebaute Einheiten (jünger) sind für Angreifer nachrangig – nach Gebäuden und HQ.
+   * - `formerRank`: Terraformer/Landformer (unbewaffnet) rangieren hinter allen bewaffneten Einheiten (0 = wie Einheiten).
+   */
+  baseFocus: { structureLock: boolean; freshSeconds: number; formerRank: number };
+  /**
+   * Belagertes HQ (07.11., Nutzer): Wird das HQ beschossen (Treffer in den letzten `window` s), bauen die Fabriken um `production`
+   * schneller, und neue Truppen sammeln sich hinter dem HQ (`back` Kacheln hinter dem Rand) und ziehen alle `gatherSeconds`
+   * gemeinsam los – Gegenschlag statt Einzeltröpfeln. 0 bei gatherSeconds = kein Sammeln.
+   */
+  hqSiege: { window: number; production: number; gatherSeconds: number; back: number };
   spotterRange: number;
   /**
    * Test-Schalter (24.10., Standard aus): `researchPause` – Forschung legt wie früher eine Fabrik der Einheit still
@@ -593,7 +609,7 @@ export const RULES: Rules = {
   // Terra-Former (22.10.): jeder fünfte Verband ein Terraformer, 4 s je Kachel
   // 23.10. abends: Terraformer formen die Umgebung (2 s je Kachel), rufen nach 4 s Ritual, 90 s Abklingzeit je Kachel
   terraform: {
-    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [3, 4, 5], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 1, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 / 1.15 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2, cautionRadius: 11, standoff: 8, cautionMemory: 8,
+    formSeconds: 1.5, ritualSeconds: 4, wasteSeconds: 150, storeByLevel: [3, 4, 5], workRadius: 2, startRadius: 6, blockSide: 2, ritualFirst: false, anyLineBlock: true, workPerSummon: 4, stepAfterSummon: 3, sprintOnSpawn: true, sprintWindow: 8, formSecondsRoots: 1.2, rootsStoreAtLevel: false, stripeSeconds: 6, stripeLevel2: 6, stripeLevel3: 12, frontGap: 4, retreatRadius: 6, retreatSeconds: 12, retreatGroup: 3, retreatSpeed: 1.6, maxPerFactory: 1, lineSpeed: { meadowhall: 1.2, mudpit: 1.2 / 1.15 }, poolFree: 999, poolDecay: 0.08, poolFloor: 0.5, poolStrong: 2, advanceStep: 1.5, frontOffset: 2, cautionRadius: 11, standoff: 8, cautionMemory: 8, evadeBase: true,
     preparedRadius: 16, maxSummons: 0, summonEvery: 10, gorgeSeek: 6, gorgeFactor: 3, every: 4, everyLevel2: 3, level3Hp: 1.25, tempoStep: 0.18, summonNeedsRoom: true, lineResearch: true, seekGround: 2,
   },
   // 30.10. (Nutzer): höchstens 1 lebender Terraformer je Fabrik (vorher 2), Naturspeicher 3 / 4 / 5 Rufe je Stufe (vorher 4 / 6 / 8).
@@ -604,7 +620,9 @@ export const RULES: Rules = {
   // Notfallverlegung (22.10., Entwurf des Nutzers): doppelt so stark, 25 s, einmal je Flügel.
   emergency: {
     ratio: 2, minEnemy: 3, depth: 1.5, seconds: 25, stunSeconds: 4, stunMargin: 3,
-    bonusSeconds: 30, bonusProduction: 1.5, bonusDamageTaken: 0.75, shieldSeconds: 10, maxUses: 2,
+    bonusSeconds: 30, bonusProduction: 1.5, bonusDamageTaken: 0.75, shieldSeconds: 10,
+    // 11.11. (Nutzer): nur eine Notfallverlegung je Partie und Seite (vorher 2), weiter nur per Knopf.
+    maxUses: 1,
     // Ab Spielbeginn. Getestet: erst ab 8:00 – kürzere Runden, aber der Technoclan zerstörte dann früh die
     // Fabriken der Myriaden (1,8 je Partie, 71 % vor 10:00) und gewann 35 : 13. Die Verlegung ist genau dafür da.
     minSeconds: 0,
@@ -626,6 +644,8 @@ export const RULES: Rules = {
   researchSlots: 2,
   targetFocus: 0,
   focusReach: 0,
+  baseFocus: { structureLock: true, freshSeconds: 4, formerRank: 0.5 },
+  hqSiege: { window: 5, production: 1.5, gatherSeconds: 10, back: 2 },
   spotterRange: 0,
   researchPause: false,
   strictPaths: false,
