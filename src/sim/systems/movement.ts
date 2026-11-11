@@ -3,7 +3,7 @@ import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
 import { TERRAIN_LIST } from '../../data/terrain';
 import type { Entity } from '../entity';
-import { hqKey, laneKey, waypointKey } from '../keys';
+import { hqKey, laneHomeKey, laneKey, waypointKey } from '../keys';
 import type { PlayerId, Route, Vec2 } from '../types';
 import type { FlowField } from '../flowfield';
 import { otherPlayer } from '../types';
@@ -253,6 +253,11 @@ function laneField(world: World, route: Route, profile: MoveProfile): FlowField 
   return world.fields.get(world.rules.laneGuide.enabled ? laneKey(route) : waypointKey(route), profile);
 }
 
+/** Feld zum eigenen HQ – mit Spurführung über das Band der eigenen Lane (11.11.). */
+function homeField(world: World, e: Entity, profile: MoveProfile): FlowField {
+  return world.fields.get(world.rules.laneGuide.enabled ? laneHomeKey(e.owner, e.mover!.route) : hqKey(e.owner), profile);
+}
+
 /** Einheit im Band der eigenen Lane oder im Umkreis des eigenen HQs (Basis)? Nur von dort geht es per Luftlinie zum Platz. */
 function onOwnLane(world: World, e: Entity): boolean {
   if (!world.rules.laneGuide.enabled) return true;
@@ -316,7 +321,8 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     }
     const d = dist(e.pos, hq);
     const rally = world.rules.influence.hqRadius * 0.6;
-    if (d > rally + 1) next = world.fields.get(hqKey(e.owner), profile).next(cx, cy, e.owner === 1);
+    // 11.11. (Nutzer): heim über die eigene Lane, nicht quer durch das Band einer anderen.
+    if (d > rally + 1) next = homeField(world, e, profile).next(cx, cy, e.owner === 1);
     else if (d < rally - 1) next = world.fields.get(waypointKey(m.route), profile).next(cx, cy, e.owner === 1);
     else return { x: 0, y: 0 };
   } else if (order === 'hold') {
@@ -329,7 +335,7 @@ function flowDirection(world: World, e: Entity, profile: MoveProfile, slot: Slot
     if (intruder) return normalize(intruder.prev.x - e.pos.x, intruder.prev.y - e.pos.y);
     const mine = controllerAt(world, here) === e.owner;
     if (!mine && !world.contested[here]) {
-      next = world.fields.get(hqKey(e.owner), profile).next(cx, cy, e.owner === 1); // zurück ins eigene Gebiet
+      next = homeField(world, e, profile).next(cx, cy, e.owner === 1); // zurück ins eigene Gebiet (über die eigene Lane)
     } else if (slot && dist(e.pos, slot.target) <= SLOT_STEER_RANGE && onOwnLane(world, e) && lineClear(world, e.pos, slot.target, profile, e.owner)) {
       // Formation: Platz in der Linie entlang der Grenze einnehmen (gestaffelt nach Reichweite).
       return steer(e, slot.target);

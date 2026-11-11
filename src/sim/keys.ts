@@ -14,3 +14,9 @@ export function hqKey(p: PlayerId): string {
 export function laneKey(route: Route): string {
   return `lane:${route}`;
 }
+
+/** Flussfeld zum HQ von Spieler p mit Aufschlag außerhalb des Bandes der Lane `route` (11.11.): Verteidigen und Rückzug ins
+ *  eigene Gebiet laufen über die eigene Lane heim, nicht quer durch eine andere. */
+export function laneHomeKey(p: PlayerId, route: Route): string {
+  return `lanehome:${p}:${route}`;
+}
