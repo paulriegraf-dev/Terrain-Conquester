@@ -14,7 +14,7 @@ import { MOVE_PROFILES } from '../data/movement';
 import type { SimEvent, SimEventData } from './events';
 import { FlowFieldCache, rectCells } from './flowfield';
 import { Grid } from './grid';
-import { hqKey, laneKey, waypointKey } from './keys';
+import { hqKey, laneHomeKey, laneKey, waypointKey } from './keys';
 import { BUILD_ZONE, laneMultiplier, parseMap, waypointCells, zoneAt } from './map';
 import type { MapDef, PadDef, ParsedMap } from './map';
 import { inBaseZone } from './placement';
@@ -536,7 +536,13 @@ export class World {
     if (lg.enabled) {
       for (const r of ROUTES) {
         targets.set(laneKey(r), waypointCells(this.map, r));
-        lane.set(laneKey(r), laneMultiplier(this.map, r, lg.bandHalf, lg.penalty, this.rules.influence.hqRadius + 2));
+        const mult = laneMultiplier(this.map, r, lg.bandHalf, lg.penalty, this.rules.influence.hqRadius + 2);
+        lane.set(laneKey(r), mult);
+        // Heimweg über die eigene Lane (11.11.): Ziel ist das eigene HQ, gleicher Aufschlag außerhalb des Bandes.
+        for (const p of PLAYERS) {
+          targets.set(laneHomeKey(p, r), rectCells(this.grid, this.map.hq[p]));
+          lane.set(laneHomeKey(p, r), mult);
+        }
       }
     }
     this.fields = new FlowFieldCache(this.grid, targets, lane);
