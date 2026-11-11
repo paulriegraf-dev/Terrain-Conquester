@@ -297,7 +297,7 @@ export interface PlayerState {
    * Notfallverlegung: Bedrängnis-Uhr (Sekunden), bedrängter Bauabschnitt (−1 = keiner), schon
    * verlegte Abschnitte, Bonus bis Tick, Rückraum offen.
    */
-  emergency: { pressure: number; section: number; used: number[]; bonusUntil: number; open: boolean };
+  emergency: { pressure: number; section: number; used: number[]; bonusUntil: number; open: boolean; lostTick?: number };
   /** Belagertes HQ (07.11.): aktuelle Sammelgruppe hinter dem HQ – Punkt und Tick, an dem sie gemeinsam losziehen. */
   siegeGather?: { x: number; y: number; release: number } | null;
   /** Spähbericht: wieder möglich ab Tick, unterwegs (kommt zu `dueTick` an), zuletzt erhaltener Bericht. */
@@ -946,7 +946,10 @@ export class World {
       life[0] += (this.tick - e.bornTick) / this.tps;
       life[1]++;
     }
-    if (e.kind === 'building') stats.buildingsLost++;
+    if (e.kind === 'building') {
+      stats.buildingsLost++;
+      if (killer !== e.owner) this.players[e.owner].emergency.lostTick = this.tick; // Notfallverlegung (11.11.)
+    }
     if (killer !== e.owner) this.players[killer].stats.kills++;
     this.emit({ type: 'death', owner: e.owner, kind: e.kind, name: e.name, pos: { x: e.pos.x, y: e.pos.y }, entity: e.id, unit: e.defId });
   }

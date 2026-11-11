@@ -10,13 +10,16 @@ import type { CellRect, PlayerId } from '../types';
 import { PLAYERS, otherPlayer } from '../types';
 import type { World } from '../world';
 import { controllerAt } from './influence';
+import { hqUnderAttack } from './production';
 
 /**
  * Notfallverlegung (Entwurf des Nutzers, 22.10.):
  *
  * - **Voraussetzung:** Gegner stehen im eigenen (oder umkämpften) Gebiet nah am eigenen HQ
  *   (Tiefenbereich) und sind dort deutlich stärker als die eigenen Truppen – und das hält an
- *   (rules.emergency.seconds). Dann wird der Knopf am HQ aktiv.
+ *   (rules.emergency.seconds). Dann wird der Knopf am HQ aktiv. Seit 11.11. reicht statt der Übermacht auch:
+ *   HQ unter Beschuss oder kürzlich ein Gebäude verloren (bei mindestens minEnemy Gegnern im Tiefenbereich).
+ *   Ausgelöst wird nie automatisch – nur per Knopf.
  * - **Aktivierung:** Der Rückraum hinter dem HQ öffnet sich (die Karte wird breiter). Der bedrängte
  *   Bauabschnitt zieht automatisch auf feste Plätze dort um – Fabriken behalten Stufe, Forschung,
  *   Einheit und Marschbefehl und bekommen kurz Bauschutz. Der alte Abschnitt ist dauerhaft verloren
@@ -91,7 +94,11 @@ export function assess(world: World, p: PlayerId): { pressed: boolean; section: 
       best = s.id;
     }
   }
-  const pressed = best >= 0 && enemy >= rules.minEnemy && enemy >= rules.ratio * own;
+  // 11.11. (Nutzer): Auch wenn das HQ beschossen wird oder gerade ein Gebäude fiel – eigene Truppen in der Nähe
+  // (frisch gebaut, Schlammmonster) verhindern den Knopf dann nicht mehr. Auslösen bleibt Handarbeit.
+  const lost = st.lostTick !== undefined && world.tick - st.lostTick <= rules.lossSeconds * world.tps;
+  const under = hqUnderAttack(world, p) || lost;
+  const pressed = best >= 0 && enemy >= rules.minEnemy && (under || enemy >= rules.ratio * own);
   return { pressed, section: best, enemy, own };
 }
 
