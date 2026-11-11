@@ -160,6 +160,7 @@ function softness(t: Entity): number {
   if (t.kind !== 'unit') return 0.2;
   const def = UNITS[t.defId as keyof typeof UNITS];
   if (!def) return 1;
+  if (def.former) return 1.2; // 07.11.: Terraformer nicht mehr Lieblingsziel der Werfer
   if (!def.weapon) return def.support ? 2.5 : 3;
   if (isSiege(def.weapon)) return 2.5;
   if (t.armor === 'light') return 1.8;
@@ -263,8 +264,16 @@ export function updateTargeting(world: World): void {
      * Gegner ganz nah → Bauwerk in Reichweite (HQ zuerst) → Einheit in Reichweite → an ein Bauwerk
      * heranrücken → Einheit nachjagen.
      */
+    const bf = world.rules.baseFocus;
     const priority = (t: Entity, d: number): number => {
-      if (!siege) return PRIORITY[t.kind];
+      if (!siege) {
+        if (t.kind === 'unit' && e.kind === 'unit') {
+          // 07.11.: Frisch gebaute Einheiten erst nach Gebäuden und HQ; Terraformer hinter allen Bewaffneten.
+          if (bf.freshSeconds > 0 && t.fromBuilding !== undefined && world.tick - t.bornTick < bf.freshSeconds * world.tps) return 2.5;
+          if (bf.formerRank > 0 && UNITS[t.defId as keyof typeof UNITS]?.former) return bf.formerRank;
+        }
+        return PRIORITY[t.kind];
+      }
       if (t.kind === 'unit') return d <= Math.max(SIEGE_SELF_DEFENSE, range) ? -3 : 2; // 27.10.: jede Einheit in Reichweite zuerst, erst dann Bauwerke
       const hq = t.kind === 'hq' ? 0 : 0.5;
       return (d <= range ? -2 : 1) + hq;
@@ -341,6 +350,8 @@ export function updateTargeting(world: World): void {
     const current = w.targetId ? world.get(w.targetId) : undefined;
     if (current && current.alive && current.owner !== e.owner && canAttack(world, e, current)) {
       const d = rangeTo(e, current);
+      // Gebäude-Fokus (07.11.): Wer ein Gebäude oder das HQ in Reichweite beschießt, bleibt dabei, bis es fällt.
+      if (bf.structureLock && e.kind === 'unit' && (current.kind === 'building' || current.kind === 'hq') && d <= range) continue;
       // Mit Zielfokus (Test-Schalter): wechseln, wenn ein deutlich besseres Ziel (Konter) in Reichweite ist.
       const better = world.rules.targetFocus > 0 && best && best !== current && rangeTo(e, best) <= range &&
         (softThrow ? softness(best) : targetFactor(world, w.def, best)) >= 1.5 * (softThrow ? softness(current) : targetFactor(world, w.def, current));

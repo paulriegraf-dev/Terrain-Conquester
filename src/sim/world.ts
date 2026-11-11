@@ -298,6 +298,8 @@ export interface PlayerState {
    * verlegte Abschnitte, Bonus bis Tick, Rückraum offen.
    */
   emergency: { pressure: number; section: number; used: number[]; bonusUntil: number; open: boolean };
+  /** Belagertes HQ (07.11.): aktuelle Sammelgruppe hinter dem HQ – Punkt und Tick, an dem sie gemeinsam losziehen. */
+  siegeGather?: { x: number; y: number; release: number } | null;
   /** Spähbericht: wieder möglich ab Tick, unterwegs (kommt zu `dueTick` an), zuletzt erhaltener Bericht. */
   scout: { readyTick: number; pending: { dueTick: number; report: ScoutReport } | null; last: ScoutReport | null };
   /** Käufe (Nachtrag G): Dauerspähen, Gegenspionage, Vorratskauf, Nachschub. */
