@@ -32,6 +32,8 @@ interface Step {
   /** Fertig, sobald true – ohne `done` gibt es den Knopf „Weiter“. */
   done?: (c: Ctx) => boolean;
   onEnter?: (c: Ctx) => void;
+  /** Schritt überspringen (z. B. Mechanik, die in dieser Ansicht ausgeblendet ist). */
+  skip?: (c: Ctx) => boolean;
 }
 
 interface Ctx {
@@ -40,6 +42,8 @@ interface Ctx {
   session: Session;
   /** Werte, die beim Betreten eines Schritts gemerkt werden. */
   memo: Record<string, number | string>;
+  /** Bildschirmpunkt einer Kachel (für die Kamera-Schritte). */
+  screenOf: (p: { x: number; y: number }) => { x: number; y: number };
 }
 
 /** Sprecher (Nutzer, 25.10. abends): Sonde 7 aus „Face_for_Tutorial“, Fenster im Hologramm-Stil. */
@@ -103,14 +107,46 @@ function buildSpot(c: Ctx): { x: number; y: number } {
   return spot;
 }
 
+/** Neue Spiel-UI (Variante C, 2,5D): nur Klicks, andere Knöpfe; die alte Ansicht behält Tastenhinweise. */
+function isC(doc: Document): boolean {
+  return doc.body.classList.contains('ui-c');
+}
+
+/** Erster sichtbarer Treffer aus mehreren Selektoren (neue und alte UI) – oder null. */
+function vis(doc: Document, ...sel: string[]): Target {
+  for (const q of sel) {
+    const el = doc.querySelector<HTMLElement>(q);
+    if (el && el.offsetParent !== null) return { el: q };
+  }
+  return null;
+}
+
+function frontsOpen(c: Ctx, doc: Document): boolean {
+  return c.view.menu === 'front' || doc.body.dataset.pop === 'front';
+}
+
+function stanceBtn(doc: Document, r: Route, st: string): Target {
+  return vis(doc, `[data-action="stance"][data-route="${r}"][data-stance="${st}"]`, `[data-cmd="stance-${r}-${st}"]`);
+}
+
+function ownHq(c: Ctx): Entity | undefined {
+  return c.world.entities.find((e) => e.alive && e.kind === 'hq' && e.owner === 0);
+}
+
+function hqSelected(c: Ctx): boolean {
+  const s = c.view.selected;
+  return s?.kind === 'entity' && c.world.get(s.id)?.kind === 'hq';
+}
+
 function steps(doc: Document): Step[] {
+  const key = (cmd: string, fallback: string): string => keyOf(doc, cmd) ?? fallback;
   return [
     {
       text: 'Kommandant, hier {name} von der Leitstelle. Ich zeige dir die Grundlagen – immer einen Handgriff nach dem anderen. Noch steht die Uhr still: Erst bereitest du dein Gelände vor.',
     },
     {
       text: 'Vor der Schlacht darfst du deine Hälfte umformen. Wald gibt Fußtruppen Deckung (Rüstung +1) und bremst Fahrzeuge. Wald ist schon gewählt – setz eine Fläche vor deine Grenze an der mittleren Lane.',
-      hint: () => 'Linksklick auf die Karte · 1–5 wechselt die Bodenart',
+      hint: () => (isC(doc) ? 'Linksklick auf die Karte · Bodenart unten in der Leiste wählen' : 'Linksklick auf die Karte · 1–5 wechselt die Bodenart'),
       target: (c) => ({ tile: prepSpot(c), r: 2 }),
       onEnter: (c) => {
         c.memo.prep = c.world.players[0].prepLeft;
@@ -119,25 +155,62 @@ function steps(doc: Document): Step[] {
     },
     {
       text: 'Gut so. Der Gegner sieht deine Vorbereitung nicht. Weitere Flächen kannst du jederzeit setzen – jetzt drück „Bereit“, dann läuft die Zeit.',
-      hint: () => 'Enter · Bereit',
+      hint: () => (isC(doc) ? 'Unten auf ▶ · Bereit' : 'Enter · Bereit'),
       target: () => ({ el: '[data-cmd="prep-ready"]' }),
       done: (c) => !c.session.prepActive,
     },
+    // 13.11. (Nutzer: „gehe auf Kameraführung auch ein“): die Kamera der 2,5D-Ansicht zum Mitmachen.
     {
-      text: 'Truppen kommen aus Fabriken. Die Kaserne baut Fußtruppen wie Scharfschützen und Plasmawerfer. Wähle sie unten im Befehlsraster.',
-      hint: () => `Taste ${keyOf(doc, 'build-barracks') ?? '1'} · Kaserne`,
+      text: 'Kurz zur Kamera. Zieh die Karte mit gedrückter linker Maustaste – oder fahr mit W, A, S, D darüber.',
+      hint: () => 'Linke Maustaste ziehen · W A S D',
+      skip: () => !isC(doc),
+      onEnter: (c) => {
+        const p = c.screenOf(ownHq(c)?.pos ?? { x: 0, y: 0 });
+        c.memo.camX = p.x;
+        c.memo.camY = p.y;
+      },
+      done: (c) => {
+        const p = c.screenOf(ownHq(c)?.pos ?? { x: 0, y: 0 });
+        return Math.hypot(p.x - Number(c.memo.camX), p.y - Number(c.memo.camY)) > 80;
+      },
+    },
+    {
+      text: 'Es gibt vier Zoomstufen: Karte, Lanes, Mittel und Nah. Nah zeigt jede Figur im Gefecht. Schalte auf Nah.',
+      hint: () => 'Rechts unten „Nah“ · Taste 4 · oder Mausrad',
+      target: () => vis(doc, '[data-action="c-level"][data-level="near"]'),
+      skip: () => !isC(doc),
+      done: () => !!doc.querySelector('[data-action="c-level"][data-level="near"].on'),
+    },
+    {
+      text: 'Darunter springst du direkt zu einer Lane – die Kamera fährt hin und bleibt in deiner Zoomstufe. Spring zur oberen Lane.',
+      hint: () => 'Rechts unten „Oben“ · Tab springt zur nächsten Lane',
+      target: () => vis(doc, '[data-action="c-lane"][data-route="top"]'),
+      skip: () => !isC(doc),
+      done: () => !!doc.querySelector('[data-action="c-lane"][data-route="top"].on'),
+    },
+    {
+      text: 'Für den Überblick ist „Lanes“ am besten: alle drei Lanes mit Figuren im Bild. „Karte“ zeigt alles als Symbole. Schalte zurück auf Lanes.',
+      hint: () => 'Rechts unten „Lanes“ · Taste 2',
+      target: () => vis(doc, '[data-action="c-level"][data-level="lanes"]'),
+      skip: () => !isC(doc),
+      done: () => !!doc.querySelector('[data-action="c-level"][data-level="lanes"].on'),
+    },
+    {
+      text: 'Truppen kommen aus Fabriken. Die Kaserne baut Fußtruppen wie Scharfschützen und Plasmawerfer. Wähle sie unten in der Bauleiste.',
+      hint: () => (isC(doc) ? 'Klick auf die Kaserne in der Bauleiste' : `Taste ${key('build-barracks', '1')} · Kaserne`),
       target: () => ({ el: '[data-cmd="build-barracks"]' }),
       done: (c) => c.view.build?.building === 'barracks' || own(c, 'building').length > 0,
     },
     {
       text: 'Jetzt setz sie in deine Bauzone – die umrandete Fläche um dein HQ. Dort steht sie nah am HQ und bei deinen Truppen.',
-      hint: () => 'Linksklick in die Bauzone · Rechtsklick bricht ab',
-      target: (c) => ({ tile: buildSpot(c), r: 2.5 }),
+      hint: (c) => (c.view.build ? 'Linksklick in die Bauzone · Rechtsklick bricht ab' : 'Erst die Kaserne in der Bauleiste wählen'),
+      // Baumodus verloren (Rechtsklick, Esc)? Dann zurück auf den Knopf statt ins Leere.
+      target: (c) => (c.view.build ? { tile: buildSpot(c), r: 2.5 } : { el: '[data-cmd="build-barracks"]' }),
       done: (c) => own(c, 'building').length > 0,
     },
     {
       text: 'Energie ist deine einzige Ressource: Du bezahlst damit Fabriken, Stufen, Forschung und Gelände – die Einheiten selbst kosten nichts, Fabriken bauen sie laufend. Energie fließt von selbst, mehr Land bringt mehr. Gleich rückt dein erster Verband aus.',
-      target: () => ({ el: '#energy-value' }),
+      target: () => vis(doc, '.c-energy', '#energy-value'),
       done: (c) => own(c, 'unit').length > 0,
     },
     {
@@ -150,29 +223,31 @@ function steps(doc: Document): Step[] {
       done: (c) => selectedFactory(c) !== null,
     },
     {
-      text: 'Jede Fabrik schickt ihre Truppen über eine Lane: oben, Mitte oder unten. Oben steht eine Station – schick die Kaserne dorthin.',
-      hint: () => `Taste ${keyOf(doc, 'route-top') ?? 'O'} · Oben`,
-      target: () => ({ el: '[data-cmd="route-top"]' }),
-      done: (c) => {
-        const f = selectedFactory(c) ?? own(c, 'building')[0];
-        return !!f?.producer && (f.producer.route === 'top' || f.producer.pendingRoute === 'top');
+      text: 'Jede Fabrik schickt ihre Truppen über eine Lane: oben, Mitte oder unten. Ein Wechsel greift nach {route} s – bis dahin läuft der Nachschub über die alte Lane. Oben steht eine Station: Schick die Kaserne dorthin.',
+      hint: (c) => (isC(doc) ? (selectedFactory(c) ? 'Im Fabrikfenster rechts unten · Oben' : 'Erst die Kaserne anklicken') : `Taste ${key('route-top', 'O')} · Oben`),
+      target: (c) => {
+        const t = vis(doc, '.cx-route[data-route="top"]', '[data-cmd="route-top"]');
+        if (t) return t;
+        const b = own(c, 'building')[0];
+        return b ? { tile: { x: b.pos.x, y: b.pos.y }, r: 1.6 } : null;
       },
+      done: (c) => own(c, 'building').some((f) => !!f.producer && (f.producer.route === 'top' || f.producer.pendingRoute === 'top')),
     },
     {
-      text: 'Was die Truppen auf einer Lane tun, bestimmst du über die Fronten. Schließ die Fabrik mit Esc und öffne die Fronten.',
-      hint: () => 'Esc, dann Taste A · Fronten',
-      target: (c) => (c.view.selected ? null : { el: '[data-cmd="front"]' }),
-      done: (c) => c.view.menu === 'front',
+      text: 'Was die Truppen auf einer Lane tun, bestimmst du über die Fronten. Öffne die Fronten.',
+      hint: () => (isC(doc) ? 'Klick oben auf die Lanes-Anzeige' : 'Esc, dann Taste A · Fronten'),
+      target: (c) => (isC(doc) ? vis(doc, '[data-action="c-fronts"]') : c.view.selected ? null : { el: '[data-cmd="front"]' }),
+      done: (c) => frontsOpen(c, doc),
     },
     {
-      text: 'Vier Haltungen je Lane: Verteidigen bleibt an der Basis, Halten an der Grenze, Front greift an. Sichern schickt die Lane zur Station und hält sie. Stell die obere Lane auf Sichern.',
-      hint: () => 'Taste 3 · Sichern (obere Lane)',
-      target: () => ({ el: '[data-cmd="stance-top-secure"]' }),
+      text: 'Vier Haltungen je Lane: Verteidigen bleibt an der Basis, Halten an der Grenze, Front greift an. Sichern schickt die Lane zur Station und hält sie. Ein Wechsel greift nach {stance} s. Stell die obere Lane auf Sichern.',
+      hint: () => (isC(doc) ? 'Obere Lane · Sichern' : 'Taste 3 · Sichern (obere Lane)'),
+      target: (c) => (frontsOpen(c, doc) ? stanceBtn(doc, 'top', 'secure') : vis(doc, '[data-action="c-fronts"]', '[data-cmd="front"]')),
       done: (c) => c.world.players[0].stance.top === 'secure' || c.world.players[0].pendingStance.top?.stance === 'secure',
     },
     {
       text: 'Die Station oben ist eine Werkhalle: Solange du sie hältst, bauen deine Fabriken dieser Lane schneller. Sie ruht, sobald Gegner näher als 6 Kacheln kommen. Deine Truppen sind unterwegs – mit 2× oder 4× geht es schneller.',
-      hint: () => 'Einnehmen: allein im Kreis stehen · Ansicht 2× / 4×',
+      hint: () => (isC(doc) ? 'Einnehmen: allein im Kreis stehen · Tempo links unten' : 'Einnehmen: allein im Kreis stehen · Ansicht 2× / 4×'),
       target: (c) => {
         const s = siteTop(c);
         return s ? { tile: s, r: 3.2 } : null;
@@ -181,18 +256,19 @@ function steps(doc: Document): Step[] {
     },
     {
       text: 'Station gehört dir. Eine Fabrik reicht nicht lange: Der Hangar baut schnelle Hover-Späher, das Schwerwerk Panzer. Bau eine zweite Fabrik, sobald die Energie reicht.',
-      hint: () => `Taste ${keyOf(doc, 'build-workshop') ?? '2'} · Hangar`,
-      target: (c) => (c.view.build ? { tile: buildSpot(c), r: 2.5 } : { el: '[data-cmd="build-workshop"]' }),
+      hint: () => (isC(doc) ? 'Esc, dann Hangar in der Bauleiste' : `Taste ${key('build-workshop', '2')} · Hangar`),
+      target: (c) => (c.view.build ? { tile: buildSpot(c), r: 2.5 } : vis(doc, '[data-cmd="build-workshop"]')),
       onEnter: (c) => {
         if (c.view.menu === 'front') c.view.menu = 'main';
+        if (doc.body.dataset.pop === 'front') delete doc.body.dataset.pop;
       },
       done: (c) => own(c, 'building').length > 1,
     },
     {
-      text: 'Fabriken lassen sich aufstufen: Eine höhere Stufe schaltet stärkere Einheiten frei. Klick eine deiner Fabriken an und wähle „Stufe 2“, sobald die Energie reicht.',
-      hint: (c) => (selectedFactory(c) ? `Taste ${keyOf(doc, 'level') ?? 'S'} · Stufe 2` : 'Linksklick auf eine Fabrik'),
+      text: 'Fabriken lassen sich aufstufen: Eine höhere Stufe schaltet stärkere Einheiten frei. Klick eine deiner Fabriken an und stufe sie auf Stufe 2, sobald die Energie reicht.',
+      hint: (c) => (selectedFactory(c) ? (isC(doc) ? 'Reiter „Stufe“ · Preis anklicken' : `Taste ${key('level', 'S')} · Stufe 2`) : 'Linksklick auf eine Fabrik'),
       target: (c) => {
-        if (selectedFactory(c)) return { el: '[data-cmd="level"]' };
+        if (selectedFactory(c)) return vis(doc, '.cx-btn[data-action="upgrade"]', '[data-cmd="level"]');
         const b = own(c, 'building')[0];
         return b ? { tile: { x: b.pos.x, y: b.pos.y }, r: 1.6 } : null;
       },
@@ -203,41 +279,44 @@ function steps(doc: Document): Step[] {
     },
     {
       text: 'Auch dein HQ lässt sich ausbauen – in drei Zweigen: Aufklärung, Markt und Gelände. Jede Stufe bringt einen dauerhaften Vorteil. Klick dein HQ an und kauf eine erste Stufe.',
-      hint: (c) => (c.view.selected?.kind === 'entity' && c.world.get(c.view.selected.id)?.kind === 'hq' ? 'Einen Zweig wählen' : 'Esc, dann Linksklick auf dein HQ'),
+      hint: (c) => (hqSelected(c) ? 'Einen Zweig wählen' : 'Linksklick auf dein HQ'),
       target: (c) => {
-        const s = c.view.selected;
-        if (s?.kind === 'entity' && c.world.get(s.id)?.kind === 'hq') return { el: '[data-cmd^="hq-"]' };
-        if (selectedFactory(c)) return null;
-        const hq = c.world.entities.find((e) => e.alive && e.kind === 'hq' && e.owner === 0);
+        if (hqSelected(c)) return vis(doc, '[data-cmd^="hq-"]');
+        const hq = ownHq(c);
         return hq ? { tile: { x: hq.pos.x, y: hq.pos.y }, r: 2.4 } : null;
       },
       done: (c) => Object.values(c.world.players[0].hq).some((t) => t > 0),
     },
     {
       text: 'Was der Gegner baut, verbirgt der Nebel. Ein Späher verrät es dir – Fabriken, Lanes, Truppen. Schick einen los.',
-      hint: () => `Taste ${keyOf(doc, 'scout') ?? 'L'} · Späher`,
-      target: () => ({ el: '[data-cmd="scout"]' }),
+      hint: () => (isC(doc) ? 'Unten auf „Späher“, dann „Späher losschicken“' : `${vis(doc, '[data-cmd="scout"]') ? '' : 'Esc, dann '}Taste ${key('scout', 'L')} · Späher`),
+      target: () => (isC(doc) ? (doc.body.dataset.pop === 'scout' ? vis(doc, '#scout-btn') : vis(doc, '.c-pop-btn[data-pop="scout"]')) : vis(doc, '[data-cmd="scout"]')),
       onEnter: (c) => {
         c.memo.scouts = c.world.players[0].stats.scouts;
       },
       done: (c) => c.world.players[0].stats.scouts > Number(c.memo.scouts),
     },
     {
-      text: 'Der Bericht steht rechts. Ab jetzt wird es ernst: Der Gegner baut auf. Achte auf seine Einheiten – im Konter-Brett (Taste H) siehst du, was wogegen hilft.',
-      target: () => ({ el: '.scout' }),
+      text: 'Der Bericht kommt gleich. Ab jetzt wird es ernst: Der Gegner baut auf. Achte auf seine Einheiten – im Konter-Brett (Taste H) siehst du, was wogegen hilft.',
+      target: () => vis(doc, '#panel-scout', '.scout'),
       onEnter: (c) => {
         c.session.aiHold = false;
       },
     },
     {
       text: 'Wenn du dich stark genug fühlst: Front. Die Truppen der Lane ziehen bis zum gegnerischen HQ – wer die Mitte überquert, bleibt im Angriff. Öffne die Fronten und schick eine Lane nach vorn.',
-      hint: () => 'Taste A · Fronten, dann 4 / R / F · Front',
-      target: (c) => (c.view.menu === 'front' ? { el: '[data-cmd="stance-mid-push"]' } : { el: '[data-cmd="front"]' }),
+      hint: () => (isC(doc) ? 'Lanes-Anzeige oben · eine Lane auf Front' : 'Taste A · Fronten, dann 4 / R / F · Front'),
+      target: (c) => (frontsOpen(c, doc) ? stanceBtn(doc, 'mid', 'push') : vis(doc, '[data-action="c-fronts"]', '[data-cmd="front"]')),
+      onEnter: () => {
+        if (doc.body.dataset.pop === 'scout') delete doc.body.dataset.pop;
+      },
       done: (c) => (['top', 'mid', 'bottom'] as Route[]).some((r) => c.world.players[0].stance[r] === 'push' || c.world.players[0].pendingStance[r]?.stance === 'push'),
     },
     {
       // 28.10. abends: Schlussstein-Fenster – der Schritt wartet auf das erste Fenster (10:00).
+      // 13.11.: Nur in der alten Ansicht – die neue Spiel-UI blendet die Schlussstein-Karten aus (Nutzer 06.11.).
       text: 'Ab Minute 10 öffnet sich alle zwei Minuten ein Schlussstein-Fenster (wer ab Minute 8 die Kartenmitte hält, früher): Unten erscheinen Karten – ein Klick setzt den Schlussstein, kostenlos und sofort. Wähle deinen ersten, sobald es so weit ist.',
+      skip: () => isC(doc),
       hint: (c) => {
         const g = c.world.players[0].gate;
         if (g.credits > 0) return 'Karte anklicken · Taste K öffnet und schließt die Karten';
@@ -248,7 +327,11 @@ function steps(doc: Document): Step[] {
       done: (c) => c.world.players[0].gate.bought > 0,
     },
     {
-      text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du im Befehlsraster, alles zum Nachlesen – Wirtschaft, Markt, Gebiet – in der Übersicht (F1) unter Grundlagen. Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
+      // 13.11.: Notfallverlegung (Knopf, einmal je Partie) und Basis-Comeback (11.11.).
+      text: 'Noch ein Rettungsanker: Drängt der Gegner deine Basis zurück, erscheint unten die Notfallverlegung – einmal je Partie verlegst du Fabriken hinter dein HQ und betäubst die Angreifer kurz. Außerdem bauen Fabriken bei belagertem HQ schneller.',
+    },
+    {
+      text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du in der Bauleiste, alles zum Nachlesen in der Übersicht (F1) unter Grundlagen. Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
     },
   ];
 }
@@ -319,7 +402,7 @@ export class Tutorial {
 
   private ctx(): Ctx {
     const session = this.host.session();
-    return { world: session.world, view: this.host.view(), session, memo: this.memo };
+    return { world: session.world, view: this.host.view(), session, memo: this.memo, screenOf: (p) => this.host.clientOf(p.x, p.y) };
   }
 
   private advance(): void {
@@ -330,6 +413,10 @@ export class Tutorial {
     this.index++;
     this.shown = 0;
     this.memo = {};
+    if (this.list[this.index]!.skip?.(this.ctx())) {
+      this.advance();
+      return;
+    }
     this.list[this.index]!.onEnter?.(this.ctx());
     this.box.classList.remove('tut-pop');
     void this.box.offsetWidth; // Animation neu starten
@@ -343,7 +430,10 @@ export class Tutorial {
     this.last = now;
     const step = this.list[this.index]!;
     const c = this.ctx();
-    const full = step.text.replace('{name}', SPEAKER.name);
+    const full = step.text
+      .replace('{name}', SPEAKER.name)
+      .replace('{route}', String(c.world.rules.routeChangeSeconds))
+      .replace('{stance}', String(c.world.rules.front.stanceChangeSeconds));
     this.shown = Math.min(full.length, this.shown + dt * TYPE_SPEED);
     const n = Math.floor(this.shown);
     if (this.textEl.dataset.n !== String(n) || this.textEl.dataset.i !== String(this.index)) {
@@ -358,7 +448,8 @@ export class Tutorial {
     if (hint && this.hintEl.textContent !== hint) this.hintEl.textContent = hint;
     this.nextBtn.hidden = !!step.done;
     this.nextBtn.textContent = this.index === this.list.length - 1 ? 'Los geht’s ▸' : 'Weiter ▸';
-    this.progressEl.textContent = `${this.index + 1} / ${this.list.length}`;
+    const shownSteps = this.list.filter((st) => !st.skip?.(c));
+    this.progressEl.textContent = `${shownSteps.indexOf(step) + 1} / ${shownSteps.length}`;
     this.place(step.target?.(c) ?? null);
     if (step.done && n >= full.length * 0.4 && step.done(c)) this.advance();
   }

@@ -1869,6 +1869,13 @@ Bericht: `auswertung/2026-10-25-u16-verbund-elite.md`
 - **Entscheidung des Nutzers:** Funkfenster im Hologramm-Stil mit dem Gesicht „Sonde 7“ (Maske, Linsen leuchten beim Sprechen). Die anderen Stile und der Umschalter sind wieder entfernt; die übrigen Gesichter bleiben im Bogen für spätere Sprecher.
 - **Grundlagen** (Titelbild neben „Tutorial“, und in der Übersicht F1 als erster Tab): alle Mechaniken aus dem Tutorial zum Nachlesen, genauer – Ziel und Phasen, Energie, Markt der Bauteile, Gebiet und Einfluss, Fabriken, Haltungen, Gelände, Aufklärung, Forschung/HQ, Stationen. Alle Zahlen aus den Regeln.
 
+- **Stand 13.11. (Nutzer: „Tutorial auf den neuesten Stand“, „gehe auf Kameraführung auch ein“):** läuft in der 2,5D-Ansicht mit Spiel-UI C, alte Ansicht bleibt bedienbar (Ziele je Ansicht, erster sichtbarer Treffer).
+  - **23 Schritte in der neuen UI** (20 in der alten): neu sind vier Kamera-Schritte zum Mitmachen nach „Bereit“ – Karte ziehen oder W/A/S/D, auf „Nah“ zoomen (Taste 4, Mausrad), zur oberen Lane springen (Tab = nächste Lane), zurück auf „Lanes“ – und ein Hinweis zur Notfallverlegung (einmal je Partie, Fabriken bei belagertem HQ schneller).
+  - **Nur Klickhinweise** in UI C (keine Befehlstasten mehr seit 06.11.): Bodenart und „Bereit“ unten, Route im Fabrikfenster rechts unten, Fronten über die Lanes-Anzeige oben, Späher über „Späher“ → „Späher losschicken“, Energie-Ziel ist die neue Anzeige.
+  - **Wechselzeiten** im Text aus den Regeln: Route greift nach 15 s, Haltung nach 10 s.
+  - **Schlussstein-Schritt** nur in der alten Ansicht – UI C blendet die Karten aus (06.11.). Übersprungene Schritte zählen nicht in „x / y“.
+  - **Robuster:** Baumodus verloren → Ring zurück auf den Kasernen-Knopf; HQ-Schritt zeigt aufs HQ, auch wenn noch eine Fabrik gewählt ist. Automatischer Durchlauf (Playwright) in UI C bis zum Ende ohne Hänger.
+
 ## Startbild-Entwürfe (25.10. abends, inspiriert von klassischen RTS-Hauptmenüs)
 - Menü in einem genieteten Metallrahmen, der an Ketten hängt; blaue Knöpfe mit Goldrand beim Darüberfahren. Darunter ein kleiner zweiter Rahmen („Mitwirkende“). Schriftzug oben links.
 - **Untermenüs** im Rahmen: Hauptmenü (Einzelspieler, Mehrspieler, Übersicht, Optionen) → Einzelspieler (Gegen die KI, Tutorial, Grundlagen, Zurück) · Optionen (Musik, Lautstärke, Startmusik, gespeicherte Partien) · Mitwirkende. Enter öffnet Einzelspieler, dort startet es „Gegen die KI“; Esc geht zurück.
