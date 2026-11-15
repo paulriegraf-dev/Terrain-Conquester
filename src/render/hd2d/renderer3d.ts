@@ -28,7 +28,7 @@ import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
 import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
-import { hitSound, shotSound } from '../../ui/sfx';
+import { deathSound, hitSound, shotSound } from '../../ui/sfx';
 import type { SoundKind } from '../../ui/sfx';
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -101,8 +101,9 @@ interface Shot {
   muzzle?: PfxUse | null;
   fired?: boolean;
   flip?: boolean;
-  /** Geschoss-Optik für den Abschuss-Klang. */
+  /** Einheit für den Abschuss-Klang, Fraktion des Schützen für den Einschlag-Klang. */
   snd?: string;
+  fac?: FactionId;
 }
 
 interface Fx {
@@ -1761,7 +1762,7 @@ export class Hd2dRenderer {
       else if (ev.type === 'heal') this.spawnHeal(ev.from, ev.to, now, world.tps);
       else if (ev.type === 'death' && ev.kind === 'unit') {
         const g = new THREE.Vector3(ev.pos.x, this.heightAt(world, ev.pos.x, ev.pos.y), ev.pos.y);
-        this.emitSound('death', g, false);
+        this.emitSound(deathSound(world.players[ev.owner].faction.id), g, false);
         if (!this.playPfx({ name: 'dirt', lift: 0, scale: 0.6 }, g, false, now)) this.burst(g, '#9a8a7a', 0.8, now, world.tps * 0.6);
       }
     }
@@ -1833,7 +1834,7 @@ export class Hd2dRenderer {
     }
     obj.visible = false;
     this.scene.add(obj);
-    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color, impact, flip, muzzle: fxDef?.muzzle ?? null, snd: spr?.attack.projectile ?? '' });
+    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color, impact, flip, muzzle: fxDef?.muzzle ?? null, snd: unit ?? '', fac: faction });
   }
 
   private spawnHeal(from: Vec2, to: Vec2, now: number, tps: number): void {
@@ -1841,7 +1842,7 @@ export class Hd2dRenderer {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.scale.set(0.35, 0.35, 1);
     this.scene.add(s);
-    this.shots.push({ obj: s, from: new THREE.Vector3(from.x, 0.7, from.y), to: new THREE.Vector3(to.x, 0.6, to.y), spawn: now, land: now + tps * 0.5, arc: 0.4, beam: false, heavy: false, color: '#6ff0d0', impact: { name: 'heal_cyan', lift: 0, scale: 0.5 } });
+    this.shots.push({ obj: s, from: new THREE.Vector3(from.x, 0.7, from.y), to: new THREE.Vector3(to.x, 0.6, to.y), spawn: now, land: now + tps * 0.5, arc: 0.4, beam: false, heavy: false, color: '#6ff0d0', impact: { name: 'heal_cyan', lift: 0, scale: 0.5 }, snd: 'nanomedic' });
   }
 
   private updateShots(now: number, view: ViewState): void {
@@ -1880,7 +1881,7 @@ export class Hd2dRenderer {
     if (!this.onSound) return;
     const lv = this.zoomLevel();
     const zoomGain = lv === 'near' ? 1 : lv === 'mid' ? 0.8 : lv === 'lanes' ? 0.55 : 0.3;
-    if (lv === 'map' && !heavy && kind !== 'hit-boom' && kind !== 'death') return;
+    if (lv === 'map' && !heavy && kind !== 'hit-boom') return;
     const v = pos.clone().project(this.camera);
     const off = Math.max(Math.abs(v.x), Math.abs(v.y));
     const place = off <= 1 ? 1 : off <= 1.6 ? 0.25 : 0;
@@ -1895,7 +1896,7 @@ export class Hd2dRenderer {
     if ((p.obj as THREE.Mesh).geometry) (p.obj as THREE.Mesh).geometry.dispose();
     this.shots.splice(k, 1);
     if (!shown) return;
-    const hk = hitSound(p.impact?.name, p.heavy);
+    const hk = hitSound(p.impact?.name, p.heavy, p.fac ?? 'technoclan');
     if (hk) this.emitSound(hk, p.to, p.heavy);
     if (p.impact && this.playPfx(p.impact, p.to, !!p.flip, now)) return;
     this.burst(p.to, p.heavy ? '#ffb02a' : p.color, p.heavy ? 0.9 : 0.35, now, p.heavy ? 8 : 5);
