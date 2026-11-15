@@ -105,5 +105,10 @@ export function facing(startsRight: boolean, opts: { targetDx?: number; moveDx?:
   return startsRight ? -1 : 1;
 }
 
-/** Teamfarbe im Spiegel-Duell (gleiche Fraktion): die rechte Seite bekommt eine eigene Farbe für Schatten und Geschosse. */
-export const MIRROR_COLORS = { technoclan: '#ffb347', myriaden: '#ffd166', terraformer: '#e0d36b' } as const;
+/**
+ * Spiegel-Duell (gleiche Fraktion, Nutzer 15.11.: „Auswärtstrikot“): die rechte Seite trägt Auswärtsfarben – alle
+ * farbigen Bildpunkte im Farbton um AWAY_HUE gedreht (Figuren und Gebäude); Schatten, Geschosse, Ringe und Leisten
+ * nehmen die ebenso gedrehte Akzentfarbe der Fraktion.
+ */
+export const AWAY_HUE = 0.42;
+export const MIRROR_COLORS = { technoclan: '#ff7f9d', myriaden: '#87ff6a', terraformer: '#917ae3' } as const;

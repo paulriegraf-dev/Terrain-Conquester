@@ -22,7 +22,7 @@ import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
-import { MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
+import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
@@ -596,8 +596,8 @@ export class Hd2dRenderer {
   }
 
   /** Einzelbild aus einem Sheet als Textur (zwischengespeichert). */
-  private frame(src: string, sx: number, sy: number, size: number, lift = false): THREE.Texture | null {
-    const key = `${src.length}:${src.slice(-24)}:${sx}:${sy}:${size}:${lift ? 1 : 0}`;
+  private frame(src: string, sx: number, sy: number, size: number, lift = false, away = false): THREE.Texture | null {
+    const key = `${src.length}:${src.slice(-24)}:${sx}:${sy}:${size}:${lift ? 1 : 0}:${away ? 1 : 0}`;
     const hit = this.frameTex.get(key);
     if (hit) return hit;
     const img = this.image(src);
@@ -608,6 +608,7 @@ export class Hd2dRenderer {
     g.imageSmoothingEnabled = false;
     g.drawImage(img, sx, sy, size, size, 0, 0, size, size);
     if (lift) liftContrast(g, size);
+    if (away) awayColors(g, size);
     const t = new THREE.CanvasTexture(c);
     t.magFilter = THREE.NearestFilter;
     t.minFilter = THREE.NearestFilter;
@@ -1137,7 +1138,8 @@ export class Hd2dRenderer {
     }
     const idx = BUILDING_INDEX[key];
     if (idx === undefined) return null;
-    const tex = this.frame(BUILDINGS_SHEET, idx * 80, 0, 80);
+    const away = world.players[0].faction.id === world.players[1].faction.id && this.startsRight(world, e.owner);
+    const tex = this.frame(BUILDINGS_SHEET, idx * 80, 0, 80, false, away);
     if (!tex) return null;
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
     // Bild passend zum Fundament (Nutzer 06.11.): kaum breiter als die Grundfläche, damit man sieht, wo das Gebäude
@@ -1309,7 +1311,7 @@ export class Hd2dRenderer {
           frame = Math.floor(now / 3.3 + i * 2) % spr.frames.idle;
         }
         const sheet = UNIT_SHEETS[spr.sheet];
-        const tex = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell, liftFor(spr)) : null;
+        const tex = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell, liftFor(spr), !!team) : null;
         if (tex && (s.material as THREE.SpriteMaterial).map !== tex) {
           (s.material as THREE.SpriteMaterial).map = tex;
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
@@ -2250,6 +2252,29 @@ function liftContrast(g: CanvasRenderingContext2D, size: number): void {
       const s2 = l + (v - l) * sat;
       d[i + c] = Math.max(0, Math.min(255, s2 * k + 10));
     }
+  }
+  g.putImageData(im, 0, 0);
+}
+
+/** Auswärtsfarben (Spiegel-Duell): farbige Bildpunkte im Farbton drehen, Grau, Umriss und Helligkeit bleiben. */
+function awayColors(g: CanvasRenderingContext2D, size: number): void {
+  const im = g.getImageData(0, 0, size, size);
+  const d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! === 0) continue;
+    const r = d[i]! / 255, gr = d[i + 1]! / 255, b = d[i + 2]! / 255;
+    const mx = Math.max(r, gr, b), mn = Math.min(r, gr, b);
+    if (mx === 0 || (mx - mn) / mx < 0.22) continue;
+    const c = mx - mn;
+    let h = mx === r ? ((gr - b) / c) % 6 : mx === gr ? (b - r) / c + 2 : (r - gr) / c + 4;
+    h = (((h / 6 + AWAY_HUE) % 1) + 1) % 1;
+    const k = (n: number): number => {
+      const x = (n + h * 6) % 6;
+      return mx - c * Math.max(0, Math.min(1, Math.min(x, 4 - x)));
+    };
+    d[i] = Math.round(k(5) * 255);
+    d[i + 1] = Math.round(k(3) * 255);
+    d[i + 2] = Math.round(k(1) * 255);
   }
   g.putImageData(im, 0, 0);
 }
