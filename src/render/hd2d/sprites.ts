@@ -21,6 +21,8 @@ export interface UnitSprite {
   scale: number;
   fly: number;
   attack: { dur: number; hits: number[]; muzzles: [number, number][]; projectile: string | null };
+  /** Sheet blickt nach links (Nutzer 15.11.: Blickrichtung angleichen) – wird beim Zeichnen gespiegelt. */
+  flip?: boolean;
   /** Gewählte Varianten (Buchstaben wie in der Mock-up-Galerie). */
   chosen: { idle: string; walk: string; attack: string };
 }
@@ -49,12 +51,12 @@ export const UNIT_SPRITES: Partial<Record<UnitId, UnitSprite>> = {
   specialMeadow: { faction: 'terraformer', sheet: 'units/specialMeadow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.31, 0.44, 0.62], muzzles: [[0.3, 0.95], [0.3, 0.95], [0.3, 0.95]], projectile: "cannon" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   wardForest: { faction: 'terraformer', sheet: 'units/wardForest.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.5, 0.8], muzzles: [[0.69, 0.5], [0.69, 0.5]], projectile: "rifle" }, chosen: { idle: 'A', walk: 'B', attack: 'B' } },
   specialForest: { faction: 'terraformer', sheet: 'units/specialForest.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.62], muzzles: [[0.7, 1]], projectile: "smash" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
-  wardMud: { faction: 'terraformer', sheet: 'units/wardMud.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.82], muzzles: [[0.5, 0.75]], projectile: "mud" }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
+  wardMud: { faction: 'terraformer', flip: true, sheet: 'units/wardMud.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.82], muzzles: [[0.5, 0.75]], projectile: "mud" }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
   specialMud: { faction: 'terraformer', sheet: 'units/specialMud.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.75], muzzles: [[0.5, 1]], projectile: "sling" }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
   wardSnow: { faction: 'terraformer', sheet: 'units/wardSnow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.84], muzzles: [[0.6, 0.6]], projectile: "ice" }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
   specialSnow: { faction: 'terraformer', sheet: 'units/specialSnow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.84], muzzles: [[0.6, 1.3]], projectile: "avalanche" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   wardRubble: { faction: 'terraformer', sheet: 'units/wardRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.7], muzzles: [[0.7, 0.7]], projectile: "smash" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
-  specialRubble: { faction: 'terraformer', sheet: 'units/specialRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.72], muzzles: [[0.62, 1.8]], projectile: "smash" }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
+  specialRubble: { faction: 'terraformer', flip: true, sheet: 'units/specialRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.72], muzzles: [[0.62, 1.8]], projectile: "smash" }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
   landformer: { faction: 'terraformer', sheet: 'units/landformer.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.344, 0.781, 0.969], muzzles: [[0.6, 1.1], [0.6, 1.1], [0.6, 1.1]], projectile: "grow" }, chosen: { idle: 'A', walk: 'A', attack: 'Feuerstoß A' } },
   mudling: { faction: 'terraformer', sheet: 'units/mudling.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.6], muzzles: [[0.5, 0.4]], projectile: "melee" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
 };
@@ -93,7 +95,6 @@ export const PROJECTILES: Readonly<Record<string, ProjectileLook>> = {
  * schlichten Technoclan-Figuren (32 px, etwa eine Kachel) für Hover Scout, Technogunner, Scharfschützen und Plasmawerfer,
  * mit einfacher Pixel-Animation (Atmen, Wippen, Rückstoß). Umschaltbar im Menü; Standard bleibt „neu“.
  */
-export const OLD_TC_KEY = 'tc-old-technoclan';
 const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
   // 48-px-Zellen (alte 32-px-Figur mittig unten), Laufen/Angriff mit PixelLab v3 aus der alten Figur animiert (06.11.)
   sniper: { faction: 'technoclan', sheet: 'units/old_sniper.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.4, hits: [0.33], muzzles: [[0.39, 0.36]], projectile: 'orail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
@@ -109,32 +110,22 @@ const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
   battery: { faction: 'technoclan', sheet: 'units/old_battery.png', cell: 48, frames: { idle: 4, walk: 8, attack: 9 }, scale: 1.1, fly: 0, attack: { dur: 1.8, hits: [0.25], muzzles: [[0.69, 1.15]], projectile: 'orail' }, chosen: { idle: 'alt', walk: 'alt', attack: 'alt' } },
 };
 /**
- * Mock-up 3 (Nutzer 11.11.): die feinen, „neuen“ Technoclan-Figuren verkleinert (80 / 70 / 60 %) – zum Vergleich mit den
- * alten, groben Figuren. Hat Vorrang vor dem alten Satz; Mündungen skalieren mit (Renderer multipliziert `scale`).
+ * Figurensatz (Nutzer 15.11.): Standard ist jetzt der neue, feine Stil – alle Fraktionen mit einem gemeinsamen Größenfaktor
+ * von 80 %, damit die Größenverhältnisse zwischen den Fraktionen erhalten bleiben. Der alte, grobe Technoclan-Satz bleibt im
+ * Menü abrufbar (dann ohne Verkleinerung, wie bisher). Mündungen skalieren mit (Renderer multipliziert `scale`).
  */
-export const NEW_SMALL_KEY = 'tc-new-small';
-export const NEW_SMALL_STEPS = [0.8, 0.7, 0.6] as const;
-export function newSmallFactor(): number | null {
+export const OLD_TC_KEY = 'tc-figures-old';
+export const FIGURE_GLOBAL = 0.8;
+export function oldTechnoclan(): boolean {
   try {
-    const v = Number(globalThis.localStorage?.getItem(NEW_SMALL_KEY));
-    return (NEW_SMALL_STEPS as readonly number[]).includes(v) ? v : null;
+    return globalThis.localStorage?.getItem(OLD_TC_KEY) === '1';
   } catch {
-    return null;
+    return false;
   }
 }
-export function oldTechnoclan(): boolean {
-  if (newSmallFactor() !== null) return false;
-  try {
-    // Seit 06.11. Standard (Nutzer: alte Technoclan-Figuren sind Basis und Stilgrundlage); „neu“ bleibt abrufbar.
-    return globalThis.localStorage?.getItem(OLD_TC_KEY) !== '0';
-  } catch {
-    return true;
-  }
+/** Gemeinsamer Größenfaktor aller Figuren (für Abstände im Bild, die mit den Figuren schrumpfen). */
+export function figureGlobal(): number {
+  return oldTechnoclan() ? 1 : FIGURE_GLOBAL;
 }
 if (oldTechnoclan()) Object.assign(UNIT_SPRITES, OLD_TC);
-else {
-  const f = newSmallFactor();
-  if (f !== null) {
-    for (const s of Object.values(UNIT_SPRITES)) if (s && s.faction === 'technoclan') s.scale *= f;
-  }
-}
+else for (const sp of Object.values(UNIT_SPRITES)) if (sp) sp.scale *= FIGURE_GLOBAL;

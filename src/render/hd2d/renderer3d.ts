@@ -24,7 +24,7 @@ import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
 import { MIRROR_COLORS, attackTime, facing, projectileShown } from './anim';
 import type { ZoomLevel } from './anim';
-import { PROJECTILES, UNIT_SPRITES } from './sprites';
+import { PROJECTILES, UNIT_SPRITES, figureGlobal } from './sprites';
 import type { UnitSprite } from './sprites';
 import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
@@ -575,8 +575,8 @@ export class Hd2dRenderer {
   }
 
   /** Einzelbild aus einem Sheet als Textur (zwischengespeichert). */
-  private frame(src: string, sx: number, sy: number, size: number): THREE.Texture | null {
-    const key = `${src.length}:${src.slice(-24)}:${sx}:${sy}:${size}`;
+  private frame(src: string, sx: number, sy: number, size: number, lift = false): THREE.Texture | null {
+    const key = `${src.length}:${src.slice(-24)}:${sx}:${sy}:${size}:${lift ? 1 : 0}`;
     const hit = this.frameTex.get(key);
     if (hit) return hit;
     const img = this.image(src);
@@ -586,6 +586,7 @@ export class Hd2dRenderer {
     const g = c.getContext('2d')!;
     g.imageSmoothingEnabled = false;
     g.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+    if (lift) liftContrast(g, size);
     const t = new THREE.CanvasTexture(c);
     t.magFilter = THREE.NearestFilter;
     t.minFilter = THREE.NearestFilter;
@@ -849,7 +850,7 @@ export class Hd2dRenderer {
       this.bbMat = new THREE.ShaderMaterial({
         vertexShader: BB_VS,
         fragmentShader: BB_FS,
-        uniforms: { map: { value: atlas }, fogMap: { value: this.fogTex }, fogOn: { value: 0 }, density: { value: 1 }, area: { value: new THREE.Vector4(0, 0, 1, 1) } },
+        uniforms: { map: { value: atlas }, fogMap: { value: this.fogTex }, fogOn: { value: 0 }, density: { value: 1 }, area: { value: new THREE.Vector4(0, 0, 1, 1) }, units: { value: Array.from({ length: TREE_FADE_MAX }, () => new THREE.Vector2(-99, -99)) }, nUnits: { value: 0 } },
       });
     }
     const P: number[] = [];
@@ -1095,6 +1096,7 @@ export class Hd2dRenderer {
     const level = this.zoomLevel();
     const asIcons = level === 'map'; // Nutzer 06.11.: Lanes zeigt Figuren, nur die Karte Symbole
     const maxFigures = level === 'mid' ? 3 : Infinity;
+    const fade: THREE.Vector2[] = [];
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
       const spr = UNIT_SPRITES[e.defId as UnitId];
@@ -1108,6 +1110,7 @@ export class Hd2dRenderer {
       const dp = disp?.get(e.id);
       const x = dp ? dp.x : e.prev.x + (e.pos.x - e.prev.x) * alpha;
       const y = dp ? dp.y : e.prev.y + (e.pos.y - e.prev.y) * alpha;
+      if (!asIcons && fade.length < TREE_FADE_MAX) fade.push(new THREE.Vector2(x, y));
       const alive = Math.max(1, Math.min(aliveModels(e), e.models));
       // Figuren je Verband (Nutzer 06.11., Variante A – nur Darstellung): Technoclan und Myriaden höchstens 2, Terra-Former 3,
       // Myr-Drohnen als Schwarm alle. Eine Figur verschwindet erst, wenn weniger Modelle leben als gezeigt werden.
@@ -1140,29 +1143,22 @@ export class Hd2dRenderer {
       const showChip = hovered === e || this.altHeld || (hovered !== null && hovered.weapon?.targetId === e.id) || (hovered !== null && e.weapon?.targetId === hovered.id);
       sq.badge.visible = showChip;
       const moveDx = e.pos.x - e.prev.x;
-      // Rückwärtsgehen (Nutzer 07.11., Variante C): kurze Rückschritte (bis 1,5 Kacheln) oder mit Gegner im Visier – Blick
-      // bleibt zum Gegner, Laufanimation läuft rückwärts; längerer Rückzug – umdrehen und normal laufen.
+      // Blickrichtung (Nutzer 15.11.): einheitlich je Verband – beim Laufen in Laufrichtung (auch beim Zurückgehen umdrehen),
+      // im Stand zum Ziel bzw. zur Gegnerseite. Kleine Querbewegungen kippen die Richtung nicht.
       if (sq.tick !== world.tick) {
         sq.tick = world.tick;
         const enemyDir: 1 | -1 = this.startsRight(world, e.owner) ? -1 : 1;
         if (sq.dir === 0) sq.dir = enemyDir;
-        if (Math.abs(moveDx) > 0.001) {
-          if (Math.sign(moveDx) === enemyDir) {
-            sq.back = 0;
-            sq.backward = false;
-            sq.dir = enemyDir;
-          } else {
-            sq.back += Math.abs(moveDx);
-            const engaged = !!e.weapon?.targetId;
-            sq.backward = engaged || sq.back < 1.5;
-            sq.dir = sq.backward ? enemyDir : (-enemyDir as 1 | -1);
-          }
-        } else if (Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.002) {
-          // Stehen: nach kurzer Zeit wieder zum Gegner schauen
-          sq.back = Math.max(0, Math.min(sq.back, 1.5) - 0.08);
-          sq.backward = false;
-          if (sq.back === 0) sq.dir = enemyDir;
+        const still = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.002;
+        const tgt = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
+        if (!still && Math.abs(moveDx) > 0.004) {
+          sq.dir = moveDx > 0 ? 1 : -1;
+          sq.back = 0;
+        } else if (still) {
+          if (tgt && Math.abs(tgt.pos.x - e.pos.x) > 0.05) sq.dir = tgt.pos.x > e.pos.x ? 1 : -1;
+          else if (++sq.back > 8) sq.dir = enemyDir;
         }
+        sq.backward = false;
       }
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
       const right = this.startsRight(world, e.owner);
@@ -1170,7 +1166,7 @@ export class Hd2dRenderer {
       const team = mirror && right ? MIRROR_COLORS[world.players[e.owner].faction.id] : null;
       // Figuren etwas kleiner (Nutzer 06.11., Nah-Gefecht): weniger Überdeckung im Gedränge.
       const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
-      const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) : 0;
+      const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) * figureGlobal() : 0;
       sq.walk += moving ? 0.016 * 60 * (UNITS[e.defId as UnitId]?.speed ?? 1) * 0.15 : 0;
       for (let i = 0; i < sq.sprites.length; i++) {
         const s = sq.sprites[i]!;
@@ -1190,7 +1186,7 @@ export class Hd2dRenderer {
         sh.position.set(mx, this.heightAt(world, mx, my) + 0.02, my);
         if (team) (sh.material as THREE.MeshBasicMaterial).color.set(team);
         const pose = this.pose(e, sq, spr, i, n, now, world.tps);
-        const dir = pose.attacking && target ? facing(right, { targetDx: target.pos.x - e.pos.x }) : sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
+        const dir = !moving && target ? facing(right, { targetDx: target.pos.x - e.pos.x }) : sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
         let row = 0;
         let frame = 0;
         if (pose.attacking) {
@@ -1199,18 +1195,17 @@ export class Hd2dRenderer {
         } else if (moving) {
           row = 1;
           frame = Math.floor(sq.walk + i * 3) % spr.frames.walk;
-          if (sq.backward) frame = spr.frames.walk - 1 - frame;
         } else {
           row = 0;
           frame = Math.floor(now / 3.3 + i * 2) % spr.frames.idle;
         }
         const sheet = UNIT_SHEETS[spr.sheet];
-        const tex = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell) : null;
+        const tex = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell, liftFor(spr)) : null;
         if (tex && (s.material as THREE.SpriteMaterial).map !== tex) {
           (s.material as THREE.SpriteMaterial).map = tex;
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
         }
-        s.scale.set(size * dir, size, 1);
+        s.scale.set(size * dir * (spr.flip ? -1 : 1), size, 1);
       }
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
@@ -1242,6 +1237,12 @@ export class Hd2dRenderer {
       if (sq.seen === stamp) continue;
       this.removeSquad(sq);
       this.squads.delete(id);
+    }
+    // Wald (Nutzer 15.11., wie im Mock-up): Bäume vor einem Verband werden durchsichtig.
+    if (this.bbMat) {
+      const arr = this.bbMat.uniforms.units!.value as THREE.Vector2[];
+      for (let i = 0; i < fade.length; i++) arr[i]!.copy(fade[i]!);
+      this.bbMat.uniforms.nUnits!.value = fade.length;
     }
   }
 
@@ -1397,7 +1398,7 @@ export class Hd2dRenderer {
       const spr = UNIT_SPRITES[e.defId as UnitId];
       if (!spr) continue;
       const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
-      const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) : 0;
+      const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) * figureGlobal() : 0;
       const r = e.defId === 'drone' ? 0.3 : Math.max(0.3, size * 0.28 + spread * 0.35);
       us.push({ e, x: e.prev.x + (e.pos.x - e.prev.x) * alpha, y: e.prev.y + (e.pos.y - e.prev.y) * alpha, r, tx: 0, ty: 0 });
     }
@@ -2031,14 +2032,46 @@ export class Hd2dRenderer {
 }
 
 /** Billboard-Shader (aus dem Mock-up): Ecke je Vertex in Kamerarichtung aufspannen, Deko nach Zoom ausdünnen, Nebel. */
+const TREE_FADE_MAX = 64;
 const BB_VS = `attribute vec2 corner;attribute vec4 uvr;attribute vec2 sz;attribute float lod;
-uniform float density;varying vec2 vUv;varying vec2 vW;
+uniform float density;uniform vec2 units[${TREE_FADE_MAX}];uniform int nUnits;varying vec2 vUv;varying vec2 vW;varying float vFade;
 void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);mv.xy+=vec2(corner.x*sz.x,corner.y*sz.y);
 gl_Position=projectionMatrix*mv;vUv=uvr.xy+vec2(corner.x+0.5,corner.y)*uvr.zw;vW=position.xz;
+vFade=0.0;
+if(lod<0.01){for(int i=0;i<${TREE_FADE_MAX};i++){if(i>=nUnits)break;vec2 d=position.xz-units[i];
+if(abs(d.x)<0.75+sz.x*0.25&&d.y>-0.35&&d.y<1.1+sz.y*0.3){vFade=1.0;break;}}}
 if(lod>density)gl_Position=vec4(2.0,2.0,2.0,1.0);}`;
-const BB_FS = `uniform sampler2D map;uniform sampler2D fogMap;uniform float fogOn;uniform vec4 area;varying vec2 vUv;varying vec2 vW;
-void main(){vec4 c=texture2D(map,vUv);if(c.a<0.5)discard;vec2 w=vec2((vW.x-area.x)/area.z,1.0-(vW.y-area.y)/area.w);
+// Durchsichtig als Pixelraster (jeder zweite Bildpunkt fällt weg) – passt zum Pixelstil, braucht keine Sortierung.
+const BB_FS = `uniform sampler2D map;uniform sampler2D fogMap;uniform float fogOn;uniform vec4 area;varying vec2 vUv;varying vec2 vW;varying float vFade;
+void main(){vec4 c=texture2D(map,vUv);if(c.a<0.5)discard;
+if(vFade>0.5&&mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y),2.0)<1.0)discard;
+vec2 w=vec2((vW.x-area.x)/area.z,1.0-(vW.y-area.y)/area.w);
 float f=fogOn*texture2D(fogMap,w).a;gl_FragColor=vec4(mix(c.rgb*0.92,vec3(0.024,0.031,0.055),f*0.85),1.0);}`;
+
+/** Neue Technoclan-Figuren aufhellen (Nutzer 15.11.: stärker vom Boden abheben); der alte, grobe Satz bleibt unverändert. */
+function liftFor(spr: UnitSprite): boolean {
+  return spr.faction === 'technoclan' && !spr.sheet.includes('old_');
+}
+
+/** Helligkeit und Sättigung anheben, Umriss (sehr dunkle Punkte) bleibt dunkel, Leuchtakzente werden kräftiger. */
+function liftContrast(g: CanvasRenderingContext2D, size: number): void {
+  const im = g.getImageData(0, 0, size, size);
+  const d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! === 0) continue;
+    const r = d[i]!, gr = d[i + 1]!, b = d[i + 2]!;
+    const l = 0.3 * r + 0.59 * gr + 0.11 * b;
+    if (l < 22) continue;
+    const k = 1.32;
+    const sat = 1.25;
+    for (let c = 0; c < 3; c++) {
+      const v = d[i + c]!;
+      const s2 = l + (v - l) * sat;
+      d[i + c] = Math.max(0, Math.min(255, s2 * k + 10));
+    }
+  }
+  g.putImageData(im, 0, 0);
+}
 
 /** Deterministischer Pseudo-Zufall je Kachel (0 … 1) – gleiche Karte, gleiches Bild. */
 function hash(a: number, b: number): number {
