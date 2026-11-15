@@ -22,6 +22,7 @@ import { orderScout } from './scout';
 import { routeChangeSeconds } from './sites';
 import { buyHqUpgrade, disguiseFactor } from './hq';
 import { HQ_PATH_IDS } from '../../data/hq';
+import { sandboxClear, sandboxSpawn } from './sandbox';
 
 const OK: CommandResult = { ok: true };
 const fail = (reason: string): CommandResult => ({ ok: false, reason });
@@ -53,6 +54,10 @@ function execute(world: World, player: PlayerId, cmd: Command): CommandResult {
       if (typeof b === 'string') return fail(b);
       return convertFactory(world, b, cmd.to);
     }
+    case 'sandboxSpawn':
+      return world.rules.sandbox ? sandboxSpawn(world, cmd.unit, cmd.owner, cmd.x, cmd.y, cmd.count, cmd.hold) : fail('Nur in der Test-Box');
+    case 'sandboxClear':
+      return world.rules.sandbox ? sandboxClear(world, cmd.owner) : fail('Nur in der Test-Box');
     case 'sell': {
       const b = ownBuilding(world, player, cmd.entityId);
       if (typeof b === 'string') return fail(b);

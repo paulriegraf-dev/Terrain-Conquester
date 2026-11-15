@@ -103,7 +103,8 @@ export function checkBuild(
     return fail('Außerhalb der Karte');
   }
   const slots = world.players[player].faction.buildings[def.id]!.slots ?? 1;
-  if (slotsUsed(world, player) + slots > slotLimit(world, player) + 1e-9) {
+  const free = !!world.rules.sandbox; // Test-Box: keine Zonen, kein Limit, keine Sicht-/Gebietsprüfung
+  if (!free && slotsUsed(world, player) + slots > slotLimit(world, player) + 1e-9) {
     return fail(`Alle ${slotLimit(world, player)} Bauplätze belegt`);
   }
   const vision = world.players[player].vision;
@@ -119,14 +120,14 @@ export function checkBuild(
   } else {
     const zones = world.map.buildZone;
     const buildable = (z: number): boolean => z === BUILD_ZONE.base || z === BUILD_ZONE.front;
-    if (!cellsAll(rect, (cx, cy) => buildable(zones[grid.index(cx, cy)]!))) return fail('Nur in Bauzonen möglich');
+    if (!free && !cellsAll(rect, (cx, cy) => buildable(zones[grid.index(cx, cy)]!))) return fail('Nur in Bauzonen möglich');
     if (terrainFactor(world, rect) === null) return fail('Auf einem Erdwall kann man nicht bauen');
     if (!cellsAll(rect, (cx, cy) => grid.structure[grid.index(cx, cy)] === 0)) return fail('Dort steht schon etwas');
     if (!cellsAll(grow(rect, rules.gap), (cx, cy) => !grid.inBounds(cx, cy) || grid.structure[grid.index(cx, cy)] === 0)) {
       return fail(`Mindestens ${rules.gap} Kachel Abstand zu anderen Bauwerken`);
     }
-    if (!cellsAll(rect, (cx, cy) => vision.isVisible(cx, cy))) return fail('Nur in sichtbarem Gebiet möglich');
-    if (!cellsAll(rect, (cx, cy) => controllerAt(world, grid.index(cx, cy)) === player)) {
+    if (!free && !cellsAll(rect, (cx, cy) => vision.isVisible(cx, cy))) return fail('Nur in sichtbarem Gebiet möglich');
+    if (!free && !cellsAll(rect, (cx, cy) => controllerAt(world, grid.index(cx, cy)) === player)) {
       return fail('Nur im eigenen Einflussgebiet möglich');
     }
     if (world.swaps.some((s) => rectHas(rect, s.index % grid.width, Math.floor(s.index / grid.width)))) {

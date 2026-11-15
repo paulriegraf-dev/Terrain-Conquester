@@ -168,6 +168,8 @@ export interface OvertimeRules {
 }
 
 export interface Rules {
+  /** Test-Box (15.11., Nutzer): keine Bauzonen, kein Bauplatz-Limit, unbegrenzte Energie, alles sofort, Einheiten direkt setzen. */
+  sandbox?: boolean;
   /** Simulationsschritte pro Sekunde (fest – nie an die Bildrate koppeln). */
   ticksPerSecond: number;
   startEnergy: number;

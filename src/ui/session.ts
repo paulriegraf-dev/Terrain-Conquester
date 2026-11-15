@@ -6,6 +6,7 @@ import type { Command, PlayerCommand, TimedCommand } from '../sim/commands';
 import { World } from '../sim/world';
 import type { FactionId } from '../data/factions';
 import { overtimeRules } from '../data/rules';
+import { sandboxTick } from '../sim/systems/sandbox';
 import type { OvertimeVariant } from '../data/rules';
 import type { StationMode } from '../data/stations';
 import type { Mode } from './view';
@@ -50,9 +51,11 @@ export class Session {
     readonly lockstep: Lockstep | null = null,
     /** Stationen (25.10. abends): Zufall aus dem Pool der Karte, Hauptpaarung, bestimmte oder aus. */
     readonly stations: StationMode = 'main',
+    /** Test-Box (15.11.): freie Bauregeln, unbegrenzte Energie, KI wartet, keine Vorbereitung. */
+    readonly sandbox = false,
   ) {
     const map = getMap(mapId);
-    const rules = { ...overtimeRules(overtime), stations };
+    const rules = { ...overtimeRules(overtime), stations, sandbox };
     if (mode === 'replay') {
       this.replay = new ReplayRunner(map, seed, log ?? [], factions, rules);
       this.world = this.replay.world;
@@ -68,7 +71,8 @@ export class Session {
             : [new SimpleAi(otherPlayer(human), aiSeed(seed, otherPlayer(human)), level)];
       // Die KI bereitet ihr Gelände sofort vor (im Nebel); du danach in Ruhe.
       this.world.prepare(this.ais.flatMap((ai) => ai.prepare(this.world).map((cmd) => ({ player: ai.player, cmd }))));
-      this.prepActive = mode === 'play';
+      this.prepActive = mode === 'play' && !sandbox;
+      if (sandbox) this.aiHold = true;
     }
   }
 
@@ -204,5 +208,6 @@ export class Session {
     this.pending = [];
     if (!this.aiHold) for (const ai of this.ais) for (const cmd of ai.think(this.world)) commands.push({ player: ai.player, cmd });
     this.world.step(commands);
+    if (this.sandbox) sandboxTick(this.world);
   }
 }

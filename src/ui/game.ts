@@ -26,6 +26,8 @@ import type { PlayerId, Route } from '../sim/types';
 import { ROUTE_NAMES, otherPlayer } from '../sim/types';
 import type { Stance, World } from '../sim/world';
 import { FACTIONS, FACTION_IDS } from '../data/factions';
+import { SandboxPanel } from './sandboxPanel';
+import type { SandboxSetup } from './sandboxPanel';
 import type { FactionId } from '../data/factions';
 import type { OvertimeVariant } from '../data/rules';
 import { Music } from './music';
@@ -122,6 +124,8 @@ export class Game {
   private titleOpen = true;
   /** Laufendes Tutorial (oder null). */
   private tutorial: Tutorial | null = null;
+  /** Test-Box (15.11.): Seitenleiste, solange die Box läuft. */
+  private sandbox: SandboxPanel | null = null;
   private readonly keystones: KeystoneZone;
   /** Übersicht (Einheiten, Konter, Gelände) offen – über Titelbild und Menü. */
   private codexOpen = false;
@@ -284,6 +288,7 @@ export class Game {
   // ------------------------------------------------------------------ Partien
 
   private startDemo(): void {
+    this.endSandbox();
     this.endTutorial();
     this.music.play('menu');
     this.mp = null;
@@ -301,6 +306,7 @@ export class Game {
   /** `factions` = [deine Fraktion, Fraktion der KI]; `side` = deine Seite (0 links, 1 rechts). */
   private startMatch(mapId: string, level: AiLevel, factions: [FactionId, FactionId], overtime: OvertimeVariant = 'off', side: PlayerId = 0, stations: StationMode = 'random'): void {
     this.endTutorial();
+    this.endSandbox();
     const id = mapId === 'random' ? pick(MAPS).id : mapId;
     this.menuOpen = false;
     this.doc.body.classList.remove('start-mode');
@@ -328,6 +334,41 @@ export class Game {
       clientOf: (x, y) => this.renderer.clientOf(x, y, this.session.world),
       tilePx: () => this.renderer.tileOnScreen(),
     });
+  }
+
+  /** Test-Box (15.11., Nutzer): Einheiten und Animationen ansehen, ohne Partie – freie Bauregeln, KI wartet. */
+  private startSandbox(setup: SandboxSetup = { map: 'felsenpass', factions: ['technoclan', 'myriaden'] }): void {
+    this.closeTitle();
+    this.endTutorial();
+    this.menuOpen = false;
+    this.doc.body.classList.remove('start-mode');
+    this.music.play('game');
+    this.session = new Session('play', setup.map, randomSeed(), 'normal', setup.factions, undefined, 'off', 0, null, 'main', true);
+    this.resetView('play');
+    this.view.prep = false;
+    this.view.fog = false; // Test-Box: alles sehen – auch gegnerische Einheiten
+    this.hud.hideOverlays();
+    this.hud.clearLog();
+    this.hud.log(0, `Test-Box auf ${this.session.world.map.def.name}: Einheit links wählen und auf die Karte klicken.`, 'info');
+    if (this.sandbox) this.sandbox.reset(setup);
+    else
+      this.sandbox = new SandboxPanel(this.doc, {
+        issue: (cmd) => this.session.issue(cmd),
+        restart: (s) => this.startSandbox(s),
+        aiOn: () => !this.session.aiHold,
+        setAi: (on) => {
+          this.session.aiHold = !on;
+        },
+        fogOn: () => this.view.fog,
+        setFog: (on) => {
+          this.view.fog = on;
+        },
+      }, setup);
+  }
+
+  private endSandbox(): void {
+    this.sandbox?.end();
+    this.sandbox = null;
   }
 
   private endTutorial(): void {
@@ -808,6 +849,11 @@ export class Game {
     const cell = this.renderer.cellAt(clientX, clientY, world);
     if (!cell) return;
     this.view.hover = cell;
+    if (this.sandbox?.armed) {
+      const pt = this.renderer.pointAt(clientX, clientY, world);
+      this.sandbox.place(pt.x, pt.y);
+      return;
+    }
     const human = this.view.human;
     if (this.view.swap) return; // Malen passiert bei pointerdown/-move
     if (this.view.build && human !== null) {
@@ -1129,6 +1175,7 @@ export class Game {
   /** Esc: erst laufendes Werkzeug abbrechen, dann Untermenü schließen, dann Auswahl aufheben. */
   private back(): void {
     this.hudSellArmed = 0;
+    if (this.sandbox?.disarm()) return;
     if (this.view.build) this.view.build = null;
     else if (this.view.rally) this.view.rally = null;
     else if (this.view.wall) this.view.wall = null;
@@ -1160,6 +1207,9 @@ export class Game {
         break;
       case 'game-menu':
         this.toggleMenu();
+        break;
+      case 'sandbox':
+        this.startSandbox();
         break;
       case 'tutorial':
         this.startTutorial();

@@ -15,6 +15,10 @@ export type Command =
   /** Gebäude bauen; (x, y) = linke obere Ecke der Grundfläche. Auf einem Außenposten: dessen Ecke. */
   | { type: 'build'; x: number; y: number; building: BuildingId }
   | { type: 'sell'; entityId: number }
+  /** Test-Box (nur mit rules.sandbox): Einheiten direkt setzen – für dich oder den Gegner; `hold` = stehen bleiben. */
+  | { type: 'sandboxSpawn'; unit: UnitId; owner: PlayerId; x: number; y: number; count: number; hold: boolean }
+  /** Test-Box: alle Einheiten entfernen (owner fehlt = beide Seiten). */
+  | { type: 'sandboxClear'; owner?: PlayerId }
   | { type: 'setRoute'; entityId: number; route: Route }
   /** Laufende Umstellung des Marschbefehls sofort abschließen (kostet Energie). */
   | { type: 'rushRoute'; entityId: number }

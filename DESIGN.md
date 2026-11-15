@@ -2262,3 +2262,10 @@ Befund (Nutzer): Nach „Sichern“ unten liefen Verbände der unteren Lane quer
 - **Verteidigen-Sammelpunkt** je Lane seitlich versetzt (`defendSpread` 5 Kacheln: oben/mitte/unten statt alle mittig).
 - Schalter: `laneGuide.enabled false` = alter Stand, `ignoreOffLane false` = nur Wegführung. Tests: tests/spurfuehrung.test.ts (Gegenprobe mit alter Regel: Durchlass-Nutzer > 0, neu 0). Suite 456 grün.
 - Replay nachgespielt (`scripts/replaySpur.ts`, Datei in `partien/`): Der Stance-Wechsel wirkt erst nach `front.stanceChangeSeconds` (Klick 3222 → wirksam 3423). In den ~8,5 s davor läuft noch *Verteidigen*, und dessen Eindringlings-Jagd zog die untere Lane schon ins Mittelband (Drohnen der Mitte-Welle im eigenen Gebiet). Ergebnis ab Wirk-Tick: alt 8 neu hineingelaufen (7 ohne Beschuss), neu 11 (9 ohne Beschuss) – die Spurführung allein erfüllt die Prüfung im Replay also NICHT; offen: Eindringlings-Jagd von Verteidigen/Halten auf die eigene Lane begrenzen (Entscheidung beim Nutzer).
+
+## Test-Box (15.11., Nutzer)
+- **Zweck:** Einheiten, Animationen und ihr Aussehen in der Umgebung direkt bewerten – ohne Partie, Produktion und Energie-Wartezeit. Titelbild → Einzelspieler → „Test-Box“.
+- **Regel `sandbox`** (nur dort, normale Partien unverändert): keine Bauzonen, kein Bauplatz-Limit, keine Sicht- und Gebietsprüfung beim Bauen; Energie dauerhaft voll; Stufen, Umrüsten, Umwidmen, Forschung und Bodenumbau sofort fertig; beide HQs unverwundbar. Belegte Kacheln, Abstand, Fels/Wasser und offene Wege gelten weiter.
+- **Seitenleiste:** Karte und Fraktion für dich und den Gegner wählen (startet die Box neu), Einheiten nach Gebäude, Gerufene und Held; setzen für dich oder den Gegner, „Halten“ (bleibt stehen, kämpft in Reichweite) oder „Laufen“ (folgt Lane und Haltung der Seite), Anzahl 1/5/10. Einheit wählen, auf die Karte klicken; Rechtsklick oder Esc beendet.
+- **Schalter:** Gegner-KI (Standard aus), Nebel (Standard aus), Gegner leeren, Alle leeren.
+- Befehle `sandboxSpawn` und `sandboxClear` – in normalen Partien abgelehnt.
