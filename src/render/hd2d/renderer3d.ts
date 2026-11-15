@@ -1151,7 +1151,14 @@ export class Hd2dRenderer {
         if (sq.dir === 0) sq.dir = enemyDir;
         const still = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.002;
         const tgt = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
-        if (!still && Math.abs(moveDx) > 0.004) {
+        // Ziel in Reichweite (Nutzer 15.11.: gegnerische Scharfschützen schauten weg): immer zum Ziel – auch wenn das
+        // Gedränge den Verband leicht schiebt oder er nebenbei weitermarschiert.
+        const tdx = tgt ? tgt.pos.x - e.pos.x : 0;
+        const inRange = !!tgt && !!e.weapon && Math.hypot(tdx, tgt.pos.y - e.pos.y) <= e.weapon.def.range + (tgt.radius ?? 0) + 0.8;
+        if (inRange && Math.abs(tdx) > 0.05) {
+          sq.dir = tdx > 0 ? 1 : -1;
+          sq.back = 0;
+        } else if (!still && Math.abs(moveDx) > 0.004) {
           sq.dir = moveDx > 0 ? 1 : -1;
           sq.back = 0;
         } else if (still) {
@@ -1162,7 +1169,6 @@ export class Hd2dRenderer {
       }
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
       const right = this.startsRight(world, e.owner);
-      const target = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
       const team = mirror && right ? MIRROR_COLORS[world.players[e.owner].faction.id] : null;
       // Figuren etwas kleiner (Nutzer 06.11., Nah-Gefecht): weniger Überdeckung im Gedränge.
       const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
@@ -1186,7 +1192,7 @@ export class Hd2dRenderer {
         sh.position.set(mx, this.heightAt(world, mx, my) + 0.02, my);
         if (team) (sh.material as THREE.MeshBasicMaterial).color.set(team);
         const pose = this.pose(e, sq, spr, i, n, now, world.tps);
-        const dir = !moving && target ? facing(right, { targetDx: target.pos.x - e.pos.x }) : sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
+        const dir = sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
         let row = 0;
         let frame = 0;
         if (pose.attacking) {
