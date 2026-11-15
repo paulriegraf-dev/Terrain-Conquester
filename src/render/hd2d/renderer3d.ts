@@ -28,6 +28,8 @@ import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
 import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
+import { hitSound, shotSound } from '../../ui/sfx';
+import type { SoundKind } from '../../ui/sfx';
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 /** Kameraabstand je Zoom 0 … 1 (wie im Mock-up). */
@@ -91,6 +93,8 @@ interface Shot {
   muzzle?: PfxUse | null;
   fired?: boolean;
   flip?: boolean;
+  /** Geschoss-Optik für den Abschuss-Klang. */
+  snd?: string;
 }
 
 interface Fx {
@@ -139,6 +143,8 @@ export class Hd2dRenderer {
   private readonly structures = new Map<number, THREE.Object3D>();
   private readonly squads = new Map<number, Squad>();
   private readonly shots: Shot[] = [];
+  /** Klang-Ausgabe (game.ts → Sfx): Art, Stereo −1 … 1, Lautstärke 0 … 1. */
+  onSound: ((kind: SoundKind, pan: number, gain: number) => void) | null = null;
   private readonly fx: Fx[] = [];
   private readonly pfxFrames = new Map<PfxName, THREE.Texture[]>();
   private tps = 20;
@@ -1622,13 +1628,17 @@ export class Hd2dRenderer {
       this.lastSeq = ev.seq;
       if (ev.type === 'shot' && ev.target !== undefined && this.humanRef !== null && ev.owner !== this.humanRef) {
         const t = world.get(ev.target);
-        if (t && t.kind === 'building' && t.owner === this.humanRef) this.attacked.set(t.id, now);
+        if (t && t.kind === 'building' && t.owner === this.humanRef) {
+          if (!this.attacked.has(t.id)) this.onSound?.('alert', 0, 1);
+          this.attacked.set(t.id, now);
+        }
       }
       if (ev.type === 'shot' && ev.land !== undefined && ev.shooter !== undefined) this.spawnShot(world, ev, now);
       else if (ev.type === 'shot') this.burst(new THREE.Vector3(ev.to.x, 0.4, ev.to.y), '#ffb02a', 0.9, now, world.tps * 0.4);
       else if (ev.type === 'heal') this.spawnHeal(ev.from, ev.to, now, world.tps);
       else if (ev.type === 'death' && ev.kind === 'unit') {
         const g = new THREE.Vector3(ev.pos.x, this.heightAt(world, ev.pos.x, ev.pos.y), ev.pos.y);
+        this.emitSound('death', g, false);
         if (!this.playPfx({ name: 'dirt', lift: 0, scale: 0.6 }, g, false, now)) this.burst(g, '#9a8a7a', 0.8, now, world.tps * 0.6);
       }
     }
@@ -1700,7 +1710,7 @@ export class Hd2dRenderer {
     }
     obj.visible = false;
     this.scene.add(obj);
-    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color, impact, flip, muzzle: fxDef?.muzzle ?? null });
+    this.shots.push({ obj, from, to, spawn, land, arc: look.arc ? (0.5 + from.distanceTo(to) * 0.06) * look.arc : 0, beam: !!look.beam, heavy: !!look.heavy || ev.heavy, color, impact, flip, muzzle: fxDef?.muzzle ?? null, snd: spr?.attack.projectile ?? '' });
   }
 
   private spawnHeal(from: Vec2, to: Vec2, now: number, tps: number): void {
@@ -1721,6 +1731,8 @@ export class Hd2dRenderer {
       if (!p.fired) {
         p.fired = true;
         if (shown && p.muzzle && zoom !== 'map') this.playPfx(p.muzzle, p.from, !!p.flip, now);
+        const sk = shotSound(p.snd ?? '');
+        if (shown && sk) this.emitSound(sk, p.from, p.heavy);
       }
       if (p.beam) {
         p.obj.visible = shown;
@@ -1737,6 +1749,21 @@ export class Hd2dRenderer {
     void view;
   }
 
+  /**
+   * Klang an einer Weltposition (Nutzer 15.11., Genre-Regeln): Stereo nach Bildposition, leiser außerhalb des Bilds und
+   * je weiter herausgezoomt; in der Kartenansicht nur Schweres.
+   */
+  private emitSound(kind: SoundKind, pos: THREE.Vector3, heavy: boolean): void {
+    if (!this.onSound) return;
+    const lv = this.zoomLevel();
+    const zoomGain = lv === 'near' ? 1 : lv === 'mid' ? 0.8 : lv === 'lanes' ? 0.55 : 0.3;
+    if (lv === 'map' && !heavy && kind !== 'hit-boom' && kind !== 'death') return;
+    const v = pos.clone().project(this.camera);
+    const off = Math.max(Math.abs(v.x), Math.abs(v.y));
+    const place = off <= 1 ? 1 : off <= 1.6 ? 0.25 : 0;
+    this.onSound(kind, v.x, zoomGain * place * (heavy ? 1 : 0.8));
+  }
+
   private dropShot(k: number, now: number, shown: boolean): void {
     const p = this.shots[k]!;
     this.scene.remove(p.obj);
@@ -1745,6 +1772,8 @@ export class Hd2dRenderer {
     if ((p.obj as THREE.Mesh).geometry) (p.obj as THREE.Mesh).geometry.dispose();
     this.shots.splice(k, 1);
     if (!shown) return;
+    const hk = hitSound(p.impact?.name, p.heavy);
+    if (hk) this.emitSound(hk, p.to, p.heavy);
     if (p.impact && this.playPfx(p.impact, p.to, !!p.flip, now)) return;
     this.burst(p.to, p.heavy ? '#ffb02a' : p.color, p.heavy ? 0.9 : 0.35, now, p.heavy ? 8 : 5);
   }

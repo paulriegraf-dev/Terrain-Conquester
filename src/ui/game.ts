@@ -1,5 +1,6 @@
 import { cmdIcon } from './icons';
 import { OLD_TC_KEY, oldTechnoclan } from '../render/hd2d/sprites';
+import { Sfx } from './sfx';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import type { AiLevel } from '../ai/simpleAi';
 import { BUILDINGS } from '../data/buildings';
@@ -179,6 +180,11 @@ export class Game {
       oldTc.textContent = `Figuren: ${oldTechnoclan() ? 'alter Technoclan (grob)' : 'neu (80 %)'}`;
     }
     this.music = new Music(doc);
+    // Kampfgeräusche (15.11.): folgen Musik an/aus und Lautstärke; Freigabe nach der ersten Nutzeraktion.
+    const sfx = new Sfx(() => ({ enabled: this.music.enabled, volume: this.music.volume }));
+    doc.addEventListener('pointerdown', () => sfx.unlock());
+    doc.addEventListener('keydown', () => sfx.unlock());
+    if (this.renderer instanceof Hd2dRenderer) this.renderer.onSound = (k, pan, gain) => sfx.play(k, pan, gain);
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
     if (this.renderer instanceof Hd2dRenderer) {
       this.hudC = new HudC({
