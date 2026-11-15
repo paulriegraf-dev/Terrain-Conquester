@@ -1107,6 +1107,7 @@ export class Hd2dRenderer {
     const asIcons = level === 'map'; // Nutzer 06.11.: Lanes zeigt Figuren, nur die Karte Symbole
     const maxFigures = level === 'mid' ? 3 : Infinity;
     const fade: THREE.Vector2[] = [];
+    const iconPlan = asIcons ? this.planIcons(world, alpha, visibleTo) : null;
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
       const spr = spriteFor(e.defId, !!e.elite);
@@ -1134,15 +1135,18 @@ export class Hd2dRenderer {
       if (asIcons) {
         const armor = UNITS[e.defId as UnitId]?.armor;
         const shape = armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
-        const key = `${shape}|${sideColor}|${alive}`;
+        const plan = iconPlan?.get(e.id);
+        const shown = plan ? plan.count : alive;
+        const key = `${shape}|${sideColor}|${shown}`;
         if (key !== sq.iconKey) {
-          (sq.icon.material as THREE.SpriteMaterial).map = this.iconTexture(shape, sideColor, alive);
+          (sq.icon.material as THREE.SpriteMaterial).map = this.iconTexture(shape, sideColor, shown);
           (sq.icon.material as THREE.SpriteMaterial).needsUpdate = true;
           sq.iconKey = key;
         }
-        const ix = e.prev.x + (e.pos.x - e.prev.x) * alpha;
-        const iy = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+        const ix = plan ? plan.x : e.prev.x + (e.pos.x - e.prev.x) * alpha;
+        const iy = plan ? plan.y : e.prev.y + (e.pos.y - e.prev.y) * alpha;
         const k = level === 'map' ? 1.9 : 1.4;
+        if (plan && !plan.show) sq.icon.visible = false;
         sq.icon.position.set(ix, this.heightAt(world, ix, iy) + 0.35, iy);
         sq.icon.scale.set(k, k, 1);
       }
@@ -1319,6 +1323,48 @@ export class Hd2dRenderer {
    * Verbandssymbol (Nutzer 06.11., Variante C): in Karte/Lanes statt der Pixelfiguren ein kleines Zeichen wie in der alten
    * Grafik – Kreis Infanterie, Raute leicht, Quadrat schwer, Dreieck fliegend – in der Seitenfarbe, mit Modellzahl.
    */
+  /**
+   * Kartenansicht (Nutzer 15.11.: Symbole überlappen): Verbände derselben Seite und Panzerung, die nah beieinander
+   * stehen, werden zu EINEM Symbol mit der Summe der Modelle zusammengefasst (wie Gruppensymbole im Genre); die übrigen
+   * Symbole schieben sich leicht auseinander.
+   */
+  private planIcons(world: World, alpha: number, visibleTo: (e: Entity) => boolean): Map<number, { show: boolean; x: number; y: number; count: number }> {
+    const R = 1.6;
+    type G = { owner: number; shape: string; x: number; y: number; n: number; count: number; ids: number[] };
+    const groups: G[] = [];
+    for (const e of world.entities) {
+      if (!e.alive || e.kind !== 'unit' || !visibleTo(e) || !UNIT_SPRITES[e.defId as UnitId]) continue;
+      const armor = UNITS[e.defId as UnitId]?.armor;
+      const shape = armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
+      const x = e.prev.x + (e.pos.x - e.prev.x) * alpha;
+      const y = e.prev.y + (e.pos.y - e.prev.y) * alpha;
+      const count = Math.max(1, Math.min(aliveModels(e), e.models));
+      const g = groups.find((q) => q.owner === e.owner && q.shape === shape && Math.hypot(q.x / q.n - x, q.y / q.n - y) < R);
+      if (g) { g.x += x; g.y += y; g.n++; g.count += count; g.ids.push(e.id); }
+      else groups.push({ owner: e.owner, shape, x, y, n: 1, count, ids: [e.id] });
+    }
+    const pts = groups.map((g) => ({ x: g.x / g.n, y: g.y / g.n }));
+    const MIN = 1.7;
+    for (let it = 0; it < 4; it++) {
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i]!, b = pts[j]!;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.hypot(dx, dy);
+          if (d >= MIN) continue;
+          const push = (MIN - d) * 0.5;
+          const nx = d > 1e-4 ? dx / d : (i < j ? 1 : -1), ny = d > 1e-4 ? dy / d : 0;
+          a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+        }
+      }
+    }
+    const out = new Map<number, { show: boolean; x: number; y: number; count: number }>();
+    groups.forEach((g, i) => {
+      g.ids.forEach((id, k) => out.set(id, { show: k === 0, x: pts[i]!.x, y: pts[i]!.y, count: g.count }));
+    });
+    return out;
+  }
+
   private iconTexture(shape: string, color: string, count: number): THREE.CanvasTexture {
     const key = `${shape}|${color}|${count}`;
     const hit = this.iconTex.get(key);
