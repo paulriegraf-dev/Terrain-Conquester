@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { FACTIONS } from '../../data/factions';
 import type { FactionId } from '../../data/factions';
 import { UNITS } from '../../data/units';
-import type { UnitId } from '../../data/units';
+import type { ProtocolId, UnitId } from '../../data/units';
 import type { Entity } from '../../sim/entity';
 import { aliveModels, fireGroupWeights } from '../../sim/systems/combat';
 import { apparentBuilding } from '../../sim/systems/visibility';
@@ -22,10 +22,12 @@ import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
+import { BADGE_PX, badgeCanvas } from './eliteBadge';
 import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
+import { PROTOCOL_COLOR } from '../palette';
 import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
 import { deathSound, hitSound, shotSound } from '../../ui/sfx';
@@ -78,12 +80,16 @@ interface Squad {
   dir: 1 | -1 | 0;
   back: number;
   backward: boolean;
+  /** Gleitender Mittelwert der Querbewegung (Blickrichtung auch bei langsamen Einheiten, z. B. Schwere im Matsch). */
+  accX: number;
   /** Übergang Knien ↔ Stehen (UnitSprite.rise): Startzeit in Ticks (−1 = keiner), Richtung, letzter Laufzustand. */
   riseStart: number;
   riseUp: boolean;
   wasMoving: boolean;
   tick: number;
   badgeKey: string;
+  /** Elite-Abzeichen je Figur (dominantes Protokoll, eliteBadge.ts). */
+  marks: THREE.Sprite[];
 }
 
 interface Shot {
@@ -1243,17 +1249,24 @@ export class Hd2dRenderer {
         sq.tick = world.tick;
         const enemyDir: 1 | -1 = this.startsRight(world, e.owner) ? -1 : 1;
         if (sq.dir === 0) sq.dir = enemyDir;
-        const still = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.002;
+        const still = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) <= 0.0005;
+        // Nutzer 16.11.: Gunner, Steinwächter, Frontbrecher, Hainhüter schauten beim Zurückgehen falsch – sie bewegen sich
+        // langsamer als die alte Schwelle je Tick. Jetzt zählt die Bewegung über die letzten ~10 Ticks.
+        sq.accX = still ? 0 : sq.accX * 0.9 + moveDx;
         const tgt = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
         // Ziel in Reichweite (Nutzer 15.11.: gegnerische Scharfschützen schauten weg): immer zum Ziel – auch wenn das
         // Gedränge den Verband leicht schiebt oder er nebenbei weitermarschiert.
         const tdx = tgt ? tgt.pos.x - e.pos.x : 0;
         const inRange = !!tgt && !!e.weapon && Math.hypot(tdx, tgt.pos.y - e.pos.y) <= e.weapon.def.range + (tgt.radius ?? 0) + 0.8;
-        if (inRange && Math.abs(tdx) > 0.05) {
+        // Deutliches Laufen (über ~10 Ticks, Gedränge-Schieben bleibt darunter) geht vor: wer abzieht, dreht sich um.
+        if (Math.abs(sq.accX) > 0.2) {
+          sq.dir = sq.accX > 0 ? 1 : -1;
+          sq.back = 0;
+        } else if (inRange && Math.abs(tdx) > 0.05) {
           sq.dir = tdx > 0 ? 1 : -1;
           sq.back = 0;
-        } else if (!still && Math.abs(moveDx) > 0.004) {
-          sq.dir = moveDx > 0 ? 1 : -1;
+        } else if (!still && Math.abs(sq.accX) > 0.012) {
+          sq.dir = sq.accX > 0 ? 1 : -1;
           sq.back = 0;
         } else if (still) {
           if (tgt && Math.abs(tgt.pos.x - e.pos.x) > 0.05) sq.dir = tgt.pos.x > e.pos.x ? 1 : -1;
@@ -1282,6 +1295,7 @@ export class Hd2dRenderer {
         void sideColor;
         s.visible = vis;
         sh.visible = vis;
+        if (sq.marks[i]) sq.marks[i]!.visible = false;
         if (!vis) continue;
         const o = OFFSETS[i]!;
         // Figuren stehen neben und hinter dem Verbandspunkt, nie davor (Richtung Gegner) – sonst wirkt die Reichweite kürzer.
@@ -1317,6 +1331,8 @@ export class Hd2dRenderer {
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
         }
         s.scale.set(size * dir * (spr.flip ? -1 : 1), size, 1);
+        const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
+        if (spr.badge && proto) this.placeBadge(sq, i, s, spr, proto, size, dir * (spr.flip ? -1 : 1));
       }
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
@@ -1394,7 +1410,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false, marks: [] };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();
@@ -1718,6 +1734,42 @@ export class Hd2dRenderer {
     for (const [id, el] of this.edgeMarks) if (!this.attacked.has(id)) { el.remove(); this.edgeMarks.delete(id); }
   }
 
+  private readonly badgeTex = new Map<string, THREE.Texture>();
+  private readonly camRight = new THREE.Vector3();
+  private readonly camUp = new THREE.Vector3();
+  private readonly camBack = new THREE.Vector3();
+
+  /** Elite-Abzeichen auf der Figur: Position in Bildebene (Kamera rechts/oben), leicht vor der Figur. */
+  private placeBadge(sq: Squad, i: number, s: THREE.Sprite, spr: UnitSprite, proto: ProtocolId, size: number, sgn: number): void {
+    let m = sq.marks[i];
+    if (!m) {
+      m = new THREE.Sprite(new THREE.SpriteMaterial({ alphaTest: 0.5 }));
+      this.scene.add(m);
+      sq.marks[i] = m;
+    }
+    let tex = this.badgeTex.get(proto);
+    if (!tex) {
+      tex = new THREE.CanvasTexture(badgeCanvas(proto, PROTOCOL_COLOR[proto]));
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.badgeTex.set(proto, tex);
+    }
+    const mat = m.material as THREE.SpriteMaterial;
+    if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+    this.camRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    this.camUp.set(0, 1, 0).applyQuaternion(this.camera.quaternion);
+    this.camBack.set(0, 0, 1).applyQuaternion(this.camera.quaternion);
+    const [bx, by] = spr.badge!;
+    m.position.copy(s.position)
+      .addScaledVector(this.camRight, (bx - 0.5) * size * sgn)
+      .addScaledVector(this.camUp, (by - 0.1) * size)
+      .addScaledVector(this.camBack, 0.06);
+    const k = (size * BADGE_PX) / spr.cell;
+    m.scale.set(k, k, 1);
+    m.visible = true;
+  }
+
   private ensureSprites(sq: Squad, n: number): void {
     while (sq.sprites.length < n) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ alphaTest: 0.5 }));
@@ -1732,7 +1784,7 @@ export class Hd2dRenderer {
   }
 
   private removeSquad(sq: Squad): void {
-    for (const o of [...sq.sprites, ...sq.shadows, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
+    for (const o of [...sq.sprites, ...sq.shadows, ...sq.marks, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
       this.scene.remove(o);
       ((o as THREE.Mesh).material as THREE.Material).dispose();
     }

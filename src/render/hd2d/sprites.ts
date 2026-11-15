@@ -26,6 +26,8 @@ export interface UnitSprite {
   flip?: boolean;
   /** Übergang Stehen ↔ Laufen (z. B. Terraformer: aus dem Knien aufstehen): Sheet-Zeile, Bilderzahl, Dauer in s. Vorwärts = aufstehen beim Loslaufen, rückwärts = hinknien beim Anhalten. */
   rise?: { row: number; frames: number; dur: number };
+  /** Elite-Abzeichen (Protokoll-Symbol): Mitte als Anteil der Zelle, x von links, y von unten (eliteBadge.ts). */
+  badge?: [number, number];
   /** Gewählte Varianten (Buchstaben wie in der Mock-up-Galerie). */
   chosen: { idle: string; walk: string; attack: string };
 }
@@ -164,14 +166,14 @@ else for (const sp of Object.values(UNIT_SPRITES)) if (sp) sp.scale *= FIGURE_GL
  * Warnkanten und Reaktor (massiv), Batterie weißblaue Spulen und rote Warnlichter (gefährlich), Hover goldener Schweif
  * (flink, edel), Heiler grüner Halo. Spielwerte, Mündungen und Geschosse wie die Grundfigur.
  */
-const ELITE_OVERRIDES: Partial<Record<UnitId, { sheet: string; frames?: UnitSprite['frames']; dur?: number; hits?: number[]; ret?: number; back?: number }>> = {
-  gunner: { sheet: 'units/elite_gunner.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.1, hits: [0.68] },
-  sniper: { sheet: 'units/elite_sniper.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
-  nanomedic: { sheet: 'units/elite_nanomedic.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
-  hoverscout: { sheet: 'units/elite_hoverscout.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 0.9, hits: [0.8], ret: 0.9989, back: 0.1122 },
-  colossus: { sheet: 'units/elite_colossus.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.17, 0.17, 0.75, 0.75] },
-  battery: { sheet: 'units/elite_battery.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.45, 0.5, 0.55, 0.6, 0.65, 0.7] },
-  plasma: { sheet: 'units/elite_plasma.png' },
+const ELITE_OVERRIDES: Partial<Record<UnitId, { sheet: string; frames?: UnitSprite['frames']; dur?: number; hits?: number[]; ret?: number; back?: number; badge?: [number, number] }>> = {
+  gunner: { badge: [0.36, 0.66], sheet: 'units/elite_gunner.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.1, hits: [0.68] },
+  sniper: { badge: [0.32, 0.68], sheet: 'units/elite_sniper.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  nanomedic: { badge: [0.4, 0.69], sheet: 'units/elite_nanomedic.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  hoverscout: { badge: [0.32, 0.64], sheet: 'units/elite_hoverscout.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 0.9, hits: [0.8], ret: 0.9989, back: 0.1122 },
+  colossus: { badge: [0.33, 0.67], sheet: 'units/elite_colossus.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.17, 0.17, 0.75, 0.75] },
+  battery: { badge: [0.33, 0.64], sheet: 'units/elite_battery.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.45, 0.5, 0.55, 0.6, 0.65, 0.7] },
+  plasma: { badge: [0.31, 0.67], sheet: 'units/elite_plasma.png' },
 };
 const ELITE_SPRITES: Partial<Record<UnitId, UnitSprite>> = {};
 if (!oldTechnoclan()) {
@@ -183,7 +185,7 @@ if (!oldTechnoclan()) {
     delete attack.back;
     if (o.ret !== undefined) Object.assign(attack, { ret: o.ret, back: o.back });
     if (!o.hits) Object.assign(attack, { ret: b.attack.ret, back: b.attack.back });
-    ELITE_SPRITES[id] = { ...b, sheet: o.sheet, frames: o.frames ?? b.frames, attack };
+    ELITE_SPRITES[id] = { ...b, sheet: o.sheet, frames: o.frames ?? b.frames, attack, badge: o.badge };
   }
 }
 /** Darstellung einer Einheit: Elite-Fassung, wenn die Einheit Elite ist und es eine gibt. */
