@@ -39,7 +39,11 @@ export type UnitId =
  * wenige große gegen Panzer.
  */
 export interface WeaponDef {
-  /** Schüsse pro Modell und Salve. */
+  /**
+   * Schüsse pro Modell und Salve (Bruchteile erlaubt). Takte (Nutzer 15.11.): schnell ~0,6–0,8 s, mittel ~1,2–1,8 s,
+   * langsam ~2,5–4 s, damit die Angriffsanimation in den Takt passt; beim Verlangsamen stiegen die Schüsse je Salve im
+   * gleichen Maß (Schüsse pro Sekunde und damit Schaden pro Sekunde unverändert, Schaden je Wunde unverändert).
+   */
   shots: number;
   /** Sekunden zwischen zwei Salven. */
   cooldown: number;
@@ -357,7 +361,7 @@ const RAW: Record<UnitId, UnitInput> = {
   plasma: {
     id: 'plasma', protocol: 'area', name: 'Plasmawerfer', armor: 'light', hp: 120, toughness: 5, save: 4,
     speed: 1.4, move: 'wheels', part: 'arms', radius: 0.4, vision: 6, spawnInterval: 16 / 3,
-    weapon: { shots: 8, cooldown: 1.0, range: 3.5, skill: 3, strength: 3, ap: 1, damage: 6.3, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
+    weapon: { shots: 6.4, cooldown: 0.8, range: 3.5, skill: 3, strength: 3, ap: 1, damage: 6.3, type: 'splinter', anti: { infantry: 4 }, splash: 1.4 },
     shape: 'triangle', letter: 'P', role: 'Flächenschaden, kontert Infanterie und Masse',
   },
   nanomedic: {
@@ -393,14 +397,14 @@ const RAW: Record<UnitId, UnitInput> = {
   colossus: {
     id: 'colossus', protocol: 'plating', name: 'Koloss', armor: 'heavy', hp: 400, toughness: 9, save: 3,
     speed: 1.15, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.48, vision: 6, spawnInterval: 10.2,
-    weapon: { shots: 3, cooldown: 2, range: 2.8, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
+    weapon: { shots: 3.75, cooldown: 2.5, range: 2.8, skill: 3, strength: 8, ap: 2, damage: 45, type: 'cannon', anti: { light: 3 } },
     shape: 'square', letter: 'K', role: 'Schwerer Kampfpanzer: stark gegen leichte Fahrzeuge und Gebäude',
   },
 
   commander: {
     id: 'commander', protocol: 'node', name: 'Commander', armor: 'heavy', hp: 450, toughness: 6, save: 2,
     speed: 1.1, move: 'foot', part: 'arms', binds: {}, supply: 0, radius: 0.45, vision: 8, spawnInterval: 0,
-    weapon: { shots: 3, cooldown: 1, range: 4, skill: 2, strength: 6, ap: 2, damage: 9, type: 'rifle' },
+    weapon: { shots: 4.2, cooldown: 1.4, range: 4, skill: 2, strength: 6, ap: 2, damage: 9, type: 'rifle' },
     command: { radius: 4.5, hitBonus: 1 },
     hero: true,
     shape: 'diamond', letter: 'C', role: 'Held: sammelt die Truppen seiner Route und schlägt mit ihnen gemeinsam los; Truppen in seiner Nähe treffen besser',
@@ -413,7 +417,7 @@ const RAW: Record<UnitId, UnitInput> = {
     id: 'drone', name: 'Myr-Drohnen', armor: 'infantry', hp: 72, models: 8, toughness: 3, save: 5,
     speed: 1.7, move: 'foot', part: 'arms', binds: { arms: 0.35 }, supply: 0.5, radius: 0.25, vision: 5, spawnInterval: 2.3,
     // Feuergruppen: Vorschlag war 2, bei 0,4 s Abklingzeit wären das 5 Geschosse/s (Ziel ≤ 2,5) – daher 1.
-    weapon: { shots: 1, cooldown: 0.4, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 1.55, type: 'rifle', fireGroups: 1 },
+    weapon: { shots: 1.5, cooldown: 0.6, range: 2.5, skill: 4, strength: 5, ap: 1, damage: 1.55, type: 'rifle', fireGroups: 1 },
     swarm: { perNeighbor: 0.06, max: 0.6, radius: 2.5 },
     corrode: { shotsPerLevel: 40, max: 2, seconds: 4 },
     // 25.10.: Speerspitze – Reichweite 2,5, schnell nahe der eigenen Basis, Ansturm ab 3 Verbänden. Nachmittags: 9 statt 8
@@ -447,7 +451,7 @@ const RAW: Record<UnitId, UnitInput> = {
     id: 'myrcannon', name: 'Myr-Kanone', armor: 'light', hp: 156, toughness: 5, save: 5,
     speed: 1.2, move: 'wheels', part: 'wheels', radius: 0.4, vision: 7, spawnInterval: 7,
     // Steine (wenn keine Drohne zum Werfen da ist): direkter Schaden mit etwas Fläche
-    weapon: { shots: 3, cooldown: 2.0, range: 7, skill: 4, strength: 6, ap: 1, damage: 12, type: 'siege', splash: 1.0, structureDamage: 1.5 },
+    weapon: { shots: 3.75, cooldown: 2.5, range: 7, skill: 4, strength: 6, ap: 1, damage: 12, type: 'siege', splash: 1.0, structureDamage: 1.5 },
     // 23.10.: wirft eigene Drohnen (3 Modelle) zu weichen Zielen hinter der Front
     launch: { unit: 'drone', models: 3, load: 3, max: 3, regen: 30, take: { radius: 3, models: 3 }, range: 7, flight: 1.5, cooldown: 4, soft: true, burrow: { seconds: 4.5, refreshes: 4, maxSeconds: 12, radius: 2.5 } },
     // 25.10.: ab 60 % Schwere rundum Steine statt Drohnen, doppelt so oft, mit Zersetzung (voll nur mit Geröll in der Nähe)
@@ -470,7 +474,7 @@ const RAW: Record<UnitId, UnitInput> = {
   sphere: {
     id: 'sphere', name: 'Myriaden-Battlesphäre', armor: 'heavy', hp: 384, toughness: 8, save: 3,
     speed: 0.9, move: 'tracks', part: 'plates', binds: { plates: 1, arms: 1 }, radius: 0.5, vision: 6, spawnInterval: 11,
-    weapon: { shots: 3, cooldown: 2, range: 3.8, skill: 3, strength: 9, ap: 2, damage: 42, type: 'cannon', anti: { light: 3 } },
+    weapon: { shots: 3.75, cooldown: 2.5, range: 3.8, skill: 3, strength: 9, ap: 2, damage: 42, type: 'cannon', anti: { light: 3 } },
     swarm: { perNeighbor: 0.03, max: 0.3, radius: 2.5 },
     deathSpawn: { unit: 'drone', count: 16 },
     shape: 'square', letter: 'O', role: 'Schwerer Körper aus vielen Myrs – zerfällt beim Tod in Drohnen',
@@ -478,7 +482,7 @@ const RAW: Record<UnitId, UnitInput> = {
   swarmmind: {
     id: 'swarmmind', name: 'Schwarmgeist', armor: 'heavy', hp: 520, toughness: 7, save: 3,
     speed: 1.2, move: 'foot', part: 'arms', binds: {}, supply: 0, radius: 0.45, vision: 8, spawnInterval: 0,
-    weapon: { shots: 3, cooldown: 1, range: 3, skill: 3, strength: 5, ap: 1, damage: 7, type: 'rifle' },
+    weapon: { shots: 4.2, cooldown: 1.4, range: 3, skill: 3, strength: 5, ap: 1, damage: 7, type: 'rifle' },
     recycle: { radius: 5, unit: 'drone' },
     hero: true,
     shape: 'diamond', letter: 'Ω', role: 'Held: Gegner, die in seiner Nähe fallen, werden zu Myr-Drohnen',
@@ -489,7 +493,7 @@ const RAW: Record<UnitId, UnitInput> = {
   taunter: {
     id: 'taunter', name: 'Myr-Verspotter', armor: 'heavy', hp: 130, toughness: 8, save: 4,
     speed: 0.8, move: 'foot', part: 'plates', radius: 0.5, vision: 5, spawnInterval: 0, supply: 0.5,
-    weapon: { shots: 1, cooldown: 2, range: 1.5, skill: 4, strength: 5, ap: 0, damage: 10, type: 'rifle' },
+    weapon: { shots: 1.25, cooldown: 2.5, range: 1.5, skill: 4, strength: 5, ap: 0, damage: 10, type: 'rifle' },
     taunt: { radius: 3 }, expires: 60,
     // 25.10.: Einschlag 25 Schaden (Katapult), danach ein Schadensfeld um ihn – das ihn selbst langsam aufzehrt
     field: { radius: 2, dps: 4, selfDps: 1 },
@@ -519,7 +523,7 @@ const RAW: Record<UnitId, UnitInput> = {
   wardMeadow: {
     id: 'wardMeadow', name: 'Halmläufer', armor: 'infantry', hp: 80, models: 4, toughness: 3, save: 5,
     speed: 1.5, move: 'foot', part: 'arms', radius: 0.3, vision: 6, spawnInterval: 5.5,
-    weapon: { shots: 2, cooldown: 1.0, range: 3.5, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle', fireGroups: 2 },
+    weapon: { shots: 2.4, cooldown: 1.2, range: 3.5, skill: 4, strength: 4, ap: 1, damage: 6, type: 'rifle', fireGroups: 2 },
     ground: 'meadow', groundBonus: { speed: 1.3 },
     shape: 'circle', letter: 'w', role: 'Leicht und flink, viel Schaden – für den schnellen Vorstoß; auf Wiese schneller',
   },
@@ -528,7 +532,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialMeadow: {
     id: 'specialMeadow', name: 'Steppenjäger', armor: 'light', hp: 145, toughness: 5, save: 4,
     speed: 2.0, move: 'hover', part: 'wheels', radius: 0.4, vision: 8, spawnInterval: 0, summoned: true,
-    weapon: { shots: 3, cooldown: 1.0, range: 4, skill: 3, strength: 6, ap: 2, damage: 14, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
+    weapon: { shots: 4.2, cooldown: 1.4, range: 4, skill: 3, strength: 6, ap: 2, damage: 14, type: 'cannon', anti: { light: 3 }, vs: { heavy: 0.7 } },
     ground: 'meadow', groundBonus: { speed: 1.3, range: 1 },
     shape: 'triangle', letter: 'J', role: 'Flinker Jäger: hohe Schadensrate und Beweglichkeit – auf Wiese Sprint und mehr Reichweite',
   },
@@ -563,7 +567,7 @@ const RAW: Record<UnitId, UnitInput> = {
   specialMud: {
     id: 'specialMud', name: 'Schlammschleuder', armor: 'light', hp: 200, toughness: 5, save: 5,
     speed: 0.8, move: 'tracks', part: 'plates', radius: 0.5, vision: 7, spawnInterval: 0, summoned: true,
-    weapon: { shots: 2, cooldown: 2.0, range: 5.5, skill: 4, strength: 5, ap: 1, damage: 14, type: 'splinter', splash: 1.6 },
+    weapon: { shots: 2.5, cooldown: 2.5, range: 5.5, skill: 4, strength: 5, ap: 1, damage: 14, type: 'splinter', splash: 1.6 },
     hitWeaken: { seconds: 3, speed: 0.6, damage: 0.75 },
     mudOnHit: { every: 5 },
     ground: 'mud', groundBonus: { range: 1 },
@@ -608,7 +612,7 @@ const RAW: Record<UnitId, UnitInput> = {
   landformer: {
     id: 'landformer', name: 'Landformer', armor: 'heavy', hp: 480, toughness: 7, save: 3,
     speed: 1.1, move: 'foot', part: 'arms', binds: {}, supply: 0, radius: 0.45, vision: 8, spawnInterval: 0,
-    weapon: { shots: 3, cooldown: 1, range: 4, skill: 3, strength: 5, ap: 1, damage: 9, type: 'rifle' },
+    weapon: { shots: 4.2, cooldown: 1.4, range: 4, skill: 3, strength: 5, ap: 1, damage: 9, type: 'rifle' },
     landformer: { every: 40, many: 12, mergeRadius: 5, mergeSeconds: 20, copyRadius: 6 },
     hero: true,
     shape: 'diamond', letter: 'Λ', role: 'Held: viele eigene Verbände → verschmilzt Gelände (jeder Boden zählt als eigener), wenige → kopiert eine gerufene Einheit',
@@ -616,7 +620,7 @@ const RAW: Record<UnitId, UnitInput> = {
     // 24.10. abends (Wunsch des Nutzers): 60 statt 30 Leben, Ausweichen nach Abstand, stürmen auf Nah- und Mitteldistanz-Schützen los.
     id: 'mudling', name: 'Schlammmonster', armor: 'infantry', hp: 60, models: 3, toughness: 3, save: 6,
     speed: 1.4, move: 'foot', part: 'arms', radius: 0.25, vision: 5, spawnInterval: 0, summoned: true, supply: 0,
-    weapon: { shots: 1, cooldown: 1.0, range: 1.5, skill: 4, strength: 3, ap: 0, damage: 4, type: 'rifle' },
+    weapon: { shots: 1.2, cooldown: 1.2, range: 1.5, skill: 4, strength: 3, ap: 0, damage: 4, type: 'rifle' },
     ground: 'mud', leash: { radius: 4 },
     dodge: { start: 1.5, per: 1, max: 4 },
     charge: { maxRange: 5, seconds: 8, reach: 8 },

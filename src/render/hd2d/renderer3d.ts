@@ -22,7 +22,7 @@ import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
-import { MIRROR_COLORS, attackTime, facing, projectileShown } from './anim';
+import { MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal } from './sprites';
 import type { UnitSprite } from './sprites';
@@ -1265,8 +1265,9 @@ export class Hd2dRenderer {
     const since = now - last < 1e8 ? (now - last) / tps : null;
     const h = spr.attack.hits.length;
     const next = (sq.shots[i] ?? 0) % h;
-    const t = attackTime(spr.attack, interval, myTurn || q === 0 ? untilNext : untilNext, since, next);
-    return t === null ? { attacking: false, t: 0 } : { attacking: true, t };
+    const tl = returnTimeline(spr.attack);
+    const t = attackTime(tl.anim, interval, myTurn || q === 0 ? untilNext : untilNext, since, next);
+    return t === null ? { attacking: false, t: 0 } : { attacking: true, t: tl.toFrame(t) };
   }
 
   private makeSquad(): Squad {

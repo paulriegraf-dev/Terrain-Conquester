@@ -10,6 +10,10 @@ export interface AttackAnim {
   dur: number;
   /** Schuss-Zeitpunkte als Anteil der Dauer, aufsteigend (mehrere = Feuerstoß/Doppelsalve in einem Durchlauf). */
   hits: number[];
+  /** Rücklauf ab diesem Anteil der Dauer (siehe returnTimeline). */
+  ret?: number;
+  /** Rücklauf endet bei diesem Anteil der Dauer (Bild, das dem Stand gleicht). */
+  back?: number;
 }
 
 /**
@@ -21,14 +25,24 @@ export interface AttackAnim {
  * - `sinceLast`: Sekunden seit seinem letzten Schuss (null = noch keiner).
  * - `next`: Index des nächsten Schuss-Frames im Durchlauf (0 … hits.length−1).
  *
- * Passt die Animation nicht in den Abstand der Schüsse, läuft sie schneller (`speed` ≥ 1): Ein Durchlauf mit h Schüssen
- * muss in h Abstände passen. Rückgabe: Zeit in der Animation (Sekunden) oder null = keine Angriffspose (Stehen/Laufen).
+ * Takt (Nutzer 15.11.): Die Animation richtet sich nach dem Schussabstand. Der Schuss selbst bleibt knackig:
+ * - Ausklang (Rückstoß bis Ende) nimmt höchstens 45 % des Abstands ein, sonst läuft nur er schneller.
+ * - Ausholen bekommt den Rest: zu wenig Zeit → schneller (gekürzt), viel Zeit → bis 1,3-fach gedehnt (ruhiges Zielen,
+ *   keine Zeitlupe); was dann noch übrig ist, steht die Figur.
+ * Rückgabe: Zeit in der Animation (Sekunden) oder null = keine Angriffspose (Stehen/Laufen).
  */
+const MAX_STRETCH = 1.3;
+const FOLLOW_SHARE = 0.45;
 export function attackTime(a: AttackAnim, interval: number, untilNext: number | null, sinceLast: number | null, next: number): number | null {
   const h = a.hits.length;
   if (h === 0 || a.dur <= 0) return null;
-  const speed = Math.max(1, a.dur / (h * Math.max(1e-3, interval)));
+  const gap = Math.max(1e-3, interval);
   const hit = (j: number): number => a.hits[Math.max(0, Math.min(h - 1, j))]! * a.dur;
+  const wind = hit(0);
+  const follow = a.dur - hit(h - 1);
+  const followSpeed = Math.max(1, follow / (gap * FOLLOW_SHARE));
+  const windAvail = Math.max(1e-3, gap - follow / followSpeed);
+  const windSpeed = Math.max(1 / MAX_STRETCH, wind / windAvail);
   // Mitten im Durchlauf: zwischen zwei Schuss-Frames gleichmäßig weiter, damit der nächste genau trifft.
   if (next > 0 && sinceLast !== null && untilNext !== null) {
     const k = sinceLast / Math.max(1e-3, sinceLast + untilNext);
@@ -36,16 +50,29 @@ export function attackTime(a: AttackAnim, interval: number, untilNext: number | 
   }
   // Ausholen auf den ersten Schuss des Durchlaufs.
   if (next === 0 && untilNext !== null) {
-    const t = hit(0) - untilNext * speed;
+    const t = wind - untilNext * windSpeed;
     if (t >= 0) return t;
   }
   // Ausklang nach dem letzten Schuss (Rückstoß, Nachladen), bis die Animation zu Ende ist.
   if (sinceLast !== null) {
     const last = next === 0 ? h - 1 : next - 1;
-    const t = hit(last) + sinceLast * speed;
+    const t = hit(last) + sinceLast * followSpeed;
     if (t < a.dur) return t;
   }
   return null;
+}
+
+/**
+ * Ende im Stand (Nutzer 15.11.): Endet das letzte Angriffsbild nicht in der Stand-Pose, läuft die Animation nach dem
+ * Rückstoß (Anteil `ret` der Dauer) rückwärts bis zu einem Bild, das dem Stand gleicht (Anteil `back`, Standard 0).
+ * Liefert die Zeitachse, mit der attackTime rechnet, und die Umrechnung auf die echte Bildzeit.
+ */
+export function returnTimeline(a: AttackAnim): { anim: AttackAnim; toFrame: (t: number) => number } {
+  if (!a.ret || a.ret >= 1) return { anim: a, toFrame: (t) => t };
+  const r = a.ret * a.dur;
+  const b = Math.min(r, (a.back ?? 0) * a.dur);
+  const dur = r + (r - b);
+  return { anim: { dur, hits: a.hits.map((x) => (x * a.dur) / dur) }, toFrame: (t) => (t <= r ? t : Math.max(b, r - (t - r))) };
 }
 
 /** Bildindex (0-basiert) einer Animation mit `frames` Bildern zur Zeit `t` von `dur` Sekunden. */

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { UNIT_IDS, UNITS } from '../src/data/units';
-import { attackTime, facing, frameAt, projectileShown } from '../src/render/hd2d/anim';
+import { attackTime, facing, frameAt, projectileShown, returnTimeline } from '../src/render/hd2d/anim';
 import { PROJECTILES, UNIT_SPRITES } from '../src/render/hd2d/sprites';
 
 /** HD-2D-Vorbereitung (05.11.): Daten vollständig, Regeln der Darstellung wie mit dem Nutzer festgelegt. */
@@ -29,14 +29,25 @@ describe('HD-2D: Ausholbewegung nach Ladezustand', () => {
   const anim = { dur: 2, hits: [0.5] };
   it('startet so früh, dass der Schuss-Frame auf den Schuss fällt', () => {
     assert.equal(attackTime(anim, 4, 2, null, 0), null, 'noch zu früh → keine Angriffspose');
-    assert.equal(attackTime(anim, 4, 0.5, null, 0), 0.5, 'Ausholen läuft');
+    // Viel Zeit (4 s Abstand): Ausholen bis 1,3-fach gedehnt – 0,5 s vor dem Schuss steht es bei 1 − 0,5/1,3.
+    assert.ok(Math.abs(attackTime(anim, 4, 0.5, null, 0)! - (1 - 0.5 / 1.3)) < 1e-9, 'Ausholen läuft (gedehnt)');
     assert.equal(attackTime(anim, 4, 0, null, 0), 1, 'genau beim Schuss: Schuss-Frame');
     assert.equal(attackTime(anim, 4, 3.5, 0.5, 0), 1.5, 'Ausklang nach dem Schuss');
     assert.equal(attackTime(anim, 4, 2.5, 1.5, 0), null, 'Animation zu Ende');
   });
-  it('schneller, wenn die Animation länger ist als der Schussabstand', () => {
-    // 2 s Animation, Schuss jede Sekunde → doppelt so schnell: Ausholen 0,5 s vor dem Schuss beginnt bei 0.
-    assert.equal(attackTime(anim, 1, 0.5, null, 0), 0);
+  it('Takt: kurzer Schussabstand kürzt Ausholen und Ausklang, der Schuss-Frame bleibt auf dem Schuss', () => {
+    // 2 s Animation, Schuss jede Sekunde: Ausklang auf 0,45 s gestaucht, Ausholen bekommt 0,55 s.
+    assert.ok(Math.abs(attackTime(anim, 1, 0.55, null, 0)! - 0) < 1e-9, 'Ausholen beginnt 0,55 s vor dem Schuss');
+    assert.equal(attackTime(anim, 1, 0, null, 0), 1, 'Schuss-Frame');
+    assert.ok(Math.abs(attackTime(anim, 1, 0.6, 0.45 - 1e-9, 0)! - 2) < 1e-6, 'Ausklang endet nach 0,45 s');
+  });
+  it('Rücklauf: nach dem Rückstoß zurück bis zum ersten Bild', () => {
+    const { anim: a, toFrame } = returnTimeline({ dur: 2, hits: [0.5], ret: 0.75 });
+    assert.equal(a.dur, 3);
+    assert.ok(Math.abs(a.hits[0]! - 1 / 3) < 1e-9);
+    assert.equal(toFrame(1.5), 1.5);
+    assert.equal(toFrame(2.5), 0.5);
+    assert.equal(toFrame(3), 0);
   });
   it('Feuerstoß: zwischen zwei Schuss-Frames gleichmäßig weiter', () => {
     const burst = { dur: 3, hits: [0.2, 0.5, 0.8] };
