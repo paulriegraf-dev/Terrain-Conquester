@@ -1626,8 +1626,9 @@ export class Hd2dRenderer {
     const faction = world.players[ev.owner].faction.id;
     const right = this.startsRight(world, ev.owner);
     const mirror = world.players[0].faction.id === world.players[1].faction.id;
-    const color = mirror && right ? MIRROR_COLORS[faction] : FACTION_COLOR[faction];
     const look = PROJECTILES[spr?.attack.projectile ?? ''] ?? { texture: 'tracer' };
+    // Akzentfarbe der Einheit (Nutzer 15.11.); im Spiegel-Duell behält die rechte Seite ihre eigene Farbe.
+    const color = mirror && right ? MIRROR_COLORS[faction] : look.tint ?? FACTION_COLOR[faction];
     // Mündung: am Modell, das jetzt dran ist (reihum in der Feuergruppe)
     const sq = shooter ? this.squads.get(shooter.id) : undefined;
     let from = new THREE.Vector3(ev.from.x, 0.5, ev.from.y);
@@ -1643,7 +1644,8 @@ export class Hd2dRenderer {
       sq.lastShot[idx] = now;
       sq.shots[idx] = (sq.shots[idx] ?? 0) + 1;
       if (model) {
-        const dir = Math.sign(model.scale.x) || 1;
+        // Blickrichtung des Modells (gespiegelte Sheets zählen umgekehrt)
+        const dir = (Math.sign(model.scale.x) || 1) * (spr.flip ? -1 : 1);
         const hi = ((sq.shots[idx] ?? 1) - 1) % Math.max(1, spr.attack.muzzles.length);
         const m = spr.attack.muzzles[hi] ?? [0.5, 0.5];
         from = model.position.clone().add(new THREE.Vector3(m[0] * dir * spr.scale, m[1] * spr.scale, 0));
@@ -1653,13 +1655,17 @@ export class Hd2dRenderer {
     const off = ev.target !== undefined ? this.sepOff.get(ev.target) : undefined;
     const tx = ev.to.x + (off?.x ?? 0);
     const ty = ev.to.y + (off?.y ?? 0);
-    const to = new THREE.Vector3(tx, this.heightAt(world, tx, ty) + 0.45, ty);
+    // Treffer auf Körpermitte der gezeichneten Zielfigur (Nutzer: Einschläge klein auf dem gezeichneten Ziel).
+    const tgt = ev.target !== undefined ? world.get(ev.target) : undefined;
+    const tspr = tgt && tgt.kind === 'unit' ? UNIT_SPRITES[tgt.defId as UnitId] : undefined;
+    const bodyH = tspr ? (tspr.cell / 32) * tspr.scale * FIGURE_SCALE * 0.4 + tspr.fly : 0.45;
+    const to = new THREE.Vector3(tx, this.heightAt(world, tx, ty) + bodyH, ty);
     const spawn = ev.spawn ?? ev.tick;
     const fxDef = SHOT_PFX[spr?.attack.projectile ?? ''];
     const flip = to.x < from.x;
     const impact: PfxUse | null = fxDef ? fxDef.impact ?? null : { name: FACTION_SPARK[faction], lift: 20 };
     // Bodennahe Einschläge (Explosion, Erde) am Boden unter dem Ziel, Funken auf Trefferhöhe.
-    if (impact && impact.lift === 0) to.y -= 0.45;
+    if (impact && impact.lift === 0) to.y -= bodyH;
     const land = Math.max(spawn + 1, ev.land!);
     let obj: THREE.Object3D;
     if (look.beam) {
@@ -1672,7 +1678,7 @@ export class Hd2dRenderer {
       const tex = projectileTexture(look.texture ?? 'tracer', color);
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: look.additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
       const img = tex.image as HTMLCanvasElement;
-      const px = look.px ?? 22;
+      const px = look.px ?? (look.fit && spr ? 32 / (spr.scale * FIGURE_SCALE) : 22);
       s.scale.set(img.width / px, img.height / px, 1);
       if (to.x < from.x) s.material.rotation = Math.PI;
       obj = s;
