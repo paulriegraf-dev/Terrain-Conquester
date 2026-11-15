@@ -26,8 +26,6 @@ export interface UnitSprite {
   flip?: boolean;
   /** Übergang Stehen ↔ Laufen (z. B. Terraformer: aus dem Knien aufstehen): Sheet-Zeile, Bilderzahl, Dauer in s. Vorwärts = aufstehen beim Loslaufen, rückwärts = hinknien beim Anhalten. */
   rise?: { row: number; frames: number; dur: number };
-  /** Elite-Abzeichen (Protokoll-Symbol): Mitte als Anteil der Zelle, x von links, y von unten (eliteBadge.ts). */
-  badge?: [number, number];
   /** Gewählte Varianten (Buchstaben wie in der Mock-up-Galerie). */
   chosen: { idle: string; walk: string; attack: string };
 }
@@ -63,14 +61,14 @@ export const UNIT_SPRITES: Partial<Record<UnitId, UnitSprite>> = {
   // 15.11.: Laufen nur aus den sechs aufrechten Schrittbildern (vor und zurück) – vorher ging er mitten im Laufen in die Hocke.
   // 15.11.: Angriff neu (PixelLab v3 aus dem Standbild, endet im Stand)
   wardForest: { faction: 'terraformer', sheet: 'units/wardForest.webp', cell: 80, frames: { idle: 9, walk: 10, attack: 8 }, scale: 1, fly: 0, attack: { dur: 1.1, hits: [0.44], muzzles: [[0.69, 0.5], [0.69, 0.5]], projectile: 'tf_shot' }, chosen: { idle: 'A', walk: 'B', attack: 'B' } },
-  specialForest: { faction: 'terraformer', sheet: 'units/specialForest.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.62], muzzles: [[0.7, 1]], projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
+  specialForest: { faction: 'terraformer', flip: true, sheet: 'units/specialForest.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.62], muzzles: [[0.7, 1]], projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   wardMud: { faction: 'terraformer', flip: true, sheet: 'units/wardMud.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.82], muzzles: [[0.5, 0.75]], ret: 0.9406, back: 0.6476, projectile: 'tf_mud' }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
   specialMud: { faction: 'terraformer', sheet: 'units/specialMud.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.75], muzzles: [[0.5, 1]], ret: 0.8818, back: 0.5888, projectile: 'tf_mud' }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
   wardSnow: { faction: 'terraformer', sheet: 'units/wardSnow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.84], muzzles: [[0.6, 0.6]], projectile: 'tf_ice' }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
   // 15.11.: Angriff neu (PixelLab v3 aus dem Standbild, endet im Stand)
   specialSnow: { faction: 'terraformer', sheet: 'units/specialSnow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 9 }, scale: 1, fly: 0, attack: { dur: 1.6, hits: [0.61], muzzles: [[0.6, 1.3]], projectile: 'tf_snow' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
-  wardRubble: { faction: 'terraformer', sheet: 'units/wardRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.7], muzzles: [[0.7, 0.7]], ret: 0.8229, back: 0.2359, projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
-  specialRubble: { faction: 'terraformer', flip: true, sheet: 'units/specialRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.66], muzzles: [[0.62, 1.8]], projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
+  wardRubble: { faction: 'terraformer', flip: true, sheet: 'units/wardRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.4, hits: [0.7], muzzles: [[0.7, 0.7]], ret: 0.8229, back: 0.2359, projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
+  specialRubble: { faction: 'terraformer', sheet: 'units/specialRubble.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.8, hits: [0.66], muzzles: [[0.62, 1.8]], projectile: 'tf_stone' }, chosen: { idle: 'A', walk: 'A', attack: 'B' } },
   landformer: { faction: 'terraformer', sheet: 'units/landformer.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.6, hits: [0.344, 0.781, 0.969], muzzles: [[0.6, 1.1], [0.6, 1.1], [0.6, 1.1]], ret: 0.9994, back: 0.7653, projectile: 'tf_orb' }, chosen: { idle: 'A', walk: 'A', attack: 'Feuerstoß A' } },
   // 15.11.: Angriff neu (PixelLab v3 aus dem Standbild, endet im Stand)
   mudling: { faction: 'terraformer', sheet: 'units/mudling.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 9 }, scale: 1, fly: 0, attack: { dur: 0.9, hits: [0.5], muzzles: [[0.5, 0.4]], projectile: "melee" }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
@@ -166,14 +164,14 @@ else for (const sp of Object.values(UNIT_SPRITES)) if (sp) sp.scale *= FIGURE_GL
  * Warnkanten und Reaktor (massiv), Batterie weißblaue Spulen und rote Warnlichter (gefährlich), Hover goldener Schweif
  * (flink, edel), Heiler grüner Halo. Spielwerte, Mündungen und Geschosse wie die Grundfigur.
  */
-const ELITE_OVERRIDES: Partial<Record<UnitId, { sheet: string; frames?: UnitSprite['frames']; dur?: number; hits?: number[]; ret?: number; back?: number; badge?: [number, number] }>> = {
-  gunner: { badge: [0.36, 0.66], sheet: 'units/elite_gunner.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.1, hits: [0.68] },
-  sniper: { badge: [0.32, 0.68], sheet: 'units/elite_sniper.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
-  nanomedic: { badge: [0.4, 0.69], sheet: 'units/elite_nanomedic.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
-  hoverscout: { badge: [0.32, 0.64], sheet: 'units/elite_hoverscout.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 0.9, hits: [0.8], ret: 0.9989, back: 0.1122 },
-  colossus: { badge: [0.33, 0.67], sheet: 'units/elite_colossus.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.17, 0.17, 0.75, 0.75] },
-  battery: { badge: [0.33, 0.64], sheet: 'units/elite_battery.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.45, 0.5, 0.55, 0.6, 0.65, 0.7] },
-  plasma: { badge: [0.31, 0.67], sheet: 'units/elite_plasma.png' },
+const ELITE_OVERRIDES: Partial<Record<UnitId, { sheet: string; frames?: UnitSprite['frames']; dur?: number; hits?: number[]; ret?: number; back?: number }>> = {
+  gunner: { sheet: 'units/elite_gunner.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.1, hits: [0.68] },
+  sniper: { sheet: 'units/elite_sniper.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  nanomedic: { sheet: 'units/elite_nanomedic.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  hoverscout: { sheet: 'units/elite_hoverscout.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 0.9, hits: [0.8], ret: 0.9989, back: 0.1122 },
+  colossus: { sheet: 'units/elite_colossus.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.17, 0.17, 0.75, 0.75] },
+  battery: { sheet: 'units/elite_battery.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.45, 0.5, 0.55, 0.6, 0.65, 0.7] },
+  plasma: { sheet: 'units/elite_plasma.png' },
 };
 const ELITE_SPRITES: Partial<Record<UnitId, UnitSprite>> = {};
 if (!oldTechnoclan()) {
@@ -185,7 +183,7 @@ if (!oldTechnoclan()) {
     delete attack.back;
     if (o.ret !== undefined) Object.assign(attack, { ret: o.ret, back: o.back });
     if (!o.hits) Object.assign(attack, { ret: b.attack.ret, back: b.attack.back });
-    ELITE_SPRITES[id] = { ...b, sheet: o.sheet, frames: o.frames ?? b.frames, attack, badge: o.badge };
+    ELITE_SPRITES[id] = { ...b, sheet: o.sheet, frames: o.frames ?? b.frames, attack };
   }
 }
 /** Darstellung einer Einheit: Elite-Fassung, wenn die Einheit Elite ist und es eine gibt. */

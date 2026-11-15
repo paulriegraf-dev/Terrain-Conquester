@@ -22,7 +22,7 @@ import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
-import { BADGE_PX, badgeCanvas } from './eliteBadge';
+import { badgeCanvas } from './eliteBadge';
 import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
@@ -88,8 +88,6 @@ interface Squad {
   wasMoving: boolean;
   tick: number;
   badgeKey: string;
-  /** Elite-Abzeichen je Figur (dominantes Protokoll, eliteBadge.ts). */
-  marks: THREE.Sprite[];
 }
 
 interface Shot {
@@ -1295,7 +1293,6 @@ export class Hd2dRenderer {
         void sideColor;
         s.visible = vis;
         sh.visible = vis;
-        if (sq.marks[i]) sq.marks[i]!.visible = false;
         if (!vis) continue;
         const o = OFFSETS[i]!;
         // Figuren stehen neben und hinter dem Verbandspunkt, nie davor (Richtung Gegner) – sonst wirkt die Reichweite kürzer.
@@ -1331,8 +1328,6 @@ export class Hd2dRenderer {
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
         }
         s.scale.set(size * dir * (spr.flip ? -1 : 1), size, 1);
-        const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
-        if (spr.badge && proto) this.placeBadge(sq, i, s, spr, proto, size, dir * (spr.flip ? -1 : 1));
       }
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
@@ -1341,15 +1336,17 @@ export class Hd2dRenderer {
         const armor = UNITS[e.defId as UnitId]?.armor;
         const shape = armor === 'heavy' ? 'square' : armor === 'light' ? 'diamond' : 'circle';
         const wt = e.weapon?.def.type ?? 'none';
-        const bk = `${shape}|${wt}|${sideColor}`;
+        // Elite (Nutzer 16.11.): Symbol des dominanten Protokolls rechts im Schild.
+        const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
+        const bk = `${shape}|${wt}|${sideColor}|${proto ?? ''}`;
         if (bk !== sq.badgeKey) {
-          (sq.badge.material as THREE.SpriteMaterial).map = this.chipTexture(shape, wt, sideColor);
+          (sq.badge.material as THREE.SpriteMaterial).map = this.chipTexture(shape, wt, sideColor, proto);
           (sq.badge.material as THREE.SpriteMaterial).needsUpdate = true;
           sq.badgeKey = bk;
         }
         const k = asIcons ? (level === 'map' ? 1.5 : 1.15) : 0.8;
         sq.badge.position.set(x, top + 0.2 * k + 0.08, y);
-        sq.badge.scale.set(k, k / 2, 1);
+        sq.badge.scale.set(proto ? k * 1.5 : k, k / 2, 1);
       }
       sq.hpBack.position.set(x, top, y);
       sq.hp.position.set(x - (1 - share) * 0.35, top, y + 0.001);
@@ -1410,7 +1407,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false, marks: [] };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();
@@ -1504,18 +1501,25 @@ export class Hd2dRenderer {
    * (● Infanterie, ◆ leicht, ■ schwer, ▲ Flieger), rechts im orangen Fadenkreuz, wogegen die Waffe stark ist
    * (Splitter → ●, Kanone → ◆, Durchschlag → ■, Belagerung → Gebäude, Gewehr → ✱ Allrounder).
    */
-  private chipTexture(shape: string, weapon: string, color: string): THREE.CanvasTexture {
-    const key = `chip|${shape}|${weapon}|${color}`;
+  private chipTexture(shape: string, weapon: string, color: string, proto?: ProtocolId): THREE.CanvasTexture {
+    const key = `chip|${shape}|${weapon}|${color}|${proto ?? ''}`;
     const hit = this.iconTex.get(key);
     if (hit) return hit;
     const c = document.createElement('canvas');
-    c.width = 48;
+    c.width = proto ? 72 : 48;
     c.height = 24;
     const g = c.getContext('2d')!;
     g.fillStyle = 'rgba(8,12,20,.82)';
     g.beginPath();
-    g.roundRect(0.5, 0.5, 47, 23, 5);
+    g.roundRect(0.5, 0.5, c.width - 1, 23, 5);
     g.fill();
+    if (proto) {
+      // Trennstrich, dann das Elite-Abzeichen (9 px, doppelt groß)
+      g.fillStyle = 'rgba(255,255,255,.25)';
+      g.fillRect(49, 5, 1, 14);
+      g.imageSmoothingEnabled = false;
+      g.drawImage(badgeCanvas(proto, PROTOCOL_COLOR[proto]), 52, 3, 18, 18);
+    }
     const draw = (sh: string, cx: number, cy: number, r: number): void => {
       g.beginPath();
       if (sh === 'circle') g.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
@@ -1734,42 +1738,6 @@ export class Hd2dRenderer {
     for (const [id, el] of this.edgeMarks) if (!this.attacked.has(id)) { el.remove(); this.edgeMarks.delete(id); }
   }
 
-  private readonly badgeTex = new Map<string, THREE.Texture>();
-  private readonly camRight = new THREE.Vector3();
-  private readonly camUp = new THREE.Vector3();
-  private readonly camBack = new THREE.Vector3();
-
-  /** Elite-Abzeichen auf der Figur: Position in Bildebene (Kamera rechts/oben), leicht vor der Figur. */
-  private placeBadge(sq: Squad, i: number, s: THREE.Sprite, spr: UnitSprite, proto: ProtocolId, size: number, sgn: number): void {
-    let m = sq.marks[i];
-    if (!m) {
-      m = new THREE.Sprite(new THREE.SpriteMaterial({ alphaTest: 0.5 }));
-      this.scene.add(m);
-      sq.marks[i] = m;
-    }
-    let tex = this.badgeTex.get(proto);
-    if (!tex) {
-      tex = new THREE.CanvasTexture(badgeCanvas(proto, PROTOCOL_COLOR[proto]));
-      tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestFilter;
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this.badgeTex.set(proto, tex);
-    }
-    const mat = m.material as THREE.SpriteMaterial;
-    if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
-    this.camRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
-    this.camUp.set(0, 1, 0).applyQuaternion(this.camera.quaternion);
-    this.camBack.set(0, 0, 1).applyQuaternion(this.camera.quaternion);
-    const [bx, by] = spr.badge!;
-    m.position.copy(s.position)
-      .addScaledVector(this.camRight, (bx - 0.5) * size * sgn)
-      .addScaledVector(this.camUp, (by - 0.1) * size)
-      .addScaledVector(this.camBack, 0.06);
-    const k = (size * BADGE_PX) / spr.cell;
-    m.scale.set(k, k, 1);
-    m.visible = true;
-  }
-
   private ensureSprites(sq: Squad, n: number): void {
     while (sq.sprites.length < n) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ alphaTest: 0.5 }));
@@ -1784,7 +1752,7 @@ export class Hd2dRenderer {
   }
 
   private removeSquad(sq: Squad): void {
-    for (const o of [...sq.sprites, ...sq.shadows, ...sq.marks, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
+    for (const o of [...sq.sprites, ...sq.shadows, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
       this.scene.remove(o);
       ((o as THREE.Mesh).material as THREE.Material).dispose();
     }

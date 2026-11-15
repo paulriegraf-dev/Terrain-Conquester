@@ -2,7 +2,7 @@ import type { ProtocolId } from '../../data/units';
 
 /**
  * Elite-Abzeichen (Nutzer 16.11.: „je nachdem welcher Baustein am dominantesten war, ein kleines Symbol auf die
- * Eliteunit“). 7×7 Pixel in Protokollfarbe mit 1 px dunklem Umriss (9×9), im Figurenmaßstab auf der Schulter.
+ * Eliteunit“). 7×7 Pixel in Protokollfarbe mit 1 px dunklem Umriss (9×9); steht im Info-Schild über dem Verband (Rüstung › Waffe | Protokoll).
  * Kein Kreuz für Selbstreparatur (Rotkreuz-Schutz) – dafür ein Schraubenschlüssel.
  */
 const BITMAPS: Record<ProtocolId, string[]> = {
@@ -16,12 +16,10 @@ const BITMAPS: Record<ProtocolId, string[]> = {
   node: ['...#...', '..#.#..', '.#.#.#.', '#.###.#', '.#.#.#.', '..#.#..', '...#...'], // Knoten
 };
 
-export const BADGE_PX = 9;
-
 /** Abzeichen als Canvas (9×9): Füllung `color`, Umriss dunkel, oberste Füllzeile etwas heller (Glanz). */
 export function badgeCanvas(p: ProtocolId, color: string): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = c.height = BADGE_PX;
+  c.width = c.height = 9;
   const g = c.getContext('2d')!;
   const rows = BITMAPS[p];
   const on = (x: number, y: number): boolean => rows[y]?.[x] === '#';
