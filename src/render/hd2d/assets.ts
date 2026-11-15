@@ -1,6 +1,13 @@
 /** HD-2D-Bilder (05.11.): werden beim Bauen als Data-URL eingebettet (esbuild-Loader für .png/.webp; Sheets verlustfrei als WebP). */
 import u_battery from '../../../assets/sprites/units/battery.webp';
 import o_battery from '../../../assets/sprites/units/old_battery.png';
+import e_gunner from '../../../assets/sprites/units/elite_gunner.png';
+import e_sniper from '../../../assets/sprites/units/elite_sniper.png';
+import e_nanomedic from '../../../assets/sprites/units/elite_nanomedic.png';
+import e_hoverscout from '../../../assets/sprites/units/elite_hoverscout.png';
+import e_colossus from '../../../assets/sprites/units/elite_colossus.png';
+import e_battery from '../../../assets/sprites/units/elite_battery.png';
+import e_plasma from '../../../assets/sprites/units/elite_plasma.png';
 import o_colossus from '../../../assets/sprites/units/old_colossus.png';
 import o_commander from '../../../assets/sprites/units/old_commander.png';
 import o_gunner from '../../../assets/sprites/units/old_gunner.png';
@@ -43,6 +50,14 @@ import tiles3 from '../../../assets/hd2d/tiles3.webp';
 import buildings from '../../../assets/hd2d/buildings.webp';
 
 export const UNIT_SHEETS: Readonly<Record<string, string>> = {
+  // Technoclan-Eliten (15.11.): Elite-Form mit eingebrannten Details (Halo, Schweif, Warnlichter, Kanten, Leuchtfarbe)
+  'units/elite_gunner.png': e_gunner,
+  'units/elite_sniper.png': e_sniper,
+  'units/elite_nanomedic.png': e_nanomedic,
+  'units/elite_hoverscout.png': e_hoverscout,
+  'units/elite_colossus.png': e_colossus,
+  'units/elite_battery.png': e_battery,
+  'units/elite_plasma.png': e_plasma,
   // Mock-up 2 (06.11.): alte, schlichte Technoclan-Figuren (32 px) mit einfacher Pixel-Animation
   'units/old_battery.png': o_battery,
   'units/old_colossus.png': o_colossus,

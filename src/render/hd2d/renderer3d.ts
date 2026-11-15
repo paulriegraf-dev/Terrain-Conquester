@@ -24,7 +24,7 @@ import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
 import { MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
-import { PROJECTILES, UNIT_SPRITES, figureGlobal } from './sprites';
+import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
 import { FACTION_SPARK, PFX, SHOT_PFX, type PfxName, type PfxUse } from './pfx';
 import { projectileTexture } from './textures';
@@ -1103,7 +1103,7 @@ export class Hd2dRenderer {
     const fade: THREE.Vector2[] = [];
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
-      const spr = UNIT_SPRITES[e.defId as UnitId];
+      const spr = spriteFor(e.defId, !!e.elite);
       if (!spr) continue;
       let sq = this.squads.get(e.id);
       if (!sq) {
@@ -1417,7 +1417,7 @@ export class Hd2dRenderer {
     const us: { e: Entity; x: number; y: number; r: number; tx: number; ty: number }[] = [];
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || !visibleTo(e)) continue;
-      const spr = UNIT_SPRITES[e.defId as UnitId];
+      const spr = spriteFor(e.defId, !!e.elite);
       if (!spr) continue;
       const size = (spr.cell / 32) * spr.scale * FIGURE_SCALE;
       const spread = e.models > 1 ? Math.max(0.45, e.radius * 1.6) * figureGlobal() : 0;
@@ -1637,7 +1637,7 @@ export class Hd2dRenderer {
   private spawnShot(world: World, ev: Extract<World['events'][number], { type: 'shot' }>, now: number): void {
     const shooter = world.get(ev.shooter!);
     const unit = (ev.unit ?? shooter?.defId) as UnitId | undefined;
-    const spr = unit ? UNIT_SPRITES[unit] : undefined;
+    const spr = unit ? spriteFor(unit, !!shooter?.elite && shooter.defId === unit) : undefined;
     const faction = world.players[ev.owner].faction.id;
     const right = this.startsRight(world, ev.owner);
     const mirror = world.players[0].faction.id === world.players[1].faction.id;
@@ -1672,7 +1672,7 @@ export class Hd2dRenderer {
     const ty = ev.to.y + (off?.y ?? 0);
     // Treffer auf Körpermitte der gezeichneten Zielfigur (Nutzer: Einschläge klein auf dem gezeichneten Ziel).
     const tgt = ev.target !== undefined ? world.get(ev.target) : undefined;
-    const tspr = tgt && tgt.kind === 'unit' ? UNIT_SPRITES[tgt.defId as UnitId] : undefined;
+    const tspr = tgt && tgt.kind === 'unit' ? spriteFor(tgt.defId, !!tgt.elite) : undefined;
     const bodyH = tspr ? (tspr.cell / 32) * tspr.scale * FIGURE_SCALE * 0.4 + tspr.fly : 0.45;
     const to = new THREE.Vector3(tx, this.heightAt(world, tx, ty) + bodyH, ty);
     const spawn = ev.spawn ?? ev.tick;

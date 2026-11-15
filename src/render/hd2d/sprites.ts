@@ -156,3 +156,37 @@ export function figureGlobal(): number {
 }
 if (oldTechnoclan()) Object.assign(UNIT_SPRITES, OLD_TC);
 else for (const sp of Object.values(UNIT_SPRITES)) if (sp) sp.scale *= FIGURE_GLOBAL;
+
+/**
+ * Technoclan-Eliten (Nutzer 15.11.): je Einheit eine Elite-Form (PixelLab-Zustand der Grundfigur, animiert) mit einem
+ * sichtbaren Detail je Ausdruck – Gunner rot glühender Kern und Warnlichter (schwer, gefährlich), Scharfschütze Halo und
+ * Silberkanten (edel, sci-fi), Plasmawerfer Glanz und Magenta (glänzend, böse; ohne eigene Form), Koloss gelbe
+ * Warnkanten und Reaktor (massiv), Batterie weißblaue Spulen und rote Warnlichter (gefährlich), Hover goldener Schweif
+ * (flink, edel), Heiler grüner Halo. Spielwerte, Mündungen und Geschosse wie die Grundfigur.
+ */
+const ELITE_OVERRIDES: Partial<Record<UnitId, { sheet: string; frames?: UnitSprite['frames']; dur?: number; hits?: number[]; ret?: number; back?: number }>> = {
+  gunner: { sheet: 'units/elite_gunner.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.1, hits: [0.68] },
+  sniper: { sheet: 'units/elite_sniper.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  nanomedic: { sheet: 'units/elite_nanomedic.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.4, hits: [0.5] },
+  hoverscout: { sheet: 'units/elite_hoverscout.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 0.9, hits: [0.8], ret: 0.9989, back: 0.1122 },
+  colossus: { sheet: 'units/elite_colossus.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.17, 0.17, 0.75, 0.75] },
+  battery: { sheet: 'units/elite_battery.png', frames: { idle: 5, walk: 8, attack: 9 }, dur: 1.8, hits: [0.45, 0.5, 0.55, 0.6, 0.65, 0.7] },
+  plasma: { sheet: 'units/elite_plasma.png' },
+};
+const ELITE_SPRITES: Partial<Record<UnitId, UnitSprite>> = {};
+if (!oldTechnoclan()) {
+  for (const [id, o] of Object.entries(ELITE_OVERRIDES) as [UnitId, NonNullable<(typeof ELITE_OVERRIDES)[UnitId]>][]) {
+    const b = UNIT_SPRITES[id];
+    if (!b) continue;
+    const attack = { ...b.attack, dur: o.dur ?? b.attack.dur, hits: o.hits ?? b.attack.hits };
+    delete attack.ret;
+    delete attack.back;
+    if (o.ret !== undefined) Object.assign(attack, { ret: o.ret, back: o.back });
+    if (!o.hits) Object.assign(attack, { ret: b.attack.ret, back: b.attack.back });
+    ELITE_SPRITES[id] = { ...b, sheet: o.sheet, frames: o.frames ?? b.frames, attack };
+  }
+}
+/** Darstellung einer Einheit: Elite-Fassung, wenn die Einheit Elite ist und es eine gibt. */
+export function spriteFor(defId: string, elite: boolean): UnitSprite | undefined {
+  return (elite ? ELITE_SPRITES[defId as UnitId] : undefined) ?? UNIT_SPRITES[defId as UnitId];
+}
