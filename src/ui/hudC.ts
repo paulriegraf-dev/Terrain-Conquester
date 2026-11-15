@@ -42,12 +42,15 @@ const STANCE_GLYPH: Record<Stance, string> = { defend: '⌂', hold: '▮', secur
 const STANCE_ICON: Record<Stance, IconName> = { defend: 'defend', hold: 'hold', secure: 'shield', push: 'push' };
 const LANE_NAME: Record<Route, string> = { top: 'Oben', mid: 'Mitte', bottom: 'Unten' };
 export type Pop = 'market' | 'scout' | 'keystones' | 'log' | 'front';
-const POPS: readonly { id: Pop; name: string }[] = [
-  { id: 'market', name: 'Markt' },
-  { id: 'scout', name: 'Späher' },
-  { id: 'keystones', name: 'Schlusssteine' },
-  { id: 'log', name: 'Lage' },
+const POPS: readonly { id: Pop; name: string; icon: IconName }[] = [
+  { id: 'market', name: 'Markt', icon: 'coin' },
+  { id: 'scout', name: 'Späher', icon: 'eye' },
+  { id: 'keystones', name: 'Schlusssteine', icon: 'star' },
+  { id: 'log', name: 'Lage', icon: 'list' },
 ];
+/** Ansichtsleiste als Pixel-Icons (15.11.: weniger Text); Name steht im Tooltip. */
+const LEVEL_ICON: Record<ZoomLevel, IconName> = { map: 'map', lanes: 'lanes', mid: 'zoom', near: 'zoomin' };
+const LANE_ICON: Record<Route, IconName> = { top: 'up', mid: 'right', bottom: 'down' };
 
 export interface HudCDeps {
   doc: Document;
@@ -114,13 +117,13 @@ export class HudC {
     feed.dataset.action = 'c-pop';
     feed.dataset.pop = 'log';
     // Fenster-Knöpfe (rechts an der Befehlsleiste)
-    const pops = mk('div', 'c-pops', POPS.map((p) => `<button type="button" class="c-pop-btn" data-action="c-pop" data-pop="${p.id}" aria-pressed="false">${p.name}</button>`).join(''));
+    const pops = mk('div', 'c-pops', POPS.map((p) => `<button type="button" class="c-pop-btn" data-action="c-pop" data-pop="${p.id}" aria-pressed="false" title="${p.name}" aria-label="${p.name}">${ICONS[p.icon]}</button>`).join(''));
     // Ansichtsleiste + Minimap
     const view = mk('div', 'c-view', `
       <div class="c-viewbar" data-k="viewbar">
-        ${LEVELS.map((l) => `<button type="button" data-action="c-level" data-level="${l.id}">${l.name}<small>${l.key}</small></button>`).join('')}
-        ${ROUTES.map((r) => `<button type="button" data-action="c-lane" data-route="${r}">${ROUTE_NAMES[r][0]!.toUpperCase()}${ROUTE_NAMES[r].slice(1)}<small>&nbsp;</small></button>`).join('')}
-        <button type="button" data-action="c-next">nächste<small>Tab</small></button>
+        ${LEVELS.map((l) => `<button type="button" data-action="c-level" data-level="${l.id}" title="${l.name} (Taste ${l.key})" aria-label="${l.name}">${ICONS[LEVEL_ICON[l.id]]}<small>${l.key}</small></button>`).join('')}
+        ${ROUTES.map((r) => `<button type="button" data-action="c-lane" data-route="${r}" title="Lane ${ROUTE_NAMES[r]}" aria-label="Lane ${ROUTE_NAMES[r]}">${ICONS[LANE_ICON[r]]}<small>${LANE_SHORT[r]}</small></button>`).join('')}
+        <button type="button" data-action="c-next" title="nächste Lane (Tab)" aria-label="nächste Lane">${ICONS.cycle}<small>Tab</small></button>
       </div>
       <canvas class="c-mini" width="240" height="160" title="Minimap – Klick springt dorthin"></canvas>
       <span class="c-mini-cap"></span>`);

@@ -1429,6 +1429,12 @@ body.ui-c {
 }
 .ic { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: square; stroke-linejoin: miter; vertical-align: -0.14em; }
 .ic-fill { fill: currentColor; stroke: none; }
+/* Pixel-Icons (15.11.): scharfe Pixel, dunkler Umriss, Füllung in Textfarbe */
+.ic-px { stroke: none; fill: none; shape-rendering: crispEdges; width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+.ic-px .o { fill: #0b0f16; }
+.ic-px .f { fill: currentColor; }
+.c-viewbar .ic-px { width: 20px; height: 20px; vertical-align: middle; display: block; margin: 0 auto 1px; }
+.c-pop-btn .ic-px { width: 20px; height: 20px; vertical-align: middle; }
 /* Rahmen: dunkel – hell – dunkel, dazu harter Schatten */
 body.ui-c .c-hud, body.ui-c .hq-bars, body.ui-c .brand .menu-btn, body.ui-c .view-panel, body.ui-c .console-grid-wrap,
 body.ui-c .c-dock .console-info, body.ui-c .c-view, body.ui-c .rs-row, body.ui-c .side > .panel, body.ui-c[data-pop="front"] .c-front {

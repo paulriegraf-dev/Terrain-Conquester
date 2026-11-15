@@ -2,10 +2,12 @@
  * UI-Look C (Nutzer 06.11.: „ästhetischer und weniger nur Text“): kleine Linien-Zeichen für Befehle und Anzeigen der
  * 2,5D-Oberfläche. Platzhalter im einheitlichen Strich – später durch Pixel-Icons ersetzbar (gleiche Schlüssel).
  */
+import { PIXEL_ICONS } from './pixelIcons';
+
 const P = (d: string, extra = ''): string =>
   `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"${extra}><path d="${d}"/></svg>`;
 
-export const ICONS = {
+const LINE_ICONS = {
   bolt: '<svg class="ic ic-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   clock: P('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2'),
   shield: P('M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6z'),
@@ -40,9 +42,19 @@ export const ICONS = {
   snow: P('M12 2v20M3 7l18 10M3 17 21 7M9 4l3 2 3-2M9 20l3-2 3 2'),
   pick: P('M3 8c5-5 13-5 18 0M12 5v16'),
   hq: P('M4 20V10l8-6 8 6v10zM10 20v-5h4v5'),
+  coin: P('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9 9h5a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h5M12 6v2M12 16v2'),
+  list: P('M8 6h12M8 12h12M8 18h12M4 6h1M4 12h1M4 18h1'),
+  map: P('M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14'),
+  lanes: P('M3 6h18M3 12h18M3 18h18'),
+  zoom: P('M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14M15 15l6 6'),
+  zoomin: P('M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14M15 15l6 6M7 10h6M10 7v6'),
+  cycle: P('M4 12a8 8 0 0 1 14-5l2 2M20 4v5h-5M20 12a8 8 0 0 1-14 5l-2-2M4 20v-5h5'),
 } as const;
 
-export type IconName = keyof typeof ICONS;
+export type IconName = keyof typeof LINE_ICONS;
+
+/** Seit 15.11. Pixel-Icons (pixelIcons.ts); die Linien-Zeichen oben sind die Vorlage und werden daraus gerastert. */
+export const ICONS = Object.fromEntries((Object.keys(LINE_ICONS) as IconName[]).map((k) => [k, PIXEL_ICONS[k] ?? LINE_ICONS[k]])) as Record<IconName, string>;
 
 const BUILD_ICON: Record<string, IconName> = {
   barracks: 'sword', workshop: 'wing', foundry: 'gear',
