@@ -24,6 +24,8 @@ export interface UnitSprite {
   attack: { dur: number; hits: number[]; muzzles: [number, number][]; projectile: string | null; ret?: number; back?: number };
   /** Sheet blickt nach links (Nutzer 15.11.: Blickrichtung angleichen) – wird beim Zeichnen gespiegelt. */
   flip?: boolean;
+  /** Übergang Stehen ↔ Laufen (z. B. Terraformer: aus dem Knien aufstehen): Sheet-Zeile, Bilderzahl, Dauer in s. Vorwärts = aufstehen beim Loslaufen, rückwärts = hinknien beim Anhalten. */
+  rise?: { row: number; frames: number; dur: number };
   /** Gewählte Varianten (Buchstaben wie in der Mock-up-Galerie). */
   chosen: { idle: string; walk: string; attack: string };
 }
@@ -52,7 +54,7 @@ export const UNIT_SPRITES: Partial<Record<UnitId, UnitSprite>> = {
   breaker: { faction: 'myriaden', sheet: 'units/breaker.webp', cell: 64, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1.45, fly: 0, attack: { dur: 2.6, hits: [0.4], muzzles: [[0, 1]], projectile: "leap" }, chosen: { idle: 'A', walk: 'A', attack: 'C' } },
   // Laufen 15.11. neu (PixelLab v3, Objekt 409dc458): aufrecht gehen statt kniend über den Boden rutschen.
   // 15.11.: Angriff neu (PixelLab v3 aus dem Standbild, endet im Stand)
-  terraformer: { faction: 'terraformer', sheet: 'units/terraformer.webp', cell: 80, frames: { idle: 9, walk: 8, attack: 9 }, scale: 1, fly: 0, attack: { dur: 1.2, hits: [0.72], muzzles: [[0.5, 0.6]], projectile: 'tf_orb' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
+  terraformer: { faction: 'terraformer', sheet: 'units/terraformer.webp', cell: 80, rise: { row: 3, frames: 7, dur: 0.45 }, frames: { idle: 9, walk: 8, attack: 9 }, scale: 1, fly: 0, attack: { dur: 1.2, hits: [0.72], muzzles: [[0.5, 0.6]], projectile: 'tf_orb' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   // 15.11.: Angriff neu (PixelLab v3 aus dem Standbild, endet im Stand)
   wardMeadow: { faction: 'terraformer', sheet: 'units/wardMeadow.webp', cell: 80, frames: { idle: 9, walk: 9, attack: 9 }, scale: 1, fly: 0, attack: { dur: 1.0, hits: [0.28], muzzles: [[0.7, 0.62]], projectile: 'tf_blade' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },
   specialMeadow: { faction: 'terraformer', sheet: 'units/specialMeadow.webp', cell: 80, frames: { idle: 9, walk: 13, attack: 17 }, scale: 1, fly: 0, attack: { dur: 2.2, hits: [0.31, 0.44, 0.62], muzzles: [[0.3, 0.95], [0.3, 0.95], [0.3, 0.95]], ret: 0.7641, back: 0.0594, projectile: 'tf_shell' }, chosen: { idle: 'A', walk: 'A', attack: 'A' } },

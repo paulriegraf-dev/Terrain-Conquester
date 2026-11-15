@@ -68,6 +68,10 @@ interface Squad {
   dir: 1 | -1 | 0;
   back: number;
   backward: boolean;
+  /** Übergang Knien ↔ Stehen (UnitSprite.rise): Startzeit in Ticks (−1 = keiner), Richtung, letzter Laufzustand. */
+  riseStart: number;
+  riseUp: boolean;
+  wasMoving: boolean;
   tick: number;
   badgeKey: string;
 }
@@ -1168,6 +1172,13 @@ export class Hd2dRenderer {
         sq.backward = false;
       }
       const moving = Math.hypot(e.pos.x - e.prev.x, e.pos.y - e.prev.y) > 0.002;
+      // Knien ↔ Stehen (Nutzer 15.11., Terraformer): beim Loslaufen aufstehen, beim Anhalten hinknien.
+      if (spr.rise && moving !== sq.wasMoving) {
+        sq.riseStart = sq.tick < 0 ? -1 : now;
+        sq.riseUp = moving;
+        sq.wasMoving = moving;
+      }
+      const riseT = spr.rise && sq.riseStart >= 0 ? (now - sq.riseStart) / world.tps / spr.rise.dur : 1;
       const right = this.startsRight(world, e.owner);
       const team = mirror && right ? MIRROR_COLORS[world.players[e.owner].faction.id] : null;
       // Figuren etwas kleiner (Nutzer 06.11., Nah-Gefecht): weniger Überdeckung im Gedränge.
@@ -1195,7 +1206,11 @@ export class Hd2dRenderer {
         const dir = sq.dir !== 0 ? sq.dir : facing(right, { moveDx: moving ? moveDx : 0 });
         let row = 0;
         let frame = 0;
-        if (pose.attacking) {
+        if (spr.rise && riseT < 1 && !pose.attacking) {
+          row = spr.rise.row;
+          const k = Math.min(spr.rise.frames - 1, Math.floor(riseT * spr.rise.frames));
+          frame = sq.riseUp ? k : spr.rise.frames - 1 - k;
+        } else if (pose.attacking) {
           row = 2;
           frame = Math.max(0, Math.min(spr.frames.attack - 1, Math.floor((pose.t / spr.attack.dur) * spr.frames.attack)));
         } else if (moving) {
@@ -1289,7 +1304,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, backward: false, tick: -1 };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();
