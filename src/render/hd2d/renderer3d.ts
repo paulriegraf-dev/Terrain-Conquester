@@ -40,6 +40,14 @@ const zoomToCam = (zoom: number): number => Math.max(0, Math.min(1, 0.42 + Math.
 /** Darstellungsgröße der Figuren (06.11.: 0,88 statt 1 gegen Pixelbrei im Nah-Gefecht). */
 const FIGURE_SCALE = 0.88;
 const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
+/**
+ * Erdwall-Optik (15.11.): eigene Wandkörper je Wall-Kachel statt hochgezogenem, verzerrtem Boden. Seiten nur dort
+ * abgeschrägt, wo kein Nachbar-Wall liegt – zusammenhängende Wälle bilden eine durchgehende Linie.
+ * Streifen walls.webp (je 32 px): Lehm 0/1/8/9, Sandsäcke 2/3/10/11, Palisade 4/5/12/13, Feldstein 6/7/14/15.
+ */
+const WALL_TEX = [2, 3, 10, 11] as const; // Nutzer 15.11.: Variante B, Sandsäcke (Seite 1/2, Deckel 1/2)
+const WALL_H = 0.62;
+HEIGHT[7] = 0; // Boden unter dem Wall bleibt flach, die Höhe kommt vom Wandkörper
 export const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
 /** Gebäude-Streifen: Index je Gebäudeart. */
 export const BUILDING_INDEX: Record<string, number> = {
@@ -136,6 +144,8 @@ export class Hd2dRenderer {
   private readonly groundComposite = document.createElement('canvas');
   private footKey = '';
   private bbMesh: THREE.Mesh | null = null;
+  private wallGroup: THREE.Group | null = null;
+  private readonly wallMats = new Map<string, THREE.MeshLambertMaterial>();
   private bbMat: THREE.ShaderMaterial | null = null;
   private readonly fogCanvas = document.createElement('canvas');
   private fogTex: THREE.CanvasTexture | null = null;
@@ -660,6 +670,7 @@ export class Hd2dRenderer {
           overlayFade(this.ground.geometry, cols * 4 + 1, rows * 4 + 1);
         }
         this.buildTrees(world, at);
+        this.buildWalls(at);
         return;
       }
     }
@@ -702,7 +713,73 @@ export class Hd2dRenderer {
     this.overlayMesh.renderOrder = 1;
     this.scene.add(this.overlayMesh);
     this.buildTrees(world, at);
+    this.buildWalls(at);
     this.buildRim(x0, cols, rows);
+  }
+
+  private wallMat(img: HTMLImageElement, i: number): THREE.MeshLambertMaterial {
+    const key = String(i);
+    let m = this.wallMats.get(key);
+    if (!m) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 32;
+      const g = c.getContext('2d')!;
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, i * 32, 0, 32, 32, 0, 0, 32, 32);
+      const t = new THREE.CanvasTexture(c);
+      t.magFilter = THREE.NearestFilter;
+      t.minFilter = THREE.NearestFilter;
+      t.colorSpace = THREE.SRGBColorSpace;
+      m = new THREE.MeshLambertMaterial({ map: t });
+      this.wallMats.set(key, m);
+    }
+    return m;
+  }
+
+  /** Wandkörper auf allen Erdwall-Kacheln im Ausschnitt (siehe WALL_TEX). */
+  private buildWalls(at: (x: number, y: number) => number): void {
+    if (this.wallGroup) {
+      this.scene.remove(this.wallGroup);
+      this.wallGroup.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+      this.wallGroup = null;
+    }
+    const img = this.image(TILESETS.walls);
+    if (!this.ready(img)) return;
+    const [s1, s2, t1, t2] = WALL_TEX;
+    const group = new THREE.Group();
+    const IN = 0.2; // Schräge oben an offenen Seiten
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = this.viewX0; x < this.viewX0 + this.viewCols; x++) {
+        if (at(x, y) !== 7) continue;
+        const wall = (dx: number, dy: number): boolean => y + dy >= 0 && y + dy < this.rows && at(x + dx, y + dy) === 7;
+        const e = wall(1, 0), w = wall(-1, 0), n = wall(0, -1), so = wall(0, 1);
+        const geo = new THREE.BoxGeometry(1, WALL_H, 1);
+        const pa = geo.attributes.position!;
+        for (let i = 0; i < pa.count; i++) {
+          if (pa.getY(i) <= 0) continue;
+          const px = pa.getX(i), pz = pa.getZ(i);
+          if (px > 0 && !e) pa.setX(i, px - IN);
+          if (px < 0 && !w) pa.setX(i, px + IN);
+          if (pz > 0 && !so) pa.setZ(i, pz - IN);
+          if (pz < 0 && !n) pa.setZ(i, pz + IN);
+        }
+        geo.computeVertexNormals();
+        const hv = hash(x * 5 + 1, y * 3 + 2);
+        const side = this.wallMat(img, hv < 0.5 ? s1 : s2);
+        const top = this.wallMat(img, hash(x + 9, y + 4) < 0.5 ? t1 : t2);
+        // Flächen: +x, −x, +y (Deckel), −y, +z (Front zur Kamera), −z
+        const m = new THREE.Mesh(geo, [side, side, top, side, side, side]);
+        // Längs ausgerichtete Wälle (Nord-Süd): Deckel um 90° drehen, damit Sandsack-/Balkenreihen der Wall-Linie folgen.
+        if ((n || so) && !(e || w)) {
+          const uv = geo.attributes.uv!;
+          for (let i = 8; i < 12; i++) uv.setXY(i, uv.getY(i), 1 - uv.getX(i));
+        }
+        m.position.set(x + 0.5, WALL_H / 2, y + 0.5);
+        group.add(m);
+      }
+    }
+    this.wallGroup = group;
+    this.scene.add(group);
   }
 
   private rim: THREE.Mesh | null = null;
@@ -907,6 +984,7 @@ export class Hd2dRenderer {
         let k = 0;
         const R = (): number => hash(x * 13 + k++, y * 7 + st);
         const pk = (a: number[]): number => a[Math.floor(R() * a.length) % a.length]!;
+        if (st === 7) continue; // auf Wandkörpern keine Deko
         const h = st === 4 ? 0.25 : (HEIGHT[st] ?? 0);
         if (t === 1) {
           if (R() < 0.7) tree(pk(FOREST), x + 0.3 + R() * 0.4, h, y + 0.3 + R() * 0.4, 0.85 + R() * 0.3);
@@ -1046,9 +1124,8 @@ export class Hd2dRenderer {
     const cx = r.x + r.w / 2;
     const cy = r.y + r.h / 2;
     if (e.kind === 'wall') {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.6, r.h), new THREE.MeshLambertMaterial({ color: '#9c7a4a' }));
-      box.position.set(cx, 0.3, cy);
-      return box;
+      // Wandkörper kommen aus buildWalls (Gelände); hier nur ein leerer Platzhalter, damit der Eintrag bestehen bleibt.
+      return new THREE.Group();
     }
     const faction = world.players[e.owner].faction.id;
     let key = `hq:${faction}`;

@@ -45,6 +45,7 @@ import u_wardMud from '../../../assets/sprites/units/wardMud.webp';
 import u_wardRubble from '../../../assets/sprites/units/wardRubble.webp';
 import u_wardSnow from '../../../assets/sprites/units/wardSnow.webp';
 import tiles1 from '../../../assets/hd2d/tiles1.webp';
+import walls from '../../../assets/hd2d/walls.webp';
 import tiles2_atlas from '../../../assets/hd2d/tiles2_atlas.webp';
 import tiles3 from '../../../assets/hd2d/tiles3.webp';
 import buildings from '../../../assets/hd2d/buildings.webp';
@@ -98,6 +99,6 @@ export const UNIT_SHEETS: Readonly<Record<string, string>> = {
   'units/wardRubble.webp': u_wardRubble,
   'units/wardSnow.webp': u_wardSnow,
 };
-export const TILESETS = { tiles1, tiles2: tiles2_atlas, tiles3 } as const;
+export const TILESETS = { tiles1, tiles2: tiles2_atlas, tiles3, walls } as const;
 /** Gebäude-Streifen (je 80 px): tcHQ, myrHQ, tfHQ, Kaserne, Hangar, Schwerwerk, Brut, Werkstatt, Schmelze, Wiesenhof, Hain, Schlammgrube, Frosthalle, Steinbruch. */
 export const BUILDINGS_SHEET = buildings;
