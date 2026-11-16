@@ -23,6 +23,7 @@ import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
 import { badgeCanvas } from './eliteBadge';
+import { ELITE_FX, eliteFxCanvas } from './eliteFx';
 import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
@@ -47,7 +48,10 @@ const HEIGHT = [0, 0, -0.05, 0.02, 1.1, -0.75, 0.04, 0.65, 0];
  * abgeschrägt, wo kein Nachbar-Wall liegt – zusammenhängende Wälle bilden eine durchgehende Linie.
  * Streifen walls.webp (je 32 px): Lehm 0/1/8/9, Sandsäcke 2/3/10/11, Palisade 4/5/12/13, Feldstein 6/7/14/15.
  */
-const WALL_TEX = [2, 3, 10, 11] as const; // Nutzer 15.11.: Variante B, Sandsäcke (Seite 1/2, Deckel 1/2)
+/** Nutzer 15.11.: Sandsäcke als Grundform; 16.11.: je Fraktion eigene Optik (Seite 1/2, Deckel 1/2). Kartenwälle ohne Besitzer: Sandsäcke. */
+const WALL_TEX: Record<FactionId | 'none', readonly [number, number, number, number]> = {
+  none: [2, 3, 10, 11], technoclan: [2, 3, 10, 11], myriaden: [0, 1, 8, 9], terraformer: [4, 5, 12, 13],
+};
 const WALL_H = 0.62;
 HEIGHT[7] = 0; // Boden unter dem Wall bleibt flach, die Höhe kommt vom Wandkörper
 export const FACTION_COLOR: Record<FactionId, string> = { technoclan: '#7fe0ff', myriaden: '#ff6ad5', terraformer: '#9be37b' };
@@ -88,6 +92,8 @@ interface Squad {
   wasMoving: boolean;
   tick: number;
   badgeKey: string;
+  /** Elite-Effekt je Figur (dominantes Protokoll, eliteFx.ts). */
+  fx: THREE.Sprite[];
 }
 
 interface Shot {
@@ -676,7 +682,7 @@ export class Hd2dRenderer {
           overlayFade(this.ground.geometry, cols * 4 + 1, rows * 4 + 1);
         }
         this.buildTrees(world, at);
-        this.buildWalls(at);
+        this.buildWalls(world, at);
         return;
       }
     }
@@ -719,7 +725,7 @@ export class Hd2dRenderer {
     this.overlayMesh.renderOrder = 1;
     this.scene.add(this.overlayMesh);
     this.buildTrees(world, at);
-    this.buildWalls(at);
+    this.buildWalls(world, at);
     this.buildRim(x0, cols, rows);
   }
 
@@ -743,7 +749,7 @@ export class Hd2dRenderer {
   }
 
   /** Wandkörper auf allen Erdwall-Kacheln im Ausschnitt (siehe WALL_TEX). */
-  private buildWalls(at: (x: number, y: number) => number): void {
+  private buildWalls(world: World, at: (x: number, y: number) => number): void {
     if (this.wallGroup) {
       this.scene.remove(this.wallGroup);
       this.wallGroup.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
@@ -751,7 +757,13 @@ export class Hd2dRenderer {
     }
     const img = this.image(TILESETS.walls);
     if (!this.ready(img)) return;
-    const [s1, s2, t1, t2] = WALL_TEX;
+    const owner = new Map<number, FactionId>();
+    for (const e of world.entities) {
+      if (e.kind !== 'wall' || !e.alive || !e.rect) continue;
+      const f = world.players[e.owner]?.faction.id;
+      if (!f) continue;
+      for (let y = e.rect.y; y < e.rect.y + e.rect.h; y++) for (let x = e.rect.x; x < e.rect.x + e.rect.w; x++) owner.set(y * 100000 + x, f);
+    }
     const group = new THREE.Group();
     const IN = 0.2; // Schräge oben an offenen Seiten
     for (let y = 0; y < this.rows; y++) {
@@ -770,6 +782,7 @@ export class Hd2dRenderer {
           if (pz < 0 && !n) pa.setZ(i, pz + IN);
         }
         geo.computeVertexNormals();
+        const [s1, s2, t1, t2] = WALL_TEX[owner.get(y * 100000 + x) ?? 'none'];
         const hv = hash(x * 5 + 1, y * 3 + 2);
         const side = this.wallMat(img, hv < 0.5 ? s1 : s2);
         const top = this.wallMat(img, hash(x + 9, y + 4) < 0.5 ? t1 : t2);
@@ -1152,7 +1165,68 @@ export class Hd2dRenderer {
     s.scale.set(e.owner === 1 ? -size : size, size, 1);
     s.center.set(0.5, 0.12);
     s.position.set(cx, 0.02, cy + r.h * 0.25);
-    return s;
+    // Ins Gelände einarbeiten (Nutzer 16.11.): weicher Kontaktschatten und ein Saum aus Kleinkram am Fuß, der die
+    // gerade Unterkante des Bilds verdeckt – je Fraktion eigene Teile.
+    const group = new THREE.Group();
+    group.add(this.contactShadow(cx + r.w * 0.08, cy + r.h * 0.12, r.w * 1.25, r.h * 0.95));
+    group.add(s);
+    for (const d of this.buildingSkirt(e, faction)) group.add(d);
+    return group;
+  }
+
+  private shadowTex: THREE.Texture | null = null;
+
+  /** Weicher, elliptischer Schatten flach auf dem Boden (Licht von oben links). */
+  private contactShadow(x: number, y: number, w: number, h: number): THREE.Mesh {
+    if (!this.shadowTex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d')!;
+      const grd = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+      grd.addColorStop(0, 'rgba(10,8,14,0.55)');
+      grd.addColorStop(0.6, 'rgba(10,8,14,0.35)');
+      grd.addColorStop(1, 'rgba(10,8,14,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, 64, 64);
+      this.shadowTex = new THREE.CanvasTexture(c);
+    }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.shadowTex, transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, 0.03, y);
+    m.renderOrder = 1;
+    return m;
+  }
+
+  /** Saum am Gebäudefuß: Deko-Teile aus dem Atlas (tiles2, Zeile ab 96), vorn dichter, seitlich lockerer. */
+  private buildingSkirt(e: Entity, faction: FactionId): THREE.Sprite[] {
+    const SKIRT: Record<FactionId, number[]> = {
+      technoclan: [21, 22, 25, 39, 20, 63, 62, 22],
+      myriaden: [19, 29, 50, 21, 49, 20, 52, 19],
+      terraformer: [1, 0, 8, 6, 31, 23, 15, 9, 1],
+    };
+    const r = e.rect!;
+    const list = SKIRT[faction];
+    const out: THREE.Sprite[] = [];
+    const n = Math.round(r.w * 3.5);
+    for (let k = 0; k < n; k++) {
+      const h1 = hash(e.id * 7 + k, 31);
+      const h2 = hash(e.id * 3 + k, 57);
+      const h3 = hash(e.id + k * 11, 91);
+      const i = list[Math.floor(h1 * list.length)]!;
+      const tex = this.frame(TILESETS.tiles2, (i % 32) * 32, 96 + Math.floor(i / 32) * 32, 32);
+      if (!tex) continue;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
+      // Vorderkante (Unterkante des Bilds) und Ecken: x über die Breite, y knapp vor der Bildkante
+      const front = k < n * 0.7;
+      const x = front ? r.x + 0.05 + (k / (n * 0.7)) * (r.w - 0.1) + (h2 - 0.5) * 0.3 : (h2 < 0.5 ? r.x - 0.05 : r.x + r.w + 0.05) + (h3 - 0.5) * 0.2;
+      const y = front ? r.y + r.h * (0.78 + h3 * 0.18) : r.y + r.h * (0.35 + h3 * 0.4);
+      const sc = 0.38 + h3 * 0.22;
+      sp.scale.set(h2 < 0.5 ? -sc : sc, sc, 1);
+      sp.center.set(0.5, 0.15);
+      sp.position.set(x, 0.02, y);
+      out.push(sp);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ Einheiten
@@ -1293,6 +1367,7 @@ export class Hd2dRenderer {
         void sideColor;
         s.visible = vis;
         sh.visible = vis;
+        if (sq.fx[i]) sq.fx[i]!.visible = false;
         if (!vis) continue;
         const o = OFFSETS[i]!;
         // Figuren stehen neben und hinter dem Verbandspunkt, nie davor (Richtung Gegner) – sonst wirkt die Reichweite kürzer.
@@ -1328,6 +1403,8 @@ export class Hd2dRenderer {
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
         }
         s.scale.set(size * dir * (spr.flip ? -1 : 1), size, 1);
+        const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
+        if (proto && level !== 'map') this.placeEliteFx(sq, i, s, proto, size, dir, now / world.tps + e.id * 0.37 + i * 0.9);
       }
       // Lebensbalken über dem Verband
       const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
@@ -1407,7 +1484,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false, fx: [] };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();
@@ -1738,6 +1815,43 @@ export class Hd2dRenderer {
     for (const [id, el] of this.edgeMarks) if (!this.attacked.has(id)) { el.remove(); this.edgeMarks.delete(id); }
   }
 
+  private readonly fxTex = new Map<string, THREE.Texture>();
+
+  /** Elite-Effekt an der Figur (eliteFx.ts): Ort nach Blickrichtung, Bewegung über Zeit `t` (s). */
+  private placeEliteFx(sq: Squad, i: number, s: THREE.Sprite, proto: ProtocolId, size: number, dir: number, t: number): void {
+    const look = ELITE_FX[proto];
+    let m = sq.fx[i];
+    if (!m) {
+      m = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      m.renderOrder = 3;
+      this.scene.add(m);
+      sq.fx[i] = m;
+    }
+    let tex = this.fxTex.get(proto);
+    if (!tex) {
+      tex = new THREE.CanvasTexture(eliteFxCanvas(proto, PROTOCOL_COLOR[proto]));
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.fxTex.set(proto, tex);
+    }
+    const mat = m.material as THREE.SpriteMaterial;
+    if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+    let [ax, ay] = look.at;
+    let a = look.alpha;
+    let k = look.size * size;
+    mat.rotation = 0;
+    if (look.motion === 'pulse') a *= 0.55 + 0.45 * Math.sin(t * 4);
+    else if (look.motion === 'flicker') { a *= 0.5 + 0.5 * Math.abs(Math.sin(t * 17) * Math.sin(t * 7.3)); k *= 0.85 + 0.3 * Math.abs(Math.sin(t * 11)); }
+    else if (look.motion === 'spin') mat.rotation = t * 1.2;
+    else if (look.motion === 'rise') { const ph = (t * 0.6) % 1; ay += ph * 0.35; a *= Math.sin(ph * Math.PI); }
+    else if (look.motion === 'orbit') { ax += Math.cos(t * 2.4) * 0.3; ay += Math.sin(t * 2.4) * 0.12; }
+    mat.opacity = Math.max(0, a);
+    m.position.set(s.position.x + ax * size * dir, s.position.y + ay * size, s.position.z + (look.motion === 'orbit' && Math.sin(t * 2.4) < 0 ? -0.05 : 0.03));
+    m.scale.set(k, k, 1);
+    m.visible = s.visible;
+  }
+
   private ensureSprites(sq: Squad, n: number): void {
     while (sq.sprites.length < n) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ alphaTest: 0.5 }));
@@ -1752,7 +1866,7 @@ export class Hd2dRenderer {
   }
 
   private removeSquad(sq: Squad): void {
-    for (const o of [...sq.sprites, ...sq.shadows, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
+    for (const o of [...sq.sprites, ...sq.shadows, ...sq.fx, sq.hp, sq.hpBack, sq.icon, sq.badge]) {
       this.scene.remove(o);
       ((o as THREE.Mesh).material as THREE.Material).dispose();
     }
