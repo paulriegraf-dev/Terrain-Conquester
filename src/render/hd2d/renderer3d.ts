@@ -24,6 +24,7 @@ import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
 import { badgeCanvas } from './eliteBadge';
 import { ELITE_FX, eliteFxCanvas } from './eliteFx';
+import { BUILDING_FX, FX_COLOR, FX_PARTS, fxCanvas, type BuildingFx } from './buildingFx';
 import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
@@ -162,6 +163,9 @@ export class Hd2dRenderer {
   private fogTex: THREE.CanvasTexture | null = null;
   private fogTick = -1;
   private readonly structures = new Map<number, THREE.Object3D>();
+  /** Gebäude-Animationen (buildingFx.ts): Teilchen je Gebäude und Bildlage (Mitte x, Fuß y, Tiefe z, Bildgröße, Spiegelung). */
+  private readonly structFx = new Map<number, { parts: { fx: BuildingFx; i: number; s: THREE.Sprite }[]; cx: number; y0: number; z: number; size: number; sgn: number; seed: number }>();
+  private readonly fxPartTex = new Map<string, THREE.Texture>();
   private readonly squads = new Map<number, Squad>();
   private readonly shots: Shot[] = [];
   /** Klang-Ausgabe (game.ts → Sfx): Art, Stereo −1 … 1, Lautstärke 0 … 1. */
@@ -1135,7 +1139,9 @@ export class Hd2dRenderer {
       if (seen.has(id)) continue;
       this.scene.remove(obj);
       this.structures.delete(id);
+      this.structFx.delete(id);
     }
+    this.animateStructures();
   }
 
   private makeStructure(world: World, e: Entity, view: ViewState): THREE.Object3D | null {
@@ -1172,7 +1178,76 @@ export class Hd2dRenderer {
     group.add(this.contactShadow(cx + r.w * 0.08, cy + r.h * 0.12, r.w * 1.25, r.h * 0.95));
     group.add(s);
     for (const d of this.buildingSkirt(e, faction)) group.add(d);
+    const fxList = BUILDING_FX[idx];
+    if (fxList) {
+      const parts: { fx: BuildingFx; i: number; s: THREE.Sprite }[] = [];
+      for (const fx of fxList) {
+        const color = fx.c ?? FX_COLOR[fx.k];
+        const tkey = `${fx.k}|${color}`;
+        let t = this.fxPartTex.get(tkey);
+        if (!t) {
+          t = new THREE.CanvasTexture(fxCanvas(fx.k, color));
+          t.magFilter = THREE.NearestFilter;
+          t.minFilter = THREE.NearestFilter;
+          t.colorSpace = THREE.SRGBColorSpace;
+          this.fxPartTex.set(tkey, t);
+        }
+        const additive = fx.k === 'glow' || fx.k === 'blink' || fx.k === 'spark' || fx.k === 'pollen';
+        for (let i = 0; i < FX_PARTS[fx.k].n; i++) {
+          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+          sp.renderOrder = 2;
+          group.add(sp);
+          parts.push({ fx, i, s: sp });
+        }
+      }
+      this.structFx.set(e.id, { parts, cx, y0: 0.02, z: cy + r.h * 0.25, size, sgn: e.owner === 1 ? -1 : 1, seed: e.id * 0.618 });
+    }
     return group;
+  }
+
+  /** Gebäude-Animationen fortschreiben (Echtzeit, auch in der Pause leise weiter). Ab „Lanes“ aus. */
+  private animateStructures(): void {
+    const lv = this.zoomLevel();
+    const on = lv === 'near' || lv === 'mid';
+    const t = performance.now() / 1000;
+    for (const b of this.structFx.values()) {
+      const px = b.size / 96; // Weltmaß eines Bildpunkts
+      for (const { fx, i, s } of b.parts) {
+        s.visible = on;
+        if (!on) continue;
+        const mat = s.material as THREE.SpriteMaterial;
+        const { n, life } = FX_PARTS[fx.k];
+        const ph = t / life + i / n + b.seed;
+        const p = ph - Math.floor(ph); // Fortschritt 0 … 1
+        const cyc = Math.floor(ph);
+        const rnd = (k: number): number => hash(cyc * 7 + i * 13 + k, Math.floor(b.seed * 100) + k * 3);
+        const w = (fx.w ?? 0) * px;
+        let dx = 0;
+        let dy = 0;
+        let sc = 2;
+        let a = 1;
+        switch (fx.k) {
+          case 'smoke': dx = p * 0.25 + (rnd(1) - 0.5) * 0.05; dy = p * 0.8; sc = 5 + p * 9; a = 0.5 * (1 - p) * Math.min(1, p * 6); break;
+          case 'spark': {
+            const burst = (t * 0.45 + b.seed) % 1 < 0.35;
+            dx = (rnd(1) - 0.5) * 0.5 * p; dy = 0.25 * p - 0.5 * p * p; sc = 2; a = burst ? 1 - p : 0; break;
+          }
+          case 'glow': sc = (fx.r ?? 10) * (0.95 + 0.08 * Math.sin(t * 2 + b.seed)); a = 0.35 + 0.25 * Math.sin(t * 2.2 + b.seed * 3); break;
+          case 'blink': sc = 3; a = Math.sin(t * 2.6 + b.seed * 5) > 0.2 ? 0.95 : 0.12; break;
+          case 'bubble': dx = (rnd(1) - 0.5) * w; dy = (rnd(2) - 0.5) * w * 0.3 + p * 0.06; sc = 2 + p * 2.5; a = p < 0.85 ? 1 : 0; break;
+          case 'leaf': dx = (rnd(1) - 0.5) * w + Math.sin(p * 9 + i) * 0.08; dy = -p * 0.9; sc = 2; a = p < 0.85 ? 1 : (1 - p) / 0.15; break;
+          case 'snow': dx = (rnd(1) - 0.5) * w + Math.sin(p * 6 + i) * 0.05; dy = -p * 0.7; sc = rnd(2) < 0.4 ? 2 : 1.4; a = Math.min(1, (1 - p) * 4); break;
+          case 'dust': dx = (rnd(1) - 0.5) * w + p * 0.15; dy = p * 0.25; sc = 4 + p * 8; a = 0.45 * (1 - p) * Math.min(1, p * 5); break;
+          case 'pollen': dx = (rnd(1) - 0.5) * w + Math.sin(p * 5 + i) * 0.12; dy = (rnd(2) - 0.5) * w * 0.5 + p * 0.3; sc = 1.5; a = Math.sin(p * Math.PI) * (0.6 + 0.4 * Math.sin(t * 9 + i)); break;
+        }
+        // Bildpunkt (x von links, y von oben) → Welt: Mitte cx, Fuß bei 10 % der Bildhöhe (center.y des Gebäudebilds)
+        const wx = b.cx + ((fx.x / 96 - 0.5) * b.size + dx) * b.sgn;
+        const wy = b.y0 + ((96 - fx.y) / 96 - 0.1) * b.size + dy;
+        s.position.set(wx, wy, b.z + 0.04);
+        s.scale.set(sc * px, sc * px, 1);
+        mat.opacity = Math.max(0, Math.min(1, a));
+      }
+    }
   }
 
   private shadowTex: THREE.Texture | null = null;
