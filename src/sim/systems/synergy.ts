@@ -52,11 +52,11 @@ export const SYNERGY_NAMES: Readonly<Record<string, string>> = {
 
 /** Wirkung je Synergie in einem Satz (HUD, Übersicht). */
 export const SYNERGY_TEXT: Readonly<Record<string, string>> = {
-  forest: 'Hainhüter springen bei Hilferuf zu eigenem Wald der Lane; auf eigenem Wald treffen Gegner 1 schwerer',
-  snow: 'Gegner 10 % langsamer, auf eigenem Schnee bis 40 %; Frostwelle +1 Radius',
-  mud: 'Schlammmonster schlüpfen doppelt so schnell und laufen weiter; Schlammschleuder schwächt länger',
-  rubble: 'Gegner auf eigenem Geröll nehmen 3 Schaden/s; Frontbrecher Durchschlag +1',
-  meadow: 'eigene Verbände heilen außerhalb des Kampfes 2 % Leben/s; Steppenjäger +10 % Tempo',
+  forest: 'Hainhüter springen zwischen deinen Waldflächen hin und her; im Wald ist deine Truppe schwer zu treffen.',
+  snow: 'Gegner werden langsamer – auf deinem Schnee immer mehr.',
+  mud: 'Auf deinem Matsch tauchen mehr Schlammmonster auf.',
+  rubble: 'Gegner auf deinem Geröll nehmen laufend Schaden.',
+  meadow: 'Deine Truppen heilen sich, wenn sie nicht kämpfen.',
 };
 
 /** Kurztext der aktiven Synergien je Lane (HUD), z. B. „oben Wurzelnetz · unten Schneesturm“. */

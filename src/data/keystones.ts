@@ -73,3 +73,36 @@ export const KEYSTONE_CARD_STYLE: Record<FactionId, { accent: string; glow: stri
   myriaden: { accent: '#7fe3ff', glow: 'rgba(110, 230, 255, 0.55)' },
   terraformer: { accent: '#7fe3ff', glow: 'rgba(110, 230, 255, 0.55)' },
 };
+
+/**
+ * Kurzfassung je Schlussstein (16.11., Nutzer: „einfach, was er bewirkt, in einem oder zwei Sätzen“) – für Übersicht und
+ * Fabrik-Karte. Die genaue Regel mit Zügel steht weiter in `rule`/`rein` (Tooltip).
+ */
+export const KEYSTONE_SHORT: Readonly<Partial<Record<UnitId, string>>> = {
+  // Terra-Former
+  wardMeadow: 'Steht er auf Wiese still, trifft ihn Artillerie kaum noch.',
+  specialMeadow: 'Zieht sich verletzt auf eigene Wiese zurück, heilt und greift wieder an.',
+  wardForest: 'Schießt aus dem Wald weiter und über Erdwälle hinweg.',
+  specialForest: 'Hält nach seinem Sprung einen Gegner kurz fest.',
+  wardMud: 'Zwei Bremsfelder zusammen halten Gegner kurz fest.',
+  specialMud: 'Seine Einschläge machen den Boden zu Matsch.',
+  wardSnow: 'Stärkerer Schild auf Schnee – schluckt einmal einen Treffer ganz.',
+  specialSnow: 'Die Frostwelle hinterlässt Schnee; Erstarrte nehmen mehr Schaden.',
+  wardRubble: 'Auf Geröll unverrückbar und schützt die Truppe dahinter.',
+  specialRubble: 'Macht Geröll zur schnellen Treppe und bricht Wälle doppelt so schnell.',
+  // Technoclan
+  sniper: 'Ein Schuss durchschlägt alles auf einer Linie – auch hinter Wällen.',
+  plasma: 'Einschläge hinterlassen brennenden Boden.',
+  nanomedic: 'Baut gefallene Verbände in der Nähe wieder auf.',
+  hoverscout: 'Markiert sein Ziel: sichtbar im Nebel und leichter zu treffen.',
+  battery: 'Legt eine Reihe Einschläge quer über die Lane.',
+  gunner: 'Baut im Stand Sandsäcke vor sich auf.',
+  colossus: 'Bricht Erdwälle sofort und schiebt Infanterie beiseite.',
+  // Myriaden
+  catapult: 'Wirft zwei Verspotter auf zwei Ziele.',
+  drone: 'Drohnen verschmelzen zu einem Rammbock, der über Wälle springt.',
+  bomber: 'Explodiert auch, wenn er vor dem Ziel fällt.',
+  hound: 'Drei Hunde auf einer Lane machen alle Myriaden dort schneller.',
+  myrcannon: 'Feuert mit zwei Drohnen-Trupps 20 s ohne Pause.',
+  sphere: 'Zerfällt bei halbem Leben in zwei Halbsphären.',
+};

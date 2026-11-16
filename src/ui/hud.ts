@@ -1,3 +1,4 @@
+import { factionTiles } from './factionPicker';
 import type { AiLevel } from '../ai/simpleAi';
 import { AI_STRATEGIES } from '../ai/simpleAi';
 import { orderCost, scoutCost, scoutDelay } from '../sim/systems/hq';
@@ -89,6 +90,8 @@ export const ROOT_TITLE = 'Befehle';
 export class Hud {
   private readonly el;
   private lastFrame = 0;
+  /** Bildkarten der Fraktionswahl angleichen (16.11.). */
+  private syncFactionTiles: (() => void)[] = [];
   private readonly logEntries: { time: string; text: string; tone: Tone }[] = [];
   private flashTimer = 0;
   private infoSig = '';
@@ -667,6 +670,7 @@ export class Hud {
       };
       this.el.factionSelect.addEventListener('change', describe);
       describe();
+      this.syncFactionTiles = [factionTiles(this.el.factionSelect), factionTiles(this.el.enemyFactionSelect)];
     }
     if (!this.el.mapSelect.options.length) {
       this.el.mapSelect.innerHTML =
@@ -674,7 +678,7 @@ export class Hud {
         maps.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
       const describe = (): void => {
         const m = maps.find((x) => x.id === this.el.mapSelect.value);
-        this.el.mapDesc.textContent = m ? m.description : 'Jede Runde eine der Karten – gespiegelt, also für beide Seiten gleich.';
+        this.el.mapDesc.textContent = m ? m.description : 'Jede Runde eine andere Karte.';
         this.fillStations();
       };
       this.el.mapSelect.addEventListener('change', describe);
@@ -687,6 +691,7 @@ export class Hud {
       this.el.factionSelect.value = ingame.factions[0];
       this.el.enemyFactionSelect.value = ingame.factions[1];
       this.el.factionSelect.dispatchEvent(new Event('change'));
+      for (const sync of this.syncFactionTiles) sync();
       const radio = this.doc.querySelector<HTMLInputElement>(`input[name="opt-level"][value="${ingame.level}"]`);
       if (radio) radio.checked = true;
       this.el.stationsSelect.value = ingame.stations;
@@ -755,10 +760,10 @@ export class Hud {
     const pair = v === 'main' ? pool[0] : v.startsWith('pair') ? pool[Number(v.slice(4))] : undefined;
     this.el.stationsDesc.textContent =
       v === 'off'
-        ? 'Keine Stationen: oben und unten nur die normale Front.'
+        ? 'Ohne Stationen.'
         : pair
-          ? `Oben: ${STATIONS[pair.top].name} – ${STATIONS[pair.top].text}. Unten: ${STATIONS[pair.bottom].name} – ${STATIONS[pair.bottom].text}.`
-          : 'Je Lane oben und unten eine Station aus dem Pool der Karte. Sie wirkt nur auf ihre Lane und ruht, solange Gegner nah sind. Haltung „Sichern“ schickt die Truppen hin.';
+          ? `Oben ${STATIONS[pair.top].name}, unten ${STATIONS[pair.bottom].name}.`
+          : 'Oben und unten je eine – wer sie hält, stärkt seine Lane.';
   }
 
   hideOverlays(): void {
