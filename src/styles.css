@@ -1435,8 +1435,7 @@ body.ui-c {
 .ic-px .f { fill: currentColor; }
 .c-viewbar .ic-px { width: 20px; height: 20px; vertical-align: middle; display: block; margin: 0 auto 1px; }
 .c-pop-btn .ic-px { width: 20px; height: 20px; vertical-align: middle; }
-/* Gelände-Symbole (16.11.): echte Bodenkachel mit Detail, pixelscharf */
-.ic-terr { width: 28px; height: 28px; image-rendering: pixelated; vertical-align: middle; border-radius: 3px; }
+/* Gelände-Symbole (16.11.): Pixelzeichen wie die übrigen Icons; Lane-Pfeil davor beim Lane-Boden */
 .ic-terr-route { font-size: 0.8rem; margin-right: 2px; vertical-align: middle; opacity: 0.85; }
 /* Rahmen: dunkel – hell – dunkel, dazu harter Schatten */
 body.ui-c .c-hud, body.ui-c .hq-bars, body.ui-c .brand .menu-btn, body.ui-c .view-panel, body.ui-c .console-grid-wrap,
