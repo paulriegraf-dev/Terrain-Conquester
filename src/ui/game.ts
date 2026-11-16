@@ -187,6 +187,7 @@ export class Game {
         setZoom: (z) => this.setZoom(z),
         toggleKeystones: () => this.session.mode === 'play' && this.keystones.toggle(),
         action: (a, d) => this.onAction(a, { ...d }),
+        commands: () => commandsFor({ world: this.session.world, view: this.view, canAct: this.session.mode === 'play' && !this.session.world.result, sellArmed: this.hudSellArmed }).buttons,
       });
       const hudC = this.hudC;
       this.hud.onLog = (time, text, tone) => (text ? hudC.log(time, text, tone) : hudC.clearLog());

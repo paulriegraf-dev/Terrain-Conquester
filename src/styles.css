@@ -1584,3 +1584,57 @@ body.ui-c .cx-route:disabled small { color: #ff5f6d; }
 .sbx-actions { flex-direction: row; flex-wrap: wrap; }
 .sbx-actions button { flex: 1 1 30%; }
 body.sandbox-mode #title-screen:not([hidden]) ~ .sbx { display: none; }
+
+/* Fabrik-Karte (16.11., Variante A): schwebt neben der Fabrik, ersetzt Panel und Leiste für Fabriken */
+body.fc-on .console-info, body.fc-on .console-grid-wrap { display: none !important; }
+.fc { position: absolute; left: 0; top: 0; z-index: 30; width: 318px; display: grid; gap: 6px; padding: 10px 10px 8px;
+  background: var(--px-bg, #1b2233); color: var(--c-text, #e8e4d6); font-size: 0.78rem;
+  box-shadow: 0 0 0 3px var(--px-dark, #0a0d14), 0 0 0 5px var(--px-rim, #5b6b8c), 0 10px 24px rgba(0, 0, 0, 0.55); pointer-events: auto; }
+.fc[hidden] { display: none; }
+.fc-head { display: flex; align-items: center; gap: 10px; }
+.fc-head b { font-family: var(--font-display); font-size: 0.92rem; font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase; }
+.fc-x { margin-left: auto; background: none; border: 0; color: var(--c-muted, #9aa8c8); cursor: pointer; font-size: 0.9rem; padding: 2px 4px; }
+.fc-x:hover { color: #fff; }
+.fc-sec { font-family: var(--font-display); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--c-muted, #9aa8c8); display: flex; justify-content: space-between; margin-top: 2px; }
+.fc-sec span { font-family: var(--font-data); letter-spacing: 0; text-transform: none; }
+.fc button { font: inherit; color: inherit; cursor: pointer; border: 0; border-radius: 0; background: var(--px-btn, #2b3550);
+  box-shadow: inset -3px -3px 0 var(--px-btn-lo, #1a2138), inset 3px 3px 0 var(--px-btn-hi, #3d4a6e); }
+.fc button:hover:not(:disabled) { background: #34406a; }
+.fc button:disabled { cursor: default; }
+.fc button.on { background: var(--px-gold, #ffd23f); color: #1a1408; box-shadow: inset -3px -3px 0 #a07c00, inset 3px 3px 0 #fff1a0; }
+.fc button.pend { outline: 2px dashed var(--warn, #ff9f43); outline-offset: -3px; }
+.fc .fc-x { box-shadow: none; background: none; }
+.fc-units { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fc-unit { display: flex; align-items: center; gap: 6px; padding: 5px 6px; text-align: left; min-height: 52px; }
+.fc-unit.lock { opacity: 0.5; }
+.fc-unit.lock .fc-port { filter: grayscale(1) brightness(0.6); }
+.fc-port { width: 40px; height: 40px; flex: 0 0 40px; image-rendering: pixelated; background-repeat: no-repeat; }
+.fc-ut { display: grid; gap: 2px; min-width: 0; }
+.fc-ut b { font-weight: 700; font-size: 0.74rem; line-height: 1.15; }
+.fc-ut small { font-family: var(--font-data); font-size: 0.62rem; opacity: 0.8; line-height: 1.2; }
+.fc-bar { display: block; height: 5px; background: rgba(0, 0, 0, 0.45); }
+.fc-bar i { display: block; height: 100%; background: #7fe0ff; }
+.fc .on .fc-bar i { background: #1a6e8a; }
+.fc-routes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.fc-route { display: grid; justify-items: center; padding: 6px 2px; font-weight: 700; font-size: 0.74rem; }
+.fc-route .ic { vertical-align: -3px; }
+.fc-route small { font-family: var(--font-data); font-size: 0.58rem; font-weight: 400; opacity: 0.8; }
+.fc-ups { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fc-up { position: relative; display: flex; gap: 6px; align-items: flex-start; padding: 6px; text-align: left; background: var(--px-btn, #2b3550);
+  box-shadow: inset -3px -3px 0 var(--px-btn-lo, #1a2138), inset 3px 3px 0 var(--px-btn-hi, #3d4a6e); }
+.fc-up.lock { opacity: 0.5; }
+.fc-up.poor .fc-cost { color: #ff6b6b; }
+.fc-up.run { outline: 2px solid #7fe0ff; outline-offset: -3px; }
+.fc-ui { flex: 0 0 auto; color: var(--px-gold, #ffd23f); }
+.fc-cost { font-family: var(--font-data); font-weight: 700; color: var(--px-gold, #ffd23f); font-size: 0.7rem; }
+.fc .on .fc-cost { color: #1a1408; }
+.fc-cancel { position: absolute; top: 3px; right: 3px; padding: 0 5px; font-size: 0.7rem; }
+.fc-more { background: none !important; box-shadow: none !important; color: var(--c-muted, #9aa8c8); font-size: 0.68rem; text-decoration: underline; justify-self: start; padding: 0; }
+.fc-note { margin: 0; color: var(--c-muted, #9aa8c8); font-size: 0.72rem; }
+.fc-main { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 4px; }
+.fc-act { padding: 7px 10px; font-weight: 700; font-size: 0.74rem; }
+.fc-act.danger { background: #8a2b2b; }
+.fc-small { display: flex; flex-wrap: wrap; gap: 4px; }
+.fc-mini { padding: 3px 7px; font-size: 0.64rem; opacity: 0.85; }
+.fc-mini .fc-cost { font-size: 0.6rem; }
+.fc-up .fc-ut small { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

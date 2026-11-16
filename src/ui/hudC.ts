@@ -20,9 +20,10 @@ import { marketLevel, marketView } from '../sim/systems/market';
 import type { PlayerId, Route } from '../sim/types';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
 import { STANCES, STANCE_NAMES, type Stance, type World } from '../sim/world';
-import { STANCE_TIP } from './commands';
+import { STANCE_TIP, type CommandButton } from './commands';
 import type { Tone } from './hud';
-import { factoryPanel, type CtxTab } from './ctxPanel';
+import { factoryCard } from './ctxPanel';
+import type { Entity } from '../sim/entity';
 
 /** Tasten der Ansichtsleiste (wie im Mock-up). */
 export const VIEW_KEYS: ReadonlySet<string> = new Set(['1', '2', '3', '4']);
@@ -61,6 +62,8 @@ export interface HudCDeps {
   toggleKeystones(): boolean;
   /** Befehl wie ein Knopf mit data-action (z. B. Fronten-Menü öffnen). */
   action(action: string, data: Record<string, string>): void;
+  /** Aktuelle Befehlsknöpfe (commands.ts) – für die seltenen Befehle der Fabrik-Karte. */
+  commands(): CommandButton[];
 }
 
 function clock(s: number): string {
@@ -168,19 +171,23 @@ export class HudC {
   private gridWrap: HTMLElement | null;
   private gridHome: HTMLElement | null;
   private docked = false;
-  private ctxTab: CtxTab = 'level';
   private ctxSig = '';
   private ctxEl: HTMLElement | null = null;
 
-  /** Kontext-Panel: Route + Ausbau-Reiter unter der Auswahl-Info (nur eigene Fabrik). */
+  private cardAll = false;
+  private cardFor = -1;
+
+  /**
+   * Fabrik-Karte (Nutzer 16.11., Variante A): schwebt neben der angeklickten eigenen Fabrik, ersetzt Kontext-Panel und
+   * Befehlsleiste für Fabriken. Untermenüs (Umwidmen, Tarnen, Forschung) laufen weiter über die Leiste unten.
+   */
   private updateCtx(world: World, view: ViewState): void {
     if (!this.ctxEl) {
-      const info = this.d.doc.querySelector('.console-info');
-      if (!info) return;
       const el = this.d.doc.createElement('div');
-      el.className = 'cx';
-      // Schon beim Drücken auslösen (das Panel zeichnet sich jede Sekunde neu) und den allgemeinen Klick-Verteiler auslassen.
+      el.className = 'fc';
+      // Schon beim Drücken auslösen (die Karte zeichnet sich neu) und den allgemeinen Klick-Verteiler auslassen.
       el.addEventListener('pointerdown', (ev) => {
+        ev.stopPropagation();
         if (ev.button !== 0) return;
         const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
         if (!t || (t as HTMLButtonElement).disabled) return;
@@ -188,19 +195,58 @@ export class HudC {
         const data: Record<string, string> = {};
         for (const [k, v] of Object.entries(t.dataset)) if (v !== undefined && k !== 'action') data[k] = v;
         this.d.action(t.dataset.action!, data);
+        this.ctxSig = '';
       });
-      el.addEventListener('click', (ev) => ev.stopPropagation());
-      info.append(el);
+      for (const t of ['click', 'wheel', 'contextmenu']) el.addEventListener(t, (ev) => ev.stopPropagation());
+      (this.d.doc.getElementById('board-frame') ?? this.d.doc.body).append(el);
       this.ctxEl = el;
     }
-    const sel = view.selected;
-    const e = sel?.kind === 'entity' ? world.get(sel.id) : undefined;
-    const own = !!e?.alive && !!e.producer && view.human !== null && e.owner === view.human;
-    const html = own ? factoryPanel(world, e!, this.ctxTab, !world.result) : '';
+    const e = this.cardEntity(world, view);
+    this.d.doc.body.classList.toggle('fc-on', !!e);
+    if (!e) {
+      if (!this.ctxEl.hidden) this.ctxEl.hidden = true;
+      this.ctxSig = '';
+      this.cardFor = -1;
+      return;
+    }
+    if (this.cardFor !== e.id) {
+      this.cardFor = e.id;
+      this.cardAll = false;
+    }
+    const html = factoryCard(world, e, this.d.commands(), this.cardAll, !world.result);
+    this.ctxEl.hidden = false;
     if (html === this.ctxSig) return;
     this.ctxSig = html;
     this.ctxEl.innerHTML = html;
-    this.ctxEl.hidden = !html;
+    this.placeCard(world);
+  }
+
+  /** Eigene, ausgewählte Fabrik – solange kein Untermenü (Umwidmen, Tarnen, Forschung) offen ist. */
+  private cardEntity(world: World, view: ViewState): Entity | null {
+    const sel = view.selected;
+    const e = sel?.kind === 'entity' ? world.get(sel.id) : undefined;
+    if (!e?.alive || !e.producer || e.kind === 'hq' || view.human === null || e.owner !== view.human) return null;
+    if (view.menu === 'convert' || view.menu === 'disguise' || view.menu === 'research') return null;
+    return e;
+  }
+
+  /** Karte rechts neben die Fabrik (zu wenig Platz: links davon), im Spielfeld gehalten. Jedes Bild neu. */
+  private placeCard(world: World): void {
+    const el = this.ctxEl;
+    if (!el || el.hidden) return;
+    const e = world.get(this.cardFor);
+    if (!e?.rect) return;
+    const frame = el.parentElement!.getBoundingClientRect();
+    const r = e.rect;
+    const right = this.d.renderer.clientOf(r.x + r.w + 0.1, r.y + r.h * 0.5, world);
+    const leftP = this.d.renderer.clientOf(r.x - 0.1, r.y + r.h * 0.5, world);
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let x = right.x - frame.left + 14;
+    if (x + w > frame.width - 10) x = leftP.x - frame.left - 14 - w;
+    x = Math.max(10, Math.min(frame.width - w - 10, x));
+    const y = Math.max(10, Math.min(frame.height - h - 10, right.y - frame.top - h * 0.45));
+    el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
   /** Aktionen der neuen Oberfläche (aus dem gemeinsamen Klick-Verteiler). true = erledigt. */
@@ -212,8 +258,8 @@ export class HudC {
       case 'c-lane':
         this.focusLane(data.route as Route);
         return true;
-      case 'c-tab':
-        this.ctxTab = (data.tab as CtxTab) ?? 'level';
+      case 'fc-all':
+        this.cardAll = !this.cardAll;
         this.ctxSig = '';
         return true;
       case 'c-next':
@@ -369,6 +415,7 @@ export class HudC {
       else this.gridHome.append(this.gridWrap);
     }
     this.drawMiniFrame(world);
+    this.placeCard(world);
     if (now - this.last < 200) return;
     this.updateCtx(world, view);
     this.updateFront(world, view);
