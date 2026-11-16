@@ -14,6 +14,8 @@ import { referenceDefense, relativeEffect, woundsPerShot } from '../sim/systems/
 import type { Defense } from '../sim/systems/hitmath';
 import type { ArmorClass } from '../sim/types';
 import { escapeHtml } from './format';
+import { BLOCKS } from '../data/verbund';
+import type { ProtocolId } from '../data/units';
 import { SYNERGY_GROUNDS, SYNERGY_NAMES, SYNERGY_TEXT } from '../sim/systems/synergy';
 import { portrait } from './unitPortrait';
 import type { BuildingId } from '../data/buildings';
@@ -472,16 +474,32 @@ function basicsTab(): string {
 }
 
 /** Eigenheiten als Karten mit Symbol, Titel und einem Satz. */
-function traitCards(items: [string, string, string][]): string {
-  return `<div class="cx-traits">${items.map(([icon, t, d]) => `<div class="cx-trait"><span>${icon}</span><div><b>${escapeHtml(t)}</b><small>${escapeHtml(d)}</small></div></div>`).join('')}</div>`;
+function traitCards(items: [string, string, string, string?][]): string {
+  return `<div class="cx-traits">${items.map(([icon, t, d, more]) => {
+    const head = `<span>${icon}</span><div><b>${escapeHtml(t)}${more ? ' <i class="cx-more-i">mehr</i>' : ''}</b><small>${escapeHtml(d)}</small></div>`;
+    // Mit Erklärung (Nutzer 16.11.): Klick klappt auf, Überfahren zeigt sie als Tooltip.
+    return more
+      ? `<details class="cx-trait cx-trait-x" title="${escapeHtml(more.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())}"><summary>${head}</summary><div class="cx-trait-more">${more}</div></details>`
+      : `<div class="cx-trait">${head}</div>`;
+  }).join('')}</div>`;
 }
 
 function technoTraits(): string {
   const n = RULES.network;
+  const blocks = (Object.keys(BLOCKS) as ProtocolId[]).filter((p) => p !== 'node');
+  const owner = (p: ProtocolId): UnitId | undefined => (Object.values(UNITS).find((u) => u.protocol === p)?.id as UnitId | undefined);
+  const list = (pick: (p: ProtocolId) => string): string => `<ul class="cx-blist">${blocks.map((p) => {
+    const u = owner(p);
+    return `<li>${u ? portrait(u, 28) : ''}<span><b>${escapeHtml(BLOCKS[p].name)}</b> <em>${escapeHtml(u ? UNITS[u].name : '')}</em><small>${escapeHtml(pick(p))}</small></span></li>`;
+  }).join('')}</ul>`;
+  const net = `<p>Verbände <b>derselben Lane</b>, die nah beieinander stehen, verbinden sich zu einem Netz (höchstens ${n.maxMembers}, mit Commander ${n.maxWithNode}). Leuchtende Linien zeigen es.</p>
+    <p>Das Netz trägt die <b>Bausteine</b> weiter: Fällt ein Mitglied, geht sein Baustein an das nächste Mitglied über. Ohne Netz ist er verloren.</p>`;
+  const bricks = `<p>Jede Einheit bringt <b>einen Baustein</b> mit – ihre Spezialität. Erbt ein Verband einen fremden Baustein, kann er das zusätzlich. Gleiche stapeln schwächer.</p>${list((p) => BLOCKS[p].copies[0])}`;
+  const elite = `<p>Mit <b>${n.eliteAt} Bausteinen</b> steigt ein Verband zur Elite auf: doppeltes Leben, voll geheilt, jeder Baustein in Elite-Fassung. Der häufigste Baustein bestimmt die Art.</p>${list((p) => BLOCKS[p].elite)}`;
   return `<h3 class="cx-h3">Technoclan</h3>${traitCards([
-    ['⌁', 'Netz', 'Verbände nahe beieinander verbinden sich.'],
-    ['◇', 'Bausteine', 'Fällt ein Mitglied, erbt das nächste seinen Baustein.'],
-    ['★', 'Elite', `Ab ${n.eliteAt} Bausteinen – oder über das Eliteprogramm der Fabrik.`],
+    ['⌁', 'Netz', 'Verbände nahe beieinander verbinden sich.', net],
+    ['◇', 'Bausteine', 'Fällt ein Mitglied, erbt das nächste seinen Baustein.', bricks],
+    ['★', 'Elite', `Ab ${n.eliteAt} Bausteinen – oder über das Eliteprogramm der Fabrik.`, elite],
     ['✚', 'Reparatur', 'Nano-Heiler flicken die Truppe im Feld.'],
   ])}`;
 }

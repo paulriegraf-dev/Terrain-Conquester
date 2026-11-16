@@ -1827,3 +1827,23 @@ body .start-card .field-pair:has(> fieldset) { grid-template-columns: 1fr; }
 /* Konter-Tafel (H) unter der HQ-Anzeige, im Pixel-Look (16.11.) */
 body.ui-c .counter-board { top: 112px; right: 21px; z-index: 25; background: #1b2233; border: 0; border-radius: 0;
   box-shadow: 0 0 0 3px #0a0d14, 0 0 0 6px #5b6b8c, 0 0 0 9px #0a0d14; }
+
+/* Eigenheiten mit Erklärung zum Aufklappen (16.11.) */
+.cx-trait-x { display: block; padding: 0; }
+.cx-trait-x > summary { display: flex; gap: 10px; align-items: center; padding: 8px 10px; cursor: pointer; list-style: none; }
+.cx-trait-x > summary::-webkit-details-marker { display: none; }
+.cx-trait-x > summary > span { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; background: #161c2b; color: #ffd23f; font-size: 1rem; }
+.cx-trait-x > summary b { display: block; font-size: 0.8rem; }
+.cx-trait-x > summary small { font-size: 0.72rem; color: #b8c2d8; }
+.cx-trait-x[open] { grid-column: 1 / -1; box-shadow: inset 0 0 0 2px #ffd23f; }
+.cx-more-i { font-style: normal; font-weight: 400; font-size: 0.6rem; color: #ffd23f; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+.cx-trait-x[open] .cx-more-i { visibility: hidden; }
+.cx-trait-more { padding: 0 12px 10px 50px; font-size: 0.76rem; color: #c8d0e2; }
+.cx-trait-more p { margin: 0 0 6px; }
+.cx-blist { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.cx-blist li { display: flex; gap: 8px; align-items: center; padding: 4px 6px; background: #161c2b; }
+.cx-blist li .cx-port { background-color: transparent; box-shadow: none; }
+.cx-blist em { font-style: normal; color: #9aa8c8; font-size: 0.68rem; }
+.cx-blist small { display: block; font-size: 0.7rem; color: #c8d0e2; }
+.cx-trait-more p b { display: inline; font-size: inherit; color: #fff; }
+.cx-blist b { display: inline !important; }
