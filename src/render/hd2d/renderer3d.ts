@@ -21,7 +21,7 @@ import type { Route, Vec2 } from '../../sim/types';
 import type { World } from '../../sim/world';
 import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
-import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
+import { BUILDINGS_SHEET, KULISSE, TILESETS, UNIT_SHEETS } from './assets';
 import { badgeCanvas } from './eliteBadge';
 import { ELITE_FX, eliteFxCanvas } from './eliteFx';
 import { abseits, bayer, noise2, paintPatches, umlandHeight, type Field } from './umland';
@@ -190,7 +190,7 @@ export class Hd2dRenderer {
     const sun = new THREE.DirectionalLight('#ffe9c4', 1.6);
     sun.position.set(-20, 32, 14);
     this.scene.add(sun);
-    for (const src of [...Object.values(UNIT_SHEETS), ...Object.values(TILESETS), BUILDINGS_SHEET]) this.image(src);
+    for (const src of [...Object.values(UNIT_SHEETS), ...Object.values(TILESETS), ...Object.values(KULISSE), BUILDINGS_SHEET]) this.image(src);
     this.scene.fog = new THREE.Fog('#0b0d12', 140, 260);
     // Tilt-Shift (Nahsicht): unscharfe Streifen oben und unten wie im Mock-up.
     const strip = (top: boolean): HTMLDivElement => {
@@ -638,7 +638,7 @@ export class Hd2dRenderer {
     const terr = world.grid.terrain;
     let sum = 0;
     for (let i = 0; i < terr.length; i++) sum = (sum * 31 + terr[i]! + 1) | 0;
-    const imgs = Object.values(TILESETS).map((s) => this.image(s));
+    const imgs = [...Object.values(TILESETS), ...Object.values(KULISSE)].map((s) => this.image(s));
     const key = `${this.viewX0}:${this.viewCols}:${sum}:${imgs.every((i) => this.ready(i))}`;
     if (key === this.terrainKey) return;
     const prevKey = this.terrainKey;
@@ -807,6 +807,22 @@ export class Hd2dRenderer {
   }
 
   private umland: THREE.Group | null = null;
+  private readonly wholeTexCache = new Map<string, THREE.Texture>();
+
+  /** Ganzes Bild als Textur (Pixelgrafik, Nearest); null, solange es lädt. */
+  private wholeTex(src: string): THREE.Texture | null {
+    const hit = this.wholeTexCache.get(src);
+    if (hit) return hit;
+    const img = this.image(src);
+    if (!this.ready(img)) return null;
+    const t = new THREE.Texture(img);
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    this.wholeTexCache.set(src, t);
+    return t;
+  }
 
   /**
    * Umland statt Felsplatte (Nutzer 16.11., nach dem Tower Defense, umland.ts): Gelände mit Hang hinten, Hügeln an den
@@ -842,6 +858,12 @@ export class Hd2dRenderer {
       return t === 4 || t === 5 ? 6 : t === 7 ? 0 : t;
     };
     const edgeH = (x: number, z: number): number => HEIGHT[at(Math.max(x0, Math.min(x0 + cols - 1, Math.floor(x))), Math.max(0, Math.min(rows - 1, Math.floor(z))))] ?? 0;
+    // Höhe inkl. Absenkung ganz außen (keine schwebende Netzkante in der Kartenansicht)
+    const groundY = (x: number, z: number): number => {
+      const rim = Math.min(x - ox, ox + W - x, z - oz, oz + H - z);
+      const out = rim >= 4 ? 0 : 1 - (rim / 4) * (rim / 4) * (3 - 2 * (rim / 4));
+      return umlandHeight(f, x, z, edgeH(x, z)) * (1 - out) - 1.9 * out;
+    };
     // ---- Bild
     const c = document.createElement('canvas');
     c.width = W * 32;
@@ -911,10 +933,7 @@ export class Hd2dRenderer {
       if (vid[k]! >= 0) return vid[k]!;
       const x = ox + i * step;
       const z = oz + j * step;
-      // ganz außen sanft auf die tiefe Wiese absenken (keine schwebende Netzkante in der Kartenansicht)
-      const rim = Math.min(i, nx - i, j, nz - j) * step;
-      const out = rim >= 4 ? 0 : 1 - (rim / 4) * (rim / 4) * (3 - 2 * (rim / 4));
-      P.push(x, umlandHeight(f, x, z, edgeH(x, z)) * (1 - out) - 1.9 * out, z);
+      P.push(x, groundY(x, z), z);
       UV.push(i / nx, 1 - j / nz);
       vid[k] = P.length / 3 - 1;
       return vid[k]!;
@@ -939,6 +958,52 @@ export class Hd2dRenderer {
     far.rotation.x = -Math.PI / 2;
     far.position.set(x0 + cols / 2, -1.9, rows / 2);
     group.add(far);
+    // ---- Kulisse (Nutzer 16.11., Bilder aus dem Tower Defense, nur Generisches): Felsgruppen an den Seiten und an Vorder-
+    // und Hinterkante (zeigen den Rand), Gebirge ganz hinten. Plätze in Kacheln relativ zur Karte, gespiegelt für rechts.
+    const taken: [number, number, number][] = [];
+    const piece = (key: keyof typeof KULISSE, x: number, z: number, scale: number, foot: number, free: number, flip: boolean): void => {
+      const tx = this.wholeTex(KULISSE[key]);
+      if (!tx) return;
+      const img = tx.image as HTMLImageElement;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, alphaTest: 0.5 }));
+      const k = scale / 64; // Kacheln je Bildpunkt (wie im Tower Defense: pixel_size = Maßstab / 64)
+      sp.scale.set(img.width * k * (flip ? -1 : 1), img.height * k, 1);
+      sp.center.set(0.5, 1 - foot / img.height);
+      sp.position.set(x, groundY(x, z), z);
+      const dk = Math.max(0.75, Math.min(1, 1 - abseits(f, x, z) * 0.03));
+      (sp.material as THREE.SpriteMaterial).color.setRGB(dk, dk, dk);
+      group.add(sp);
+      taken.push([x, z, free]);
+    };
+    // Seiten: nur generische Felsgruppen (Nutzer 16.11.: keine Fabriken/Fraktionsstücke aus dem Tower Defense übernehmen)
+    const sideRocks: [number, number, number][] = [[-2.6, rows * 0.22, 2.2], [-0.6, rows + 3.4, 2.4], [0.6, -2.6, 2.0], [-2.2, rows + 2.0, 1.8], [-1.6, rows * 0.55, 1.6], [-3.2, rows * 0.8, 1.7]];
+    for (const side of [0, 1]) {
+      const X = (x: number): number => (side === 0 ? x0 + x : x0 + cols - x);
+      sideRocks.forEach(([x, z, sc], i) => piece('felsen', X(x), z, sc, 59, 1.4, hash(i + side * 9, 61) < 0.5));
+    }
+    for (let x = 4, i = 0; x < cols - 1; i++) {
+      piece('felsen', x0 + x + (hash(i, 71) - 0.5) * 1.6, rows + 0.35 + hash(i, 72) * 0.25, 1.1 + hash(i, 73) * 0.4, 59, 0.9, hash(i, 74) < 0.5);
+      x += 3 + hash(i, 75) * 1.5;
+    }
+    for (let x = 4.5, i = 0; x < cols - 1; i++) {
+      piece('felsen', x0 + x + (hash(i, 81) - 0.5) * 1.6, -0.7 - hash(i, 82) * 0.4, 1.2 + hash(i, 83) * 0.4, 59, 0.9, hash(i, 84) < 0.5);
+      x += 3.5 + hash(i, 85) * 1.5;
+    }
+    // Gebirge: senkrechte Bildflächen (zur Kamera, nur um die Hochachse), hinten auf dem Hang, abwechselnd versetzt
+    const berge = this.wholeTex(KULISSE.berge);
+    if (berge) {
+      const bw = 256 * 0.075;
+      const bh = 128 * 0.075;
+      for (let bx = ox, i = 0; bx < ox + W; bx += 15.5, i++) {
+        const geo = new THREE.PlaneGeometry(bw, bh);
+        geo.translate(0, bh / 2 - (12 / 128) * bh, 0);
+        if (i % 2) geo.scale(-1, 1, 1);
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: berge, alphaTest: 0.5, side: THREE.DoubleSide, color: new THREE.Color(0.82, 0.86, 0.92) }));
+        const z = -10.5 - (i % 2) * 1.5;
+        m.position.set(bx + 9, groundY(bx + 9, z) - 0.6, z);
+        group.add(m);
+      }
+    }
     // ---- Wald: Bäume aus dem Atlas (Zeile 32, 64 px), hinten dicht, seitlich locker, vorn licht
     const TREES = [0, 1, 2, 4, 0, 1, 2, 4, 3, 5, 7];
     for (let i = 0; i < 300; i++) {
@@ -947,6 +1012,7 @@ export class Hd2dRenderer {
       const d = abseits(f, x, z);
       if (d < 1.3) continue;
       if (z > rows + 1.4 && hash(i, 303) < 0.7) continue;
+      if (taken.some(([tx2, tz2, rr]) => Math.hypot(x - tx2, z - tz2) < rr)) continue;
       const k = TREES[Math.floor(hash(i, 404) * TREES.length)]!;
       const tt = this.frame(TILESETS.tiles2, k * 64, 32, 64);
       if (!tt) continue;
@@ -954,7 +1020,7 @@ export class Hd2dRenderer {
       const sc = (64 / 36) * (0.85 + hash(i, 505) * 0.45);
       sp.scale.set(hash(i, 606) < 0.5 ? -sc : sc, sc, 1);
       sp.center.set(0.5, 0.06);
-      sp.position.set(x, umlandHeight(f, x, z, edgeH(x, z)), z);
+      sp.position.set(x, groundY(x, z), z);
       const dk = Math.max(0.55, Math.min(1, 1 - d * 0.035));
       (sp.material as THREE.SpriteMaterial).color.setRGB(0.86 * dk, 0.92 * dk, 0.86 * dk);
       group.add(sp);

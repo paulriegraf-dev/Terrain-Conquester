@@ -49,6 +49,8 @@ import walls from '../../../assets/hd2d/walls.webp';
 import tiles2_atlas from '../../../assets/hd2d/tiles2_atlas.webp';
 import tiles3 from '../../../assets/hd2d/tiles3.webp';
 import buildings from '../../../assets/hd2d/buildings.webp';
+import k_berge from '../../../assets/hd2d/kulisse/berge.webp';
+import k_felsen from '../../../assets/hd2d/kulisse/felsen.webp';
 
 export const UNIT_SHEETS: Readonly<Record<string, string>> = {
   // Technoclan-Eliten (15.11.): Elite-Form mit eingebrannten Details (Halo, Schweif, Warnlichter, Kanten, Leuchtfarbe)
@@ -102,3 +104,6 @@ export const UNIT_SHEETS: Readonly<Record<string, string>> = {
 export const TILESETS = { tiles1, tiles2: tiles2_atlas, tiles3, walls } as const;
 /** Gebäude-Streifen (je 80 px): tcHQ, myrHQ, tfHQ, Kaserne, Hangar, Schwerwerk, Brut, Werkstatt, Schmelze, Wiesenhof, Hain, Schlammgrube, Frosthalle, Steinbruch. */
 export const BUILDINGS_SHEET = buildings;
+
+/** Kulisse um das Spielfeld (16.11., aus Pauls Tower Defense „assets/neu/kulisse“): Gebirge und Felsen (nur Generisches). */
+export const KULISSE = { berge: k_berge, felsen: k_felsen } as const;
