@@ -174,7 +174,10 @@ export class Game {
     const sfx = new Sfx(() => ({ enabled: this.music.enabled, volume: this.music.volume }));
     doc.addEventListener('pointerdown', () => sfx.unlock());
     doc.addEventListener('keydown', () => sfx.unlock());
-    if (this.renderer instanceof Hd2dRenderer) this.renderer.onSound = (k, pan, gain) => sfx.play(k, pan, gain);
+    if (this.renderer instanceof Hd2dRenderer) this.renderer.onSound = (k, pan, gain) => {
+      // keine Kampfgeräusche aus der Vorschau-Partie hinter dem Menü (Nutzer 16.11.)
+      if (this.session.mode !== 'demo') sfx.play(k, pan, gain);
+    };
     this.hud = new Hud(doc, (action, data) => this.onAction(action, data));
     if (this.renderer instanceof Hd2dRenderer) {
       this.hudC = new HudC({
@@ -463,8 +466,8 @@ export class Game {
     const dt = Math.min(250, now - (this.lastTime || now));
     this.lastTime = now;
     const tickMs = 1000 / this.session.world.tps;
-    // Die Vorschau hinter der Startkarte läuft im Zeitraffer.
-    const speed = this.session.mode === 'demo' ? 4 : this.speed;
+    // Vorschau hinter der Startkarte: normale Geschwindigkeit (Nutzer 16.11., vorher Zeitraffer ×4).
+    const speed = this.session.mode === 'demo' ? 1 : this.speed;
     if (this.session.catchUp) {
       this.session.catchUpStep(14);
       if (!this.session.catchUp) this.onCatchUpDone();
