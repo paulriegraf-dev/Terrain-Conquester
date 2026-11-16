@@ -395,7 +395,8 @@ export class Renderer {
       const y = (e.prev.y + (e.pos.y - e.prev.y) * alpha) * t;
       const r = Math.max(2.5, e.radius * t);
       // Elite (25.10.): goldenes Leuchten und alle vier Bausteine über ihr (auch das eigene).
-      if (e.elite) {
+      // In HD-2D nicht (16.11.): dort tragen Elite-Figur, Protokoll-Effekt und Symbol im Info-Schild die Elite.
+      if (e.elite && !this.opts.overlayOnly) {
         const pulse = 0.55 + 0.35 * Math.sin((world.tick + alpha) * 0.15);
         const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 2.6);
         g.addColorStop(0, `rgba(255,214,120,${0.45 * pulse})`);

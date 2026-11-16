@@ -1156,14 +1156,15 @@ export class Hd2dRenderer {
     const idx = BUILDING_INDEX[key];
     if (idx === undefined) return null;
     const away = world.players[0].faction.id === world.players[1].faction.id && this.startsRight(world, e.owner);
-    const tex = this.frame(BUILDINGS_SHEET, idx * 80, 0, 80, false, away);
+    // Zellen 96 px (16.11.: Hain, Steinbruch, Wiesenhof, Schwerwerk nach oben/seitlich ergänzt; Bild unten bündig, 8 px Rand je Seite).
+    const tex = this.frame(BUILDINGS_SHEET, idx * 96, 0, 96, false, away);
     if (!tex) return null;
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
     // Bild passend zum Fundament (Nutzer 06.11.): kaum breiter als die Grundfläche, damit man sieht, wo das Gebäude
     // endet und wie weit Truppen davor stehen (vorher 2,5 Kacheln für 2×2, HQ 3,9 für 3×3).
-    const size = r.w * (e.kind === 'hq' ? 1.15 : 1.1);
+    const size = r.w * (e.kind === 'hq' ? 1.15 : 1.1) * (96 / 80);
     s.scale.set(e.owner === 1 ? -size : size, size, 1);
-    s.center.set(0.5, 0.12);
+    s.center.set(0.5, 0.1);
     s.position.set(cx, 0.02, cy + r.h * 0.25);
     // Ins Gelände einarbeiten (Nutzer 16.11.): weicher Kontaktschatten und ein Saum aus Kleinkram am Fuß, der die
     // gerade Unterkante des Bilds verdeckt – je Fraktion eigene Teile.
