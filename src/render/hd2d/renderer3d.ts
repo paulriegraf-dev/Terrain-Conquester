@@ -24,6 +24,7 @@ import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, TILESETS, UNIT_SHEETS } from './assets';
 import { badgeCanvas } from './eliteBadge';
 import { ELITE_FX, eliteFxCanvas } from './eliteFx';
+import { abseits, bayer, noise2, paintPatches, umlandHeight, type Field } from './umland';
 import { BUILDING_FX, FX_COLOR, FX_PARTS, fxCanvas, type BuildingFx } from './buildingFx';
 import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
@@ -730,7 +731,7 @@ export class Hd2dRenderer {
     this.scene.add(this.overlayMesh);
     this.buildTrees(world, at);
     this.buildWalls(world, at);
-    this.buildRim(x0, cols, rows);
+    this.buildUmland(at, x0, cols, rows);
   }
 
   private wallMat(img: HTMLImageElement, i: number): THREE.MeshLambertMaterial {
@@ -805,62 +806,162 @@ export class Hd2dRenderer {
     this.scene.add(group);
   }
 
-  private rim: THREE.Mesh | null = null;
+  private umland: THREE.Group | null = null;
 
-  /** Felsrand um die Karte (wie im Mock-up): dunkles Gestein statt Schwarz neben dem Spielfeld. */
-  private buildRim(x0: number, cols: number, rows: number): void {
-    if (this.rim) {
-      this.scene.remove(this.rim);
-      this.rim.geometry.dispose();
+  /**
+   * Umland statt Felsplatte (Nutzer 16.11., nach dem Tower Defense, umland.ts): Gelände mit Hang hinten, Hügeln an den
+   * Seiten und Böschung vorn, gemalt aus denselben Bodenkacheln (am Rand setzt sich das Gelände der Karte fort, weiter
+   * draußen Wiese, Waldboden, Ödland und Geröll), nach außen gerastert dunkler, mit Wald (hinten dicht, vorn licht).
+   * Ganz außen eine tiefe, dunkle Wiese bis in den Dunst.
+   */
+  private buildUmland(at: (x: number, y: number) => number, x0: number, cols: number, rows: number): void {
+    if (this.umland) {
+      this.scene.remove(this.umland);
+      this.umland.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          ((o.material as THREE.MeshLambertMaterial).map as THREE.Texture | null)?.dispose();
+        }
+      });
+      this.umland = null;
     }
-    const M = 60;
-    const shape = new THREE.Shape();
-    shape.moveTo(x0 - M, -M);
-    shape.lineTo(x0 + cols + M, -M);
-    shape.lineTo(x0 + cols + M, rows + M);
-    shape.lineTo(x0 - M, rows + M);
-    shape.closePath();
-    const hole = new THREE.Path();
-    hole.moveTo(x0, 0);
-    hole.lineTo(x0, rows);
-    hole.lineTo(x0 + cols, rows);
-    hole.lineTo(x0 + cols, 0);
-    hole.closePath();
-    shape.holes.push(hole);
-    const geo = new THREE.ShapeGeometry(shape);
-    // Kachelbare Pixel-Felstextur (64 px = 2 Kacheln)
-    if (!this.rimTex) {
-      const c = document.createElement('canvas');
-      c.width = c.height = 64;
-      const g = c.getContext('2d')!;
-      // Grobe, kontrastarme Blöcke: der Rand liegt flach im Hintergrund, feine Pixel flimmern dort als Streifen.
-      const pal = ['#2e3138', '#32353c', '#363940', '#2b2e35'];
-      for (let y = 0; y < 64; y += 8) for (let x = 0; x < 64; x += 8) {
-        const n = hash(x >> 4, y >> 4) * 0.5 + hash(x, y) * 0.5;
-        g.fillStyle = pal[Math.min(pal.length - 1, Math.floor(n * pal.length))]!;
-        g.fillRect(x, y, 8, 8);
+    const s1 = this.image(TILESETS.tiles1);
+    const s2 = this.image(TILESETS.tiles2);
+    const s3 = this.image(TILESETS.tiles3);
+    if (![s1, s2, s3].every((i) => this.ready(i))) return;
+    const f: Field = { x0, cols, rows };
+    const M = 14;
+    const W = cols + 2 * M;
+    const H = rows + 2 * M;
+    const ox = x0 - M;
+    const oz = -M;
+    const group = new THREE.Group();
+    // Gelände der Karte am Rand fortsetzen; Höhenarten (Berg, Schlucht, Wall) werden draußen zu Geröll bzw. Wiese.
+    const edgeT = (x: number, z: number): number => {
+      const t = at(Math.max(x0, Math.min(x0 + cols - 1, Math.floor(x))), Math.max(0, Math.min(rows - 1, Math.floor(z))));
+      return t === 4 || t === 5 ? 6 : t === 7 ? 0 : t;
+    };
+    const edgeH = (x: number, z: number): number => HEIGHT[at(Math.max(x0, Math.min(x0 + cols - 1, Math.floor(x))), Math.max(0, Math.min(rows - 1, Math.floor(z))))] ?? 0;
+    // ---- Bild
+    const c = document.createElement('canvas');
+    c.width = W * 32;
+    c.height = H * 32;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.imageSmoothingEnabled = false;
+    const sets = this.groundSets(s1, s2, s3);
+    const vt = new Uint8Array(W * H);
+    for (let ty = 0; ty < H; ty++) {
+      for (let tx = 0; tx < W; tx++) {
+        const wx = ox + tx + 0.5;
+        const wz = oz + ty + 0.5;
+        const d = abseits(f, wx, wz);
+        const n = noise2(wx, wz, 0.12, 5);
+        let t: number;
+        if (d <= 0) t = at(Math.floor(wx), Math.floor(wz));
+        else if (d < 2.2 + n * 1.2) t = edgeT(wx, wz);
+        else if (d > 7 + n * 3 && n < -0.15) t = 6; // Geröll weit draußen
+        else if (n > 0.3) t = 1; // Waldboden
+        else if (n < -0.35) t = 8; // Ödland
+        else t = 0;
+        vt[ty * W + tx] = t;
+        const list = sets[t];
+        if (list) this.drawTile(g, list, t, ox + tx, oz + ty, tx * 32, ty * 32, hash(ox + tx, oz + ty));
       }
-      const t = new THREE.CanvasTexture(c);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.magFilter = THREE.NearestFilter;
-      // Mipmaps gegen Moiré im flachen Blickwinkel (der Rand liegt weit hinten)
-      t.minFilter = THREE.LinearMipmapLinearFilter;
-      t.anisotropy = 4;
-      t.colorSpace = THREE.SRGBColorSpace;
-      this.rimTex = t;
     }
-    // ShapeGeometry liegt in der xy-Ebene: UV = Weltkoordinaten / 2 (eine Textur je 2 Kacheln)
-    const uv = geo.attributes.uv!;
-    const pos = geo.attributes.position!;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / 2, pos.getY(i) / 2);
-    this.rim = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: this.rimTex, side: THREE.DoubleSide }));
-    // xy → xz: Drehung um x um +90° legt y auf z
-    this.rim.rotation.x = Math.PI / 2;
-    this.rim.position.y = -0.02;
-    this.scene.add(this.rim);
+    blendEdges(g, W, H, (x, y) => vt[Math.max(0, Math.min(H - 1, y)) * W + Math.max(0, Math.min(W - 1, x))]!);
+    paintPatches(g, ox, oz, { x: 0, y: 0, w: W * 32, h: H * 32 });
+    // Bewuchs aus dem Deko-Atlas (nur auf Wiese/Waldboden), dann nach außen gerastert dunkler
+    const DECO = [0, 1, 6, 2, 3, 35, 61, 4, 20, 0, 1, 6, 8, 9, 23];
+    for (let i = 0; i < (W * H) / 2; i++) {
+      const tx = Math.floor(hash(i, 11) * W);
+      const ty = Math.floor(hash(i, 23) * H);
+      const d = abseits(f, ox + tx + 0.5, oz + ty + 0.5);
+      if (d < 0.7) continue;
+      const t = vt[ty * W + tx];
+      if (t !== 0 && t !== 1) continue;
+      const k = DECO[Math.floor(hash(i, 37) * DECO.length)]!;
+      g.drawImage(s2, (k % 32) * 32, 96 + Math.floor(k / 32) * 32, 32, 32, tx * 32 + Math.floor(hash(i, 5) * 16), ty * 32 + Math.floor(hash(i, 7) * 16), 32, 32);
+    }
+    for (let py = 0; py < H * 32; py += 4) {
+      for (let px = 0; px < W * 32; px += 4) {
+        const d = abseits(f, ox + px / 32, oz + py / 32);
+        if (d <= 0.25) continue;
+        // gleich am Rand eine sanfte Stufe (man sieht, wo das Spielfeld endet), nach außen weiter dunkler
+        const a = 0.16 + Math.min(1, (d - 0.25) / 11) * 0.5 + bayer(px / 4, py / 4) * 0.06;
+        if (a <= 0) continue;
+        g.fillStyle = `rgba(5,10,13,${Math.round(a / 0.06) * 0.06})`;
+        g.fillRect(px, py, 4, 4);
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.anisotropy = 4;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // ---- Netz: halbe Kacheln, Felder des Spielfelds ausgespart
+    const step = 0.5;
+    const nx = W / step;
+    const nz = H / step;
+    const P: number[] = [];
+    const UV: number[] = [];
+    const idx: number[] = [];
+    const vid = new Int32Array((nx + 1) * (nz + 1)).fill(-1);
+    const vert = (i: number, j: number): number => {
+      const k = j * (nx + 1) + i;
+      if (vid[k]! >= 0) return vid[k]!;
+      const x = ox + i * step;
+      const z = oz + j * step;
+      // ganz außen sanft auf die tiefe Wiese absenken (keine schwebende Netzkante in der Kartenansicht)
+      const rim = Math.min(i, nx - i, j, nz - j) * step;
+      const out = rim >= 4 ? 0 : 1 - (rim / 4) * (rim / 4) * (3 - 2 * (rim / 4));
+      P.push(x, umlandHeight(f, x, z, edgeH(x, z)) * (1 - out) - 1.9 * out, z);
+      UV.push(i / nx, 1 - j / nz);
+      vid[k] = P.length / 3 - 1;
+      return vid[k]!;
+    };
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const cx = ox + (i + 0.5) * step;
+        const cz = oz + (j + 0.5) * step;
+        if (abseits(f, cx, cz) <= 0) continue;
+        const a = vert(i, j), b = vert(i + 1, j), cc = vert(i + 1, j + 1), d = vert(i, j + 1);
+        idx.push(a, d, cc, a, cc, b);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex })));
+    // ---- Ferne: tiefe, dunkle Wiese bis in den Dunst
+    const far = new THREE.Mesh(new THREE.PlaneGeometry(W + 400, H + 400), new THREE.MeshLambertMaterial({ color: '#2a3a2c' }));
+    far.rotation.x = -Math.PI / 2;
+    far.position.set(x0 + cols / 2, -1.9, rows / 2);
+    group.add(far);
+    // ---- Wald: Bäume aus dem Atlas (Zeile 32, 64 px), hinten dicht, seitlich locker, vorn licht
+    const TREES = [0, 1, 2, 4, 0, 1, 2, 4, 3, 5, 7];
+    for (let i = 0; i < 300; i++) {
+      const x = ox + hash(i, 101) * W;
+      const z = oz + hash(i, 202) * (H - M + 6);
+      const d = abseits(f, x, z);
+      if (d < 1.3) continue;
+      if (z > rows + 1.4 && hash(i, 303) < 0.7) continue;
+      const k = TREES[Math.floor(hash(i, 404) * TREES.length)]!;
+      const tt = this.frame(TILESETS.tiles2, k * 64, 32, 64);
+      if (!tt) continue;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tt, alphaTest: 0.5 }));
+      const sc = (64 / 36) * (0.85 + hash(i, 505) * 0.45);
+      sp.scale.set(hash(i, 606) < 0.5 ? -sc : sc, sc, 1);
+      sp.center.set(0.5, 0.06);
+      sp.position.set(x, umlandHeight(f, x, z, edgeH(x, z)), z);
+      const dk = Math.max(0.55, Math.min(1, 1 - d * 0.035));
+      (sp.material as THREE.SpriteMaterial).color.setRGB(0.86 * dk, 0.92 * dk, 0.86 * dk);
+      group.add(sp);
+    }
+    this.umland = group;
+    this.scene.add(group);
   }
-
-  private rimTex: THREE.CanvasTexture | null = null;
 
   /** Boden aus den PixelLab-Kacheln (Variante N des Mock-ups), Übergänge verzahnt, Kanten mit Höhensprung schattiert. */
   private groundCanvas(world: World, at: (x: number, y: number) => number): HTMLCanvasElement {
@@ -883,19 +984,7 @@ export class Hd2dRenderer {
     const s2 = this.image(TILESETS.tiles2);
     const s3 = this.image(TILESETS.tiles3);
     const fallback = ['#5f9a3c', '#2f5e2c', '#5a4330', '#e3ecf2', '#7a7d86', '#2a2420', '#7d7468', '#9c7a4a', '#6b6457'];
-    type Pick = [HTMLImageElement, number, number];
-    const range = (img: HTMLImageElement, row: number, idx: number[]): Pick[] => idx.map((i) => [img, row, i]);
-    const sets: Pick[][] = [
-      range(s2, 0, [0, 1, 2, 12, 15]), // Wiese
-      range(s2, 0, [9, 10, 11, 14]), // Wald
-      range(s1, 0, [10, 11, 12]), // Matsch
-      range(s3, 0, [0, 1, 2]), // Schnee
-      range(s3, 0, [3, 4, 5]), // Gebirge
-      range(s3, 0, [6, 7, 8]), // Schlucht
-      range(s3, 0, [12, 13, 14, 15]), // Geröll
-      range(s1, 1, [14, 15]), // Erdwall
-      range(s3, 0, [9, 10, 11]), // Ödland
-    ];
+    const sets = this.groundSets(s1, s2, s3);
     const ok = [s1, s2, s3].every((i) => this.ready(i));
     for (let y = box.y0; y < box.y1; y++) {
       for (let x = box.x0; x < box.x1; x++) {
@@ -908,16 +997,12 @@ export class Hd2dRenderer {
           g.fillRect(x * TP, y * TP, TP, TP);
           continue;
         }
-        const [img, row, i] = list[Math.floor(h * list.length) % list.length]!;
-        const rot = t === 7 ? 0 : Math.floor(hash(wx + 17, y + 3) * 4);
-        g.save();
-        g.translate(x * TP + TP / 2, y * TP + TP / 2);
-        g.rotate((rot * Math.PI) / 2);
-        g.drawImage(img, i * 32, row * 32, 32, 32, -TP / 2, -TP / 2, TP, TP);
-        g.restore();
+        this.drawTile(g, list, t, wx, y, x * TP, y * TP, h);
       }
     }
     if (ok) blendEdges(g, cols, rows, (x, y) => at(this.viewX0 + x, y), box);
+    // Große Licht-/Schattenflecken (Nutzer 16.11., wie im Tower Defense) – gleiches Rauschen wie im Umland
+    if (ok) paintPatches(g, this.viewX0, 0, { x: box.x0 * TP, y: box.y0 * TP, w: (box.x1 - box.x0) * TP, h: (box.y1 - box.y0) * TP });
     for (let y = box.y0; y < box.y1; y++) {
       for (let x = box.x0; x < box.x1; x++) {
         const wx = this.viewX0 + x;
@@ -934,6 +1019,33 @@ export class Hd2dRenderer {
         }
       }
     }
+  }
+
+  private groundSets(s1: HTMLImageElement, s2: HTMLImageElement, s3: HTMLImageElement): [HTMLImageElement, number, number][][] {
+    type Pick = [HTMLImageElement, number, number];
+    const range = (img: HTMLImageElement, row: number, idx: number[]): Pick[] => idx.map((i) => [img, row, i]);
+    return [
+      range(s2, 0, [0, 1, 2, 12, 15]), // Wiese
+      range(s2, 0, [9, 10, 11, 14]), // Wald
+      range(s1, 0, [10, 11, 12]), // Matsch
+      range(s3, 0, [0, 1, 2]), // Schnee
+      range(s3, 0, [3, 4, 5]), // Gebirge
+      range(s3, 0, [6, 7, 8]), // Schlucht
+      range(s3, 0, [12, 13, 14, 15]), // Geröll
+      range(s1, 1, [14, 15]), // Erdwall
+      range(s3, 0, [9, 10, 11]), // Ödland
+    ];
+  }
+
+  private drawTile(g: CanvasRenderingContext2D, list: [HTMLImageElement, number, number][], t: number, wx: number, wy: number, px: number, py: number, h: number): void {
+    const TP = 32;
+    const [img, row, i] = list[Math.floor(h * list.length) % list.length]!;
+    const rot = t === 7 ? 0 : Math.floor(hash(wx + 17, wy + 3) * 4);
+    g.save();
+    g.translate(px + TP / 2, py + TP / 2);
+    g.rotate((rot * Math.PI) / 2);
+    g.drawImage(img, i * 32, row * 32, 32, 32, -TP / 2, -TP / 2, TP, TP);
+    g.restore();
   }
 
   /**
