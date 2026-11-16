@@ -2353,8 +2353,10 @@ export class Game {
           ? ` · Waffe: ${w.shots}× Schaden ${Math.round(w.damage * 10) / 10}, Treffen ${w.skill}+, Stärke ${w.strength}, Durchschlag ${w.ap}`
           : '';
         const enemyFaction = world.players[otherPlayer(unit.owner)].faction.id;
-        // Technoclan (v2): Elite mit ihrem Protokoll
-        const net = unit.elite && unit.net ? ` · ELITE (${PROTOCOLS[unit.net.protocols[0]!].name})` : '';
+        // Technoclan: Bausteine und Elite (Netz; der Verbund ist seit v2 aus dem Spiel)
+        const net = unit.net
+          ? (unit.elite ? ` · ELITE ${unit.tech?.eliteFx?.kind === 'hybrid' ? `Hybrid (${PROTOCOLS[unit.tech.eliteFx.dominant].name})` : 'reinrassig'} (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '')
+          : '';
         const mudN = unit.mud ? Math.round(unit.mud.n) : 0;
         const mud = mudN > 0 ? ` · Verschlammung ${mudN} – ${mudN * world.rules.mudStacks.dps}/s` : '';
         this.hud.setStatus(

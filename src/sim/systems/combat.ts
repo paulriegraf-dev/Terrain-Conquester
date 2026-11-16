@@ -207,7 +207,7 @@ export function updateCombat(world: World): void {
     // Todeswut (Lebensuhr): alte Verbände feuern schneller.
     const rage = e.lifespan ? frenzyOf(world, e) : null;
     // Netz-Aufstieg (Technoclan): kurz schnelleres Feuer.
-    const rate = pressure * (rage ? rage.fireRate : 1) * warmupRate(world, e, t) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
+    const rate = pressure * (rage ? rage.fireRate : 1) * warmupRate(world, e, t) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
     w.ready = rate !== 1 ? Math.max(1, Math.round(w.cooldownTicks / rate)) : w.cooldownTicks;
     e.combatTick = world.tick;
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer

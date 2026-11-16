@@ -32,6 +32,7 @@ import type { BuyState } from './systems/purchases';
 import { updateLifespans } from './systems/lifespan';
 import { updateEmergency } from './systems/emergency';
 import { updateScout } from './systems/scout';
+import { onNetworkDeath, updateNetworks } from './systems/network';
 import { onTrickDeath, revealedTo, updateTricks } from './systems/tricks';
 import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
@@ -635,6 +636,7 @@ export class World {
     updateMarket(this);
     if (this.tick % this.rules.visionEvery === 0) updateVision(this);
     updateProduction(this);
+    updateNetworks(this);
     updateVerbund(this);
     updateTricks(this);
     updateTerraform(this);
@@ -931,6 +933,7 @@ export class World {
   destroy(e: Entity, killer: PlayerId | null): void {
     if (!e.alive) return;
     e.alive = false;
+    if (e.net && e.net.id !== 0) onNetworkDeath(this, e);
     if (e.kind === 'unit' && killer !== null) {
       this.onUnitDeath(e, killer);
       onTrickDeath(this, e);

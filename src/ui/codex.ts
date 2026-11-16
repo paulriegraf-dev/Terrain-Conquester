@@ -566,15 +566,19 @@ function technoTraits(): string {
   const blocks = (Object.keys(BLOCKS) as ProtocolId[]).filter((p) => p !== 'node').map((p) => {
     const b = BLOCKS[p];
     const owner = Object.values(UNITS).find((u) => u.protocol === p);
-    return `<tr><th scope="row"><span class="cx-uname">${owner ? portrait(owner.id, 30) : ''}<span>${escapeHtml(owner?.name ?? '')}<span class="cx-role">${escapeHtml(b.name)}</span></span></span></th><td>${escapeHtml(b.elite)}</td></tr>`;
+    return `<tr><th scope="row"><span class="cx-uname">${owner ? portrait(owner.id, 30) : ''}<span>${escapeHtml(b.name)}<span class="cx-role">${escapeHtml(owner?.name ?? '')}</span></span></span></th><td>${escapeHtml(b.copies[0])}</td><td>${escapeHtml(b.copies[1])}</td><td>${escapeHtml(b.copies[2])}</td><td>${escapeHtml(b.elite)}</td></tr>`;
   }).join('');
-  return `<h3 class="cx-h3">Elite</h3>
+  return `<h3 class="cx-h3">Netzwerk</h3>
     <ul class="cx-rules">
-      <li>Mit dem Fabrik-Verhalten <b>Eliteprogramm</b> (je Fabrik, nach Ausrüstung I) kommt <b>jeder 4. Verband</b> dieser Fabrik als Elite: ${Math.round(n.eliteHp * 100)} % Leben und sein Protokoll in der Elite-Fassung.</li>
-      <li>Elite erkennt man am Lichteffekt an der Figur und am Symbol rechts im Schild über dem Verband. Der Gegner sieht Eliten auch im Spähbericht.</li>
-      <li>Der frühere Verbund (Kombinationen zweier Fabriken je Lane) und die Netze sind seit dem Upgrade-Pfad v2 aus dem Spiel.</li>
+      <li>Verbände auf derselben Lane verbinden sich, wenn sie höchstens ${num(n.joinRadius)} Kacheln auseinander stehen – auch gleiche Arten, höchstens ${n.maxTypes} Arten je Netz, ${n.maxMembers} Mitglieder (mit Commander ${n.maxWithNode}). Wer sich weiter als ${num(n.breakRadius)} Kacheln entfernt, fällt heraus.</li>
+      <li>Stirbt ein Mitglied, droppt es den <b>Baustein seines Typs</b>; das nächste lebende Mitglied fängt ihn auf. Ohne Netz geht er verloren. Gleiche Bausteine stapeln mit abnehmender Wirkung.</li>
+      <li>Ab <b>${n.eliteAt} Bausteinen</b> (eigener plus aufgefangene) wird der Verband <b>Elite</b>: ${Math.round(n.eliteHp * 100)} % Leben und volle Heilung beim Aufstieg, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach +75 %). Danach nimmt er nichts mehr auf.</li>
+      <li>Der <b>häufigste Baustein</b> bestimmt die Art der Elite (Gleichstand: die eigene Grundart). <b>Reinrassig</b>: der eigene dominiert. <b>Hybrid</b>: ein fremder dominiert – die Elite bekommt dessen Waffenart dazu (Zielmarkierung: Treffen +1).</li>
+      <li>Zusätzlich macht das Fabrik-Verhalten <b>Eliteprogramm</b> jeden 4. Verband der Fabrik gleich als Elite (mit seinem eigenen Baustein).</li>
+      <li>Der frühere <b>Verbund</b> (Kombinationen zweier Fabriken je Lane, z. B. Plasma + Plasma) ist seit dem Upgrade-Pfad v2 aus dem Spiel.</li>
     </ul>
-    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit · Protokoll</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>`;
+    <h3 class="cx-h3">Bausteine</h3>
+    <div class="cx-scroll"><table class="cx-table cx-blocks"><thead><tr><th>Baustein</th><th>1. Kopie</th><th>2. Kopie</th><th>3. Kopie</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>`;
 }
 
 function terraTraits(): string {

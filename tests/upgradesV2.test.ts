@@ -50,13 +50,13 @@ describe('Upgrade-Pfad v2: Budget und Aufbau', () => {
     }
   });
 
-  it('kein Verbund mehr: Technoclan-Verbände bilden keine Netze', () => {
+  it('kein Verbund mehr – das Netz mit den Bausteinen bleibt', () => {
     const world = new World({ map: openMap, seed: 1, rules: smallBases });
     const a = unit(world, 0, 'sniper', 4.5, 7.5);
     unit(world, 0, 'plasma', 5.5, 7.5);
     stepTimes(world, 3 * world.tps);
-    assert.equal(a.net!.id, 0);
-    assert.equal(world.networks.size, 0);
+    assert.ok(a.net!.id !== 0, 'im Netz');
+    assert.equal(world.verbund[0].mid.active, null, 'kein Verbund');
   });
 });
 

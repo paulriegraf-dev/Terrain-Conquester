@@ -310,7 +310,7 @@ const behavior = (building: BuildingId, kind: BuildingUpgradeKind, name: string,
 
 /** Eliteprogramm (Technoclan, v2): jeder 4. Verband der Fabrik kommt als Elite. */
 const elite = (building: BuildingId, name: string): BuildingUpgradeDef =>
-  behavior(building, 'elite', 'Eliteprogramm', `jeder 4. Verband aus ${name} kommt als Elite: doppeltes Leben, sein Protokoll in Elite-Fassung`, 200, `${building}-gear-1`);
+  behavior(building, 'elite', 'Eliteprogramm', `jeder 4. Verband aus ${name} kommt gleich als Elite (sonst erst ab 4 Bausteinen im Netz)`, 200, `${building}-gear-1`);
 
 /**
  * Terra-Former fraktionsweit (v2), an jeder Linienfabrik: Wächterkraft (Kampfwerte aller Wächter), Naturkraft (Gerufene),

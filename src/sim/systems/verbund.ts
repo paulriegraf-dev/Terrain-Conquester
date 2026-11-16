@@ -1,5 +1,6 @@
 import type { TechMods } from '../../data/verbund';
-import type { ProtocolId, UnitId } from '../../data/units';
+import { UNITS } from '../../data/units';
+import type { ProtocolId, UnitId, WeaponDef } from '../../data/units';
 import type { Entity } from '../entity';
 import type { World } from '../world';
 import { applyHits } from './combat';
@@ -9,9 +10,10 @@ import { TRICK, hasTrick, stillSeconds } from './tricks';
 import { hasKeystone } from './keystone';
 
 /**
- * Technoclan-Technik (v2, 16.11.): Der Verbund (Lane-Kombinationen) und die Netze sind aus dem Spiel genommen. Geblieben:
- * Elite (über das Fabrik-Verhalten „Eliteprogramm“, jeder 4. Verband) mit der Elite-Fassung des eigenen Protokolls, und die
- * Kniffe/Schlusssteine, die als Werte auf die Waffe wirken (Ruhige Hand, Plasmabrand, Rammbock, Glutfeld).
+ * Technoclan-Technik (v2, 16.11.): Der Verbund (Lane-Kombinationen wie „Plasma + Plasma“) ist aus dem Spiel genommen.
+ * Geblieben (Nutzer 16.11.: „das Technonetz mit den Bausteinen bleibt drin“): Netze und Bausteine (systems/network.ts),
+ * Elite ab `eliteAt` Bausteinen – reinrassig oder Hybrid – und zusätzlich über das Fabrik-Verhalten „Eliteprogramm“.
+ * Dazu die Kniffe/Schlusssteine, die als Werte auf die Waffe wirken (Ruhige Hand, Plasmabrand, Rammbock, Glutfeld).
  *
  * Alles läuft einmal je Sekunde; die Wirkung im Kampf lesen combat.ts und hitmath.ts aus `e.tech`.
  */
@@ -53,6 +55,17 @@ export function becomeElite(world: World, e: Entity): void {
 
 const DUP = [0, 1, 1.5, 1.75] as const;
 
+/** Welche Einheit liefert welchen Baustein (für die Waffenart der Hybrid-Elite). */
+const PROTOCOL_UNIT: Partial<Record<ProtocolId, UnitId>> = {
+  antiHeavy: 'sniper',
+  area: 'plasma',
+  mark: 'hoverscout',
+  range: 'battery',
+  pierce: 'gunner',
+  plating: 'colossus',
+};
+
+
 /**
  * Dominierender Baustein einer Elite: der häufigste. Gleichstand: die eigene Grundart, wenn sie dabei ist,
  * sonst der zuletzt aufgenommene.
@@ -65,6 +78,15 @@ export function dominantProtocol(protocols: readonly ProtocolId[]): ProtocolId |
   if (count(protocols, own) === max) return own;
   for (let i = protocols.length - 1; i >= 0; i--) if (count(protocols, protocols[i]!) === max) return protocols[i]!;
   return own;
+}
+
+/** Waffenart dazunehmen: je Panzerungsklasse gilt das bessere „anti“, gegen Gebäude der höhere Bonus. */
+function addWeaponType(w: WeaponDef, from: WeaponDef | undefined): WeaponDef {
+  if (!from) return w;
+  const anti = { ...(w.anti ?? {}) };
+  for (const [k, v] of Object.entries(from.anti ?? {}) as [keyof typeof anti, number][]) anti[k] = anti[k] === undefined ? v : Math.min(anti[k]!, v);
+  const structureDamage = Math.max(w.structureDamage ?? 1, from.structureDamage ?? 1);
+  return { ...w, anti, ...(structureDamage > 1 ? { structureDamage } : {}) };
 }
 
 function count(protocols: readonly ProtocolId[], p: ProtocolId): number {
@@ -119,8 +141,15 @@ export function refreshTech(world: World, e: Entity): void {
   const protocols = e.net.protocols;
   const mods: TechMods = {};
   const key = '';
+  // Gestapelte Panzerung (die eigene erste Kopie des Koloss steckt in seinen Werten).
+  const plating = count(protocols, 'plating');
+  for (let c = protocols[0] === 'plating' ? 2 : 1; c <= Math.min(3, plating); c++) merge(mods, c === 1 ? { toughness: 1 } : { damageTaken: c === 2 ? 0.9 : 0.95 });
+  // Elite-Art (Netz): reinrassig (eigener Baustein dominiert) oder Hybrid (fremder dominiert → dessen Waffenart dazu;
+  // Zielmarkierung: Treffen +1). Seit v2 ohne Verbund-Spezialisierung.
   const dominant = e.elite ? dominantProtocol(protocols) : null;
-  const pure = true;
+  const pure = !dominant || dominant === protocols[0];
+  const hybridFrom = dominant && !pure && dominant !== 'mark' ? PROTOCOL_UNIT[dominant] : undefined;
+  if (dominant && !pure && dominant === 'mark') merge(mods, { hit: 1 });
   // Kniffe und Schlusssteine (v2, 16.11.) als Werte
   let calm = false;
   if (e.defId === 'sniper' && hasTrick(world, e.owner, 'calmHand') && stillSeconds(world, e) >= TRICK.calmHand.still) {
@@ -170,6 +199,7 @@ export function refreshTech(world: World, e: Entity): void {
   if (sig !== t.sig && e.weapon) {
     t.sig = sig;
     let w = withProtocols(e.weapon.baseDef, protocols);
+    if (hybridFrom) w = addWeaponType(w, UNITS[hybridFrom]?.weapon);
     if (fx?.splashFull) w = { ...w, splash: Math.max(w.splash ?? 0, 1.5 + 0.25 * (count(protocols, 'area') - 1)) };
     if (mods.range) w = { ...w, range: w.range + mods.range };
     if (mods.hit) w = { ...w, skill: Math.max(2, w.skill - mods.hit) };
