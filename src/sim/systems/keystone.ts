@@ -16,6 +16,7 @@ import type { Hit } from './combat';
 import { defenseOf, woundsPerShot } from './hitmath';
 import { researchableUnits } from './factory';
 import { breakerDeath } from './breaker';
+import { longThrowImpact } from './myr';
 
 /** Hat Spieler p den Schlussstein dieser Einheitenart? */
 export function hasKeystone(world: World, p: PlayerId, unit: string): boolean {
@@ -229,7 +230,7 @@ export function throwTaunter(world: World, c: Entity, x: number, y: number): voi
     start: world.tick,
     land: world.tick + Math.max(1, Math.round(def.flight * world.tps)),
     route: c.mover?.route ?? 'mid',
-    impact: def.impact,
+    impact: longThrowImpact(world, c, def.impact),
     thrower: c.id,
   });
   world.emit({ type: 'launch', owner: c.owner, unit: def.unit, from: { x: c.pos.x, y: c.pos.y }, to: { x, y }, land: world.tick + Math.round(def.flight * world.tps) });

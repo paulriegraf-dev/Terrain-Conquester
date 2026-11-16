@@ -34,41 +34,28 @@ function lane(world: World, rows: number[], ground: TerrainId, x0 = 2, x1 = 9): 
 }
 
 describe('Terra-Former: Lane-Synergien', () => {
-  it('zwei gleiche Lanes plus eine dritte: Grundwirkung mit Färbung; alle drei gleich: verstärkt; 1+1+1: nichts', () => {
+  it('v2: jede Lane für sich – je Lane der Boden mit den meisten Kacheln (ab 12), keine Kombinationen', () => {
     const w1 = new World({ map: openMap, seed: 1, ...tf });
     lane(w1, [0, 1], 'forest');
-    lane(w1, [7, 8], 'forest');
-    lane(w1, [4, 5], 'meadow');
+    lane(w1, [7, 8], 'snow');
     const s1 = computeSynergy(w1, 0);
-    assert.deepEqual([s1.base, s1.accent, s1.triple], ['forest', 'meadow', false]);
-    assert.equal(synergyLabel(s1), 'Wurzelnetz + Waldrand');
+    assert.deepEqual(s1.lanes, ['forest', null, 'snow']);
+    assert.equal(s1.base, null, 'keine Lane-übergreifende Synergie');
+    assert.equal(synergyLabel(s1), 'oben Wurzelnetz · unten Schneesturm');
 
-    const w2 = new World({ map: openMap, seed: 1, ...tf });
-    lane(w2, [0, 1], 'snow');
-    lane(w2, [4, 5], 'snow');
-    lane(w2, [7, 8], 'snow');
-    const s2 = computeSynergy(w2, 0);
-    assert.deepEqual([s2.base, s2.triple], ['snow', true]);
-
-    const w3 = new World({ map: openMap, seed: 1, ...tf });
-    lane(w3, [0, 1], 'snow');
-    lane(w3, [4, 5], 'mud');
-    lane(w3, [7, 8], 'rubble');
-    assert.equal(computeSynergy(w3, 0).base, null, 'keine 1+1-Synergien');
-
-    // Seit 24.10.: X muss in der Lane nicht vorherrschen – genug Kacheln reichen.
     const w4 = new World({ map: openMap, seed: 1, ...tf });
     lane(w4, [0, 1], 'forest');
     lane(w4, [2], 'mud', 2, 19);
-    lane(w4, [7, 8], 'forest');
     const s4 = computeSynergy(w4, 0);
-    assert.equal(s4.lanes[0], 'mud', 'oben herrscht Matsch vor');
-    assert.equal(s4.base, 'forest', 'trotzdem Wald-Doppel');
+    assert.equal(s4.lanes[0], 'mud', 'oben: der Boden mit den meisten Kacheln');
+
+    const w5 = new World({ map: openMap, seed: 1, ...tf });
+    lane(w5, [0], 'forest', 2, 8);
+    assert.deepEqual(computeSynergy(w5, 0).lanes, [null, null, null], 'unter 12 Kacheln nichts');
   });
 
-  it('Schneesturm: Gegner auf eigenem Schnee werden mit jeder Sekunde langsamer – bis 60 %', () => {
+  it('Schneesturm: Gegner in der Schnee-Lane langsamer, auf eigenem Schnee mit jeder Sekunde mehr – bis 40 %', () => {
     const world = new World({ map: openMap, seed: 1, rules: calm, ...tf });
-    lane(world, [0, 1], 'snow');
     lane(world, [6, 7, 8], 'snow');
     const enemy = unit(world, 1, 'gunner', 8.5, 7.5);
     enemy.weapon = undefined;
@@ -77,12 +64,11 @@ describe('Terra-Former: Lane-Synergien', () => {
     stepTimes(world, 10 * world.tps);
     const late = groundSpeedFactor(world, enemy);
     assert.ok(early < 1 && late < early, `${early.toFixed(2)} → ${late.toFixed(2)}`);
-    assert.ok(late >= 0.4 - 1e-9, 'höchstens 60 % Bremse');
+    assert.ok(late >= 0.9 * 0.6 - 1e-9, 'Lane −10 %, Sturm höchstens −40 %');
   });
 
   it('Geröllhagel: Gegner auf eigenem Geröll nehmen Schaden über Zeit', () => {
     const world = new World({ map: openMap, seed: 1, rules: calm, ...tf });
-    lane(world, [0, 1], 'rubble');
     lane(world, [6, 7, 8], 'rubble');
     const enemy = unit(world, 1, 'gunner', 8.5, 7.5);
     enemy.weapon = undefined;
@@ -90,13 +76,16 @@ describe('Terra-Former: Lane-Synergien', () => {
     assert.ok(enemy.hp < enemy.maxHp, `${enemy.hp} von ${enemy.maxHp}`);
   });
 
-  it('Blühende Wiese: Produktion der Terra-Former schneller', () => {
-    const world = new World({ map: openMap, seed: 1, ...tf });
+  it('Blühende Wiese: eigene Verbände der Lane heilen außerhalb des Kampfes; keine Produktionsboni', () => {
+    const world = new World({ map: openMap, seed: 1, rules: calm, ...tf });
     const base = productionSpeed(world, 0, 'arms');
-    lane(world, [0, 1], 'meadow');
-    lane(world, [7, 8], 'meadow');
-    world.step();
-    assert.ok(productionSpeed(world, 0, 'arms') > base * 1.1);
+    lane(world, [6, 7, 8], 'meadow');
+    const ward = unit(world, 0, 'wardMeadow', 8.5, 7.5);
+    ward.weapon = undefined;
+    ward.hp = ward.maxHp * 0.5;
+    stepTimes(world, 6 * world.tps);
+    assert.ok(ward.hp > ward.maxHp * 0.55, `geheilt: ${(ward.hp / ward.maxHp).toFixed(2)}`);
+    assert.equal(productionSpeed(world, 0, 'arms'), base, 'Produktion unverändert');
   });
 });
 

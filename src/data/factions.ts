@@ -63,7 +63,15 @@ export interface UpgradeDef {
   fork?: string;
   /** Schlussstein (26.10.): ändert eine Regel der Einheitenart (siehe data/keystones.ts). */
   keystone?: boolean;
+  /** Spezialisierung (v2, 16.11.): kleiner Kniff, den die Systeme über hasTrick lesen. */
+  trick?: TrickId;
 }
+
+/** Kniffe der Säule Spezialisierung (v2, 16.11.). */
+export type TrickId =
+  | 'calmHand' | 'plasmaBurn' | 'callOut' | 'spotter' | 'ricochet' | 'warmup' | 'ram'
+  | 'lastBite' | 'dash' | 'scent' | 'acid' | 'longThrow' | 'rollShield'
+  | 'meadowWay' | 'resinBark' | 'toughMud' | 'coldCore' | 'graniteCore';
 
 export interface FactionBuilding {
   name: string;
@@ -107,7 +115,7 @@ export interface FactionBuilding {
  * - `summons`: Terra-Former – gerufene Spezialeinheiten der Linie mit rules.terraform.level3Hp Leben.
  * - `tempo`: Terra-Former – Wächter und Terraformer der Linie schneller (rules.terraform.tempoStep je Stufe).
  */
-export type BuildingUpgradeKind = 'clutch' | 'tempo' | 'gear' | 'nature' | 'roots';
+export type BuildingUpgradeKind = 'clutch' | 'gear' | 'nature' | 'roots' | 'elite' | 'recycle' | 'kiln' | 'warden' | 'harvest';
 
 export interface BuildingUpgradeDef {
   id: string;
@@ -260,31 +268,22 @@ const healing = (unit: UnitId): UpgradeDef[] => {
 /** Gerufene (Naturkraft I–III): einheitlich Stärke → Durchschlag → Schaden und Widerstand → Rüstung → Leben. */
 export const NATURE_STEPS = { attack: (['S', 'AP', 'D'] as const).map((st) => WEAPON_STEPS[st].effect), armor: (['T', 'SV', 'W'] as const).map((st) => ARMOR_STEPS[st].effect) };
 
-/** Einzel-Upgrade. Kosten seit 24.10. +20 % (Forschung läuft parallel zur Produktion), auf 5 gerundet. */
-function special(unit: UnitId, id: string, name: string, description: string, cost: number, seconds: number, effect: UpgradeEffect): UpgradeDef {
-  return { id, unit, name, description, cost: Math.round((cost * 1.2) / 5) * 5, seconds, effect };
+/**
+ * Spezialisierung (v2, 16.11.): je Einheit ein kleiner sichtbarer Kniff – eine Regel statt einer flachen Zahl. Die Wirkung
+ * lesen die Systeme über `hasTrick` (sim/systems/tricks.ts); `effect` trägt nur, was sich als Zahl ausdrückt.
+ * Forschungszeit einheitlich ≈ Kosten / 8 Sekunden.
+ */
+function trick(unit: UnitId, id: TrickId, name: string, description: string, cost: number, effect: UpgradeEffect = {}): UpgradeDef {
+  return { id: `${unit}-${id}`, unit, name, description, cost, seconds: Math.round(cost / 8), effect, trick: id };
 }
 
 /**
  * Schlussstein (26.10. spät): keine Forschungs-Voraussetzung mehr – freigegeben über das Zeit-Tor (rules.keystoneGate).
- * Preis nach Reihenfolge (siehe keystonePrice), 20 s an einer Fabrik, die die Einheit baut. Terra-Former: je Linie einer
- * (Wächter + Gerufener). Technoclan: die alte Waffen-III-Gabelung als zwei Türen (a/b, nur eine wählbar).
+ * 20 s an einer Fabrik, die die Einheit baut. Terra-Former: je Linie einer (Wächter + Gerufener). Seit 16.11. auch der
+ * Technoclan mit einer Regel je Einheit (keine Türen mehr).
  */
 function keystoneUpgrade(unit: UnitId): UpgradeDef[] {
   const k = KEYSTONE_OF[unit]!;
-  if (k.doors) {
-    return k.doors.map((d, i) => ({
-      id: `${keystoneId(unit)}-${i === 0 ? 'a' : 'b'}`,
-      unit,
-      name: `Schlussstein: ${d.name}`,
-      description: d.description,
-      cost: 200,
-      seconds: 20,
-      effect: d.effect,
-      keystone: true,
-      fork: keystoneId(unit),
-    }));
-  }
   // Terra-Former: der Schlussstein der Linie gilt für Wächter UND Gerufenen (z. B. Wiese = Grasnarbe + Heimkehr).
   const partner = KEYSTONES.find((x) => x.line === unit && x.unit !== unit);
   if (partner) {
@@ -296,29 +295,46 @@ function keystoneUpgrade(unit: UnitId): UpgradeDef[] {
   return [{ id: keystoneId(unit), unit, name: `Schlussstein: ${k.name}`, description: `${k.rule} (${k.rein})`, cost: 200, seconds: 20, effect: {}, keystone: true }];
 }
 
-/** Ausrüstung I–III je Fabrikart (alle Fraktionen, 26.10. spät): 120 / 180 / 240 Energie, 15 / 20 / 25 s. */
+/** Ausrüstung I–III je Fabrikart (Säule Kampfwerte, v2): 120 / 180 / 240 Energie, 15 / 22 / 30 s. */
 const gear = (building: BuildingId, name: string): BuildingUpgradeDef[] =>
   buildingChain(building, 'gear', [
     { name: 'Ausrüstung I', description: `alle Einheiten aus ${name}: nächster Angriffs- und Panzerungsschritt`, cost: 120, seconds: 15 },
-    { name: 'Ausrüstung II', description: `alle Einheiten aus ${name}: noch ein Angriffs- und Panzerungsschritt`, cost: 180, seconds: 20 },
-    { name: 'Ausrüstung III', description: `alle Einheiten aus ${name}: dritter Angriffs- und Panzerungsschritt`, cost: 240, seconds: 25 },
+    { name: 'Ausrüstung II', description: `alle Einheiten aus ${name}: noch ein Angriffs- und Panzerungsschritt`, cost: 180, seconds: 22 },
+    { name: 'Ausrüstung III', description: `alle Einheiten aus ${name}: dritter Angriffs- und Panzerungsschritt`, cost: 240, seconds: 30 },
   ]);
 
-/** Terra-Former fraktionsweit (26.10. spät): Naturkraft (Gerufene) und Wurzelwerk (Terraformer), an jeder Linienfabrik. */
+/** Ein einzelner Fabrik-Ausbau (Säule Verhalten). */
+const behavior = (building: BuildingId, kind: BuildingUpgradeKind, name: string, description: string, cost: number, requires?: string, anyBuilding?: boolean): BuildingUpgradeDef => ({
+  id: `${building}-${kind}-1`, building, kind, name, description, cost, seconds: Math.round(cost / 8), requires, anyBuilding,
+});
+
+/** Eliteprogramm (Technoclan, v2): jeder 4. Verband der Fabrik kommt als Elite. */
+const elite = (building: BuildingId, name: string): BuildingUpgradeDef =>
+  behavior(building, 'elite', 'Eliteprogramm', `jeder 4. Verband aus ${name} kommt als Elite: doppeltes Leben, sein Protokoll in Elite-Fassung`, 200, `${building}-gear-1`);
+
+/**
+ * Terra-Former fraktionsweit (v2), an jeder Linienfabrik: Wächterkraft (Kampfwerte aller Wächter), Naturkraft (Gerufene),
+ * Wurzelwerk I–II und Erntezeit (Verhalten).
+ */
 const tfFaction = (): BuildingUpgradeDef[] => [
+  ...buildingChain('meadowhall', 'warden', [
+    { name: 'Wächterkraft I', description: 'alle Wächter: nächster Angriffs- und Panzerungsschritt', cost: 200, seconds: 25 },
+    { name: 'Wächterkraft II', description: 'alle Wächter: noch ein Angriffs- und Panzerungsschritt', cost: 270, seconds: 34 },
+    { name: 'Wächterkraft III', description: 'alle Wächter: dritter Angriffs- und Panzerungsschritt', cost: 340, seconds: 42 },
+  ]).map((u) => ({ ...u, anyBuilding: true })),
   ...buildingChain('meadowhall', 'nature', [
-    { name: 'Naturkraft I', description: 'alle Gerufenen: Stärke +1 und Widerstand +1', cost: 150, seconds: 18 },
-    { name: 'Naturkraft II', description: 'alle Gerufenen: Durchschlag +1 und Rüstung +1', cost: 220, seconds: 24 },
-    { name: 'Naturkraft III', description: 'alle Gerufenen: Schaden +25 % und Leben +20 %', cost: 300, seconds: 30 },
+    { name: 'Naturkraft I', description: 'alle Gerufenen: Stärke +1 und Widerstand +1', cost: 200, seconds: 25 },
+    { name: 'Naturkraft II', description: 'alle Gerufenen: Durchschlag +1 und Rüstung +1', cost: 270, seconds: 34 },
+    { name: 'Naturkraft III', description: 'alle Gerufenen: Schaden +25 % und Leben +20 %', cost: 340, seconds: 42 },
   ]).map((u) => ({ ...u, anyBuilding: true })),
   ...buildingChain('meadowhall', 'roots', [
-    { name: 'Wurzelwerk I', description: 'neue Terraformer: Naturspeicher +1', cost: 150, seconds: 18 },
-    { name: 'Wurzelwerk II', description: 'Terraformer formen schneller (1,5 → 1,2 s je Kachel)', cost: 220, seconds: 24 },
-    { name: 'Wurzelwerk III', description: 'Terraformer brauchen nur 3 statt 4 Kacheln Arbeit je Ruf', cost: 300, seconds: 30 },
+    { name: 'Wurzelwerk I', description: 'neue Terraformer: Naturspeicher +1', cost: 150, seconds: 19 },
+    { name: 'Wurzelwerk II', description: 'Terraformer formen schneller (1,5 → 1,2 s je Kachel) und brauchen 3 statt 4 Kacheln je Ruf', cost: 200, seconds: 25 },
   ]).map((u) => ({ ...u, anyBuilding: true })),
+  behavior('meadowhall', 'harvest', 'Erntezeit', 'Wächter und Terraformer aller Linien kommen 25 % schneller', 250, undefined, true),
 ];
 
-/** Gebäude-Ausbau in zwei Stufen (zentral für alle Gebäude dieser Art). */
+/** Gebäude-Ausbau als Kette (zentral für alle Gebäude dieser Art). */
 function buildingChain(building: BuildingId, kind: BuildingUpgradeKind, steps: readonly { name: string; description: string; cost: number; seconds: number }[]): BuildingUpgradeDef[] {
   return steps.map((st, k) => ({
     id: `${building}-${kind}-${k + 1}`,
@@ -331,16 +347,6 @@ function buildingChain(building: BuildingId, kind: BuildingUpgradeKind, steps: r
     requires: k > 0 ? `${building}-${kind}-${k}` : undefined,
   }));
 }
-
-/** Terra-Former: je Linie „Terraformer öfter“ und „Gerufene stärker“ (vorher Fabrikstufe II und III). */
-const tfLine = (building: BuildingId): BuildingUpgradeDef[] => [
-  // 26.10. spät: „Mehr Terraformer“ und „Starke Gerufene“ entfallen (gehen in Naturkraft/Wurzelwerk auf).
-  // 26.10.: Wächter-Bauzeit 6,5 s (vorher 4) – der Ausbau holt sie zurück (Stufe I ≈ 5,5 s, II ≈ 4,8 s).
-  ...buildingChain(building, 'tempo', [
-    { name: 'Erntezeit I', description: 'Wächter und Terraformer dieser Linie kommen 18 % schneller', cost: 110, seconds: 20 },
-    { name: 'Erntezeit II', description: 'noch einmal 18 % schneller (insgesamt 36 %)', cost: 170, seconds: 28 },
-  ]),
-];
 
 export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
   technoclan: {
@@ -364,18 +370,20 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     upgrades: [
       ...weapons('sniper', ['S', 'D', 'D']), ...armor('sniper', ['SV', 'SV', 'W']),
       ...weapons('plasma', ['S', 'AP', 'BS']), ...armor('plasma', ['T', 'SV', 'W']),
-      special('plasma', 'plasma-nozzle', 'Breitdüse', 'größerer Flächenschaden (+0,5 Radius)', 90, 15, { splash: 0.5 }),
       ...healing('nanomedic'), ...armor('nanomedic', ['SV', 'W', 'W']),
-      special('nanomedic', 'medic-range', 'Weitfeld', '+1,5 Heilradius', 80, 15, { range: 1.5 }),
       ...weapons('hoverscout', ['AP', 'S', 'D']), ...armor('hoverscout', ['T', 'SV', 'W']),
-      special('hoverscout', 'scout-sensors', 'Sensoren', '+3 Sicht', 70, 12, { vision: 3 }),
-      special('hoverscout', 'scout-booster', 'Nachbrenner', '+20 % Tempo', 80, 12, { speed: 1.2 }),
       ...weapons('battery', ['AP', 'BS', 'D']), ...armor('battery', ['T', 'SV', 'W']),
-      special('battery', 'battery-split', 'Splittergeschoss', 'größerer Flächenschaden (+0,6 Radius)', 100, 18, { splash: 0.6 }),
       ...weapons('gunner', ['BS', 'S', 'D']), ...armor('gunner', ['T', 'T', 'W']),
       ...weapons('colossus', ['AP', 'BS', 'D']), ...armor('colossus', ['T', 'W', 'W']),
-      special('colossus', 'colossus-shells', 'Splittergranaten', 'kleiner Flächenschaden (Radius 1)', 110, 20, { splash: 1 }),
-      // 26.10. spät: Schlusssteine des Technoclans = die alte Waffen-III-Gabelung (zwei Türen je Einheit).
+      // v2 (16.11.): Spezialisierung – ein kleiner Kniff je Einheit.
+      trick('sniper', 'calmHand', 'Ruhige Hand', 'nach 3 s Stillstand Reichweite +1', 100),
+      trick('plasma', 'plasmaBurn', 'Plasmabrand', 'getroffene Gegner 1 s um 30 % langsamer', 100),
+      trick('nanomedic', 'callOut', 'Notruf', 'springt zu einem eigenen Verband unter 30 % Leben in 4 Kacheln (alle 15 s)', 90),
+      trick('hoverscout', 'spotter', 'Zielfunk', 'sein Ziel ist 3 s markiert: alle eigenen Verbände treffen es 1 leichter', 90),
+      trick('battery', 'ricochet', 'Abpraller', 'jeder Treffer springt auf den nächsten Gegner dahinter weiter', 110, { pierce: 1 }),
+      trick('gunner', 'warmup', 'Warmlaufen', 'Feuerrate steigt je Sekunde Dauerfeuer auf dasselbe Ziel, bis +40 %', 100),
+      trick('colossus', 'ram', 'Rammbock', 'bricht Erdwälle doppelt so schnell', 110),
+      // Schlusssteine: seit 16.11. eine Regel je Einheit wie bei den anderen Fraktionen.
       ...(['sniper', 'plasma', 'hoverscout', 'battery', 'gunner', 'colossus', 'nanomedic'] as const).flatMap((u) => keystoneUpgrade(u)),
     ],
     // 22.10.: Fabriken 20 % schneller – wenige, teure Einheiten, aber zügiger Nachschub. Mit der Lebensuhr der
@@ -384,7 +392,10 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     // schwächeren Verspotter stand es Technoclan–Myriaden 31 : 37 und Technoclan–Terra-Former 30 : 31 (je 72 Partien).
     productionSpeed: 4 / 3,
     network: true,
-    buildingUpgrades: [...gear('barracks', 'der Kaserne'), ...gear('workshop', 'dem Hangar'), ...gear('foundry', 'dem Schwerwerk')],
+    buildingUpgrades: [
+      ...gear('barracks', 'der Kaserne'), ...gear('workshop', 'dem Hangar'), ...gear('foundry', 'dem Schwerwerk'),
+      elite('barracks', 'der Kaserne'), elite('workshop', 'dem Hangar'), elite('foundry', 'dem Schwerwerk'),
+    ],
     hero: { unit: 'commander', cost: 200, respawnSeconds: 45, leadsWaves: true },
   },
   myriaden: {
@@ -406,29 +417,28 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     ],
     upgrades: [
       ...weapons('drone', ['AP', 'S', 'D']), ...armor('drone', ['SV', 'SV', 'W']),
-      // Lebensuhr: +30 s je Stufe bis zum Verfall – kostet Energie und Forschungszeit im Aufbau.
-      { id: 'drone-life-1', unit: 'drone', name: 'Lebensdauer I', description: '+30 s bis zum Verfall', cost: 100, seconds: 12, effect: { lifespan: 30 } },
-      { id: 'drone-life-2', unit: 'drone', name: 'Lebensdauer II', description: '+30 s bis zum Verfall', cost: 150, seconds: 16, effect: { lifespan: 30 }, requires: 'drone-life-1' },
-      special('drone', 'drone-legs', 'Krabbelbeine', '+15 % Tempo', 70, 12, { speed: 1.15 }),
       ...weapons('bomber', ['D', 'D', 'D']), ...armor('bomber', ['SV', 'W', 'SV']),
-      special('bomber', 'bomber-sprint', 'Zündeifer', '+20 % Tempo', 80, 12, { speed: 1.2 }),
       ...healing('hound'), ...armor('hound', ['T', 'SV', 'W']),
-      special('hound', 'hound-pack', 'Rudelruf', '+1,5 Aura-Radius', 80, 15, { range: 1.5 }),
-      // 26.10.: Schlusssteine der Myriaden (seit 26.10. spät über das Zeit-Tor).
-      ...(['catapult', 'drone', 'bomber', 'myrcannon', 'sphere', 'hound'] as const).flatMap((u) => keystoneUpgrade(u)),
       ...weapons('myrcannon', ['S', 'AP', 'D']), ...armor('myrcannon', ['T', 'SV', 'W']),
-      special('myrcannon', 'cannon-spread', 'Streuladung', 'größerer Flächenschaden (+0,5 Radius)', 90, 15, { splash: 0.5 }),
       ...weapons('catapult', ['AP', 'AP', 'D']), ...armor('catapult', ['T', 'SV', 'W']),
-      special('catapult', 'catapult-arm', 'Langer Wurfarm', '+1 Reichweite', 100, 18, { range: 1 }),
       ...weapons('sphere', ['S', 'BS', 'D']), ...armor('sphere', ['T', 'T', 'W']),
+      // v2 (16.11.): Spezialisierung – ein kleiner Kniff je Einheit.
+      trick('drone', 'lastBite', 'Letzter Biss', 'verfällt eine Drohne nahe am Kampf, beißt sie ein letztes Mal mit doppeltem Schaden', 120),
+      trick('bomber', 'dash', 'Anlauf', 'die letzten 3 Kacheln vor dem Ziel +60 % Tempo', 100),
+      trick('hound', 'scent', 'Witterung', 'Gegner in seiner Aura bleiben 5 s im Nebel sichtbar', 100),
+      trick('myrcannon', 'acid', 'Säuregeschoss', 'Einschlag hinterlässt 3 s Säure: Gegner darin haben 1 Rüstung weniger', 120),
+      trick('catapult', 'longThrow', 'Weitwurf', 'Verspotter fliegen 2 Kacheln weiter und landen mit einem Aufprall', 130, { range: 2 }),
+      trick('sphere', 'rollShield', 'Rollschild', 'in Bewegung 20 % weniger Schaden', 130),
+      ...(['catapult', 'drone', 'bomber', 'myrcannon', 'sphere', 'hound'] as const).flatMap((u) => keystoneUpgrade(u)),
     ],
-    // 24.10.: Das Gelege wächst zentral für alle Bruten (vorher mit der Fabrikstufe, 90 / 160 Energie).
     buildingUpgrades: [
       ...buildingChain('barracks', 'clutch', [
-        { name: 'Gelege II', description: 'Gelege aller Bruten fasst 8 statt 6 Verbände', cost: 90, seconds: 18 },
-        { name: 'Gelege III', description: 'Gelege aller Bruten fasst 10 Verbände', cost: 160, seconds: 25 },
+        { name: 'Gelege II', description: 'Gelege aller Bruten fasst 8 statt 6 Verbände', cost: 110, seconds: 14 },
+        { name: 'Gelege III', description: 'Gelege aller Bruten fasst 10 Verbände', cost: 160, seconds: 20 },
       ]),
       ...gear('barracks', 'der Brut'), ...gear('workshop', 'der Werkstatt'), ...gear('foundry', 'der Schmelze'),
+      behavior('workshop', 'recycle', 'Recycling', 'fällt ein Werkstatt-Verband, schlüpfen 4 Drohnen (höchstens alle 30 s je Werkstatt)', 160),
+      behavior('foundry', 'kiln', 'Brutofen', 'die Schmelze baut Battlesphären 20 % schneller', 170),
     ],
     hero: { unit: 'swarmmind', cost: 220, respawnSeconds: 45 },
   },
@@ -457,14 +467,16 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
       ...weapons('wardMud', ['S', 'BS', 'D']), ...armor('wardMud', ['T', 'SV', 'W']),
       ...weapons('wardSnow', ['S', 'AP', 'D']), ...armor('wardSnow', ['T', 'SV', 'W']),
       ...weapons('wardRubble', ['S', 'AP', 'D']), ...armor('wardRubble', ['T', 'W', 'W']),
-      // 26.10. spät: ein Schlussstein je Linie (Wächter + Gerufener), an der Linienfabrik; Naturspeicher-Upgrade → Wurzelwerk I.
+      // v2 (16.11.): Spezialisierung je Linie – wirkt auf Wächter und Gerufenen.
+      trick('wardMeadow', 'meadowWay', 'Weidegang', 'Halmläufer und Steppenjäger auf eigener Wiese +20 % Tempo', 140),
+      trick('wardForest', 'resinBark', 'Harzborke', 'Borkenschützen auf eigenem Wald 25 % weniger Schaden; Hainhüter nach dem Sprung 3 s 30 % weniger', 140),
+      trick('wardMud', 'toughMud', 'Zäher Schlamm', 'Einschlag der Schlammschleuder zieht Gegner 1 Kachel heran; Schlammwerfer bremsen 1 s länger', 140),
+      trick('wardSnow', 'coldCore', 'Kältekern', 'wer einen Frostwächter trifft, ist 1 s langsamer; Frostwelle Radius +1', 140),
+      trick('wardRubble', 'graniteCore', 'Granitkern', 'Steinwächter im Stillstand alle 5 s +1 Rüstung (bis +2); Frontbrecher-Aufschlag wirft Splitter', 140),
+      // 26.10. spät: ein Schlussstein je Linie (Wächter + Gerufener), an der Linienfabrik.
       ...(['wardMeadow', 'wardForest', 'wardMud', 'wardSnow', 'wardRubble'] as const).flatMap((u) => keystoneUpgrade(u)),
     ],
-    buildingUpgrades: [
-      ...tfLine('meadowhall'), ...tfLine('grove'), ...tfLine('mudpit'), ...tfLine('frosthall'), ...tfLine('quarry'),
-      ...gear('meadowhall', 'dem Wiesenhof'), ...gear('grove', 'dem Hain'), ...gear('mudpit', 'der Schlammgrube'), ...gear('frosthall', 'der Frosthalle'), ...gear('quarry', 'dem Steinbruch'),
-      ...tfFaction(),
-    ],
+    buildingUpgrades: [...tfFaction()],
     hero: { unit: 'landformer', cost: 200, respawnSeconds: 45 },
   },
 };

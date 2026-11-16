@@ -18,9 +18,12 @@ import { referenceDefense, relativeEffect, woundsPerShot } from '../sim/systems/
 import type { Defense } from '../sim/systems/hitmath';
 import type { ArmorClass } from '../sim/types';
 import { escapeHtml, num } from './format';
-import { BLOCKS, VERBUND, VERBUND_UNITS, verbundKey } from '../data/verbund';
+import { BLOCKS } from '../data/verbund';
 import type { ProtocolId } from '../data/units';
-import { SYNERGY_GROUNDS, SYNERGY_NAMES } from '../sim/systems/synergy';
+import { SYNERGY_GROUNDS, SYNERGY_NAMES, SYNERGY_TEXT } from '../sim/systems/synergy';
+import { portrait } from './unitPortrait';
+import type { BuildingId } from '../data/buildings';
+import type { BuildingUpgradeDef, UpgradeDef } from '../data/factions';
 import { roleBadge, weaponRole } from './weaponRole';
 import type { RoleTarget } from './weaponRole';
 
@@ -28,7 +31,7 @@ import type { RoleTarget } from './weaponRole';
  * Übersicht (Wunsch des Nutzers, 24.10.): Einheiten, Konter und Gelände auf einen Blick – im Startbildschirm und im
  * Menü (F10). Alles wird aus den Spieldaten berechnet, damit die Tabellen nach jeder Abstimmung stimmen.
  */
-export type CodexTab = 'basics' | 'units' | 'counters' | 'terrain' | 'traits';
+export type CodexTab = 'basics' | 'units' | 'tree' | 'counters' | 'terrain' | 'traits';
 
 export interface CodexState {
   tab: CodexTab;
@@ -42,6 +45,82 @@ export interface CodexState {
 
 export const FACTION_SHORT: Readonly<Record<FactionId, string>> = { technoclan: 'TC', myriaden: 'Myr', terraformer: 'TF' };
 const ROMAN = ['', 'I', 'II', 'III', 'IV'];
+
+// ------------------------------------------------------------------ Ausbau: Einheitenbaum und Upgrade-Pfad (v2, 16.11.)
+
+type Pil = 'kampf' | 'verh' | 'spez' | 'ks';
+const PIL_NAME: Record<Pil, string> = { kampf: 'Kampfwerte', verh: 'Verhalten', spez: 'Spezialisierung', ks: 'Schlussstein' };
+const pilOf = (u: BuildingUpgradeDef): Pil => (u.kind === 'gear' || u.kind === 'warden' || u.kind === 'nature' ? 'kampf' : 'verh');
+
+/** Eine Kette (Ausrüstung I–III) als eine Zeile mit Stufenpreisen. */
+function chainLine(ups: readonly BuildingUpgradeDef[]): string {
+  const groups = new Map<string, BuildingUpgradeDef[]>();
+  for (const u of ups) groups.set(u.kind, [...(groups.get(u.kind) ?? []), u]);
+  return [...groups.values()].map((g) => {
+    if (g.length === 1) return `<li title="${escapeHtml(g[0]!.description)}"><b>${escapeHtml(g[0]!.name)}</b><span class="cx-cost">${g[0]!.cost}</span><small>${escapeHtml(g[0]!.description)}</small></li>`;
+    const base = g[0]!.name.replace(/ I$/, '');
+    return `<li title="${escapeHtml(g.map((x) => `${x.name}: ${x.description}`).join('\n'))}"><b>${escapeHtml(base)} ${ROMAN[1]}–${ROMAN[g.length]}</b><span class="cx-cost">${g.map((x) => x.cost).join(' / ')}</span><small>${escapeHtml(g[0]!.description.replace(/nächster /, 'je Stufe ein '))}</small></li>`;
+  }).join('');
+}
+
+function trickLine(u: UpgradeDef): string {
+  return `<li title="${escapeHtml(u.description)}"><b>${escapeHtml(u.name)}</b><span class="cx-cost">${u.cost}</span><small>${escapeHtml(u.description)}</small></li>`;
+}
+
+function keystoneLine(u: UpgradeDef): string {
+  const k = KEYSTONE_OF[u.unit];
+  const name = u.name.replace(/^Schlussstein:? ?/, '');
+  return `<li title="${escapeHtml(u.description)}"><b>${escapeHtml(k?.icon ?? '◆')} ${escapeHtml(name)}</b><small>${escapeHtml(u.description)}</small></li>`;
+}
+
+function pilBlock(p: Pil, items: string): string {
+  return items ? `<div class="cx-pil cx-pil-${p}"><h4>${PIL_NAME[p]}</h4><ul>${items}</ul></div>` : '';
+}
+
+function treeTab(state: CodexState): string {
+  const f = state.faction;
+  const def = FACTIONS[f];
+  const sum = (xs: readonly { cost: number }[]): number => xs.reduce((a, x) => a + x.cost, 0);
+  const kampf = sum(def.buildingUpgrades.filter((u) => pilOf(u) === 'kampf'));
+  const verh = sum(def.buildingUpgrades.filter((u) => pilOf(u) === 'verh'));
+  const spez = sum(def.upgrades.filter((u) => u.trick));
+  const budget = `<div class="cx-budget">
+    <span class="cx-pil-kampf"><b>${kampf}</b> Kampfwerte</span><span class="cx-pil-verh"><b>${verh}</b> Verhalten</span><span class="cx-pil-spez"><b>${spez}</b> Spezialisierung</span>
+    <span class="cx-budget-sum">= <b>${kampf + verh + spez}</b> Energie Upgrade-Budget</span><span class="cx-pil-ks">Schlusssteine über das Zeit-Tor</span></div>`;
+  // Fraktionsweit (Terra-Former: Wächterkraft, Naturkraft, Wurzelwerk, Erntezeit)
+  const wide = def.buildingUpgrades.filter((u) => u.anyBuilding);
+  const wideCard = wide.length
+    ? `<section class="cx-fac cx-fac-wide"><header><b>Alle Linienfabriken</b><small>einmal erforscht, gilt überall</small></header>
+        ${pilBlock('kampf', chainLine(wide.filter((u) => pilOf(u) === 'kampf')))}${pilBlock('verh', chainLine(wide.filter((u) => pilOf(u) === 'verh')))}</section>`
+    : '';
+  const cols = buildingIds(def).map((bid: BuildingId) => {
+    const fb = def.buildings[bid]!;
+    const units: { unit: UnitId; tag: string }[] = fb.tiers.map((u, k) => ({ unit: u, tag: fb.tiers.length > 1 || (fb.levels ?? 1) > 1 ? `Stufe ${ROMAN[k + 1]}` : '' }));
+    if (fb.mix) units.push({ unit: fb.mix.unit, tag: `Beimischung ab ${ROMAN[fb.mix.level]}` });
+    if (fb.former) {
+      units.push({ unit: fb.former, tag: 'formt Boden' });
+      const g = UNITS[fb.tiers[0]!].ground;
+      const sp = ({ meadow: 'specialMeadow', forest: 'specialForest', mud: 'specialMud', snow: 'specialSnow', rubble: 'specialRubble' } as const)[g as 'meadow'];
+      if (sp) units.push({ unit: sp, tag: 'gerufen' });
+    }
+    const tree = units.map((x) => `<div class="cx-node">${portrait(x.unit, 44)}<span><b>${escapeHtml(UNITS[x.unit].name)}</b>${x.tag ? `<small>${escapeHtml(x.tag)}</small>` : ''}</span></div>`).join('');
+    const own = def.buildingUpgrades.filter((u) => u.building === bid && !u.anyBuilding);
+    const unitIds = units.map((x) => x.unit);
+    const tricks = def.upgrades.filter((u) => u.trick && unitIds.includes(u.unit));
+    const keys = def.upgrades.filter((u) => u.keystone && unitIds.includes(u.unit));
+    const levels = def.levelUpgrades.slice(0, Math.max(0, (fb.levels ?? fb.tiers.length) - 1)).map((l, k) => `Stufe ${ROMAN[k + 2]} ${l.cost}`).join(' · ');
+    return `<section class="cx-fac"><header><b>${escapeHtml(fb.name)}</b>${levels ? `<small>${levels} Energie</small>` : ''}</header>
+      <div class="cx-tree">${tree}</div>
+      ${pilBlock('kampf', chainLine(own.filter((u) => pilOf(u) === 'kampf')))}
+      ${pilBlock('verh', chainLine(own.filter((u) => pilOf(u) === 'verh')))}
+      ${pilBlock('spez', tricks.map(trickLine).join(''))}
+      ${pilBlock('ks', keys.map(keystoneLine).join(''))}</section>`;
+  }).join('');
+  const hero = def.hero ? `<p class="cx-lede">Held: <b>${escapeHtml(UNITS[def.hero.unit].name)}</b> über das HQ (${def.hero.cost} Energie), kehrt nach ${def.hero.respawnSeconds} s zurück.</p>` : '';
+  return `${factionChips(state, 'faction', 'Fraktion')}
+    <p class="cx-lede">Was jede Fabrik baut und wie sie sich verbessern lässt. <b>Kampfwerte</b> sind Zahlen für alle Einheiten der Fabrik, <b>Verhalten</b> ändert, was die Fabrik tut, <b>Spezialisierung</b> gibt einer Einheit einen kleinen Kniff, der <b>Schlussstein</b> eine neue Regel. Kosten in Energie, Forschung ≈ Kosten ÷ 8 Sekunden.</p>
+    ${budget}${wideCard}<div class="cx-facs">${cols}</div>${hero}`;
+}
 const CLASSES: readonly ArmorClass[] = ['infantry', 'light', 'heavy', 'structure'];
 
 interface Entry {
@@ -226,7 +305,7 @@ function unitsTab(state: CodexState): string {
     const models = u.models ?? 1;
     const range = u.weapon ? `${num(shown(u).weapon!.range, 1)}${bar(shown(u).weapon!.range, maxRange)}` : u.support ? 'Aura' : '–';
     return `<tr>
-      <th scope="row" title="${escapeHtml(u.role)}"><span class="cx-glyph" data-f="${f}">${escapeHtml(u.letter)}</span>${escapeHtml(u.name)}<span class="cx-role">${escapeHtml(u.role)}</span></th>
+      <th scope="row" title="${escapeHtml(u.role)}"><span class="cx-uname">${portrait(unit, 36)}<span>${escapeHtml(u.name)}<span class="cx-role">${escapeHtml(u.role)}</span></span></span></th>
       <td class="cx-src">${escapeHtml(source)}</td>
       <td><span class="cx-armor" data-a="${u.armor}">${ARMOR_NAMES[u.armor]}</span></td>
       <td>${roleBadge(u)}</td>
@@ -410,11 +489,11 @@ function basicsTab(): string {
     '<b>Erdwall</b> ist Gelände (kein Budget, 8 Energie je Kachel – jeder weitere Wall kurz nacheinander +4, höchstens 16; eigene Wälle kostenlos zuschütten): Alle Einheiten nehmen den billigsten Weg; ein Wall darf jede gegnerische Route höchstens ×1,5 so teuer machen (lenken, nicht sperren). Sperrt er doch, bricht ihn jede Einheit (80 Leben). <b>Stellung</b>: je Fabrik ein Sammelpunkt für haltende Verbände. Käufe am HQ: Gegenspionage, Dauerspähen, Vorratskauf, Nachschub; an jeder Fabrik das Aufgebot. <b>Schluchten</b> gibt es über den HQ-Zweig Gelände; Schweber gleiten darüber und bekommen danach einen Flankenbonus.',
   ])}
   ${section('Aufklärung und Täuschung', [
-    `Den Gegner verbirgt der Nebel. Ein <b>Späher</b> (${r.scout.cost} Energie, alle ${r.scout.cooldownSeconds} s) meldet nach ${r.scout.delaySeconds} s Stärke und Panzerung je Lane, Fabriken und Verbünde.`,
+    `Den Gegner verbirgt der Nebel. Ein <b>Späher</b> (${r.scout.cost} Energie, alle ${r.scout.cooldownSeconds} s) meldet nach ${r.scout.delaySeconds} s Stärke und Panzerung je Lane, Fabriken und Eliten.`,
     'Fabriken lassen sich <b>tarnen</b>: Der Gegner sieht dann eine Weile eine andere Fabrik und Lane.',
   ])}
   ${section('Forschung, HQ und Held', [
-    `Forschung (bis ${r.researchSlots} gleichzeitig): <b>Ausrüstung I–III</b> je Fabrikart (Angriff und Panzerung aller Einheiten dieser Fabrik, Heiler: Heilung) und einzelne Sonder-Upgrades. Terra-Former zusätzlich <b>Naturkraft</b> (Gerufene) und <b>Wurzelwerk</b> (Terraformer). Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
+    `Forschung (bis ${r.researchSlots} gleichzeitig) in drei Säulen – jede Fraktion hat dafür dasselbe Budget (Tab <b>Ausbau</b>): <b>Kampfwerte</b> (Ausrüstung I–III je Fabrikart; Terra-Former: Wächterkraft und Naturkraft), <b>Verhalten</b> (eine Regel der Fabrik, z. B. Eliteprogramm, Gelege, Erntezeit) und <b>Spezialisierung</b> (ein kleiner Kniff je Einheit). Die Pips unter dem Schild über einem Verband zeigen seine Ausrüstungsstufe – auch beim Gegner. Das HQ hat drei Zweige: Aufklärung, Markt und Gelände.`,
     `<b>Schlusssteine</b> kommen in Fenstern: das erste bei ${Math.round(r.keystoneGate.first / 60)}:00, danach alle ${r.keystoneGate.every / 60} Minuten; je Fenster eine Karte wählen (Taste K) – kostenlos und sofort wirksam, höchstens ${r.keystoneGate.maxCredits} Wahlen auf Vorrat. Die <b>Kartenmitte</b> ist ab ${Math.round(r.keystoneGate.centerFrom / 60)}:00 umkämpft: Wer sie ${r.keystoneGate.centerHold} s allein hält, bekommt sein erstes Fenster sofort (frühestens ${Math.round((r.keystoneGate.centerFrom + r.keystoneGate.centerHold) / 60)}:00) – und hält er sie danach stabil, öffnet jedes weitere Fenster ${r.keystoneGate.centerLead} s früher.`,
     'Jede Fraktion hat einen Helden, der über das HQ kommt und nach seinem Tod zurückkehrt.',
   ])}
@@ -442,14 +521,15 @@ function factionChips(state: CodexState, which: 'faction' | 'enemy', label: stri
 
 export function renderCodex(state: CodexState): string {
   if (state.tab === 'basics') return basicsTab();
+  if (state.tab === 'tree') return treeTab(state);
   return state.tab === 'units' ? unitsTab(state) : state.tab === 'counters' ? countersTab(state) : state.tab === 'traits' ? traitsTab(state) : terrainTab();
 }
 
 // ------------------------------------------------------------------ Eigenheiten (25.10.)
 
 /**
- * Eigenheiten der Fraktionen: Technoclan-Netzwerk und Verbund, Terra-Former-Lane-Synergien, Myriaden-Besonderheiten.
- * Die Tabellen kommen aus den Spieldaten (data/verbund.ts, Synergie-Namen), die Texte der Synergien aus dem Entwurf.
+ * Eigenheiten der Fraktionen: Technoclan-Elite, Terra-Former-Lane-Synergien (je Lane), Myriaden-Besonderheiten.
+ * Alles aus den Spieldaten (Protokolle, Synergie-Namen und -Texte).
  */
 function traitsTab(state: CodexState): string {
   const f = state.faction;
@@ -483,78 +563,26 @@ function keystoneList(f: FactionId, bought: Record<string, number>): string {
 
 function technoTraits(): string {
   const n = RULES.network;
-  const head = VERBUND_UNITS.map((u) => `<th>${escapeHtml(UNITS[u].name)}</th>`).join('');
-  const rows = VERBUND_UNITS.map((a, i) => {
-    const cells = VERBUND_UNITS.map((b, j) => {
-      if (j < i) return '<td class="cx-vb cx-vb-empty"></td>';
-      const d = VERBUND[verbundKey(a, b)]!;
-      return `<td class="cx-vb${d.special ? ' cx-vb-special' : ''}" title="${escapeHtml(`${d.name}: ${d.text}`)}"><b>${escapeHtml(d.name)}</b><span>${escapeHtml(d.text)}</span></td>`;
-    }).join('');
-    return `<tr><th scope="row">${escapeHtml(UNITS[a].name)}</th>${cells}</tr>`;
-  }).join('');
   const blocks = (Object.keys(BLOCKS) as ProtocolId[]).filter((p) => p !== 'node').map((p) => {
     const b = BLOCKS[p];
     const owner = Object.values(UNITS).find((u) => u.protocol === p);
-    return `<tr><th scope="row">${escapeHtml(b.name)}<span class="cx-role">${escapeHtml(owner?.name ?? '')}</span></th><td>${escapeHtml(b.copies[0])}</td><td>${escapeHtml(b.copies[1])}</td><td>${escapeHtml(b.copies[2])}</td><td>${escapeHtml(b.elite)}</td></tr>`;
+    return `<tr><th scope="row"><span class="cx-uname">${owner ? portrait(owner.id, 30) : ''}<span>${escapeHtml(owner?.name ?? '')}<span class="cx-role">${escapeHtml(b.name)}</span></span></span></th><td>${escapeHtml(b.elite)}</td></tr>`;
   }).join('');
-  return `<h3 class="cx-h3">Netzwerk</h3>
+  return `<h3 class="cx-h3">Elite</h3>
     <ul class="cx-rules">
-      <li>Verbände auf derselben Lane verbinden sich, wenn sie höchstens ${num(n.joinRadius)} Kacheln auseinander stehen – auch gleiche Arten, höchstens ${n.maxTypes} Arten je Netz, ${n.maxMembers} Mitglieder (mit Commander ${n.maxWithNode}). Wer sich weiter als ${num(n.breakRadius)} Kacheln entfernt, fällt heraus; Verstärkung rückt nach.</li>
-      <li>Stirbt ein Mitglied, droppt es den <b>Baustein seines Typs</b>; das nächste lebende Mitglied fängt ihn auf. Ohne Netz geht er verloren. Gleiche Bausteine stapeln mit abnehmender Wirkung.</li>
-      <li>Ab <b>${n.eliteAt} Bausteinen</b> (eigener plus aufgefangene) wird der Verband <b>Elite</b>: +${Math.round((n.eliteHp - 1) * 100)} % Leben und volle Heilung beim Aufstieg, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach +75 %), und er behält den Verbund, in dem er aufgestiegen ist (Prägung). Danach nimmt er nichts mehr auf; fällt er, droppt er seinen Grundbaustein.</li>
-      <li>Der <b>häufigste Baustein</b> bestimmt die Art der Elite (Gleichstand: die eigene Grundart). <b>Reinrassig</b> (eigener Baustein, doppelter Ring): bekommt die Spezialisierung ihrer Art dazu; ist das schon ihr Verbund, wirkt er ×1,5. <b>Hybrid</b> (fremder Baustein, gestrichelter Ring): bekommt die Waffenart dieses Bausteins dazu und trifft jede Panzerung mit der besseren der beiden (Panzerjagd und Durchschlag: Durchschlag, Fläche: Splitter, Weitsicht: Belagerung, Panzerung: Kanone); Zielmarkierung gibt stattdessen Treffen +1.</li>
+      <li>Mit dem Fabrik-Verhalten <b>Eliteprogramm</b> (je Fabrik, nach Ausrüstung I) kommt <b>jeder 4. Verband</b> dieser Fabrik als Elite: ${Math.round(n.eliteHp * 100)} % Leben und sein Protokoll in der Elite-Fassung.</li>
+      <li>Elite erkennt man am Lichteffekt an der Figur und am Symbol rechts im Schild über dem Verband. Der Gegner sieht Eliten auch im Spähbericht.</li>
+      <li>Der frühere Verbund (Kombinationen zweier Fabriken je Lane) und die Netze sind seit dem Upgrade-Pfad v2 aus dem Spiel.</li>
     </ul>
-    <h3 class="cx-h3">Bausteine</h3>
-    <div class="cx-scroll"><table class="cx-table cx-blocks"><thead><tr><th>Baustein</th><th>1. Kopie</th><th>2. Kopie</th><th>3. Kopie</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>
-    <h3 class="cx-h3">Verbund je Lane</h3>
-    <p class="cx-lede">Die zwei Fabriken mit der höchsten Stufe auf einer Lane (Gleichstand: die ältere) bilden einen Verbund aus den Einheiten, die sie gerade bauen. Zweimal dieselbe Art = <b>Spezialisierung</b> (hervorgehoben, stärker), zwei verschiedene = <b>Kombination</b>. Er gilt nach ${RULES.verbund.switchSeconds} s Einspielzeit für alle Einheiten dieser beiden Fabriken auf der Lane. <b>Prägung:</b> Jede Einheit behält den ersten Verbund, den sie erlebt, bis zu ihrem Tod – auch wenn die Fabrik danach Lane oder Einheit wechselt. Die Fabriken pochen in der Farbe ihrer Lane. Der Gegner sieht ihn im Spähbericht.</p>
-    <div class="cx-scroll"><table class="cx-table cx-vbtable"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Einheit · Protokoll</th><th>als Elite</th></tr></thead><tbody>${blocks}</tbody></table></div>`;
 }
 
-/** Texte der Terra-Former-Synergien (Entwurf 23.10., DESIGN.md). */
-const SYNERGY_TEXT: Readonly<Record<string, string>> = {
-  forest: 'bei Gedränge springt der Hainhüter auf eine günstige Stelle einer anderen Lane',
-  snow: 'die Bremse im Schneesturm wächst, je länger ein Gegner darin steht (bis 60 %)',
-  mud: 'Schlammmonster-Gelege füllen sich doppelt so schnell, längere Leine',
-  rubble: 'Geröllhagel: Schaden über Zeit auf eigenem Geröll',
-  meadow: 'Wächter +10 % Schaden und Tempo, Produktion +15 %',
-  'forest+snow': 'Hainhüter auch auf Schnee getarnt, Frostwellen halten im Wald länger',
-  'forest+mud': 'Wurzeln halten Gegner in Wald und Matsch kurz fest',
-  'forest+rubble': 'Hainhüter +1 Rüstung, sein Sprung schlägt mit Flächenschaden ein',
-  'forest+meadow': 'auch Wiesen-Jäger nutzen das Wurzelnetz',
-  'snow+forest': 'der Sturm reicht auch in den eigenen Wald',
-  'snow+mud': 'Gegner mit voller Sturm-Bremse erstarren im Matsch kurz',
-  'snow+rubble': 'Geröllhagel fällt auch auf Schneefelder',
-  'snow+meadow': 'eigene Einheiten im Sturm +15 % Tempo statt gebremst',
-  'mud+forest': 'Schlammmonster im Wald getarnt',
-  'mud+snow': 'Treffer der Schlammmonster bremsen',
-  'mud+rubble': 'Treffer der Schlammschleuder machen Schaden über Zeit',
-  'mud+meadow': 'Schlammmonster heilen eigene Einheiten auf Wiese und Matsch',
-  'rubble+forest': 'Hagel auch im eigenen Wald, Wächter dort +1 Rüstung',
-  'rubble+snow': 'der Hagel bremst die Getroffenen',
-  'rubble+mud': 'Gegner im Hagel kommen im Matsch kaum voran',
-  'rubble+meadow': 'Wiesen-Jäger +1 Durchschlag',
-  'meadow+forest': 'der Wiesen-Bonus gilt auch für Gerufene im Wald',
-  'meadow+snow': 'Wiesen-Einheiten auf Schnee ungebremst und schneller',
-  'meadow+mud': 'auch die Schlammmonster-Gelege füllen sich schneller',
-  'meadow+rubble': 'Frontbrecher erhalten den Tempo-Bonus der Wiese',
-};
-
 function terraTraits(): string {
-  const grounds = SYNERGY_GROUNDS;
   const tname = (g: string): string => TERRAIN_LIST.find((t) => t.id === g)?.name ?? g;
-  const head = grounds.map((g) => `<th>+ ${escapeHtml(tname(g))}</th>`).join('');
-  const rows = grounds.map((a) => {
-    const cells = grounds.map((b) => {
-      if (a === b) return `<td class="cx-vb cx-vb-special" title="Alle drei Lanes gleich: Grundwirkung ×${num(RULES.synergy.triple, 1)}"><b>verstärkt</b><span>alle drei Lanes ${escapeHtml(tname(a))}</span></td>`;
-      const k = `${a}+${b}`;
-      return `<td class="cx-vb" title="${escapeHtml(`${SYNERGY_NAMES[k] ?? ''}: ${SYNERGY_TEXT[k] ?? ''}`)}"><b>${escapeHtml(SYNERGY_NAMES[k] ?? '')}</b><span>${escapeHtml(SYNERGY_TEXT[k] ?? '')}</span></td>`;
-    }).join('');
-    return `<tr><th scope="row">2× ${escapeHtml(tname(a))}<span class="cx-role"><b>${escapeHtml(SYNERGY_NAMES[a] ?? '')}</b>: ${escapeHtml(SYNERGY_TEXT[a] ?? '')}</span></th>${cells}</tr>`;
-  }).join('');
+  const rows = SYNERGY_GROUNDS.map((g) => `<tr><th scope="row">${escapeHtml(tname(g))}</th><td><b>${escapeHtml(SYNERGY_NAMES[g] ?? '')}</b></td><td class="cx-note">${escapeHtml(SYNERGY_TEXT[g] ?? '')}</td></tr>`).join('');
   return `<h3 class="cx-h3">Lane-Synergien</h3>
-    <p class="cx-lede">Eine Lane zählt als Boden X, wenn dort mindestens ${RULES.synergy.laneMin} eigene geformte Kacheln X liegen. <b>Zwei Lanes mit X</b> geben die Grundwirkung (Zeile), die <b>dritte Lane</b> färbt sie (Spalte). Alle drei gleich: Grundwirkung verstärkt. Bodenboni der Einheiten gelten auf jedem Boden ihrer Art, egal wer ihn geformt hat.</p>
-    <div class="cx-scroll"><table class="cx-table cx-vbtable"><thead><tr><th>Doppel</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    <p class="cx-lede">Jede Lane für sich: Liegen in einer Lane mindestens <b>${RULES.synergy.laneMin} eigene geformte Kacheln</b> eines Bodens, hat sie dessen Synergie – bei mehreren der Boden mit den meisten Kacheln. Die Wirkung gilt nur in dieser Lane und hält ${RULES.laneHysteresis} s nach, wenn die Kacheln fallen. Keine Kombinationen über Lanes, keine Produktionsboni.</p>
+    <div class="cx-scroll"><table class="cx-table"><thead><tr><th>Boden</th><th>Synergie</th><th>Wirkung in der Lane</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function myrTraits(): string {
@@ -574,6 +602,6 @@ function myrTraits(): string {
     ['Materie geht nicht verloren', 'Battlesphären zerfallen in Drohnen, der Schwarmgeist macht gefallene Gegner zu Drohnen.'],
   ];
   return `<h3 class="cx-h3">Besonderheiten der Myriaden</h3>
-    <p class="cx-lede">Platzhalter für eine spätere Myriaden-Mechanik wie Verbund oder Synergien – bis dahin die Eigenheiten im Überblick.</p>
+    <p class="cx-lede">Masse und Opfer: Myrs stärken sich gegenseitig, dienen als Munition und gehen nicht verloren.</p>
     <ul class="cx-rules">${items.map(([a, b]) => `<li><b>${escapeHtml(a)}:</b> ${escapeHtml(b)}</li>`).join('')}</ul>`;
 }

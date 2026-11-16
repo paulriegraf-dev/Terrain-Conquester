@@ -1,3 +1,4 @@
+import { TRICK, hasTrick, noteJump, onTerraHit, trickSpeed } from './tricks';
 import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
 import type { TerrainId } from '../../data/terrain';
@@ -18,7 +19,7 @@ import { RING16 } from '../math';
 import { lineClear } from './movement';
 import { assess } from './emergency';
 import {
-  hasSynergy, laneOfRow, mudClutchRate, mudLeash, synergyCamouflage, synergyPower, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
+  hasSynergy, laneOfRow, laneSynergy, mudClutchRate, mudLeash, synergyCamouflage, synergySaveBonus, synergySpeedFactor, synergyTick, updateSynergy,
 } from './synergy';
 
 /**
@@ -161,6 +162,7 @@ export function groundSpeedFactor(world: World, e: Entity): number {
   if (e.weaken && world.tick < e.weaken.until) slow *= e.weaken.speed;
   const syn = synergySpeedFactor(world, e);
   let f = Math.max(0.4, slow * Math.min(1, syn)) * Math.max(1, syn);
+  f *= trickSpeed(world, e); // Anlauf, Weidegang (v2)
   const gb = e.tf?.gb;
   if (gb?.speed) f *= gb.speed;
   if (gb?.dugIn) f = 0;
@@ -300,7 +302,7 @@ function formSecondsOf(world: World, p: PlayerId): number {
   return rootsLevel(world, p) >= 2 ? world.rules.terraform.formSecondsRoots : world.rules.terraform.formSeconds;
 }
 function workPerSummonOf(world: World, p: PlayerId): number {
-  return rootsLevel(world, p) >= 3 ? world.rules.terraform.workPerSummon - 1 : world.rules.terraform.workPerSummon;
+  return rootsLevel(world, p) >= 2 ? world.rules.terraform.workPerSummon - 1 : world.rules.terraform.workPerSummon; // v2: Wurzelwerk II
 }
 
 /** Boden-Index → gerufenes Wesen (Wiese → Steppenjäger, …). */
@@ -986,7 +988,6 @@ function updateMudNests(world: World): void {
   for (const p of PLAYERS) {
     if (world.players[p].faction.id !== 'terraformer') continue;
     const nests = world.mudNests[p];
-    const rate = mudClutchRate(world, p);
     let alive = 0;
     for (const e of world.entities) if (e.alive && e.owner === p && e.defId === 'mudling') alive++;
     for (let cy = 0; cy < rows; cy++) {
@@ -1003,7 +1004,7 @@ function updateMudNests(world: World): void {
           nests.delete(key);
           continue;
         }
-        const sec = (nests.get(key) ?? 0) + rate;
+        const sec = (nests.get(key) ?? 0) + mudClutchRate(world, p, cy * NEST + 1);
         if (sec < rules.eggSeconds * rules.clutch) {
           nests.set(key, sec);
           continue;
@@ -1048,7 +1049,7 @@ export function nearOwnGround(world: World, p: PlayerId, ground: number, x: numb
 export function leashOk(world: World, e: Entity, t: Entity, charging = false): boolean {
   const def = UNITS[e.defId as UnitId];
   if (!def.leash || !def.ground) return true;
-  const radius = charging && def.charge ? Math.max(def.charge.reach, mudLeash(world, e.owner, def.leash.radius)) : mudLeash(world, e.owner, def.leash.radius);
+  const radius = charging && def.charge ? Math.max(def.charge.reach, mudLeash(world, e.owner, def.leash.radius, e.pos.y)) : mudLeash(world, e.owner, def.leash.radius, e.pos.y);
   return nearOwnGround(world, e.owner, TERRAIN_INDEX[def.ground], t.pos.x, t.pos.y, radius);
 }
 
@@ -1073,7 +1074,9 @@ function updateLeashed(world: World, e: Entity, def: UnitDef): void {
 function frostWave(world: World, e: Entity, f: { every: number; radius: number; stun: number }): void {
   const tf = e.tf!;
   if (world.tick < tf.nextAbility) return;
-  const r2 = f.radius * f.radius;
+  // Kältekern (v2): Frostwelle größer.
+  const radius = f.radius + (hasTrick(world, e.owner, 'coldCore') ? TRICK.coldCore.waveRadius : 0) + (laneSynergy(world, e.owner, e.pos.y, 'snow') ? 1 : 0);
+  const r2 = radius * radius;
   const snow = TERRAIN_INDEX.snow;
   const forest = TERRAIN_INDEX.forest;
   const rime = hasSynergy(world, e.owner, 'forest', 'snow');
@@ -1104,15 +1107,14 @@ function frostWave(world: World, e: Entity, f: { every: number; radius: number; 
     }
   }
   tf.nextAbility = world.tick + Math.round(f.every * world.tps);
-  world.emit({ type: 'frost', owner: e.owner, pos: { x: e.pos.x, y: e.pos.y }, radius: f.radius });
+  world.emit({ type: 'frost', owner: e.owner, pos: { x: e.pos.x, y: e.pos.y }, radius });
 }
 
 /** Wurzelnetz – nur mit der Synergie zweier Wald-Lanes (Hainhüter; Waldrand: auch Steppenjäger). */
 function rootsFor(world: World, e: Entity): { every: number; chance: number; cooldown: number } | null {
-  if (!hasSynergy(world, e.owner, 'forest')) return null;
-  const ok = e.defId === 'specialForest' || (e.defId === 'specialMeadow' && hasSynergy(world, e.owner, 'forest', 'meadow'));
-  if (!ok) return null;
-  return { every: 20, chance: 0.3, cooldown: 20 / synergyPower(world, e.owner) };
+  // v2 (16.11.): nur in einer Wald-Lane, Sprung innerhalb derselben Lane.
+  if (e.defId !== 'specialForest' || !laneSynergy(world, e.owner, e.pos.y, 'forest')) return null;
+  return { every: 20, chance: 0.3, cooldown: 20 };
 }
 
 /**
@@ -1132,7 +1134,8 @@ function rootsJump(world: World, e: Entity, r: { every: number; chance: number; 
     if (world.contested[i] !== 1 && controllerAt(world, i) !== e.owner) continue;
     const y = Math.floor(i / g.width);
     const r2 = laneOfRow(world, y);
-    if (r2 === route) continue;
+    if (r2 !== laneOfRow(world, Math.floor(e.pos.y))) continue; // v2: Wurzelnetz nur innerhalb der eigenen Lane
+    if ((i % g.width + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2 < 9) continue; // kein Hüpfer auf der Stelle
     const x = i % g.width;
     const call = world.entities.some((o) => o.alive && o.kind === 'unit' && o.owner !== e.owner && Math.abs(o.pos.x - x - 0.5) <= 2 && Math.abs(o.pos.y - y - 0.5) <= 2);
     patches.push({ cell: i, route: r2, call });
@@ -1162,6 +1165,7 @@ function rootsJump(world: World, e: Entity, r: { every: number; chance: number; 
     }
   }
   world.emit({ type: 'roots', owner: e.owner, from, to: { x: e.pos.x, y: e.pos.y } });
+  noteJump(world, e); // Harzborke (v2)
   rootGrip(world, e); // Wurzelgriff (Schlussstein Hainhüter)
 }
 
@@ -1217,10 +1221,14 @@ export function onHit(world: World, shooter: Entity, target: Entity): void {
   mudOnHit(world, shooter, target); // Verschlammung (26.10. spät)
   const def = UNITS[shooter.defId as UnitId];
   const hs = shooter.tf?.gb?.hitSlow ?? def.hitSlow;
-  if (hs) slowDown(world, target, world.tick + Math.round(hs.seconds * world.tps), hs.factor);
+  // Zäher Schlamm (Kniff Schlammgrube, v2): Schlammwerfer bremsen länger.
+  const extra = shooter.defId === 'wardMud' && hasTrick(world, shooter.owner, 'toughMud') ? TRICK.toughMud.slowExtra : 0;
+  if (hs) slowDown(world, target, world.tick + Math.round((hs.seconds + extra) * world.tps), hs.factor);
+  onTerraHit(world, shooter, target); // Zäher Schlamm (Sog), Granitkern (Splitter)
   if (def.hitWeaken) {
     const w = def.hitWeaken;
-    target.weaken = { until: world.tick + Math.round(w.seconds * world.tps), speed: w.speed, damage: w.damage };
+    const longer = laneSynergy(world, shooter.owner, shooter.pos.y, 'mud') ? 1 : 0; // Schlammmonster-Lane (v2)
+    target.weaken = { until: world.tick + Math.round((w.seconds + longer) * world.tps), speed: w.speed, damage: w.damage };
     if (hasSynergy(world, shooter.owner, 'mud', 'rubble')) target.dot = { until: world.tick + 3 * world.tps, dps: 4, owner: shooter.owner };
   }
   // Schlammschleuder (25.10.): jeder `every`-te Angriff macht die Kachel des Ziels dauerhaft zu Matsch.

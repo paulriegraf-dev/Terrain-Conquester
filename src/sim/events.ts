@@ -81,6 +81,8 @@ export type SimEventData =
   | { type: 'landform'; owner: PlayerId; what: 'merge' | 'copy'; pos: Vec2 }
   /** Technoclan: Ein Verband tritt einem Netz bei (Linie zum nächsten Mitglied). */
   | { type: 'link'; owner: PlayerId; from: Vec2; to: Vec2 }
+  /** Sperrfeuer (Schlussstein Batterie): Einschläge angekündigt (Warnmarken bis `land`). */
+  | { type: 'barrage'; owner: PlayerId; points: Vec2[]; land: number }
   /** Technoclan: Ein Mitglied erbt ein Protokoll eines gefallenen Mitglieds (ascend = steigt dadurch auf). */
   | { type: 'protocol'; owner: PlayerId; protocol: ProtocolId; from: Vec2; to: Vec2; ascend: boolean }
   /** HQ-Zweig ausgebaut. */

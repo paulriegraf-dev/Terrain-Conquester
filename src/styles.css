@@ -1637,4 +1637,83 @@ body.fc-on .console-info, body.fc-on .console-grid-wrap { display: none !importa
 .fc-small { display: flex; flex-wrap: wrap; gap: 4px; }
 .fc-mini { padding: 3px 7px; font-size: 0.64rem; opacity: 0.85; }
 .fc-mini .fc-cost { font-size: 0.6rem; }
-.fc-up .fc-ut small { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fc-up .fc-ut small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Verbessern nach Säulen (v2, 16.11.) */
+.fc-pils { display: grid; gap: 5px; }
+.fc-pil { display: grid; gap: 3px; padding-left: 7px; box-shadow: inset 3px 0 0 var(--pil, #5b6b8c); }
+.fc-pil-level { --pil: #e8e4d6; }
+.fc-pil-kampf { --pil: #7fb6e0; }
+.fc-pil-verh { --pil: #ff9f43; }
+.fc-pil-spez { --pil: #9be06a; }
+.fc-pil-ks { --pil: #c49bff; }
+.fc-pil-h { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 0.54rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pil); }
+.fc-done { font-family: var(--font-data); letter-spacing: 0; color: var(--pil); opacity: 0.85; cursor: help; }
+.fc-pil .fc-up { display: flex; align-items: center; padding: 4px 6px; gap: 6px; }
+.fc-pil .fc-up .fc-ut { flex: 1; }
+.fc-pil .fc-up .fc-ut b { display: flex; justify-content: space-between; gap: 6px; }
+.fc-pil .fc-up .fc-ut b em { font-style: normal; font-family: var(--font-data); font-weight: 400; font-size: 0.62rem; opacity: 0.8; }
+.fc-pil .fc-ui { color: var(--pil); }
+.fc-pil .fc-up.run { outline-color: var(--pil); }
+.fc-pil .fc-up.run .fc-bar i { background: var(--pil); }
+.fc-pil .fc-note { font-size: 0.64rem; }
+.fc-ks { display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: rgba(196, 155, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(196, 155, 255, 0.25); }
+.fc-ks.open { background: rgba(196, 155, 255, 0.18); box-shadow: inset 0 0 0 2px #c49bff; }
+.fc-ks .fc-ui { font-size: 0.95rem; }
+
+/* ===================================================================================================================
+   Übersicht im Pixel-Look (16.11., Nutzer: „Übersichten visuell auf den aktuellen Stand bringen und schön machen“):
+   gleicher Doppelrahmen und dieselben Knopfkanten wie Fabrik-Karte und HUD; Säulenfarben wie in der Fabrik-Karte.
+   =================================================================================================================== */
+.codex { background: rgba(6, 9, 15, 0.86); }
+.codex-card { --cx-bg: #1b2233; --cx-dark: #0a0d14; --cx-rim: #5b6b8c; --cx-btn: #2b3550; --cx-btn-hi: #4a5a80; --cx-btn-lo: #161c2b;
+  background: var(--cx-bg); border: 0; border-radius: 0; color: #e8e4d6;
+  box-shadow: 0 0 0 3px var(--cx-dark), 0 0 0 6px var(--cx-rim), 0 0 0 9px var(--cx-dark), 8px 12px 0 8px rgba(0, 0, 0, 0.4); }
+.codex-head { border-bottom: 3px solid var(--cx-dark); background: #161c2b; }
+.codex-head .card-title { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase; color: #ffd23f; }
+.codex .btn, .codex .btn-mini { border: 0; border-radius: 0; background: var(--cx-btn); color: #e8e4d6;
+  box-shadow: inset -3px -3px 0 var(--cx-btn-lo), inset 3px 3px 0 var(--cx-btn-hi); }
+.codex .btn:hover, .codex .btn-mini:hover { background: #34406a; }
+.codex-tab[aria-selected="true"], .codex .cx-chip[aria-pressed="true"] { background: #ffd23f; color: #1a1408;
+  box-shadow: inset -3px -3px 0 #a07c00, inset 3px 3px 0 #fff2a8; }
+.codex .cx-table th, .codex .cx-table td { border-bottom: 1px solid rgba(91, 107, 140, 0.35); }
+.codex .cx-table thead th { background: var(--cx-bg); color: #9aa8c8; font-family: var(--font-display); font-weight: 400; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.codex .cx-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.codex .cx-h3 { font-family: var(--font-display); font-weight: 400; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: #ffd23f; margin-top: 14px; }
+.codex .cx-lede { color: #b8c2d8; }
+.codex .cx-lede b { color: #fff; }
+.cx-port { display: inline-block; flex: 0 0 auto; image-rendering: pixelated; background-repeat: no-repeat; vertical-align: middle; }
+.cx-uname { display: flex; align-items: center; gap: 8px; }
+.cx-uname > span { display: grid; }
+/* Ausbau-Reiter */
+.cx-budget { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 8px 10px; background: #161c2b; box-shadow: inset 0 0 0 2px rgba(91, 107, 140, 0.4); font-size: 0.78rem; }
+.cx-budget b { font-family: var(--font-data); font-size: 0.95rem; }
+.cx-budget > span { color: var(--pil, #e8e4d6); }
+.cx-budget-sum { color: #ffd23f !important; }
+.cx-pil-kampf { --pil: #7fb6e0; }
+.cx-pil-verh { --pil: #ff9f43; }
+.cx-pil-spez { --pil: #9be06a; }
+.cx-pil-ks { --pil: #c49bff; }
+.cx-facs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 12px; }
+.cx-fac { display: grid; align-content: start; gap: 8px; padding: 10px; background: #222a3e;
+  box-shadow: 0 0 0 2px var(--cx-dark, #0a0d14), 0 0 0 4px #3a4766; }
+.cx-fac header { display: grid; gap: 1px; }
+.cx-fac header b { font-family: var(--font-display); font-weight: 400; font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.cx-fac header small { font-family: var(--font-data); font-size: 0.64rem; color: #9aa8c8; }
+.cx-fac-wide { margin-top: 12px; grid-template-columns: 1fr 1fr; }
+.cx-fac-wide header { grid-column: 1 / -1; }
+.cx-tree { display: grid; gap: 4px; padding: 6px; background: rgba(0, 0, 0, 0.22); position: relative; }
+.cx-node { display: flex; align-items: center; gap: 8px; position: relative; }
+.cx-node + .cx-node::before { content: ""; position: absolute; left: 21px; top: -6px; width: 2px; height: 6px; background: #3a4766; }
+.cx-node b { font-size: 0.76rem; display: block; line-height: 1.15; }
+.cx-node small { font-family: var(--font-data); font-size: 0.6rem; color: #9aa8c8; }
+.cx-pil { display: grid; gap: 3px; padding-left: 8px; box-shadow: inset 3px 0 0 var(--pil); }
+.cx-pil h4 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 0.56rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pil); }
+.cx-pil ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.cx-pil li { display: grid; grid-template-columns: 1fr auto; gap: 0 6px; font-size: 0.74rem; line-height: 1.25; }
+.cx-pil li b { font-weight: 700; }
+.cx-pil li small { grid-column: 1 / -1; color: #b8c2d8; font-size: 0.66rem; }
+.cx-cost { font-family: var(--font-data); font-size: 0.68rem; color: #ffd23f; white-space: nowrap; }
+@media (max-width: 640px) { .cx-fac-wide { grid-template-columns: 1fr; } }
+
+.codex .cx-tri-cell, .codex .cx-armor, .codex .cx-move, .codex .cx-key, .codex .cx-bar, .codex .cx-bar i, .codex .cx-glyph { border-radius: 0; }
+.codex .cx-tri-cell { background: #222a3e; }

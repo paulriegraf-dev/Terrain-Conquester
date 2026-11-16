@@ -212,6 +212,16 @@ export interface Entity {
    * Schlusssteine (26.10.): Zustand je Verband – Heimkehr (einmal je Leben, Rückzugsziel, Heilung), Wurzelgriff,
    * Schlammbett, Weißer Tod (Wellen), Eispanzer (geschluckter Treffer), Schlammgrund (Sperre je Ziel).
    */
+  /**
+   * Kniffe und Technoclan-Schlusssteine (v2, 16.11.): still seit Tick, Abklingzeiten, Dauerfeuer-Ziel, letzter Sprung.
+   * Siehe sim/systems/tricks.ts.
+   */
+  trk?: {
+    still: number; lastPos: Vec2; nextCall?: number; nextRail?: number; nextBarrage?: number; nextWall?: number;
+    nextRebuild?: number; heatTarget?: number; heatSince?: number; jumpedAt?: number; nextRecycle?: number; nextPush?: number;
+  };
+  /** Im Nebel sichtbar für den Gegner bis Tick (Peilsender, Witterung) – Index = Betrachter. */
+  revealed?: [number, number];
   ks?: {
     homeUsed?: boolean; retreat?: Vec2 | null; retreatUntil?: number; healStart?: number; healFrom?: number;
     nextGrip?: number; nextBed?: number; waves?: number; shieldUsed?: number; mudLockUntil?: number;

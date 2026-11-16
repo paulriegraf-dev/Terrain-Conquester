@@ -1,3 +1,4 @@
+import { lastBite } from './tricks';
 import type { Entity } from '../entity';
 import type { World } from '../world';
 
@@ -26,6 +27,7 @@ export function updateLifespans(world: World): void {
     life.age += rate;
     const cap = lifeCap(world, e);
     if (cap <= 1e-6) {
+      lastBite(world, e); // Letzter Biss (Kniff Drohnen, v2)
       e.hp = 0;
       world.players[e.owner].stats.expired++;
       world.destroy(e, null);

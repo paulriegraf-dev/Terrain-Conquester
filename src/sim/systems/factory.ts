@@ -166,6 +166,23 @@ export function buildingUpgradeLevel(world: World, owner: PlayerId, building: Bu
   return n;
 }
 
+/**
+ * Kampfwerte-Stufe (0–3) einer Einheitenart beim Spieler (v2, für die Pips im Info-Chip): Ausrüstung der Fabrikart, die sie
+ * baut; Terra-Former: Wächterkraft für Wächter, Naturkraft für Gerufene.
+ */
+export function gearLevel(world: World, owner: PlayerId, unit: UnitId): number {
+  const p = world.players[owner];
+  const def = UNITS[unit];
+  const lvl = (b: BuildingId, kind: BuildingUpgradeKind): number => buildingUpgradeLevel(world, owner, b, kind);
+  if (def.summoned) return def.leash ? 0 : lvl('meadowhall', 'nature');
+  let n = 0;
+  if (def.ground && !def.former && !def.landformer) n = lvl('meadowhall', 'warden');
+  for (const [id, fb] of Object.entries(p.faction.buildings) as [BuildingId, NonNullable<(typeof p.faction.buildings)[BuildingId]>][]) {
+    if (fb.tiers.includes(unit) || fb.mix?.unit === unit || fb.mix2?.unit === unit) n = Math.max(n, lvl(id, 'gear'));
+  }
+  return n;
+}
+
 /** Wird dieses Upgrade gerade beim Spieler erforscht? */
 export function researching(world: World, owner: PlayerId, upgradeId: string): boolean {
   return world.players[owner].labs.some((l) => l.upgrade === upgradeId);

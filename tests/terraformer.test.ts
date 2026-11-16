@@ -291,11 +291,11 @@ describe('Terra-Former: eigener Boden', () => {
     assert.ok(world.events.some((e) => e.type === 'frost'));
   });
 
-  it('Wurzelnetz nur mit zwei Wald-Lanes: dann springt der Hainhüter zu einer eigenen Waldfläche, an der Gegner stehen', () => {
-    const jumped = (twoLanes: boolean): boolean => {
+  it('Wurzelnetz (v2): in einer Wald-Lane springt der Hainhüter zu eigenem Wald derselben Lane, an dem Gegner stehen', () => {
+    const jumped = (enough: boolean): boolean => {
       const world = new World({ map: openMap, seed: 1, ...tf });
-      // Eigene, geformte Waldflächen: unten (Route „unten“) und – für die Synergie – oben
-      const rows = twoLanes ? [0, 1, 7, 8] : [7, 8];
+      // Eigene, geformte Waldflächen in der unteren Lane – genug für die Synergie oder zu wenig.
+      const rows = enough ? [7, 8] : [8];
       for (const y of rows) {
         for (let x = 2; x <= 9; x++) {
           if (world.grid.structure[world.grid.index(x, y)] !== 0) continue;
@@ -303,25 +303,26 @@ describe('Terra-Former: eigener Boden', () => {
           world.formed[world.grid.index(x, y)] = 1;
         }
       }
-      const keeper = unit(world, 0, 'specialForest', 4.5, 4.5);
-      const enemy = unit(world, 1, 'gunner', 8.0, 7.5);
+      const keeper = unit(world, 0, 'specialForest', 2.5, 7.5);
+      const enemy = unit(world, 1, 'gunner', 8.5, 8.5);
       enemy.weapon = undefined;
-      stepTimes(world, world.tps + 1);
-      return keeper.mover!.route === 'bottom';
+      keeper.mover!.speed = 0;
+      stepTimes(world, 6 * world.tps + 1);
+      return keeper.pos.x > 5;
     };
     assert.equal(jumped(true), true, 'mit Synergie: gesprungen');
     assert.equal(jumped(false), false, 'ohne: kein Wurzelnetz');
   });
-  it('Naturkraft gilt für Gerufene, Ausrüstung der Linienfabrik für ihre Wächter und Terraformer (26.10. spät)', () => {
+  it('Naturkraft gilt für Gerufene, Wächterkraft für alle Wächter (v2)', () => {
     const world = new World({ map: openMap, seed: 1, ...tf });
     world.players[0].research.push('meadowhall-nature-1');
     const k = unit(world, 0, 'specialForest', 4.5, 7.5);
     assert.equal(k.toughness, UNITS.specialForest.toughness + 1, 'Naturkraft I: Widerstand +1');
     assert.equal(k.weapon!.def.strength, UNITS.specialForest.weapon!.strength + 1, 'Naturkraft I: Stärke +1');
     const w2 = new World({ map: openMap, seed: 1, ...tf });
-    w2.players[0].research.push('grove-gear-1');
+    w2.players[0].research.push('meadowhall-warden-1');
     const k2 = unit(w2, 0, 'specialForest', 4.5, 7.5);
-    assert.equal(k2.toughness, UNITS.specialForest.toughness, 'Ausrüstung wirkt nicht auf Gerufene');
+    assert.equal(k2.toughness, UNITS.specialForest.toughness, 'Wächterkraft wirkt nicht auf Gerufene');
     w2.addBuilding(0, BUILDINGS.grove, { x: 0, y: 0, w: 2, h: 2 });
     const ward = unit(w2, 0, 'wardForest', 5.5, 7.5);
     const base = UNITS.wardForest;

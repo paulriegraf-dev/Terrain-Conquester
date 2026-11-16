@@ -43,29 +43,14 @@ export const KEYSTONES: readonly KeystoneDef[] = [
   { unit: 'wardMud', line: 'wardMud', lineName: 'Matsch', name: 'Schlammgrund', icon: '◎', rule: 'Erfassen zwei Bremsfelder auf eigenem Matsch dasselbe Ziel, ist es 1 s bewegungsunfähig.', rein: 'Nur bei Überlappung zweier Verbände; alle 6 s je Ziel.' },
   { unit: 'wardSnow', line: 'wardSnow', lineName: 'Schnee', name: 'Eispanzer', icon: '◈', rule: 'Der Schild wirkt auf Schnee doppelt (−30 % statt −15 %); einmal je Leben schluckt der Verband einen Treffer ganz.', rein: 'Doppelschild nur auf Schnee.' },
   { unit: 'wardRubble', line: 'wardRubble', lineName: 'Geröll', name: 'Fels in der Brandung', icon: '▲', rule: 'Auf eigenem Geröll unverdrängbar; eigene Verbände direkt hinter ihm +1 Rüstung.', rein: 'Nur auf eigenem Geröll, nur die Kachel direkt hinter ihm.' },
-  // Technoclan (26.10. spät): Gabelung als Schlussstein mit zwei Türen. Hover Scout, Batterie, Technogunner, Koloss und
-  // Nano-Heiler sind Platzhalter (Vorschläge), als Daten – später zu entscheiden.
-  { unit: 'sniper', line: 'sniper', name: 'Scharfschützen', icon: '◇', rule: 'Tür wählen: Überladung oder Durchschuss.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Überladung', description: '+40 % Schaden – gegen Drohnen nutzlos, Überschuss verfällt', effect: { damage: 1.4 } },
-    { name: 'Durchschuss', description: 'trifft auch den nächsten Gegner dahinter (halbe Wirkung)', effect: { pierce: 0.5 } }] },
-  { unit: 'plasma', line: 'plasma', name: 'Plasmawerfer', icon: '◇', rule: 'Tür wählen: Bündelung oder Streuung.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Bündelung', description: 'Reichweite +1, kleinere Fläche (−0,4)', effect: { range: 1, splash: -0.4 } },
-    { name: 'Streuung', description: 'größere Fläche (+0,6), 20 % weniger Schaden', effect: { splash: 0.6, damage: 0.8 } }] },
-  { unit: 'hoverscout', line: 'hoverscout', name: 'Hover Scout', icon: '◇', placeholder: true, rule: 'Tür wählen: Jagdprogramm oder Hartkern.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Jagdprogramm', description: 'Treffen +1', effect: { hit: 1 } },
-    { name: 'Hartkern', description: 'Durchschlag +2 – auch gegen Panzer brauchbar', effect: { ap: 2 } }] },
-  { unit: 'battery', line: 'battery', name: 'Batterie', icon: '◇', placeholder: true, rule: 'Tür wählen: Schwerer Kern oder Weitschuss.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Schwerer Kern', description: '+40 % Schaden', effect: { damage: 1.4 } },
-    { name: 'Weitschuss', description: 'Reichweite +1,5', effect: { range: 1.5 } }] },
-  { unit: 'gunner', line: 'gunner', name: 'Technogunner', icon: '◇', placeholder: true, rule: 'Tür wählen: Überladung oder Streufeuer.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Überladung', description: '+40 % Schaden', effect: { damage: 1.4 } },
-    { name: 'Streufeuer', description: 'kleiner Flächenschaden (Radius 0,8)', effect: { splash: 0.8 } }] },
-  { unit: 'colossus', line: 'colossus', name: 'Koloss', icon: '◇', placeholder: true, rule: 'Tür wählen: Panzerbrecher oder Durchwalzen.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Panzerbrecher', description: 'Durchschlag +2', effect: { ap: 2 } },
-    { name: 'Durchwalzen', description: 'trifft auch den nächsten Gegner dahinter (halbe Wirkung)', effect: { pierce: 0.5 } }] },
-  { unit: 'nanomedic', line: 'nanomedic', name: 'Nano-Heiler', icon: '◇', placeholder: true, rule: 'Tür wählen: Notversorgung oder Feldnetz.', rein: 'Eine Tür je Partie.', doors: [
-    { name: 'Notversorgung', description: 'Heilung +40 %', effect: { heal: 1.4 } },
-    { name: 'Feldnetz', description: 'Heilradius +1', effect: { range: 1 } }] },
+  // Technoclan (16.11., v2): eine Regel je Einheit statt zweier Türen – Präzision, Reichweite, Reparatur.
+  { unit: 'sniper', line: 'sniper', name: 'Schienenschuss', icon: '⟿', rule: 'Alle 8 s ein geladener Schuss, der alle Gegner auf einer Linie bis zur Reichweite trifft – auch hinter Erdwällen.', rein: 'Nur im Stillstand (3 s).' },
+  { unit: 'plasma', line: 'plasma', name: 'Glutfeld', icon: '♨', rule: 'Einschläge hinterlassen 4 s brennenden Boden (3 Schaden/s).', rein: 'Höchstens 2 Felder je Verband.' },
+  { unit: 'nanomedic', line: 'nanomedic', name: 'Wiederaufbau', icon: '✚', rule: 'Fällt ein eigener Verband in 3 Kacheln, baut er ihn in 8 s mit einem Modell und 30 % Leben wieder auf.', rein: 'Alle 40 s je Heiler; nicht für Koloss und Helden.' },
+  { unit: 'hoverscout', line: 'hoverscout', name: 'Peilsender', icon: '◎', rule: 'Sein Ziel bleibt 10 s markiert und im Nebel sichtbar – alle eigenen Verbände treffen es 1 leichter.', rein: 'Ein Ziel je Scout.' },
+  { unit: 'battery', line: 'battery', name: 'Sperrfeuer', icon: '⁂', rule: 'Nach 5 s Stillstand alle 15 s eine Reihe aus 3 Einschlägen quer über die Lane, mit 1 s Vorwarnung.', rein: 'Gegner können ausweichen.' },
+  { unit: 'gunner', line: 'gunner', name: 'Feldstellung', icon: '▬', rule: 'Im Stillstand baut er alle 30 s einen Sandsack-Erdwall direkt vor sich.', rein: 'Höchstens 2 je Verband, sie zerfallen nach 40 s.' },
+  { unit: 'colossus', line: 'colossus', name: 'Walze', icon: '⛭', rule: 'Geht durch Erdwälle (bricht sie sofort) und schiebt gegnerische Infanterie beiseite.', rein: 'Infanterie höchstens 1 Kachel je Sekunde.' },
   // Myriaden
   { unit: 'catapult', line: 'catapult', name: 'Doppelwurf', icon: '⇉', rule: 'Trägt zwei Verspotter und wirft sie nacheinander auf zwei Ziele, die mindestens 4 Kacheln auseinander liegen. Dazu Bluff: Stirbt ein geworfener Verspotter vor seiner Zeit, wirft das Katapult sofort gratis nach.', rein: 'Ladung zwei Verspotter je 60 s; nur ein Ziel: wirft einen, behält den zweiten. Bluff einmal je 30 s, nur in Reichweite.' },
   { unit: 'drone', line: 'drone', name: 'Brechstange', icon: '✸', rule: 'Stehen 3 Drohnen-Verbände (zusammen 16 Modelle) 8 s still beieinander, verschmelzen sie in 6 s zur Brechstange: kein Angriff, langsam, 25 Leben je Modell. 4–5 Kacheln vor dem gegnerischen Drittel springt sie 5 Kacheln über Wälle und Schluchten, trifft beim Einschlag alles in 1,5 Kacheln (18 je Modell) und entlässt die Drohnen.', rein: 'Eine je Spieler, höchstens 24 Modelle; während der Fusion verwundbar; eigene Uhr 90 s; fällt sie vorher, kommt nur ein Teil der Drohnen frei.' },

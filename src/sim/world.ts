@@ -32,7 +32,7 @@ import type { BuyState } from './systems/purchases';
 import { updateLifespans } from './systems/lifespan';
 import { updateEmergency } from './systems/emergency';
 import { updateScout } from './systems/scout';
-import { onNetworkDeath, updateNetworks } from './systems/network';
+import { onTrickDeath, revealedTo, updateTricks } from './systems/tricks';
 import { updateVerbund } from './systems/verbund';
 import { initialSites, updateSites } from './systems/sites';
 import { camouflageRange, updateTerraform } from './systems/terraform';
@@ -505,7 +505,13 @@ export class World {
     { top: { active: null, pending: null }, mid: { active: null, pending: null }, bottom: { active: null, pending: null } },
   ];
   /** Bodenfelder mit Schaden (Brandfeld der Batterie im Verbund). */
-  groundFields: { owner: PlayerId; pos: Vec2; radius: number; dps: number; until: number; src: string }[] = [];
+  groundFields: { owner: PlayerId; pos: Vec2; radius: number; dps: number; until: number; src: string; by?: number; acid?: boolean }[] = [];
+  /** Sperrfeuer (Schlussstein Batterie): angekündigte Einschläge. */
+  barrages: { owner: PlayerId; points: Vec2[]; land: number; damage: number; src: string }[] = [];
+  /** Wiederaufbau (Schlussstein Nano-Heiler): Verbände, die zum Tick `at` zurückkehren. */
+  rebuilds: { owner: PlayerId; unit: UnitId; pos: Vec2; route: Route; at: number }[] = [];
+  /** Feldstellung (Schlussstein Technogunner): Sandsack-Wälle mit Ablauf und Erbauer. */
+  fieldWalls: { id: number; by: number; until: number }[] = [];
   /** Elite-Späher je Spieler (Weitsicht als Elite): entdecken Getarnte in ihrer Sicht. Jede Sekunde neu. */
   detectors: [{ x: number; y: number; r: number }[], { x: number; y: number; r: number }[]] = [[], []];
   /** Terra-Former: laufende Verschmelzungen des Landformers (dort zählt jeder Boden als eigener). */
@@ -629,8 +635,8 @@ export class World {
     updateMarket(this);
     if (this.tick % this.rules.visionEvery === 0) updateVision(this);
     updateProduction(this);
-    updateNetworks(this);
     updateVerbund(this);
+    updateTricks(this);
     updateTerraform(this);
     updateMyr(this);
     updateSlits(this);
@@ -720,6 +726,7 @@ export class World {
   /** Sieht Spieler p diese Entity gerade? (Eigene sieht man immer.) */
   isVisibleTo(p: PlayerId, e: Entity): boolean {
     if (e.owner === p) return true;
+    if (revealedTo(this, e, p)) return true; // Peilsender, Witterung (v2)
     const vision = this.players[p].vision;
     // Getarnt (Borkenschützen im Wald): nur sichtbar, wenn eine gegnerische Einheit ganz nah ist.
     const camo = e.kind === 'unit' ? camouflageRange(this, e) : null;
@@ -924,8 +931,10 @@ export class World {
   destroy(e: Entity, killer: PlayerId | null): void {
     if (!e.alive) return;
     e.alive = false;
-    if (e.net && e.net.id !== 0) onNetworkDeath(this, e);
-    if (e.kind === 'unit' && killer !== null) this.onUnitDeath(e, killer);
+    if (e.kind === 'unit' && killer !== null) {
+      this.onUnitDeath(e, killer);
+      onTrickDeath(this, e);
+    }
     if (e.kind === 'wall') removeWall(this, e);
     if (e.kind === 'building') {
       // Gelege: Fällt die Brut, schlüpft es sofort.
@@ -1093,6 +1102,9 @@ export class World {
       if (!fb) continue;
       if (fb.tiers.includes(unit) || fb.mix?.unit === unit || fb.mix2?.unit === unit || fb.former === unit) gear = Math.max(gear, level(id, 'gear'));
     }
+    // Wächterkraft I–III (Terra-Former, v2): Ausrüstung für alle Wächter, fraktionsweit.
+    const ud = UNITS[unit];
+    if (ud.ground && !ud.summoned && !ud.former && !ud.landformer) gear = Math.max(gear, level('meadowhall', 'warden'));
     const steps = GEAR_STEPS[unit];
     for (let k = 0; k < gear && steps; k++) {
       if (steps.attack[k]) add(steps.attack[k]!);

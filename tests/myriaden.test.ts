@@ -216,7 +216,7 @@ describe('Lebensuhr und Hund', () => {
 });
 
 describe('Lebensuhr (Standard seit 22.10.)', () => {
-  it('Drohnen: 40 s voll, dann Verfall bis 120 s; ab 90 s Todeswut; Lebensdauer I verlängert um 30 s', () => {
+  it('Drohnen: 40 s voll, dann Verfall bis 120 s; ab 90 s Todeswut', () => {
     const world = new World({ map: openMap, seed: 1, factions: ['myriaden', 'technoclan'] });
     const d = world.addUnit(0, UNITS.drone, { x: 3.5, y: 4.5 }, 'mid');
     d.mover!.speed = 0;
@@ -232,14 +232,6 @@ describe('Lebensuhr (Standard seit 22.10.)', () => {
     assert.equal(d.alive, false, 'nach 120 s verfallen');
     assert.ok(world.players[0].stats.expired >= 1);
 
-    const w2 = new World({ map: openMap, seed: 1, factions: ['myriaden', 'technoclan'] });
-    w2.players[0].research.push('drone-life-1');
-    const d2 = w2.addUnit(0, UNITS.drone, { x: 3.5, y: 4.5 }, 'mid');
-    d2.mover!.speed = 0;
-    d2.weapon = undefined;
-    stepTimes(w2, 125 * w2.tps);
-    assert.equal(d2.alive, true, 'mit Lebensdauer I lebt sie noch');
     assert.ok(UNITS.hound.support!.slowAging === 0.5, 'der Hund halbiert das Altern');
-    assert.ok(FACTIONS.myriaden.upgrades.some((u) => u.id === 'drone-life-2' && u.requires === 'drone-life-1'));
   });
 });

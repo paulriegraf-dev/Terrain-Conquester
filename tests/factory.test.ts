@@ -76,12 +76,12 @@ describe('Ausrüstung je Fabrikart (26.10. spät)', () => {
     assert.equal(other.weapon!.def.strength, UNITS.sniper.weapon!.strength);
   });
 
-  it('Stufe II erst nach Stufe I; Preise 120/180/240, 15/20/25 s', () => {
+  it('Stufe II erst nach Stufe I; Preise 120/180/240, 15/22/30 s', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     factory(world);
     const steps = FACTIONS.technoclan.buildingUpgrades.filter((u) => u.building === 'barracks' && u.kind === 'gear');
     assert.deepEqual(steps.map((u) => u.cost), [120, 180, 240]);
-    assert.deepEqual(steps.map((u) => u.seconds), [15, 20, 25]);
+    assert.deepEqual(steps.map((u) => u.seconds), [15, 22, 30]);
     world.step([cmd(0, { type: 'research', upgrade: 'barracks-gear-2' })]);
     assert.equal(world.players[0].labs.length, 0, 'II ohne I geht nicht');
   });

@@ -29,9 +29,8 @@ import { factorySpeed, mixOf, mix2Of, settleFactor } from '../sim/systems/produc
 import { HQ_PATHS, HQ_PATH_IDS, HQ_PATH_LIMITS } from '../data/hq';
 import { ownsBuilding, researchableUnitsOf, researching, visibleBuildingUpgrades, visibleUpgrades } from '../sim/systems/factory';
 import { clutchSize } from '../sim/systems/myr';
-import { SYNERGY_GROUNDS, laneCounts, synergyFadeLeft, synergyHint, synergyLabel } from '../sim/systems/synergy';
+import { SYNERGY_GROUNDS, SYNERGY_NAMES, SYNERGY_TEXT, laneCounts, synergyFadeLeft, synergyHint, synergyLabel } from '../sim/systems/synergy';
 import { apparentBuilding, intelNextSeconds } from '../sim/systems/visibility';
-import { VERBUND } from '../data/verbund';
 import { siegeMultiplier } from '../sim/systems/front';
 import type { PlayerId } from '../sim/types';
 import { ROUTES, ROUTE_NAMES } from '../sim/types';
@@ -363,7 +362,7 @@ export class Hud {
           const x = report.routes[r];
           const armor = (x.armor ? ` · meist ${ARMOR_NAMES[x.armor]}` : '') + (x.unit ? ` · ${UNITS[x.unit].name}` : '');
           // Technoclan-Verbund und Eliten des Gegners (25.10.)
-          const vb = (x.verbund ? ` · Verbund ${VERBUND[x.verbund]?.name ?? ''}` : '') + (x.elites ? ` · ${x.elites} Elite${x.elites > 1 ? 'n' : ''}` : '');
+          const vb = x.elites ? ` · ${x.elites} Elite${x.elites > 1 ? 'n' : ''}` : '';
           return `<li><span>${ROUTE_NAMES[r]}</span><span class="lvl" data-level="${x.level}">${SCOUT_LEVELS[x.level]}${x.level > 0 ? armor : ''}${vb}</span></li>`;
         }).join('')
       : '<li><span>–</span><span class="lvl" data-level="0">Späher losschicken, um zu sehen, was im Nebel steht</span></li>';
@@ -853,46 +852,17 @@ function buildingInfo(e: Entity, world: World): string {
     <div class="progress${job ? ' job' : ''}"><i style="width:${Math.min(100, bar * 100)}%"></i></div>
     <p class="${(pr.blockedBy !== 'none' && !pr.paused) || job ? 'warn' : ''}">${escapeHtml(status)}</p>
     ${route}
-    ${factoryVerbundLine(world, e)}
     <p class="muted">${where}</p>
     ${price > 1.01 ? `<p class="warn">Markt: ${PARTS[unit.part].name} ${MARKET_LEVELS[marketLevel(price)]} – ${Math.round((1 - 1 / price) * 100)} % langsamer</p>` : ''}
     ${disguised}`;
 }
 
-/** Technoclan (25.10.): Verbund je Lane – aktiv mit Wirkung, wartend mit Restzeit, oder keiner. Dazu Eliten. */
+/** Technoclan (v2): Eliten je Lane (der Verbund ist seit 16.11. aus dem Spiel). */
 function verbundLines(world: World, me: PlayerId): string {
   if (!world.players[me].faction.network) return '';
-  const rows = ROUTES.map((r) => {
-    const st = world.verbund[me][r];
-    const elites = world.entities.filter((e) => e.alive && e.owner === me && e.elite && e.mover?.route === r).length;
-    const el = elites ? ` · ${elites} Elite${elites > 1 ? 'n' : ''}` : '';
-    if (st.active) {
-      const d = VERBUND[st.active.key]!;
-      return `<p class="vb-line" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> <strong>${escapeHtml(d.name)}</strong>${d.special ? ' (Spezialisierung)' : ''} – ${escapeHtml(d.text)}${el}</p>`;
-    }
-    if (st.pending) {
-      const d = VERBUND[st.pending.key]!;
-      return `<p class="vb-line muted" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> ${escapeHtml(d.name)} in ${Math.max(0, Math.ceil((st.pending.at - world.tick) / world.tps))} s${el}</p>`;
-    }
-    return `<p class="vb-line muted" data-lane="${r}"><span class="vb-lane">${ROUTE_NAMES[r]}</span> –${el}</p>`;
-  }).join('');
-  return `<p class="vb-head" title="Je Lane bilden die zwei Fabriken mit der höchsten Stufe einen Verbund (Übersicht F1 → Eigenheiten)">Verbund je Lane</p>${rows}`;
-}
-
-/** Technoclan: Verbund einer Fabrik (im Fabrik-Feld). */
-function factoryVerbundLine(world: World, e: Entity): string {
-  if (!world.players[e.owner].faction.network || !e.producer) return '';
-  const st = world.verbund[e.owner][e.producer.route];
-  const inIt = (x: { factories: [number, number] } | null): boolean => !!x && x.factories.includes(e.id);
-  if (inIt(st.active)) {
-    const d = VERBUND[st.active!.key]!;
-    return `<p class="vb-line" data-lane="${e.producer.route}">Verbund <strong>${escapeHtml(d.name)}</strong> – ${escapeHtml(d.text)}</p>`;
-  }
-  if (inIt(st.pending)) {
-    const d = VERBUND[st.pending!.key]!;
-    return `<p class="vb-line muted" data-lane="${e.producer.route}">Verbund ${escapeHtml(d.name)} in ${Math.max(0, Math.ceil((st.pending!.at - world.tick) / world.tps))} s</p>`;
-  }
-  return `<p class="muted" title="Auf jeder Lane bilden die zwei Fabriken mit der höchsten Stufe einen Verbund">Verbund: –</p>`;
+  const n = ROUTES.map((r) => world.entities.filter((e) => e.alive && e.owner === me && e.elite && e.mover?.route === r).length);
+  if (!n.some((x) => x > 0)) return '';
+  return `<p class="muted">Eliten: ${ROUTES.map((r, k) => `${ROUTE_NAMES[r]} ${n[k]}`).join(' · ')}</p>`;
 }
 
 /** Terra-Former: Lanes, aktive Synergie (mit Nachlauf-Ring) und Zielhinweis (26.10.). */
@@ -920,21 +890,20 @@ function synergyLine(world: World, me: PlayerId): string {
     } else {
       text = `${ROUTE_NAMES[r]} · ${name(top.id)} ${Math.round((top.n / Math.max(1, total)) * 100)} %`;
     }
-    // 28.10.: Eine Lane zählt für die Synergie schon ab laneMin Kacheln des Synergie-Bodens, auch wenn ein anderer Boden
-    // dort vorherrscht – das zeigt die Zeile jetzt mit an (sonst wirkt „Matsch verstärkt“ bei „Geröll 64 %“ falsch).
-    const baseK = s.base ? SYNERGY_GROUNDS.indexOf(s.base) : -1;
-    const counted = s.base && top.id !== s.base && c[baseK]! >= min ? ` · zählt: ${name(s.base)} ${c[baseK]} ✓` : '';
-    return `<p class="muted syn-lane" title="${escapeHtml(tip)}">${escapeHtml(text + counted + held)}</p>${bar}`;
+    const active = s.lanes[lane];
+    const counted = active ? ` → ${SYNERGY_NAMES[active]} ✓` : '';
+    const tip2 = active ? `${tip}\n${SYNERGY_NAMES[active]}: ${SYNERGY_TEXT[active]}` : tip;
+    return `<p class="${active ? '' : 'muted '}syn-lane" title="${escapeHtml(tip2)}">${escapeHtml(text + counted + held)}</p>${bar}`;
   }).join('');
   const label = synergyLabel(s);
   const fade = synergyFadeLeft(world, me);
   const ring = label ? synergyRing(fade === null ? 1 : fade / world.rules.laneHysteresis) : '';
   const head = label
     ? `<p>Synergie: ${ring} <strong>${escapeHtml(label)}</strong>${fade !== null ? ` <span class="muted">· fällt in ${Math.ceil(fade)} s</span>` : ''}</p>`
-    : `<p class="muted">Synergie: keine – zwei Lanes mit gleichem Boden formen</p>`;
+    : `<p class="muted">Synergie: keine – ${min} Kacheln eines Bodens in einer Lane formen</p>`;
   const hint = synergyHint(world, me, counts);
   const hintLine = hint
-    ? `<p class="muted">${escapeHtml(`${name(hint.ground)}-${hint.triple ? 'Dreifach' : 'Doppel'}: ${hint.need.map((n) => `${ROUTE_NAMES[n.lane]} fehlen ${n.missing}`).join(', ')} ${name(hint.ground)} (≈ ${hint.buys} ${hint.buys === 1 ? 'Kauf' : 'Käufe'})`)}</p>`
+    ? `<p class="muted">${escapeHtml(`Nächste: ${SYNERGY_NAMES[hint.ground]} – ${hint.need.map((n) => `${ROUTE_NAMES[n.lane]} fehlen ${n.missing}`).join(', ')} ${name(hint.ground)} (≈ ${hint.buys} ${hint.buys === 1 ? 'Kauf' : 'Käufe'})`)}</p>`
     : '';
   return head + rows + hintLine;
 }

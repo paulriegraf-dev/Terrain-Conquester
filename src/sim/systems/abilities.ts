@@ -136,7 +136,7 @@ function reserved(world: World): Set<number> {
  * Bliebe der Weg von HQ zu HQ offen, wenn diese Kacheln zusätzlich zu allen angekündigten Wällen (Wall) und laufenden
  * Schlucht-Bauten (Schlucht) unpassierbar wären?
  */
-function staysOpenWith(world: World, cells: readonly number[], as: number): boolean {
+export function staysOpenWith(world: World, cells: readonly number[], as: number): boolean {
   const grid = world.grid;
   const set = new Map<number, number>();
   for (const w of world.walls) for (const c of w.cells) set.set(c.index, TERRAIN_INDEX.wall);

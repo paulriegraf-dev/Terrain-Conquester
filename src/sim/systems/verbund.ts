@@ -1,33 +1,22 @@
-import { VERBUND, VERBUND_UNITS, verbundKey } from '../../data/verbund';
-import type { TechMods, VerbundUnit } from '../../data/verbund';
-import { UNITS } from '../../data/units';
-import type { ProtocolId, UnitId, WeaponDef } from '../../data/units';
+import type { TechMods } from '../../data/verbund';
+import type { ProtocolId, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
-import { ROUTES } from '../types';
-import type { PlayerId, Route } from '../types';
 import type { World } from '../world';
 import { applyHits } from './combat';
 import type { Hit } from './combat';
 import { withProtocols } from './network';
+import { TRICK, hasTrick, stillSeconds } from './tricks';
+import { hasKeystone } from './keystone';
 
 /**
- * Technoclan-Verbund, Bausteine und Eliten (25.10., mit dem Nutzer besprochen; Daten in data/verbund.ts):
- *
- * - **Verbund:** Je Lane bilden die zwei Fabriken mit der höchsten Stufe (Gleichstand: die ältere) einen Verbund aus den
- *   Einheiten, die sie gerade bauen. Ein neuer oder geänderter Verbund gilt erst nach der Einspielzeit; fällt eine der
- *   beiden Fabriken weg, wechselt sie Lane oder Einheit, endet er sofort. Es profitieren alle Einheiten dieser beiden
- *   Fabriken auf der Lane.
- * - **Elite:** ab `eliteAt` Bausteinen. +100 % Leben (29.10.) und volle Heilung beim Aufstieg, jeder Baustein in seiner Elite-Fassung (doppelt +50 %, dreifach
- *   +75 %), und die Verbund-Wirkung, die sie beim Aufstieg hatte, behält sie (Prägung).
+ * Technoclan-Technik (v2, 16.11.): Der Verbund (Lane-Kombinationen) und die Netze sind aus dem Spiel genommen. Geblieben:
+ * Elite (über das Fabrik-Verhalten „Eliteprogramm“, jeder 4. Verband) mit der Elite-Fassung des eigenen Protokolls, und die
+ * Kniffe/Schlusssteine, die als Werte auf die Waffe wirken (Ruhige Hand, Plasmabrand, Rammbock, Glutfeld).
  *
  * Alles läuft einmal je Sekunde; die Wirkung im Kampf lesen combat.ts und hitmath.ts aus `e.tech`.
  */
 export function updateVerbund(world: World): void {
   if (world.tick % world.tps !== 0) return;
-  for (const p of [0, 1] as PlayerId[]) {
-    if (!world.players[p].faction.network) continue;
-    for (const r of ROUTES) updateLane(world, p, r);
-  }
   burnFields(world);
   const detectors: [{ x: number; y: number; r: number }[], { x: number; y: number; r: number }[]] = [[], []];
   const heals: { e: Entity; amount: number }[] = [];
@@ -49,70 +38,20 @@ export function updateVerbund(world: World): void {
   }
 }
 
-/** Verbund einer Lane bestimmen (Einspielzeit, sofortiges Ende). */
-function updateLane(world: World, p: PlayerId, r: Route): void {
-  const st = world.verbund[p][r];
-  const factories = world.entities
-    .filter((b) => b.alive && b.owner === p && b.kind === 'building' && b.producer && b.producer.route === r && (VERBUND_UNITS as readonly string[]).includes(b.producer.unit))
-    .sort((a, b) => b.producer!.level - a.producer!.level || a.id - b.id);
-  const unitOf = (b: Entity): VerbundUnit => b.producer!.unit as VerbundUnit;
-  const cand = factories.length >= 2 ? { key: verbundKey(unitOf(factories[0]!), unitOf(factories[1]!)), factories: [factories[0]!.id, factories[1]!.id] as [number, number] } : null;
-  // Der aktive Verbund endet sofort, wenn eine seiner Fabriken nicht mehr dazu passt.
-  if (st.active) {
-    const ok = st.active.factories.every((id) => {
-      const b = world.get(id);
-      return !!b && b.alive && b.producer?.route === r && !!cand && cand.factories.includes(id);
-    }) && cand?.key === st.active.key;
-    if (!ok) st.active = null;
-  }
-  if (!cand) {
-    st.pending = null;
-    return;
-  }
-  if (st.active && st.active.key === cand.key) {
-    st.pending = null;
-  } else if (st.pending && st.pending.key === cand.key && st.pending.factories.join() === cand.factories.join()) {
-    if (world.tick >= st.pending.at) {
-      st.active = { key: cand.key, factories: cand.factories };
-      st.pending = null;
-      world.emit({ type: 'verbund', owner: p, route: r, key: cand.key });
-    }
-  } else {
-    st.pending = { ...cand, at: world.tick + Math.round(world.rules.verbund.switchSeconds * world.tps) };
-  }
-  if (st.active) {
-    const s = world.players[p].stats.verbundSeconds;
-    s[st.active.key] = (s[st.active.key] ?? 0) + 1;
-  }
-}
-
 /** Welcher Verbund gilt gerade für diese Einheit (Fabrik im aktiven Verbund ihrer Lane)? */
-export function verbundOf(world: World, e: Entity): string | null {
-  if (e.fromBuilding === undefined || !e.mover) return null;
-  const st = world.verbund[e.owner][e.mover.route];
-  if (!st.active || !st.active.factories.includes(e.fromBuilding)) return null;
-  return VERBUND[st.active.key]?.mods[e.defId as VerbundUnit] ? st.active.key : null;
+export function verbundOf(_world: World, _e: Entity): string | null {
+  return null; // v2 (16.11.): kein Verbund mehr
 }
 
 /** Aufstieg zur Elite: Leben ×rules.network.eliteHp (über refreshTech; die Heilung auf volles Leben macht inherit), Prägung = Geburts-Verbund, sonst der gerade aktive. */
 export function becomeElite(world: World, e: Entity): void {
   if (e.elite) return;
-  e.elite = { print: e.verbundPrint ?? verbundOf(world, e), since: world.tick };
+  e.elite = { print: null, since: world.tick };
   world.players[e.owner].stats.elites++;
   world.emit({ type: 'elite', owner: e.owner, unit: e.defId as UnitId, pos: { x: e.pos.x, y: e.pos.y } });
 }
 
 const DUP = [0, 1, 1.5, 1.75] as const;
-
-/** Welche Einheit liefert welchen Baustein (für die Waffenart der Hybrid-Elite). */
-const PROTOCOL_UNIT: Partial<Record<ProtocolId, UnitId>> = {
-  antiHeavy: 'sniper',
-  area: 'plasma',
-  mark: 'hoverscout',
-  range: 'battery',
-  pierce: 'gunner',
-  plating: 'colossus',
-};
 
 /**
  * Dominierender Baustein einer Elite: der häufigste. Gleichstand: die eigene Grundart, wenn sie dabei ist,
@@ -126,37 +65,6 @@ export function dominantProtocol(protocols: readonly ProtocolId[]): ProtocolId |
   if (count(protocols, own) === max) return own;
   for (let i = protocols.length - 1; i >= 0; i--) if (count(protocols, protocols[i]!) === max) return protocols[i]!;
   return own;
-}
-
-/** Wirkung eines Verbunds mit Faktor f (Zuschläge ×f, Faktoren (x−1)·f+1). */
-function scaled(m: TechMods | undefined, f: number): TechMods | undefined {
-  if (!m) return m;
-  const add = (v?: number): number | undefined => (v === undefined ? v : v * f);
-  const mul = (v?: number): number | undefined => (v === undefined ? v : 1 + (v - 1) * f);
-  return {
-    ...m,
-    range: add(m.range),
-    hit: add(m.hit),
-    ap: add(m.ap),
-    splash: add(m.splash),
-    toughness: add(m.toughness),
-    vision: add(m.vision),
-    hp: mul(m.hp),
-    speed: mul(m.speed),
-    damageTaken: m.damageTaken === undefined ? undefined : 1 - (1 - m.damageTaken) * f,
-    structure: mul(m.structure),
-    wallBreak: mul(m.wallBreak),
-    still: m.still ? { ...m.still, damage: 1 + (m.still.damage - 1) * f } : undefined,
-  };
-}
-
-/** Waffenart dazunehmen: je Panzerungsklasse gilt das bessere „anti“, gegen Gebäude der höhere Bonus. */
-function addWeaponType(w: WeaponDef, from: WeaponDef | undefined): WeaponDef {
-  if (!from) return w;
-  const anti = { ...(w.anti ?? {}) };
-  for (const [k, v] of Object.entries(from.anti ?? {}) as [keyof typeof anti, number][]) anti[k] = anti[k] === undefined ? v : Math.min(anti[k]!, v);
-  const structureDamage = Math.max(w.structureDamage ?? 1, from.structureDamage ?? 1);
-  return { ...w, anti, ...(structureDamage > 1 ? { structureDamage } : {}) };
 }
 
 function count(protocols: readonly ProtocolId[], p: ProtocolId): number {
@@ -210,25 +118,18 @@ export function refreshTech(world: World, e: Entity): void {
 
   const protocols = e.net.protocols;
   const mods: TechMods = {};
-  // Gestapelte Panzerung (die eigene erste Kopie des Koloss steckt in seinen Werten).
-  const plating = count(protocols, 'plating');
-  for (let c = protocols[0] === 'plating' ? 2 : 1; c <= Math.min(3, plating); c++) merge(mods, c === 1 ? { toughness: 1 } : { damageTaken: c === 2 ? 0.9 : 0.95 });
-  // Verbund bzw. Prägung
-  if (!e.verbundPrint) {
-    const v = verbundOf(world, e);
-    if (v) e.verbundPrint = v;
-  }
-  const key = e.elite?.print ?? e.verbundPrint ?? '';
-  // Elite-Art: reinrassig (eigener Baustein dominiert) bekommt die eigene Spezialisierung dazu – ist die schon
-  // ihr Verbund, wirkt er ×1,5. Hybrid (fremder dominiert) bekommt dessen Waffenart dazu (Zielmarkierung: Treffen +1).
+  const key = '';
   const dominant = e.elite ? dominantProtocol(protocols) : null;
-  const pure = !!dominant && dominant === protocols[0];
-  const own = e.defId as VerbundUnit;
-  const spec = pure && (VERBUND_UNITS as readonly string[]).includes(own) ? verbundKey(own, own) : '';
-  if (key) merge(mods, spec === key ? scaled(VERBUND[key]?.mods[own], 1.5) : VERBUND[key]?.mods[own]);
-  if (spec && spec !== key) merge(mods, VERBUND[spec]?.mods[own]);
-  const hybridFrom = dominant && !pure && dominant !== 'mark' ? PROTOCOL_UNIT[dominant] : undefined;
-  if (dominant && !pure && dominant === 'mark') merge(mods, { hit: 1 });
+  const pure = true;
+  // Kniffe und Schlusssteine (v2, 16.11.) als Werte
+  let calm = false;
+  if (e.defId === 'sniper' && hasTrick(world, e.owner, 'calmHand') && stillSeconds(world, e) >= TRICK.calmHand.still) {
+    calm = true;
+    merge(mods, { range: TRICK.calmHand.range });
+  }
+  if (e.defId === 'plasma' && hasTrick(world, e.owner, 'plasmaBurn')) merge(mods, { slowHit: { seconds: TRICK.plasmaBurn.seconds, factor: TRICK.plasmaBurn.factor } });
+  if (e.defId === 'plasma' && hasKeystone(world, e.owner, 'plasma')) merge(mods, { burnField: { seconds: TRICK.glow.seconds, radius: TRICK.glow.radius, dps: TRICK.glow.dps } });
+  if (e.defId === 'colossus' && hasTrick(world, e.owner, 'ram')) merge(mods, { wallBreak: TRICK.ram.wallBreak });
   // Elite
   let fx: NonNullable<typeof t.eliteFx> | null = null;
   if (e.elite) {
@@ -265,11 +166,10 @@ export function refreshTech(world: World, e: Entity): void {
   e.vision = t.base.vision + (mods.vision ?? 0);
   if (e.mover) e.mover.speed = t.base.speed * (mods.speed ?? 1);
   // Waffe nur neu bauen, wenn sich etwas geändert hat
-  const sig = `${protocols.join(',')}|${key}|${e.elite ? 1 : 0}`;
+  const sig = `${protocols.join(',')}|${key}|${e.elite ? 1 : 0}|${calm ? 1 : 0}`;
   if (sig !== t.sig && e.weapon) {
     t.sig = sig;
     let w = withProtocols(e.weapon.baseDef, protocols);
-    if (hybridFrom) w = addWeaponType(w, UNITS[hybridFrom]?.weapon);
     if (fx?.splashFull) w = { ...w, splash: Math.max(w.splash ?? 0, 1.5 + 0.25 * (count(protocols, 'area') - 1)) };
     if (mods.range) w = { ...w, range: w.range + mods.range };
     if (mods.hit) w = { ...w, skill: Math.max(2, w.skill - mods.hit) };
@@ -290,6 +190,14 @@ function burnFields(world: World): void {
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === f.owner) continue;
       if ((o.pos.x - f.pos.x) ** 2 + (o.pos.y - f.pos.y) ** 2 > r2) continue;
+      if (f.acid) {
+        // Säuregeschoss (Myr-Kanone): 1 Rüstung weniger, solange man in der Säure steht.
+        const c = o.corrosion && world.tick < o.corrosion.until ? o.corrosion : { shots: 0, level: 0, until: 0 };
+        c.level = Math.max(c.level, 1);
+        c.until = Math.max(c.until, world.tick + Math.round(1.2 * world.tps));
+        o.corrosion = c;
+        continue;
+      }
       hits.push({ target: o, wounds: 1, damage: f.dps, attacker: f.owner, src: f.src });
     }
   }

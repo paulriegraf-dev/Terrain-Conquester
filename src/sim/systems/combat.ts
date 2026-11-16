@@ -18,6 +18,7 @@ import { ambushFactor, dugInFactor, onHit, slowDown } from './terraform';
 import { tryLaunch } from './myr';
 import { synergyApBonus, synergyDamageFactor } from './synergy';
 import { fireKeystone, hasKeystone, trySplit, tryPressure, underPressure } from './keystone';
+import { TRICK, acidField, glowFieldAllowed, hasTrick, onTrickShot, trickDamageTaken, warmupRate } from './tricks';
 
 export interface Hit {
   target: Entity;
@@ -86,8 +87,10 @@ export function updateCombat(world: World): void {
     const launch = udef?.launch;
     tryPressure(world, e, consumed); // Hochdruck (Schlussstein Myr-Kanone)
     const pressure = underPressure(world, e) ? world.rules.keystone.pressureRate : 1;
-    if (launch && !e.stoneMode && rangeTo(e, t) <= launch.range && tryLaunch(world, e, t, consumed)) {
+    const launchRange = launch ? launch.range + (e.defId === 'catapult' && hasTrick(world, e.owner, 'longThrow') ? TRICK.longThrow.range : 0) : 0;
+    if (launch && !e.stoneMode && rangeTo(e, t) <= launchRange && tryLaunch(world, e, t, consumed)) {
       w.ready = Math.max(1, Math.round((launch.cooldown * world.tps) / pressure));
+      acidField(world, e, aimPoint(e, t)); // Säuregeschoss (Kniff Myr-Kanone)
       continue;
     }
     let damage = damagePerWound(world, e, t);
@@ -166,9 +169,10 @@ export function updateCombat(world: World): void {
         t.corrosion = c;
       }
       if (m.slowHit && t.kind === 'unit') slowDown(world, t, world.tick + Math.round(m.slowHit.seconds * world.tps), m.slowHit.factor);
-      if (m.burnField) {
+      if (m.burnField && glowFieldAllowed(world, e)) {
         const at = aimPoint(e, t);
-        world.groundFields.push({ owner: e.owner, pos: { x: at.x, y: at.y }, radius: m.burnField.radius, dps: m.burnField.dps, until: world.tick + Math.round(m.burnField.seconds * world.tps), src: e.defId });
+        world.groundFields.push({ owner: e.owner, pos: { x: at.x, y: at.y }, radius: m.burnField.radius, dps: m.burnField.dps, until: world.tick + Math.round(m.burnField.seconds * world.tps), src: e.defId, by: e.id });
+        fireKeystone(world, e.owner, 'plasma');
       }
       if (tech.eliteFx?.mark && t.kind === 'unit') t.mark = { owner: e.owner, until: world.tick + 2 * world.tps };
     }
@@ -203,10 +207,12 @@ export function updateCombat(world: World): void {
     // Todeswut (Lebensuhr): alte Verbände feuern schneller.
     const rage = e.lifespan ? frenzyOf(world, e) : null;
     // Netz-Aufstieg (Technoclan): kurz schnelleres Feuer.
-    const rate = pressure * (rage ? rage.fireRate : 1) * (e.net && world.tick < e.net.ascendUntil ? world.rules.network.ascendFireRate : 1) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
+    const rate = pressure * (rage ? rage.fireRate : 1) * warmupRate(world, e, t) * (e.stoneMode && def?.stoneMode ? def.stoneMode.rate : 1);
     w.ready = rate !== 1 ? Math.max(1, Math.round(w.cooldownTicks / rate)) : w.cooldownTicks;
     e.combatTick = world.tick;
     if (e.tf) onHit(world, e, t); // Terra-Former: letzter Schuss, Frost-Treffer
+    onTrickShot(world, e, t); // Kniffe (v2): Zielfunk, Peilsender, Kältekern
+    if (def?.launch) acidField(world, e, aimPoint(e, t));
     const heavy = e.kind === 'hq' || w.def.damage >= 30;
     if (def?.kamikaze) world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: aimPoint(e, t), heavy });
     else {
@@ -588,6 +594,7 @@ function damagePerWound(world: World, e: Entity, t: Entity): number {
     if (t.kind === 'wall' && e.tech.mods.wallBreak) damage *= e.tech.mods.wallBreak;
     if ((t.kind === 'building' || t.kind === 'hq') && e.tech.mods.structure) damage *= e.tech.mods.structure;
   }
+  damage *= trickDamageTaken(world, t); // Rollschild, Harzborke (v2)
   if (t.tech) {
     if (t.tech.mods.damageTaken) damage *= t.tech.mods.damageTaken;
     if (t.tech.guardOn && t.tech.mods.guard) damage *= t.tech.mods.guard.damageTaken;

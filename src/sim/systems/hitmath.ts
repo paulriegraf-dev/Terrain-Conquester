@@ -1,3 +1,5 @@
+import { graniteSave } from './tricks';
+import { synergyEvasion } from './synergy';
 import { ARMOR_REFERENCE } from '../../data/combat';
 import { UNITS } from '../../data/units';
 import type { UnitId } from '../../data/units';
@@ -89,9 +91,13 @@ export function defenseOf(world: World, t: Entity, from?: Entity): Defense {
   let save = t.tf ? Math.max(2, t.save - groundSaveBonus(world, t)) : t.save;
   // Fels in der Brandung (Schlussstein Steinwächter): Deckung direkt hinter ihm.
   if (unit && world.coverIds.has(t.id)) save = Math.max(2, save - world.rules.keystone.rockSave);
+  // Granitkern (Kniff Steinwächter, v2): im Stillstand härter.
+  if (unit) save = Math.max(2, save - graniteSave(world, t));
   // Zersetzung (Myr-Drohnen): Rüstung kurz schlechter.
   if (t.corrosion && world.tick < t.corrosion.until) save = Math.min(7, save + t.corrosion.level);
   let evasion = t.evasion;
+  // Wurzelnetz-Deckung (Wald-Lane, v2): auf eigenem Wald treffen Fernschützen 1 schwerer.
+  if (from && dist(t.pos, from.pos) > 2) evasion += synergyEvasion(world, t);
   // Verwurzelt (Hainhüter, 25.10.): alle treffen besser.
   if (t.root && world.tick < t.root.until) evasion -= t.root.hitBonus;
   // Zielmarkierung einer Technoclan-Elite (25.10.): ihre Seite trifft besser.

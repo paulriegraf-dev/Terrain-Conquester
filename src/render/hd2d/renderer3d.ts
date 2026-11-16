@@ -23,6 +23,7 @@ import type { ViewState } from '../../ui/view';
 import { Renderer } from '../renderer';
 import { BUILDINGS_SHEET, KULISSE, TILESETS, UNIT_SHEETS } from './assets';
 import { badgeCanvas } from './eliteBadge';
+import { gearLevel } from '../../sim/systems/factory';
 import { ELITE_FX, eliteFxCanvas } from './eliteFx';
 import { abseits, bayer, noise2, paintPatches, umlandHeight, type Field } from './umland';
 import { BUILDING_FX, FX_COLOR, FX_PARTS, fxCanvas, type BuildingFx } from './buildingFx';
@@ -1669,15 +1670,17 @@ export class Hd2dRenderer {
         const wt = e.weapon?.def.type ?? 'none';
         // Elite (Nutzer 16.11.): Symbol des dominanten Protokolls rechts im Schild.
         const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
-        const bk = `${shape}|${wt}|${sideColor}|${proto ?? ''}`;
+        // Kampfwerte-Stufe (v2, Nutzer 16.11.): kleine Pips unter dem Schild – auch beim Gegner.
+        const gear = gearLevel(world, e.owner, e.defId as UnitId);
+        const bk = `${shape}|${wt}|${sideColor}|${proto ?? ''}|${gear}`;
         if (bk !== sq.badgeKey) {
-          (sq.badge.material as THREE.SpriteMaterial).map = this.chipTexture(shape, wt, sideColor, proto);
+          (sq.badge.material as THREE.SpriteMaterial).map = this.chipTexture(shape, wt, sideColor, proto, gear);
           (sq.badge.material as THREE.SpriteMaterial).needsUpdate = true;
           sq.badgeKey = bk;
         }
         const k = asIcons ? (level === 'map' ? 1.5 : 1.15) : 0.8;
         sq.badge.position.set(x, top + 0.2 * k + 0.08, y);
-        sq.badge.scale.set(proto ? k * 1.5 : k, k / 2, 1);
+        sq.badge.scale.set(proto ? k * 1.5 : k, gear > 0 ? (k * 31) / 48 : k / 2, 1);
       }
       sq.hpBack.position.set(x, top, y);
       sq.hp.position.set(x - (1 - share) * 0.35, top, y + 0.001);
@@ -1832,18 +1835,25 @@ export class Hd2dRenderer {
    * (● Infanterie, ◆ leicht, ■ schwer, ▲ Flieger), rechts im orangen Fadenkreuz, wogegen die Waffe stark ist
    * (Splitter → ●, Kanone → ◆, Durchschlag → ■, Belagerung → Gebäude, Gewehr → ✱ Allrounder).
    */
-  private chipTexture(shape: string, weapon: string, color: string, proto?: ProtocolId): THREE.CanvasTexture {
-    const key = `chip|${shape}|${weapon}|${color}|${proto ?? ''}`;
+  private chipTexture(shape: string, weapon: string, color: string, proto?: ProtocolId, gear = 0): THREE.CanvasTexture {
+    const key = `chip|${shape}|${weapon}|${color}|${proto ?? ''}|${gear}`;
     const hit = this.iconTex.get(key);
     if (hit) return hit;
     const c = document.createElement('canvas');
     c.width = proto ? 72 : 48;
-    c.height = 24;
+    c.height = gear > 0 ? 31 : 24;
     const g = c.getContext('2d')!;
     g.fillStyle = 'rgba(8,12,20,.82)';
     g.beginPath();
-    g.roundRect(0.5, 0.5, c.width - 1, 23, 5);
+    g.roundRect(0.5, 0.5, c.width - 1, c.height - 1, 5);
     g.fill();
+    if (gear > 0) {
+      // Drei Pips (Ausrüstung I–III): gold = erforscht, dunkel = offen.
+      for (let k = 0; k < 3; k++) {
+        g.fillStyle = k < gear ? '#ffd23f' : 'rgba(255,255,255,.18)';
+        g.fillRect(9 + k * 11, 24, 8, 3);
+      }
+    }
     if (proto) {
       // Trennstrich, dann das Elite-Abzeichen (9 px, doppelt groß)
       g.fillStyle = 'rgba(255,255,255,.25)';

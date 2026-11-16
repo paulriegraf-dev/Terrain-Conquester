@@ -1,3 +1,4 @@
+import { TRICK, hasTrick } from './tricks';
 import { hasKeystone, secondThrow, underPressure, updatePack } from './keystone';
 import { landLeap, updateBreakers } from './breaker';
 import type { BuildingId } from '../../data/buildings';
@@ -185,7 +186,7 @@ export function tryLaunch(world: World, e: Entity, t: Entity, consumed: Map<Enti
     start: world.tick,
     land: world.tick + Math.max(1, Math.round(def.flight * world.tps)),
     route: e.mover?.route ?? 'mid',
-    impact: def.impact,
+    impact: longThrowImpact(world, e, def.impact),
     burrow: def.burrow,
     thrower: e.id,
   };
@@ -193,6 +194,13 @@ export function tryLaunch(world: World, e: Entity, t: Entity, consumed: Map<Enti
   world.emit({ type: 'launch', owner: e.owner, unit: def.unit, from: flight.from, to: flight.to, land: flight.land });
   secondThrow(world, e, t); // Doppelwurf (Schlussstein Katapult)
   return true;
+}
+
+/** Weitwurf (Kniff Katapult, v2): geworfene Verspotter landen mit einem Aufprall. */
+export function longThrowImpact(world: World, e: Entity, imp: { radius: number; damage: number } | undefined): { radius: number; damage: number } | undefined {
+  if (e.defId !== 'catapult' || !hasTrick(world, e.owner, 'longThrow')) return imp;
+  const L = TRICK.longThrow;
+  return { radius: Math.max(imp?.radius ?? 0, L.impactRadius), damage: (imp?.damage ?? 0) + L.impactDamage };
 }
 
 /** Nächster eigener Verband dieser Art im Radius, der noch Modelle übrig hat. */

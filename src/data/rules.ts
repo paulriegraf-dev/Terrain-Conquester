@@ -621,7 +621,7 @@ export const RULES: Rules = {
   },
   // 30.10. (Nutzer): höchstens 1 lebender Terraformer je Fabrik (vorher 2), Naturspeicher 3 / 4 / 5 Rufe je Stufe (vorher 4 / 6 / 8).
   mud: { fieldMin: 9, eggSeconds: 10, clutch: 3, max: 15 },
-  synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.6, hailDps: 3 },
+  synergy: { every: 5, laneMin: 12, triple: 1.5, stormPerSecond: 0.1, stormMax: 0.4, hailDps: 3 },
   // Gelände in der eigenen Hälfte (23.10.): 3 Vorbereitungs-Flächen mehr, danach dort 10 statt 15 Energie und 2 statt 3 s
   shaping: { prepExtra: 3, homeCost: 0.67, homeSeconds: 0.67 },
   // Notfallverlegung (22.10., Entwurf des Nutzers): doppelt so stark, 25 s, einmal je Flügel.

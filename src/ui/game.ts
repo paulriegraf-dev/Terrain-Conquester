@@ -51,7 +51,6 @@ import { Session } from './session';
 import { createView } from './view';
 import { counterMatrix, renderCodex } from './codex';
 import { weaponRoleOf } from './weaponRole';
-import { VERBUND } from '../data/verbund';
 const ARMOR_LABEL: Partial<Record<string, string>> = { infantry: 'Infanterie', light: 'Leicht', heavy: 'Schwer' };
 import type { CodexState } from './codex';
 import type { ViewState } from './view';
@@ -2354,11 +2353,8 @@ export class Game {
           ? ` · Waffe: ${w.shots}× Schaden ${Math.round(w.damage * 10) / 10}, Treffen ${w.skill}+, Stärke ${w.strength}, Durchschlag ${w.ap}`
           : '';
         const enemyFaction = world.players[otherPlayer(unit.owner)].faction.id;
-        // Technoclan (25.10.): Bausteine, Elite, Verbund
-        const net = unit.net
-          ? (unit.elite ? ` · ELITE ${unit.tech?.eliteFx?.kind === 'hybrid' ? `Hybrid (${PROTOCOLS[unit.tech.eliteFx.dominant].name})` : 'reinrassig'} (${unit.net.protocols.map((p) => PROTOCOLS[p].name).join(', ')})` : unit.net.protocols.length > 1 ? ` · Bausteine: ${unit.net.protocols.slice(1).map((p) => PROTOCOLS[p].name).join(', ')} (${unit.net.protocols.length}/${world.rules.network.eliteAt} bis Elite)` : unit.net.id !== 0 ? ' · im Netz' : '') +
-            (unit.tech?.key ? ` · Verbund ${VERBUND[unit.tech.key]?.name ?? ''}${unit.elite?.print ? ' (Elite-Prägung)' : ' (seit Geburt)'}` : '')
-          : '';
+        // Technoclan (v2): Elite mit ihrem Protokoll
+        const net = unit.elite && unit.net ? ` · ELITE (${PROTOCOLS[unit.net.protocols[0]!].name})` : '';
         const mudN = unit.mud ? Math.round(unit.mud.n) : 0;
         const mud = mudN > 0 ? ` · Verschlammung ${mudN} – ${mudN * world.rules.mudStacks.dps}/s` : '';
         this.hud.setStatus(

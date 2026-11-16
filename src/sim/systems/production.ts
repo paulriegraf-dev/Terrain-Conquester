@@ -12,7 +12,12 @@ import { clutchSize, layEgg } from './myr';
 import { buildingUpgradeLevel } from './factory';
 import type { UnitId } from '../../data/units';
 import { synergyProduction } from './synergy';
-import { verbundOf } from './verbund';
+import { becomeElite, refreshTech } from './verbund';
+import { eliteBirth } from './tricks';
+
+/** Erntezeit (v2): +25 % Tempo für Wächter und Terraformer. Brutofen: Schmelze 20 % kürzer (= ×1,25 Tempo). */
+const HARVEST = 0.25;
+const KILN = 1.25;
 import { stationActive } from './sites';
 import type { BuildingId } from '../../data/buildings';
 import type { PartId } from '../../data/market';
@@ -53,12 +58,15 @@ export function settleFactor(world: World, e: Entity): number {
 /** Tempo genau dieser Fabrik: Markt, Phase, Synergie, Notfall – und Einspielen. */
 export function factorySpeed(world: World, e: Entity): number {
   const workshop = stationActive(world, e.owner, e.producer!.route, 'workshop') ? world.rules.sites.workshop : 1; // Werkhalle (Station)
-  // Terra-Former „Erntezeit“ (Gebäude-Ausbau 'tempo'): je Stufe +18 % Tempo für Wächter und Terraformer der Linie.
-  const tempo = 1 + world.rules.terraform.tempoStep * buildingUpgradeLevel(world, e.owner, e.defId as BuildingId, 'tempo');
+  // Terra-Former „Erntezeit“ (v2, fraktionsweit): Wächter und Terraformer aller Linien schneller.
+  const fb = world.players[e.owner].faction.buildings[e.defId as BuildingId];
+  const tempo = fb?.former ? 1 + HARVEST * buildingUpgradeLevel(world, e.owner, 'meadowhall', 'harvest') : 1;
+  // Brutofen (Myriaden, v2): die Schmelze baut schneller.
+  const kiln = e.defId === 'foundry' && buildingUpgradeLevel(world, e.owner, 'foundry', 'kiln') > 0 ? KILN : 1;
   // Rudel (Schlussstein Hund): Bruten auf einer heulenden Lane füllen ihr Gelege schneller.
   const pack = e.producer!.clutch && world.pack[e.owner][e.producer!.route] > world.tick ? 1 + world.rules.keystone.packClutch : 1;
   const line = world.rules.terraform.lineSpeed[e.defId] ?? 1; // Wiesenhof / Schlammgrube: +20 % (27.10.)
-  return line * surgeFactor(world, e.owner) * productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack;
+  return line * surgeFactor(world, e.owner) * productionSpeed(world, e.owner, UNITS[e.producer!.unit].part) * settleFactor(world, e) * (e.producer!.super ? world.rules.superBrood.speed : 1) * workshop * tempo * pack * kiln;
 }
 
 /**
@@ -151,8 +159,12 @@ function producePlayer(world: World, owner: PlayerId): void {
       u.fromBuilding = building.id;
       setMuster(world, u, building, pr.route);
       if (def.former) world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
-      const birth = verbundOf(world, u);
-      if (birth) u.verbundPrint = birth;
+      // Eliteprogramm (Technoclan, v2): jeder 4. Verband der Fabrik kommt als Elite.
+      if (u.net && eliteBirth(world, building)) {
+        becomeElite(world, u);
+        refreshTech(world, u);
+        u.hp = u.maxHp;
+      }
       if (extraFormer) {
         const fpos = spawnPoint(world, building, pr.route, MOVE_PROFILES[UNITS[mix!.unit].move]);
         if (fpos) {

@@ -1528,7 +1528,7 @@ export class SimpleAi {
       if (!c.ok || me.energy < c.cost + keep) continue;
       // Fraktionsweite Ketten (Naturkraft, Wurzelwerk) zählen alle Linienfabriken.
       const count = this.ownBuildings(world).filter((b) => (u.anyBuilding ? !!me.faction.buildings[b.defId as BuildingId]?.former : b.defId === u.building)).length;
-      const value = count * (u.kind === 'gear' ? 1.15 : u.kind === 'nature' ? 0.9 : u.kind === 'roots' ? 1.05 : u.kind === 'tempo' ? 0.9 : 1);
+      const value = count * (u.kind === 'gear' ? 1.15 : u.kind === 'nature' ? 0.9 : u.kind === 'roots' ? 1.05 : u.kind === 'harvest' ? 0.9 : u.kind === 'warden' ? 1.15 : u.kind === 'elite' ? 1.1 : 1);
       if (value <= 0) continue;
       if (!best || value > best.value + 1e-9 || (Math.abs(value - best.value) <= 1e-9 && u.id < best.id)) best = { id: u.id, value };
     }
@@ -1555,7 +1555,9 @@ export class SimpleAi {
         const c = checkResearch(world, f, u.id);
         if (!c.ok || me.energy < c.cost + reserve) continue;
         // Schlussstein (26.10.): Nutzen = eigene Verbände der Art × 2 / Kosten – konkurriert so mit Waffen und Panzerung.
-        const value = (u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (this.upgradeGain(world, u.unit, u.effect) * this.unitWeight(world, u.unit)) / c.cost);
+        // Kniff (v2): wie etwa 12 % Mehrwirkung bewertet – er ist eine Regel, keine Zahl.
+        const gain = u.trick ? Math.max(0.12, this.upgradeGain(world, u.unit, u.effect)) : this.upgradeGain(world, u.unit, u.effect);
+        const value = (u.keystone ? (this.aliveOf(world, u.unit) * 2) / c.cost : (gain * this.unitWeight(world, u.unit)) / c.cost);
         // Gleichstand spiegelbildlich auflösen (nicht nach Entity-Reihenfolge): Upgrade-ID, dann gespiegelte Lage.
         const mx = (e: Entity): number => (this.player === 0 ? e.pos.x : world.map.width - e.pos.x);
         const better = !best || value > best.value + 1e-9 ||

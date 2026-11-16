@@ -12,13 +12,14 @@ describe('Terra-Former: Wächter-Bauzeit und Erntezeit (26.10.)', () => {
     assert.equal(UNITS.wardRubble.spawnInterval, 6.6);
   });
 
-  it('Erntezeit beschleunigt die Linie je Stufe um 18 %', () => {
+  it('Erntezeit (v2, fraktionsweit) beschleunigt alle Linien um 25 %', () => {
     const world = new World({ map: openMap, seed: 1, factions: ['terraformer', 'technoclan'], rules: smallBases });
     const hall = world.addBuilding(0, BUILDINGS.meadowhall, { x: 3, y: 0, w: 2, h: 2 });
+    const pit = world.addBuilding(0, BUILDINGS.quarry, { x: 3, y: 6, w: 2, h: 2 });
     const base = factorySpeed(world, hall);
-    world.players[0].research.push('meadowhall-tempo-1');
-    assert.ok(Math.abs(factorySpeed(world, hall) / base - 1.18) < 1e-9);
-    world.players[0].research.push('meadowhall-tempo-2');
-    assert.ok(Math.abs(factorySpeed(world, hall) / base - 1.36) < 1e-9);
+    const basePit = factorySpeed(world, pit);
+    world.players[0].research.push('meadowhall-harvest-1');
+    assert.ok(Math.abs(factorySpeed(world, hall) / base - 1.25) < 1e-9);
+    assert.ok(Math.abs(factorySpeed(world, pit) / basePit - 1.25) < 1e-9, 'auch der Steinbruch');
   });
 });
