@@ -1,23 +1,15 @@
-import battery from '../../assets/sprites/technoclan/battery.png';
-import colossus from '../../assets/sprites/technoclan/colossus.png';
-import gunner from '../../assets/sprites/technoclan/gunner.png';
-import hoverscout from '../../assets/sprites/technoclan/hoverscout.png';
-import nanomedic from '../../assets/sprites/technoclan/nanomedic.png';
-import plasma from '../../assets/sprites/technoclan/plasma.png';
-import sniper from '../../assets/sprites/technoclan/sniper.png';
-import drone from '../../assets/sprites/myriaden/drone.png';
-import bomb from '../../assets/sprites/myriaden/bomb.png';
-import hound from '../../assets/sprites/myriaden/hound.png';
-import cannon from '../../assets/sprites/myriaden/cannon.png';
-import catapult from '../../assets/sprites/myriaden/catapult.png';
-import sphere from '../../assets/sprites/myriaden/sphere.png';
-import swarmmind from '../../assets/sprites/myriaden/swarmmind.png';
+import { UNIT_SHEETS } from '../render/hd2d/assets';
+import { UNIT_SPRITES, type UnitSprite } from '../render/hd2d/sprites';
+import type { UnitId } from '../data/units';
 
 /**
  * Kleines Gefecht im Titelbild: links der Technoclan, rechts die Myriaden (Pixel-Figuren des Nutzers aus
  * PixelLab/Aseprite, assets/sprites/technoclan und assets/sprites/myriaden). Beide Seiten laufen aufeinander zu,
  * schießen und fallen. Reine Dekoration, nicht die Spiel-Simulation. Die Seiten erkennt man an Farbschein und
  * Bodenring (links blau, rechts orange); die rechte Seite ist gespiegelt.
+ *
+ * Seit 16.11. (Nutzer: Startbild F mit den neuen Figuren als Front im Hintergrund) mit den animierten Sheets des Spiels:
+ * Laufen, Stehen und Angriff wie in der Partie.
  *
  * Myriaden in der Deko: viele billige Drohnen, Sprengetöpfe laufen hin und explodieren, das Katapult wirft im Bogen,
  * der Hund heilt, und fällt ein Technoclan-Kämpfer nahe dem Schwarmgeist, wird daraus eine neue Drohne.
@@ -26,12 +18,11 @@ type TechId = 'sniper' | 'plasma' | 'gunner' | 'colossus' | 'hoverscout' | 'batt
 type MyrId = 'drone' | 'bomb' | 'hound' | 'cannon' | 'catapult' | 'sphere' | 'swarmmind';
 type SpriteId = TechId | MyrId;
 
-const URLS: Record<SpriteId, string> = {
-  sniper, plasma, gunner, colossus, hoverscout, battery, nanomedic,
-  drone, bomb, hound, cannon, catapult, sphere, swarmmind,
+/** Deko-Art → Einheit im Spiel (Sheet aus sprites.ts). */
+const DEF: Record<SpriteId, UnitId> = {
+  sniper: 'sniper', plasma: 'plasma', gunner: 'gunner', colossus: 'colossus', hoverscout: 'hoverscout', battery: 'battery', nanomedic: 'nanomedic',
+  drone: 'drone', bomb: 'bomber', hound: 'hound', cannon: 'myrcannon', catapult: 'catapult', sphere: 'sphere', swarmmind: 'swarmmind',
 };
-/** Diese Figuren schauen im Bild nach links (werden für die linke Seite gespiegelt, für die rechte nicht). */
-const FACES_LEFT: ReadonlySet<SpriteId> = new Set(['hoverscout', 'cannon', 'catapult']);
 /** Schweben (wippen auf und ab). */
 const HOVERS: ReadonlySet<SpriteId> = new Set(['hoverscout', 'swarmmind']);
 /** Heilen Verbündete in der Nähe, statt zu schießen. */
@@ -52,6 +43,9 @@ interface Unit {
   speed: number;
   dead: number;
   bob: number;
+  /** läuft gerade (Laufzeile), Zeit seit dem letzten Schuss (Angriffszeile). */
+  moving: boolean;
+  atk: number;
 }
 interface Shot {
   x: number;
@@ -128,10 +122,13 @@ export class TitleFx {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
-    for (const id of Object.keys(URLS) as SpriteId[]) {
+    for (const id of Object.keys(DEF) as SpriteId[]) {
+      const spr = UNIT_SPRITES[DEF[id]];
+      const url = spr ? UNIT_SHEETS[spr.sheet] : undefined;
+      if (!spr || !url) continue;
       const img = new Image();
-      img.onload = () => this.feet.set(id, footRow(img));
-      img.src = URLS[id];
+      img.onload = () => this.feet.set(id, footRow(img, spr.cell));
+      img.src = url;
       this.images.set(id, img);
     }
   }
@@ -191,6 +188,8 @@ export class TitleFx {
       speed: st.speed * (0.85 + Math.random() * 0.3),
       dead: 0,
       bob: Math.random() * 6,
+      moving: true,
+      atk: 99,
     });
   }
 
@@ -223,6 +222,8 @@ export class TitleFx {
         continue;
       }
       u.bob += dt;
+      u.atk += dt;
+      u.moving = false;
       const dir = u.team === 0 ? 1 : -1;
       const st = STATS[u.kind];
       let target: Unit | null = null;
@@ -244,7 +245,10 @@ export class TitleFx {
           this.burst(u.x, u.y - 14 * s, 5, TEAMS[u.team].heal);
         }
         const lead = target && best < 0.2 * w;
-        if (!lead) u.x += dir * u.speed * s * dt;
+        if (!lead) {
+          u.x += dir * u.speed * s * dt;
+          u.moving = true;
+        }
       } else if (u.kind === 'bomb' && target && best <= st.range * w + 10 * s) {
         // Sprengetopp: Kamikaze – explodiert am Ziel, trifft auch Nachbarn.
         u.dead = 0.001;
@@ -255,10 +259,12 @@ export class TitleFx {
         u.cool -= dt;
         if (u.cool <= 0) {
           u.cool = st.cool * (0.8 + Math.random() * 0.4);
+          u.atk = 0;
           this.fire(u, target, st);
         }
       } else {
         u.x += dir * u.speed * s * dt;
+        u.moving = true;
       }
       if (u.x < -120 || u.x > w + 120) u.dead = 9;
     }
@@ -340,6 +346,13 @@ export class TitleFx {
     }
   }
 
+  /** Sheet-Zeile und Bild: Angriff, solange die Angriffsanimation läuft, sonst Laufen oder Stehen. */
+  private pose(u: Unit, spr: UnitSprite): [number, number] {
+    if (u.atk < spr.attack.dur && !u.dead) return [2, Math.min(spr.frames.attack - 1, Math.floor((u.atk / spr.attack.dur) * spr.frames.attack))];
+    if (u.moving && !u.dead) return [1, Math.floor(u.bob * 9) % spr.frames.walk];
+    return [0, Math.floor(u.bob * 6) % spr.frames.idle];
+  }
+
   private draw(): void {
     const g = this.ctx;
     const { width: w, height: h } = this.canvas;
@@ -351,10 +364,13 @@ export class TitleFx {
     const sorted = [...this.units].sort((a, b) => a.y - b.y);
     for (const u of sorted) {
       const img = this.images.get(u.kind);
-      if (!img?.complete || !img.naturalWidth) continue;
-      const iw = img.naturalWidth * s;
-      const ih = img.naturalHeight * s;
-      const foot = this.feet.get(u.kind) ?? img.naturalHeight - 1;
+      const spr = UNIT_SPRITES[DEF[u.kind]];
+      if (!img?.complete || !img.naturalWidth || !spr) continue;
+      const cell = spr.cell;
+      const iw = cell * s;
+      const ih = cell * s;
+      const foot = this.feet.get(u.kind) ?? cell - 1;
+      const [row, frame] = this.pose(u, spr);
       const fade = u.dead ? Math.max(0, 1 - u.dead / 1.2) : 1;
       const team = TEAMS[u.team];
       // Bodenring in Spielerfarbe
@@ -366,14 +382,14 @@ export class TitleFx {
       // Figur: Schweber wippen, Blick zum Gegner; die Füße (unterste sichtbare Pixelreihe) stehen auf u.y.
       const hover = HOVERS.has(u.kind);
       const bob = hover ? Math.round(Math.sin(u.bob * 4) * s * 1.5) - (u.kind === 'swarmmind' ? 4 * s : 0) : 0;
-      const flip = (u.team === 1) !== FACES_LEFT.has(u.kind);
+      const flip = (u.team === 1) !== !!spr.flip;
       g.save();
       g.globalAlpha = 0.95 * fade;
       g.shadowColor = team.glow;
       g.shadowBlur = 10;
       g.translate(Math.round(u.x), Math.round(u.y - (foot + 1) * s + bob));
       if (flip) g.scale(-1, 1);
-      g.drawImage(img, -Math.round(iw / 2), 0, iw, ih);
+      g.drawImage(img, frame * cell, row * cell, cell, cell, -Math.round(iw / 2), 0, iw, ih);
       g.restore();
     }
     g.globalAlpha = 1;
@@ -390,14 +406,14 @@ export class TitleFx {
   }
 }
 
-/** Unterste Pixelreihe eines Bildes, die nicht durchsichtig ist. */
-function footRow(img: HTMLImageElement): number {
+/** Unterste nicht durchsichtige Pixelreihe im ersten Standbild (Zelle oben links) eines Sheets. */
+function footRow(img: HTMLImageElement, cell: number): number {
   const c = document.createElement('canvas');
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
+  c.width = cell;
+  c.height = cell;
   const x = c.getContext('2d')!;
-  x.drawImage(img, 0, 0);
-  const d = x.getImageData(0, 0, c.width, c.height).data;
-  for (let y = c.height - 1; y >= 0; y--) for (let k = 0; k < c.width; k++) if (d[(y * c.width + k) * 4 + 3]! > 40) return y;
-  return c.height - 1;
+  x.drawImage(img, 0, 0, cell, cell, 0, 0, cell, cell);
+  const d = x.getImageData(0, 0, cell, cell).data;
+  for (let y = cell - 1; y >= 0; y--) for (let k = 0; k < cell; k++) if (d[(y * cell + k) * 4 + 3]! > 40) return y;
+  return cell - 1;
 }

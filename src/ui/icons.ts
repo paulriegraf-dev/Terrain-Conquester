@@ -3,6 +3,8 @@
  * 2,5D-Oberfläche. Platzhalter im einheitlichen Strich – später durch Pixel-Icons ersetzbar (gleiche Schlüssel).
  */
 import { PIXEL_ICONS } from './pixelIcons';
+import { terrainIconHtml } from './terrainIcons';
+import type { TerrainId } from '../data/terrain';
 
 const P = (d: string, extra = ''): string =>
   `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"${extra}><path d="${d}"/></svg>`;
@@ -68,8 +70,16 @@ const CMD_ICON: Record<string, IconName> = {
   'hero-gather': 'target', 'hero-strike': 'push', 'buy-watch': 'eye',
 };
 
+const TERRAIN_IDS = new Set<TerrainId>(['meadow', 'forest', 'mud', 'snow', 'mountain', 'gorge', 'wall', 'rubble', 'waste']);
+const ROUTE_ARROW: Record<string, string> = { top: '↑', mid: '→', bottom: '↓' };
+
 /** Zeichen für einen Befehlsknopf (id aus commands.ts) – null: Textzeichen des Knopfs behalten. */
 export function cmdIcon(id: string): string | null {
+  // Geländearten als Bild (16.11.): Geländetausch „swap-…“, Vorbereitung „prep-…“, Lane-Boden „lg-<route>-<boden>“
+  const m = /^(?:swap|prep)-(\w+)$/.exec(id);
+  if (m && TERRAIN_IDS.has(m[1] as TerrainId)) return terrainIconHtml(m[1] as TerrainId);
+  const lg = /^lg-(top|mid|bottom)-(\w+)$/.exec(id);
+  if (lg && TERRAIN_IDS.has(lg[2] as TerrainId)) return terrainIconHtml(lg[2] as TerrainId, ROUTE_ARROW[lg[1]!]);
   if (id.startsWith('build-')) {
     const b = BUILD_ICON[id.slice(6)];
     return b ? ICONS[b] : null;

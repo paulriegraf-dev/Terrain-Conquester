@@ -85,7 +85,7 @@ export class HudC {
   private readonly root: HTMLElement;
   private readonly el: {
     energy: HTMLElement; income: HTMLElement; units: HTMLElement; clock: HTMLElement; gate: HTMLElement;
-    lanes: HTMLElement; market: HTMLElement; center: HTMLElement; feed: HTMLElement; pops: HTMLElement;
+    lanes: HTMLElement; market: HTMLElement; center: HTMLElement; centerIco: HTMLElement | null; centerCell: HTMLElement | null; feed: HTMLElement; pops: HTMLElement;
     viewBar: HTMLElement; mini: HTMLCanvasElement; miniCap: HTMLElement;
   };
   private last = 0;
@@ -110,7 +110,7 @@ export class HudC {
       <button type="button" class="c-cell c-ks" data-action="c-keystones" title="Uhr und nächstes Schlussstein-Fenster – Klick zeigt deine Schlusssteine (Taste K wählt)"><span class="c-lbl">Schlussstein</span><small data-k="gate"></small></button>
       <button type="button" class="c-cell" data-action="c-fronts" title="Frontlage je Lane (Anteil am Gebiet) und Haltung – Klick öffnet die Fronten (⇧A)"><span class="c-lbl">Lanes</span><div class="c-lanes" data-k="lanes"></div></button>
       <button type="button" class="c-cell" data-action="c-pop" data-pop="market" title="Markt (Lage von vor 5 s, Prozent = Änderung zu 20 s davor) – Klick öffnet den Markt"><span class="c-lbl">Markt</span><div class="c-mkt" data-k="market"></div></button>
-      <div class="c-cell c-center" title="Kartenmitte: wer sie hält"><span class="c-lbl">Zentrum</span><span class="c-ico">${ICONS.target}</span><b data-k="center">frei</b></div>`);
+      <div class="c-cell c-center" data-k="centerCell" title="Kartenmitte: Wer sie ununterbrochen hält, öffnet sofort das nächste Schlussstein-Tor."><span class="c-lbl">Mitte</span><span class="c-ico" data-k="centerIco">${ICONS.target}</span><b data-k="center">offen</b></div>`);
     // Kurzmeldungen
     const feed = mk('ol', 'c-feed');
     feed.title = 'Lagebericht – Klick öffnet alle Meldungen';
@@ -142,7 +142,7 @@ export class HudC {
     const q = (k: string): HTMLElement => (hud.querySelector(`[data-k="${k}"]`) ?? view.querySelector(`[data-k="${k}"]`)) as HTMLElement;
     this.el = {
       energy: q('energy'), income: q('income'), units: q('units'), clock: q('clock'), gate: q('gate'), lanes: q('lanes'),
-      market: q('market'), center: q('center'), feed, pops, viewBar: q('viewbar'),
+      market: q('market'), center: q('center'), centerIco: hud.querySelector('[data-k="centerIco"]'), centerCell: hud.querySelector('[data-k="centerCell"]'), feed, pops, viewBar: q('viewbar'),
       mini: view.querySelector('canvas')!, miniCap: view.querySelector('.c-mini-cap')!,
     };
     this.root = hud;
@@ -415,9 +415,23 @@ export class HudC {
     // Zentrum
     const holder = centerHolder(world);
     const hold = Math.floor(g.hold);
-    const cTxt = holder === null ? 'frei' : holder === me ? `deins${hold > 0 ? ` ${hold}/${world.rules.keystoneGate.centerHold} s` : ''}` : 'Gegner';
+    // Nutzer 16.11.: deutlicher – was die Anzeige bedeutet (Tor öffnen), ab wann sie zählt, und Fortschritt für beide Seiten.
+    const kg = world.rules.keystoneGate;
+    const tNow = world.tick / world.tps;
+    const mmss = (sec: number): string => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+    const cTxt = !kg.center ? '–'
+      : tNow < kg.centerFrom ? `ab ${mmss(kg.centerFrom)}`
+      : holder === null ? 'offen'
+      : holder === me ? `deins ${hold}/${kg.centerHold} s` : 'Gegner hält';
     set(this.el.center, cTxt);
-    this.el.center.style.color = holder === null ? '' : sideColor(world, holder);
+    const col = holder === null ? '' : sideColor(world, holder);
+    this.el.center.style.color = col;
+    if (this.el.centerIco) this.el.centerIco.style.color = col || (tNow < kg.centerFrom ? '' : 'var(--px-gold)');
+    if (this.el.centerCell) {
+      this.el.centerCell.title = tNow < kg.centerFrom
+        ? `Kartenmitte (${kg.centerSize}×${kg.centerSize}): ab ${mmss(kg.centerFrom)} zählt sie. Wer sie dann ${kg.centerHold} s ununterbrochen hält, öffnet sofort das nächste Schlussstein-Tor.`
+        : `Kartenmitte (${kg.centerSize}×${kg.centerSize}): Wer sie ${kg.centerHold} s ununterbrochen hält, öffnet sofort das nächste Schlussstein-Tor. Ohne Kontrolle sinkt der Fortschritt wieder.`;
+    }
     // Ansichtsleiste: aktive Stufe/Lane
     const lvl = this.d.renderer.level();
     const fy = this.d.renderer.focusPoint().y;

@@ -143,12 +143,14 @@ const OLD_TC: Partial<Record<UnitId, UnitSprite>> = {
  */
 export const OLD_TC_KEY = 'tc-figures-old';
 export const FIGURE_GLOBAL = 0.8;
+// Nutzer 16.11.: Umschalter entfernt – immer die neuen Figuren; eine alte gespeicherte Wahl einmal beim Laden verwerfen.
+try {
+  globalThis.localStorage?.removeItem(OLD_TC_KEY);
+} catch {
+  /* egal */
+}
 export function oldTechnoclan(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(OLD_TC_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return false;
 }
 /** Gemeinsamer Größenfaktor aller Figuren (für Abstände im Bild, die mit den Figuren schrumpfen). */
 export function figureGlobal(): number {

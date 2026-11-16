@@ -14,14 +14,19 @@ const DEFAULT_MODE: GraphicsMode = 'hd2d';
 
 const KEY = 'tc-graphics';
 
+/**
+ * Nutzer 16.11.: Die Knöpfe „Alte Version“ und „Figuren: alt/neu“ sind aus dem Startmenü entfernt. Nur noch die neue
+ * Grafik; eine früher gespeicherte Wahl der alten Ansicht wird verworfen (Seite `?klassisch` öffnet sie zum Vergleich).
+ */
 export function graphicsMode(): GraphicsMode {
   if (!HD2D_AVAILABLE) return 'classic';
   try {
-    const v = globalThis.localStorage?.getItem(KEY);
-    return v === 'classic' || v === 'hd2d' ? v : DEFAULT_MODE;
+    if (globalThis.location?.search.includes('klassisch')) return 'classic';
+    globalThis.localStorage?.removeItem(KEY);
   } catch {
-    return DEFAULT_MODE;
+    /* ohne Speicher egal */
   }
+  return DEFAULT_MODE;
 }
 
 /** Umschalten und neu starten (die Darstellung wird nur beim Laden gewählt). */

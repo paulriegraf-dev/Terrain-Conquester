@@ -41,7 +41,7 @@ import { STATIONS } from '../data/stations';
 import { STANCE_NAMES } from '../sim/world';
 import { Renderer } from '../render/renderer';
 import { Hd2dRenderer } from '../render/hd2d/renderer3d';
-import { HD2D_AVAILABLE, graphicsButtonLabel, graphicsMode, switchGraphics } from './graphics';
+import { graphicsMode, switchGraphics } from './graphics';
 import { HudC, PAN_KEYS, VIEW_KEYS } from './hudC';
 import { PALETTE } from '../render/palette';
 import { clock, percent } from './format';
@@ -169,16 +169,6 @@ export class Game {
   ) {
     // Grafik-Modus (05.11.): klassische Ansicht oder HD-2D – gewählt im Hauptmenü, gilt ab dem Neustart der Seite.
     this.renderer = graphicsMode() === 'hd2d' ? new Hd2dRenderer(canvas) : new Renderer(canvas);
-    const gfx = doc.getElementById('btn-graphics');
-    if (gfx) {
-      gfx.hidden = !HD2D_AVAILABLE;
-      gfx.textContent = graphicsButtonLabel(graphicsMode());
-    }
-    const oldTc = doc.getElementById('btn-oldtc');
-    if (oldTc) {
-      oldTc.hidden = graphicsMode() !== 'hd2d';
-      oldTc.textContent = `Figuren: ${oldTechnoclan() ? 'alter Technoclan (grob)' : 'neu (80 %)'}`;
-    }
     this.music = new Music(doc);
     // Kampfgeräusche (15.11.): folgen Musik an/aus und Lautstärke; Freigabe nach der ersten Nutzeraktion.
     const sfx = new Sfx(() => ({ enabled: this.music.enabled, volume: this.music.volume }));
@@ -222,13 +212,8 @@ export class Game {
     this.titleFx = fx ? new TitleFx(fx) : null;
     const hero = doc.getElementById('title-hero') as HTMLCanvasElement | null;
     this.titleHero = hero ? new TitleHero(hero) : null;
-    let variant = 'a';
-    try {
-      variant = localStorage.getItem('tc-title-variant') ?? 'g';
-    } catch {
-      /* ohne Speicher: Entwurf A */
-    }
-    this.setTitleVariant(variant);
+    // Nutzer 16.11.: Startbild F (Brakk als Feldherr vor dem Gefecht) fest, keine Auswahl mehr.
+    this.setTitleVariant('f');
     try {
       const cb = JSON.parse(localStorage.getItem('tc-counter-board') ?? 'null') as { on?: boolean; flip?: boolean } | null;
       if (cb) this.counterBoard = { on: !!cb.on, flip: !!cb.flip, x: (cb as { x?: number }).x, y: (cb as { y?: number }).y };
@@ -889,8 +874,8 @@ export class Game {
     if (this.view.wall && human !== null) {
       const check = checkWall(world, human, cell.x, cell.y, this.view.wall.vertical);
       if (check.ok) {
+        // Nutzer 16.11.: im Wall-Modus bleiben – mehrere Wälle nacheinander setzen; Ende mit Rechtsklick, Esc oder dem Knopf.
         this.session.issue({ type: 'castWall', x: cell.x, y: cell.y, vertical: this.view.wall.vertical });
-        this.view.wall = null;
       } else {
         this.hud.flash(check.reason);
       }

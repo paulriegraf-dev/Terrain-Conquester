@@ -1435,6 +1435,9 @@ body.ui-c {
 .ic-px .f { fill: currentColor; }
 .c-viewbar .ic-px { width: 20px; height: 20px; vertical-align: middle; display: block; margin: 0 auto 1px; }
 .c-pop-btn .ic-px { width: 20px; height: 20px; vertical-align: middle; }
+/* Gelände-Symbole (16.11.): echte Bodenkachel mit Detail, pixelscharf */
+.ic-terr { width: 28px; height: 28px; image-rendering: pixelated; vertical-align: middle; border-radius: 3px; }
+.ic-terr-route { font-size: 0.8rem; margin-right: 2px; vertical-align: middle; opacity: 0.85; }
 /* Rahmen: dunkel – hell – dunkel, dazu harter Schatten */
 body.ui-c .c-hud, body.ui-c .hq-bars, body.ui-c .brand .menu-btn, body.ui-c .view-panel, body.ui-c .console-grid-wrap,
 body.ui-c .c-dock .console-info, body.ui-c .c-view, body.ui-c .rs-row, body.ui-c .side > .panel, body.ui-c[data-pop="front"] .c-front {
@@ -1491,6 +1494,7 @@ body.ui-c .c-cell:first-child { border-left: 0; }
 body.ui-c .c-ico { display: grid; place-items: center; font-size: 1.15rem; color: var(--c-muted); }
 body.ui-c .c-energy .c-ico { color: var(--px-gold); font-size: 1.5rem; filter: drop-shadow(0 0 4px rgba(255, 210, 63, 0.45)); }
 body.ui-c .c-energy b { font-family: var(--font-display); font-size: 1.55rem; color: var(--px-gold); text-shadow: 2px 2px 0 #7a5a00; }
+body.ui-c .c-center .c-ico { font-size: 1.45rem; filter: drop-shadow(0 0 3px rgba(0,0,0,.6)); }
 body.ui-c .c-clock b, body.ui-c .c-center b { font-family: var(--font-display); font-size: 1.1rem; text-shadow: 2px 2px 0 #000; }
 body.ui-c .c-lanes { display: flex; gap: 6px; grid-template-columns: none; }
 body.ui-c .c-lanes .c-ln, body.ui-c .c-lanes .c-sn { display: none; }
