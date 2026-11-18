@@ -600,11 +600,14 @@ export class Hud {
     } else if (canAct) {
       text = this.icon ? '' : 'Befehl wählen – jeder Knopf zeigt seine Taste. Gebäude anklicken für Marschbefehle.';
     }
-    const sig = `${warn}|${text}`;
+    // Mit aktivem Werkzeug (Bauen, Wall, Gelände) spricht die Vorschau – die Gelände-Zeile darunter ruht (CSS: .tool + .tip-hover).
+    const tool = !!(view.build || view.wall || view.swap) && text !== '';
+    const sig = `${warn}|${tool}|${text}`;
     if (sig === this.tipSig) return;
     this.tipSig = sig;
     this.el.tipText.textContent = text;
     this.el.tipText.classList.toggle('warn', warn);
+    this.el.tipText.classList.toggle('tool', tool);
   }
 
   // ------------------------------------------------------------------ Meldungen
@@ -627,6 +630,14 @@ export class Hud {
   }
 
   flash(text: string): void {
+    // Steht genau dieser Grund schon in der Hinweiszeile (Bauvorschau), nicht doppelt zeigen: die Zeile zuckt kurz.
+    const tip = this.el.tipText;
+    if (tip.textContent === text && tip.getClientRects().length > 0) {
+      tip.classList.remove('nudge');
+      void tip.offsetWidth; // Animation neu starten
+      tip.classList.add('nudge');
+      return;
+    }
     this.el.flash.textContent = text;
     this.el.flash.hidden = false;
     this.flashTimer = performance.now() + 2600;

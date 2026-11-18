@@ -28,6 +28,7 @@ import { ROUTE_NAMES, otherPlayer } from '../sim/types';
 import type { Stance, World } from '../sim/world';
 import { FACTIONS, FACTION_IDS } from '../data/factions';
 import { SandboxPanel } from './sandboxPanel';
+import { startMenuGamepad } from './gamepad';
 import type { SandboxSetup } from './sandboxPanel';
 import type { FactionId } from '../data/factions';
 import type { OvertimeVariant } from '../data/rules';
@@ -828,7 +829,15 @@ export class Game {
       this.back();
     });
     this.doc.addEventListener('keydown', (ev) => this.onKey(ev));
-    const flow = this.doc.getElementById('flow-select') as HTMLSelectElement;
+    // Gamepad in Menüs: das jeweils oberste offene Menü ist der Fokusbereich.
+    startMenuGamepad(this.doc, () => {
+      if (this.codexOpen) return this.doc.getElementById('codex');
+      if (this.titleOpen) return this.doc.querySelector('.tp-page:not([hidden])');
+      if (this.lobbyOpen) return this.doc.getElementById('mp-card');
+      if (this.menuOpen || this.hud.startOpen) return this.doc.getElementById('start-card');
+      return null;
+    });
+    const flow =this.doc.getElementById('flow-select') as HTMLSelectElement;
     flow.addEventListener('change', () => this.setFlow(flow.value === 'off' ? null : (flow.value as MoveProfileId)));
   }
 
@@ -2383,7 +2392,7 @@ export class Game {
       const def = world.map.sites[site]!;
       const st = world.siteStates[site]!;
       const owner = st.owner === null ? 'neutral' : human === null ? (st.owner === 0 ? 'links' : 'rechts') : st.owner === human ? 'deins' : 'gegnerisch';
-      this.hud.setStatus(`${SITE_NAMES[def.kind]} (${ROUTE_NAMES[def.route]}, ${owner}${st.fortified ? ', befestigt' : ''}, ${siteActiveText(world, site)}): ${STATIONS[def.kind].text}. Wirkt nur für den Besitzer und ruht, solange Gegner näher als ${world.rules.sites.contestRadius} Kacheln sind. Einnehmen: allein im Kreis stehen – erst neutralisieren, dann ${world.rules.sites.captureSeconds} s.`);
+      this.hud.setStatus(`${SITE_NAMES[def.kind]} (${ROUTE_NAMES[def.route]}, ${owner}${st.fortified ? ', befestigt' : ''}, ${siteActiveText(world, site)}): ${STATIONS[def.kind].text}. Nur für den Besitzer; ruht bei Gegnern unter ${world.rules.sites.contestRadius} Kacheln. Einnehmen: allein im Kreis – neutralisieren, dann ${world.rules.sites.captureSeconds} s.`);
       return;
     }
     const terrain = world.grid.terrainAt(h.x, h.y);

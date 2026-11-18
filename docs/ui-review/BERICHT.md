@@ -13,7 +13,8 @@ Die Bilanz-Zeile im Menü ist für die Bilder mit „47 Siege · 33 Niederlagen�
 | `vorher-menue-1920x1080.jpg` / `nachher-menue-1920x1080.jpg` | breiter Bildschirm |
 | `vorher-menue-390x844.png` / `nachher-menue-390x844.png` | Handy hoch |
 | `nachher-menue-844x390.png` | Handy quer |
-| `nachher-menue-1280x800-einzelspieler.jpg` | Unterseite Einzelspieler („Gegen die KI“ als Primärknopf) |
+| `nachher-menue-1280x800-einzelspieler.png` | Unterseite Einzelspieler („Gegen die KI“ als Primärknopf) |
+| `nachher-gamepad-fokus-lobby.png` | Gamepad: mit Steuerkreuz zu Mehrspieler, A, dann ↓ – Fokusrahmen auf „Raum erstellen“ |
 
 **Umgesetzt**
 
@@ -27,11 +28,11 @@ Die Bilanz-Zeile im Menü ist für die Bilder mit „47 Siege · 33 Niederlagen�
 5. **Bilanz als Statuszeile:** Sie steht unter einer eingravierten Trennlinie. Davor kommt „BILANZ“ in Pixelschrift, dann ▲ Siege in Grün und ▼ Niederlagen in Rot. Die Form zeigt die Bedeutung, nicht nur die Farbe. Darunter liegt ein schmaler Balken mit dem Siegesanteil. Die Zahlen nutzen `tabular-nums`, und für Screenreader gibt es ein `aria-label`.
 6. **Tastatur (Bugfix):** Enter und Leertaste öffneten bisher *immer* Einzelspieler, egal welcher Knopf den Fokus hatte. Wer mit Tab zu „Optionen“ ging und Enter drückte, landete trotzdem in Einzelspieler. Jetzt löst Enter den fokussierten Knopf aus. Die alte Abkürzung gilt nur noch, wenn kein Knopf den Fokus hat. Neu: Mit ↑/↓ wandert der Fokus durch die Knöpfe der offenen Seite, mit Umlauf.
 7. **Auflösungen:**
-   - Breit: Die Tafel wächst mit (`clamp(340px, 22vw, 420px)`), ebenso die Schrift. Bei 1920 px wirkte sie vorher verloren.
+   - Breit: Die Tafel wächst mit (`clamp(340px, 22vw, 420px)`). Bei 1920 px wirkte sie vorher verloren. Die Knopfschrift bleibt fest bei 16 px, weil die Pixelschrift nur auf ihrem Raster scharf ist (siehe J).
    - Niedrige Fenster (Höhe ≤ 560 px, z. B. Handy quer): Die Ketten fallen weg, die Knöpfe werden flacher und der Schriftzug wandert nach links. Vorher verdeckte die Tafel „TERRAIN“.
    - `prefers-reduced-motion` schaltet die Übergänge ab.
 
-Geänderte Dateien: `index.html` (Klasse `tp-primary` an zwei Knöpfen), `src/styles.css` (Menü-Block), `src/ui/game.ts` (`syncSavedCount`, Titel-Tasten in `onKey`).
+Geänderte Dateien: `index.html` (Klasse `tp-primary` an zwei Knöpfen), `src/styles.css` (Menü-Block), `src/ui/game.ts` (`syncSavedCount`, Titel-Tasten in `onKey`). Zur Gamepad-Steuerung siehe Punkt H.
 
 ## Teil 2: Schriften und Oberfläche im Spiel
 
@@ -66,29 +67,31 @@ Kontrast (WCAG AA): Fast alles liegt deutlich über 4,5:1. Die einzige Unterschr
 
 In `:root` gibt es dafür die neue Stufe `--step--2: 0.6875rem` (11 px) als Untergrenze für Etiketten.
 
-### Offen, mit Vorschlag
+### Zweite Runde: die ehemals offenen Punkte A–J (umgesetzt)
 
-| # | Bereich | Befund | Vorschlag |
+| # | Bereich | Befund | Umsetzung |
 |---|---|---|---|
-| A | ganzes CSS | Die Skala `--step-*` wird kaum genutzt. Daneben gibt es rund 40 Einzelwerte zwischen 0,54 und 0,66 rem (8,6–10,6 px). Das ist die Hauptursache für uneinheitliche Größen. | Einmal alle `font-size: 0.5x/0.6x rem` auf `--step--2` (11 px) bzw. eine neue Stufe `--step--3` = 10 px (nur für Tastenkappen) umstellen. Weil manche Raster dabei enger werden, braucht das einen eigenen Durchgang mit Screenshots. |
-| B | HUD Befehlsleiste | Die Kosten an den Knöpfen (`.cmd .cost`, z. B. „60“, „90“) haben nur 9,6 px, sind aber spielentscheidend: Kann ich mir das leisten? | Auf 11 px anheben, dafür Symbol und Kosten im Knopf neu verteilen, oder unleistbare Kosten zusätzlich rot färben. |
-| C | Übersicht, Startkarte | Noch unter 11 px: „Kaserne · Stufe I“ (9,9 px Mono), Panzerungs- und Bewegungs-Etiketten (10,6 px), Untertitel der Säulen im Ausbau (10,4 px), Fraktionsnamen auf den Porträts der Startkarte (10,6 px). | Teil von A. Die Etiketten sitzen in engen Zeilen, deshalb nicht blind vergrößern. |
-| D | HUD Energie | Die Energiezahl steht in Silkscreen ohne `tabular-nums`. Hat die Schrift unterschiedlich breite Ziffern, springt die Zahl beim Hochzählen. Live-Zählen wurde nicht geprüft. | Prüfen; wenn die Zahl springt: `min-width` in `ch` oder `--font-data`. |
-| E | HUD Energie | In allen Testläufen blieb die Energie minutenlang bei 400, obwohl „+3,5/s“ angezeigt wurde. Vermutlich ist das Lager voll. Das HUD zeigt das nicht, und das Einkommen verfällt unbemerkt. | Bei vollem Lager „400/400“ oder ein „VOLL“-Hinweis mit Messing-Puls. Gerade bei Auto-Spawn-Fabriken ist das der Moment, ein Upgrade zu kaufen. *Zuerst im Code prüfen, ob es eine Obergrenze gibt.* |
-| F | HUD Bauen | Beim Bauen an ungültiger Stelle steht der Grund doppelt da: als rote Pille („Nur in Bauzonen möglich“) und als gelbe Hinweiszeile. Die Gelände-Zeile darüber überlagert die Pille teilweise. | Nur eine Quelle (die rote Pille). Die Gelände-Zeile ausblenden, solange ein Bau-Werkzeug aktiv ist. |
-| G | Lobby | Die Mehrspieler-Karte nutzt noch das alte grüne Thema: grüner Hintergrund, flacher Rahmen, großer Messingknopf. Die Startkarte daneben ist Navy mit Pixelrahmen. | `.mp-card` an `.start-card` angleichen. Nicht angefasst, weil parallel die Online-Session an der Lobby arbeitet. Danach in einem eigenen Schritt. |
-| H | Gamepad | Das Spiel hat keine Gamepad-Anbindung. Im Menü sind Fokusstil und Pfeiltasten jetzt da, ein Controller bewegt aber noch nichts. | Kleine Schicht nur für Menüs: Gamepad-API pollen, Steuerkreuz → ↑/↓, A → Enter, B → Esc. Mehr braucht es nicht, das Menü reagiert bereits auf diese Tasten. |
-| I | HUD Hinweiszeile | Lange Hinweise (z. B. zur Station „Belagerungsturm“) laufen über drei Zeilen und stehen dann recht hoch über der Leiste. | Höchstens zwei Zeilen; Ausführliches in die Übersicht verlinken (Taste F1). |
-| J | Pixelschrift | Silkscreen ist auf ein festes Pixelraster gebaut. Bei krummen Größen (z. B. 14,7 px auf den Menüknöpfen, 12 px auf den Tempo-Knöpfen) werden die Kanten weich. | Pixelschrift-Größen auf ganze Vielfache des Rasters setzen (z. B. 16 px / 24 px) und an Bildschirmen mit Skalierung 125 % gegenprüfen. |
+| A | ganzes CSS | Die Skala `--step-*` wurde kaum genutzt; daneben gab es 52 Einzelwerte zwischen 0,5 und 0,68 rem (8–10,9 px). | Alle umgestellt: 45 Stellen auf `--step--2` (11 px). Die 7 Tastenkappen und Zähler-Plaketten in festen kleinen Kästchen (Tastenbuchstabe am Befehlsknopf, Forschungs-Zähler, Fronten-Kappen, Kurzwahl-Kappe in der Fabrik-Karte, Ansichtsleiste) bekamen die neue Stufe `--step--3` (10 px). `kbd` hat 10 px als Untergrenze (`max(0.72em, --step--3)`). |
+| B | HUD Befehlsleiste | Die Kosten an den Knöpfen hatten 8,8–9,6 px, obwohl sie spielentscheidend sind. | 11 px. Unbezahlbare Kosten färbt das Spiel schon rot, das bleibt. |
+| C | Übersicht, Startkarte | „Kaserne · Stufe I“, Panzerungs- und Bewegungs-Etiketten, Säulen-Untertitel im Ausbau und Fraktionsnamen lagen bei 9,9–10,6 px. | Mit A auf 11 px. Gesichtet: Die Karten der Übersicht und die Startkarte brechen nicht um. |
+| D | HUD Energie und Uhr | Nachgemessen: In Silkscreen ist die „1“ schmaler (0,625 em) als die übrigen Ziffern (0,75 em), Energie und Uhr sprangen also in der Breite. `tabular-nums` hilft nicht, weil die Schrift keine Tabellenziffern hat. | Feste Mindestbreite, rechtsbündig: Energie `3ch`, Uhr `4ch`. |
+| E | HUD Energie | Bestätigt: Das Lager hat eine Obergrenze (`energyCap`, Standard 400). Voll verfällt das Einkommen, das HUD zeigte das nicht. | Bei vollem Lager steht eine goldene **VOLL**-Plakette neben der Zahl, die Zahl glimmt langsam (1,6 s, kein Blinken; aus bei `prefers-reduced-motion`). Der Tooltip sagt: „Lager voll: weiteres Einkommen verfällt. Jetzt ausgeben!“ |
+| F | HUD Bauen | Der Grund stand doppelt da (rote Pille und gelbe Hinweiszeile), dazu die Gelände-Zeile darüber. | Steht der Grund schon in der Hinweiszeile, gibt es keine zweite Pille mehr; die Zeile zuckt stattdessen kurz. Solange ein Werkzeug aktiv ist (Bauen, Wall, Gelände), ruht die Gelände-Zeile. Andere Meldungen (z. B. „Pausieren kann nur der Host“) erscheinen weiter als Pille. |
+| G | Lobby | Die Mehrspieler-Karte trug noch das alte grüne Thema. | Sie nutzt jetzt denselben Pixel-Look wie die Startkarte: Navy-Platte mit Pixelrahmen, goldener Primärknopf, eingelassenes Code-Feld mit Messing-Fokus, Spielerzeilen als Pixel-Platten. Nur CSS; `src/net` ist unberührt. |
+| H | Gamepad | Es gab keine Gamepad-Anbindung. | Neues Modul `src/ui/gamepad.ts`, nur für Menüs (Titel, Übersicht, Lobby, Startkarte/Rundenmenü). Steuerkreuz oder linker Stick bewegen den Fokus (gehalten: Wiederholung), A bestätigt, B wirkt wie Esc. Auf der Karte greift das Gamepad nicht ein. Weil der Browser bei Fokus per Skript den Fokusrahmen nicht immer zeigt, setzt das Modul die Klasse `gp-nav`; ein Mausklick nimmt sie wieder weg. Geprüft mit einem simulierten Pad. |
+| I | HUD Hinweiszeile | Der Hinweis zu Stationen lief über drei Zeilen. | Abschneiden hätte die Einnahme-Regel verloren, die sonst nirgends steht. Darum ist der feste Teil kürzer formuliert („Nur für den Besitzer; ruht bei Gegnern unter 6 Kacheln. Einnehmen: allein im Kreis – neutralisieren, dann 15 s.“). Gemessen: zwei Zeilen. |
+| J | Pixelschrift | Nachgemessen: Silkscreen ist auf 1/8 em gebaut und damit nur bei 8, 16, 24 oder 32 px scharf. | Menüknöpfe, Primärknopf, Uhr, Einheitenname in der Konsole und Titel der Fabrik-Karte haben jetzt 16 px, die Energiezahl 24 px. Kleine Etiketten bleiben bei 11 px: 8 px wäre scharf, aber zu klein zum Lesen. |
 
 ### Ingame-UI: Eindruck insgesamt
 
 Das neue Ingame-UI ist stimmig: Navy-Platten mit Pixelrahmen, die HQ-Leisten oben rechts, Energie, Zeit und Eskalation in einem Block, die Ansichtsleiste unten rechts. Die Fabrik-Karte passt gut zu den Eigenheiten des Spiels. Eine Fabrik spawnt von selbst, die Karte bündelt deshalb genau die wenigen Entscheidungen, die zählen: Einheit, Lane (Oben/Mitte/Unten mit Countdown) und vier Ausbau-Säulen in eigenen Farben. Die farbigen Säulen-Kanten (Fabrik, Kampfwerte, Spezialisierung, Schlussstein) machen die Upgrade-Pfade auf einen Blick unterscheidbar.
 
-Die größten Hebel bleiben **A/B** (einheitliche Mindestgröße, vor allem die Kosten) und **E** (sichtbar machen, wenn Energie verfällt).
+Mit der zweiten Runde sind die größten Hebel umgesetzt: eine einheitliche Mindestgröße (vor allem für die Kosten) und die VOLL-Anzeige, wenn Energie verfällt.
 
 ## Prüfung
 
 - `npm run check`: Typecheck, 476/476 Tests und Build sind grün.
 - Gesichtet in 1280×800, 1280×720, 1920×1080, 390×844 und 844×390. Die Fabrik-Karte wurde bei 1280×720 nicht erneut geöffnet; dort sorgt `max-height` dafür, dass sie in jedem Fall ins Bild passt.
-- Nicht geprüft: echtes Gamepad (keine Anbindung vorhanden), Screenreader-Ausgabe, Safari/Firefox.
+- Die Nachher-Bilder im Spiel zeigen die Karte Felsenpass (fest gewählt, damit die Bauplätze stimmen). `nachher-bauen-ungueltig.jpg` zeigt den Bau-Modus ohne doppelte Meldung, `nachher-hud-laeuft.jpg` die VOLL-Plakette und den zweizeiligen Stationshinweis.
+- Gamepad: mit einem simulierten Pad geprüft (↓/↑ bewegen den Fokus, A öffnet die Lobby, B wirkt wie Esc). Mit einem echten Controller noch nicht getestet.
+- Nicht geprüft: Screenreader-Ausgabe, Safari/Firefox.

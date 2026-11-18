@@ -14,7 +14,7 @@ import { FACTION_COLOR, type Hd2dRenderer } from '../render/hd2d/renderer3d';
 import { MIRROR_COLORS, type ZoomLevel } from '../render/hd2d/anim';
 import type { ViewState } from './view';
 import { zoneAt } from '../sim/map';
-import { incomePerSecond } from '../sim/systems/economy';
+import { energyCap, incomePerSecond } from '../sim/systems/economy';
 import { centerHolder } from '../sim/systems/keystone';
 import { marketLevel, marketView } from '../sim/systems/market';
 import type { PlayerId, Route } from '../sim/types';
@@ -432,6 +432,13 @@ export class HudC {
       }
     };
     set(this.el.energy, String(Math.floor(p.energy)));
+    // Lager voll: das Einkommen verfällt – sichtbar machen, damit der Spieler ausgibt (Upgrade, Gelände, Aufgebot).
+    const full = p.energy >= energyCap(world, me) - 0.5;
+    const cell = this.el.energy.parentElement!;
+    if (cell.classList.contains('full') !== full) {
+      cell.classList.toggle('full', full);
+      cell.title = full ? 'Energie – Lager voll: weiteres Einkommen verfällt. Jetzt ausgeben!' : 'Energie';
+    }
     set(this.el.income, `+${incomePerSecond(world, me).toFixed(1)}/s`);
     set(this.el.units, `${Math.ceil(world.unitCount(me))}/${world.rules.unitCap} Einheiten`);
     set(this.el.clock, clock(world.seconds));
