@@ -55,7 +55,7 @@ function ttkCodex(a: UnitDef, t: UnitDef): number {
   const per = woundsPerShot(w, d) * Math.min(w.damage * (w.vs?.[t.armor] ?? 1), t.hp / t.models);
   return t.hp / ((a.models * w.shots * per) / Math.max(0.1, w.cooldown));
 }
-/** Sprengetopp: 4 Ladungen (je 1 „Wunde“ mit Schaden = 110 × Erwartung, gedeckelt aufs Modell), dann Kamikaze 40 %. */
+/** Sprengetopp: 4 Ladungen, dann Kamikaze 40 % – je Explosion Erwartung × min(Schaden, Leben je Modell) wie blastHit (combat.ts). */
 function bomberLife(t: UnitDef): { sec: number; dealt: number; share: number } {
   const b = UNITS.bomber;
   const c = b.charges!;
@@ -63,13 +63,14 @@ function bomberLife(t: UnitDef): { sec: number; dealt: number; share: number } {
   const mw = t.hp / t.models;
   let hp = t.hp;
   const cur = (): number => (t.models <= 1 ? hp : hp - (Math.max(1, Math.min(t.models, Math.ceil(hp / mw - 1e-9))) - 1) * mw);
+  const blast = (dmg: number, p: number): number => p * (t.models > 1 ? Math.min(dmg, mw) : dmg);
   const hit = (dmg: number): void => { hp -= Math.min(dmg, cur()); };
   for (let k = 1; k <= c.count; k++) {
-    hit(c.damage * woundsPerShot({ ...b.weapon!, damage: c.damage }, d));
+    hit(blast(c.damage, woundsPerShot({ ...b.weapon!, damage: c.damage }, d)));
     if (hp <= 1e-6) return { sec: k * c.cooldown, dealt: t.hp, share: 1 };
   }
   const dk = defense(t, b.weapon!.range, true);
-  hit(b.weapon!.damage * c.kamikazeFactor * woundsPerShot(b.weapon!, dk));
+  hit(blast(b.weapon!.damage * c.kamikazeFactor, woundsPerShot(b.weapon!, dk)));
   const dealt = t.hp - Math.max(0, hp);
   return { sec: hp <= 1e-6 ? c.count * c.cooldown + 1 : Infinity, dealt, share: dealt / t.hp };
 }

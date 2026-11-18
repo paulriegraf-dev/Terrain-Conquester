@@ -72,7 +72,8 @@ describe('Myriaden: Eigenheiten', () => {
     b.weapon!.targetId = target.id;
     world.step();
     assert.equal(b.alive, false);
-    assert.ok(target.hp < target.maxHp - 100, `Gunner hp ${target.hp}`);
+    // 18.11.: Schaden je Wunde aufs Modell gedeckelt (150 Leben je Gunner-Modell) – p · min(216, 150), nicht min(p · 216, 150).
+    assert.ok(target.hp < target.maxHp - 60, `Gunner hp ${target.hp}`);
   });
 
   it('Test-Schalter: die Explosion verteilt sich auf mehrere Modelle (kamikazeSpread)', () => {

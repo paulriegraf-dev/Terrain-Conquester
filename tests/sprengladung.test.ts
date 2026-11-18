@@ -4,6 +4,8 @@ import { felsenpass } from '../src/data/maps/felsenpass';
 import { RULES } from '../src/data/rules';
 import { UNITS } from '../src/data/units';
 import { World } from '../src/sim/world';
+import { blastHit } from '../src/sim/systems/combat';
+import { defenseOf, woundsPerShot } from '../src/sim/systems/hitmath';
 import { stepTimes } from './fixtures';
 
 const calm = { front: { ...RULES.front, regenPerSecond: 0 } };
@@ -40,5 +42,39 @@ describe('Sprengladung mit Forschung', () => {
     const geared = firstCharge(3);
     assert.ok(geared.damage > plain.damage * 1.5, `Ausrüstung III wirkt (${plain.damage} → ${geared.damage})`);
     assert.equal(geared.weaponDamage, geared.damage);
+  });
+});
+
+/**
+ * Review 18.11.: Eine Explosion deckelte den Erwartungswert statt jede Wunde – min(p·D, Modell) statt p·min(D, Modell).
+ * Gegen weiche Ziele (Leben je Modell unter dem Schaden) war das bis +44 % zu viel.
+ */
+describe('Explosion: Schaden je Wunde erst aufs Modell deckeln', () => {
+  it('Sprengladung gegen Halmläufer: p · min(110, 20) statt min(p · 110, 20)', () => {
+    const world = new World({ map: felsenpass, seed: 1, rules: calm, factions: ['myriaden', 'terraformer'] });
+    const t = world.addUnit(1, UNITS.wardMeadow, { x: 22.5, y: 13.5 }, 'mid');
+    t.mover!.speed = 0;
+    t.weapon = undefined;
+    const b = world.addUnit(0, UNITS.bomber, { x: 19.5, y: 13.5 }, 'mid');
+    b.mover!.speed = 0;
+    let p = 0;
+    let seen = false;
+    for (let i = 0; i < 6 * world.tps; i++) {
+      stepTimes(world, 1);
+      const c = world.flights.find((f) => f.charge)?.charge;
+      if (c && !seen) { seen = true; p = woundsPerShot(c.weapon, defenseOf(world, t)); }
+      if (seen && world.flights.length === 0) break;
+    }
+    assert.ok(seen && p > 0.5 && p < 1, `Ladung geworfen (p = ${p})`);
+    const dealt = t.maxHp - t.hp;
+    const want = p * Math.min(UNITS.bomber.charges!.damage, t.modelWounds);
+    assert.ok(Math.abs(dealt - want) < 0.5, `Schaden ${dealt.toFixed(1)}, erwartet ${want.toFixed(1)} (alt: ${Math.min(p * 110, 20).toFixed(1)})`);
+  });
+
+  it('blastHit: gegen Einzelmodelle (Schwere, Gebäude) unverändert der volle Erwartungswert', () => {
+    const world = new World({ map: felsenpass, seed: 1, rules: calm, factions: ['myriaden', 'technoclan'] });
+    const tank = world.addUnit(1, UNITS.colossus, { x: 22.5, y: 13.5 }, 'mid');
+    const h = blastHit(tank, 216, 0.5);
+    assert.equal(h.wounds * h.damage, 108);
   });
 });

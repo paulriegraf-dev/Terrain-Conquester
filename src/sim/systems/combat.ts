@@ -186,8 +186,7 @@ export function updateCombat(world: World): void {
       if (def.charges) damage *= def.charges.kamikazeFactor;
       // Eine einzige Explosion: der erwartete Schaden in einem Schlag.
       const spread = t.kind === 'unit' ? Math.min(world.rules.kamikazeSpread, aliveModels(t)) : 0;
-      if (spread > 1) hits.push({ target: t, wounds: spread, damage: (damage * expected) / spread, attacker: e.owner, src: e.defId });
-      else hits.push({ target: t, wounds: 1, damage: damage * expected, attacker: e.owner, src: e.defId });
+      hits.push({ target: t, ...blastHit(t, damage, expected, spread), attacker: e.owner, src: e.defId });
       sacrificed.push(e);
     }
     const salvoStart = hits.length;
@@ -583,6 +582,21 @@ export function aliveModels(e: Entity): number {
 }
 
 /** Leben des Modells, das gerade Schaden nimmt (das angeschlagene zuerst). */
+/**
+ * Eine einzelne Explosion (Kamikaze, Sprengladung) als Treffer: `expected` erwartete Wunden zu je `damage`. Wie im normalen
+ * Kampf verfällt Schaden über ein Modell hinaus – also erst je Wunde auf das Modell deckeln, dann mit der Erwartung
+ * multiplizieren: expected · min(damage, Leben je Modell). 18.11.: vorher min(expected · damage, Modell) – gegen weiche Ziele
+ * bis +44 % zu viel (Ladung gegen Halmläufer: 20 statt 13,9). `spread` > 1 verteilt auf so viele Wunden (rules.kamikazeSpread).
+ */
+export function blastHit(t: Entity, damage: number, expected: number, spread = 0): { wounds: number; damage: number } {
+  // Test-Schalter kamikazeSpread (Standard aus): die Explosion bewusst auf mehrere Modelle verteilen – wie bisher.
+  if (spread > 1) return { wounds: spread, damage: (damage * expected) / spread };
+  const perWound = t.kind === 'unit' && t.models > 1 ? Math.min(damage, t.modelWounds) : damage;
+  const total = perWound * expected;
+  const wounds = Math.max(1, Math.ceil(expected - 1e-9));
+  return { wounds, damage: total / wounds };
+}
+
 export function currentModelWounds(e: Entity): number {
   if (e.models <= 1) return e.hp;
   return e.hp - (aliveModels(e) - 1) * e.modelWounds;
