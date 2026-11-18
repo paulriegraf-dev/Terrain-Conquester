@@ -2,6 +2,7 @@ import type { MoveProfileId } from '../data/movement';
 import type { BuildingId } from '../data/buildings';
 import type { GroundBonus, ProtocolId, UnitId, WeaponDef } from '../data/units';
 import type { TechMods } from '../data/verbund';
+import type { UpgradeEffect } from '../data/factions';
 import type { ArmorClass, CellRect, PlayerId, Route, Vec2 } from './types';
 
 /**
@@ -129,6 +130,8 @@ export interface Entity {
   flankUntil?: number;
   /** Zuletzt gekämpft (geschossen oder getroffen) – Schildgenerator: Schild nur außerhalb des Kampfes. */
   combatTick?: number;
+  /** Forschungswerte, mit denen der Verband gebaut bzw. zuletzt aufgerüstet wurde (18.11., systems/retrofit.ts). */
+  fxApplied?: Required<UpgradeEffect>;
   /** Schild des Schildgenerators (fängt Schaden zuerst ab) und wann er zuletzt aufgefüllt wurde. */
   stationShield?: number;
   shieldAt?: number;
