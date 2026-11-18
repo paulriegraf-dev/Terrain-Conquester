@@ -781,7 +781,7 @@ export class SimpleAi {
         if (factories < AI_TUNING.myrPlan.researchAt) return 0; // Patch 7: erst 2–3 Fabriken, dann Forschung und Stufen
         return (world.seconds < this.researchFrom(world) ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
       }
-      case 'hq': return AI_TUNING.myrPlan.hqNeed; // Patch 7: HQ-Ausbau nebensächlich, erst Kampfkraft (vorher 0,8)
+      case 'hq': return world.rules.hqUpgrades ? AI_TUNING.myrPlan.hqNeed : 0; // 18.11.: HQ-Zweige vorerst aus // Patch 7: HQ-Ausbau nebensächlich, erst Kampfkraft (vorher 0,8)
       case 'terrain': return 1;
       case 'wall': {
         if (this.funnelStep) return 1.5;
@@ -1770,7 +1770,7 @@ export class SimpleAi {
    * Gekauft wird vom Überschuss, höchstens eine Stufe je 45 s, frühestens ab 2:00. Die Masse-KI baut nichts aus.
    */
   private decideHq(world: World): Command | null {
-    if (this.profileId === 'mass' || world.seconds < 120 || world.tick - this.lastHq < 45 * world.tps) return null;
+    if (!world.rules.hqUpgrades || this.profileId === 'mass' || world.seconds < 120 || world.tick - this.lastHq < 45 * world.tps) return null;
     const [main, side] = hqPlan(this.profileId, world.players[this.player].faction.id);
     const t = world.players[this.player].hq;
     const path: HqPathId | null =

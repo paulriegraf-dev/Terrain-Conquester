@@ -8,12 +8,14 @@ import type { World } from '../world';
  * HQ-Zweige (24.10.): Aufklärung, Markt, Gelände. Ein Zweig bis Stufe 5, ein zweiter bis Stufe 2, der dritte bleibt
  * zu. Die Stufen wirken sofort; die Systeme fragen sie über die Helfer unten ab.
  */
+/** 18.11.: Mit rules.hqUpgrades = false wirkt keine Stufe (alle Effekte aus). */
 export function hqTier(world: World, p: PlayerId, path: HqPathId): number {
-  return world.players[p].hq[path];
+  return world.rules.hqUpgrades ? world.players[p].hq[path] : 0;
 }
 
 /** Darf Spieler p die nächste Stufe dieses Zweigs kaufen? */
 export function checkHqUpgrade(world: World, p: PlayerId, path: HqPathId): { ok: true; cost: number; tier: number } | { ok: false; reason: string } {
+  if (!world.rules.hqUpgrades) return { ok: false, reason: 'HQ-Zweige sind vorerst abgeschaltet' };
   const tiers = world.players[p].hq;
   const def = HQ_PATHS[path];
   const next = tiers[path] + 1;

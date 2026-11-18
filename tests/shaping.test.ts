@@ -67,7 +67,7 @@ describe('Gelände formen in der eigenen Kartenhälfte (großzügiger)', () => {
 
 describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () => {
   it('erst mit „Schluchtgräber“ am HQ', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300, hqUpgrades: true } });
     const c = checkSwapArea(world, 0, 8, 13, 'gorge');
     assert.equal(c.ok, false);
     assert.match(c.ok ? '' : c.reason, /HQ-Zweig Gelände/);
@@ -76,7 +76,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
   });
 
   it('2×4 Kacheln, drehbar, sperrt Bodentruppen – Truppen darauf weichen aus – und lässt sich zuschütten', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300, hqUpgrades: true } });
     world.players[0].hq.terrain = 1;
     const area = gorgeArea(8, 13, true);
     assert.equal(area.length, 8);
@@ -109,7 +109,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
   });
 
   it('so viele gleichzeitig, wie der HQ-Zweig erlaubt – nach dem Zuschütten geht wieder eine', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 400 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 400, hqUpgrades: true } });
     world.players[0].hq.terrain = 1; // Schluchtgräber: 2 gleichzeitig
     const spots: [number, number][] = [[8, 9], [8, 17]];
     for (const [x, y] of spots) {
@@ -134,7 +134,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
   });
 
   it('schneidet nie den letzten Weg von HQ zu HQ ab', () => {
-    const world = new World({ map: chokeMap, seed: 1, rules: { ...smallBases, startEnergy: 300 } });
+    const world = new World({ map: chokeMap, seed: 1, rules: { ...smallBases, startEnergy: 300, hqUpgrades: true } });
     world.players[0].hq.terrain = 1;
     spotter(world, 4, 3);
     world.grid.setTerrain(world.grid.index(8, 2), TERRAIN_INDEX.mountain); // Engpass: nur noch Zeilen 3–4

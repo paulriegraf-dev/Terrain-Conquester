@@ -8,7 +8,7 @@ import { checkResearch } from '../src/sim/systems/factory';
 import { World } from '../src/sim/world';
 import { cmd, noIncome, openMap, stepTimes } from './fixtures';
 
-const rich = { ...noIncome, startEnergy: 2000, maxEnergy: 3000 };
+const rich = { ...noIncome, startEnergy: 2000, maxEnergy: 3000, hqUpgrades: true }; // 18.11.: HQ-Zweige sind standardmäßig aus
 
 describe('HQ-Zweige (24.10.): einer bis 5, einer bis 2, der dritte bleibt zu', () => {
   it('Aufklärung 5, Markt 2 – dann ist Markt 3 und Gelände gesperrt', () => {
@@ -72,5 +72,32 @@ describe('Forschung (24.10.): zentral, parallel zur Produktion', () => {
     const c = checkResearch(world, 0, id);
     assert.equal(c.ok, false);
     assert.match(c.ok ? '' : c.reason, /Koloss/);
+  });
+});
+
+describe('HQ-Zweige vorerst abgeschaltet (18.11., rules.hqUpgrades)', () => {
+  it('Standard: nicht kaufbar, keine Wirkung, die KI kauft keine Stufe', async () => {
+    const { hqTier, scoutCost } = await import('../src/sim/systems/hq');
+    const { SimpleAi } = await import('../src/ai/simpleAi');
+    assert.equal(RULES.hqUpgrades, false);
+    const world = new World({ map: openMap, seed: 1, rules: { ...noIncome, startEnergy: 2000, maxEnergy: 3000 } });
+    const c = checkHqUpgrade(world, 0, 'intel');
+    assert.equal(c.ok, false);
+    assert.match(c.ok ? '' : c.reason, /abgeschaltet/);
+    world.step([cmd(0, { type: 'hqUpgrade', path: 'intel' })]);
+    assert.equal(world.players[0].hq.intel, 0, 'Befehl abgelehnt');
+    world.players[0].hq.intel = 1; // selbst eine gesetzte Stufe wirkt nicht
+    assert.equal(hqTier(world, 0, 'intel'), 0);
+    assert.equal(scoutCost(world, 0), world.rules.scout.cost, 'kein Späher-Rabatt');
+    world.players[0].hq.intel = 0;
+    const ai = new SimpleAi(0, 1, 'paulslike');
+    let bought = 0;
+    for (let i = 0; i < 300 * world.tps; i++) {
+      const cmds = ai.think(world);
+      bought += cmds.filter((x) => x.type === 'hqUpgrade').length;
+      world.step(cmds.map((x) => ({ player: 0 as const, cmd: x })));
+      world.players[0].energy = 2000;
+    }
+    assert.equal(bought, 0);
   });
 });

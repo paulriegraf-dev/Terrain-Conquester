@@ -273,6 +273,8 @@ export interface Rules {
   sellRefund: number;
   /** Schießt das HQ selbst? (Pur-Profil 30.10.: nein.) */
   hqWeapon: boolean;
+  /** HQ-Zweige (Aufklärung, Markt, Gelände) kaufbar und wirksam? 18.11.: vorerst aus – werden neu gemacht; der Code bleibt. */
+  hqUpgrades: boolean;
   /** Bauplatz-Sperre (30.10.): So lange (Sekunden) kann nach der Zerstörung einer Fabrik auf ihren Kacheln niemand bauen. */
   siteLockSeconds: number;
   /** Jede weitere eigene Schlucht kostet so viel mehr (24.10. abends). */
@@ -533,6 +535,7 @@ export const RULES: Rules = {
   // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
   sellRefund: 0.7,
   hqWeapon: false,
+  hqUpgrades: false,
   siteLockSeconds: 60,
   gorgeCostStep: 30,
   flank: { seconds: 18, damage: 1.3 },

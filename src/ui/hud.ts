@@ -491,7 +491,7 @@ export class Hud {
         title = e.name;
         const w = HQ.weapon;
         const own = view.human === null || e.owner === view.human;
-        const branches = own
+        const branches = own && world.rules.hqUpgrades
           ? `<p><strong>Zweige</strong> (einer bis Stufe ${HQ_PATH_LIMITS.main}, einer bis ${HQ_PATH_LIMITS.side}): ${HQ_PATH_IDS.map((id) => `${HQ_PATHS[id].name} ${'●'.repeat(world.players[e.owner].hq[id])}${'○'.repeat(HQ_PATHS[id].tiers.length - world.players[e.owner].hq[id])}`).join(' · ')}</p>`
           : '';
         html = `${hpLine(e)}${branches}<p class="muted">${world.rules.hqWeapon ? `Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. ` : 'Wehrt sich nicht selbst – Truppen, Erdwälle und Notfallverlegung schützen es. '}Widerstand ${e.toughness}, Rüstung ${e.save}+.</p>${world.hqDamageMult !== 1 || world.rules.phases.some((p) => p.hqDamageGrowth) ? `<p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>` : ''}`;
