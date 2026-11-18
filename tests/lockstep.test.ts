@@ -12,8 +12,11 @@ import { Session } from '../src/ui/session';
  * Multiplayer (24.10.): Zwei Sessions, verbunden über eine nachgebaute Leitung mit schwankender
  * Laufzeit. Jede Seite wird von einer KI gesteuert, die nur über `issue` Befehle gibt – wie ein Mensch.
  * Beide Welten müssen am Ende gleich sein.
+ *
+ * `hidden`: Diese Seite liegt im Hintergrund-Tab – ihr Timer läuft nur 1× pro Sekunde (Browser-Drosselung).
+ * `onMessage`: Sie rechnet zusätzlich bei jeder eintreffenden Nachricht weiter (wie game.ts seit 18.11.).
  */
-function pair(latency: (rng: () => number) => number, seed = 11) {
+function pair(latency: (rng: () => number) => number, seed = 11, hidden?: { side: 0 | 1; onMessage: boolean }) {
   let now = 0;
   let r = 12345;
   const rng = (): number => ((r = (Math.imul(r, 1103515245) + 12345) >>> 0) / 2 ** 32);
@@ -42,11 +45,21 @@ function pair(latency: (rng: () => number) => number, seed = 11) {
   sides[0]!.s.receivePrep(preps[1]!);
   sides[1]!.s.receivePrep(preps[0]!);
   lastAt = [0, 0];
+  const stepSide = (i: number, onTick?: (side: number) => void): void => {
+    const { s, ai } = sides[i]!;
+    const due = Math.floor(now / 50);
+    while (s.world.tick < due && !s.world.result) {
+      if (s.world.tick % 5 === 0) for (const cmd of ai.think(s.world)) s.issue(cmd);
+      if (!s.tryStep()) break;
+      onTick?.(i);
+    }
+  };
   const deliver = (): void => {
     queue.sort((a, b) => a.at - b.at);
     while (queue.length && queue[0]!.at <= now) {
       const { to, m } = queue.shift()!;
       sides[to]!.ls.onMessage(m, now);
+      if (hidden?.onMessage && to === hidden.side) stepSide(to);
     }
   };
   const run = (ms: number, onTick?: (side: number) => void): void => {
@@ -56,13 +69,8 @@ function pair(latency: (rng: () => number) => number, seed = 11) {
       deliver();
       if (now % 1000 === 0) for (const { ls } of sides) ls.ping(now);
       for (let i = 0; i < 2; i++) {
-        const { s, ai } = sides[i]!;
-        const due = Math.floor(now / 50);
-        while (s.world.tick < due && !s.world.result) {
-          if (s.world.tick % 5 === 0) for (const cmd of ai.think(s.world)) s.issue(cmd);
-          if (!s.tryStep()) break;
-          onTick?.(i);
-        }
+        if (hidden?.side === i && now % 1000 !== 0) continue; // gedrosselter Timer im Hintergrund-Tab
+        stepSide(i, onTick);
       }
     }
   };
@@ -175,5 +183,20 @@ describe('Multiplayer: Lockstep', () => {
     assert.ok(a!.ls.delay >= 5, `Verzögerung wächst mit der Laufzeit (${a!.ls.delay})`);
     assert.equal(a!.ls.desyncAt, null);
     assert.equal(b!.ls.desyncAt, null);
+  });
+
+  it('Hintergrund-Tab (Timer nur 1×/s): rechnet er bei eintreffenden Eingaben weiter, läuft die Runde für beide in Echtzeit', () => {
+    // Nur der gedrosselte Timer: Der wache Rechner wartet jede Sekunde auf den schlafenden – die Runde läuft
+    // dann mit etwa 2 × Verzögerung Ticks pro Sekunde (~30 % Tempo) für beide.
+    const slow = pair(() => 30, 11, { side: 1, onMessage: false });
+    slow.run(20_000);
+    const fast = pair(() => 30, 11, { side: 1, onMessage: true });
+    fast.run(20_000);
+    const rate = (p: typeof slow): number => p.sides[0]!.s.world.tick / 400; // 20 s × 20 Ticks
+    assert.ok(rate(slow) < 0.5, `ohne Nachrichten-Antrieb gebremst (${rate(slow).toFixed(2)})`);
+    assert.ok(rate(fast) > 0.9, `mit Nachrichten-Antrieb Echtzeit (${rate(fast).toFixed(2)})`);
+    fast.run(2000);
+    assert.equal(fast.sides[0]!.ls.desyncAt, null);
+    assert.equal(fast.sides[1]!.ls.desyncAt, null);
   });
 });

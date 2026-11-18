@@ -3,6 +3,7 @@
  *   npm run dev  →  http://localhost:8000
  */
 import { context } from 'esbuild';
+import { simSourceHash } from './simSource.mjs';
 
 const ctx = await context({
   entryPoints: ['src/main.ts'],
@@ -11,6 +12,8 @@ const ctx = await context({
   target: 'es2022',
   sourcemap: true,
   loader: { '.mp3': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' },
+  // Beim Start berechnet (nicht bei jedem Neubau) – reicht, weil beide Tabs denselben Dev-Server nutzen.
+  define: { __SIM_SOURCE__: JSON.stringify(simSourceHash()) },
   outfile: 'build/app.js',
   banner: { js: "new EventSource('/esbuild').addEventListener('change', () => location.reload());" },
   logLevel: 'info',

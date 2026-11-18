@@ -103,6 +103,8 @@ export class Game {
   private speed = 1;
   private paused = false;
   private lastTime = 0;
+  /** Letztes Bild (requestAnimationFrame) – bleibt es aus, rechnet der Multiplayer ohne Bilder weiter. */
+  private lastFrameAt = 0;
   private acc = 0;
   private lastSeq = 0;
   private endHandled = false;
@@ -465,6 +467,7 @@ export class Game {
   private frameBody(now: number): void {
     const dt = Math.min(250, now - (this.lastTime || now));
     this.lastTime = now;
+    this.lastFrameAt = now;
     const tickMs = 1000 / this.session.world.tps;
     // Vorschau hinter der Startkarte: normale Geschwindigkeit (Nutzer 16.11., vorher Zeitraffer ×4).
     const speed = this.session.mode === 'demo' ? 1 : this.speed;
@@ -1671,11 +1674,25 @@ export class Game {
       if (ls) ls.ping(now);
       else this.room.send({ k: 'ping', ts: now, rtt: Math.round(this.netRtt) });
     }
-    if (this.doc.hidden && this.session.lockstep) {
-      const dt = Math.min(2000, now - (this.lastTime || now));
-      this.lastTime = now;
-      this.advanceOnline(dt, now);
+    this.advanceWithoutFrames(now);
+  }
+
+  /**
+   * Multiplayer ohne Bilder weiterrechnen: im Hintergrund-Tab (Timer dort nur noch 1× pro Sekunde) und
+   * wenn requestAnimationFrame ausbleibt, obwohl die Seite als sichtbar gilt (verdecktes Fenster, Vorschau).
+   * Läuft auch bei jeder eintreffenden Eingabe – sonst bremst ein Hintergrund-Tab die Runde für beide.
+   */
+  private advanceWithoutFrames(now: number): void {
+    if (!this.session.lockstep) return;
+    if (!this.doc.hidden && now - this.lastFrameAt < 200) return;
+    if (this.session.catchUp) {
+      this.session.catchUpStep(14);
+      if (!this.session.catchUp) this.onCatchUpDone();
+      return;
     }
+    const dt = Math.min(2000, now - (this.lastTime || now));
+    this.lastTime = now;
+    this.advanceOnline(dt, now);
   }
 
   /** Die Welt wurde ausgetauscht (Multiplayer: Vorbereitung beider fertig) – Anzeige nachziehen. */
@@ -1717,7 +1734,12 @@ export class Game {
       giveUp = secs >= 20;
     } else if (ls && !this.onlineEnded && !this.session.world.result) {
       if (this.session.prepActive && this.session.myPrepDone) text = 'Warte, bis dein Gegner bereit ist …';
-      else if (this.stalledSince && now - this.stalledSince > 1200) text = 'Warte auf deinen Mitspieler … (Verbindung langsam)';
+      else if (this.stalledSince && now - this.stalledSince > 1200) {
+        // Bricht die Leitung still ab (kein „close“), bleibt es hier – nach 20 s auch dann aufgeben können.
+        const secs = Math.floor((now - this.stalledSince) / 1000);
+        text = secs >= 20 ? `Keine Eingaben von deinem Mitspieler seit ${clock(secs)}.` : 'Warte auf deinen Mitspieler … (Verbindung langsam)';
+        giveUp = secs >= 20;
+      }
       if (ls.desyncAt !== null && !this.desyncShown) {
         this.desyncShown = true;
         this.hud.log(this.session.world.seconds, `Achtung: Die Spielstände beider Rechner weichen ab (seit ${clock(ls.desyncAt / this.session.world.tps)}). Bitte melden – das Replay hilft beim Suchen.`, 'bad');
@@ -1956,6 +1978,7 @@ export class Game {
         break;
       case 'fs':
         ls?.onMessage(m, now);
+        this.advanceWithoutFrames(now);
         break;
       case 'rj':
         if (m.i === 0) this.rjParts = [];
@@ -2008,6 +2031,7 @@ export class Game {
       case 'resume':
       case 'hash':
         ls?.onMessage(m, now);
+        if (m.k !== 'hash') this.advanceWithoutFrames(now);
         break;
       case 'resign':
         if (ls && !this.session.world.result && !this.onlineEnded) this.endOnline('Sieg', 'Dein Gegner hat aufgegeben.', true);

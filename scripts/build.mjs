@@ -5,6 +5,7 @@
  */
 import { build } from 'esbuild';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { simSourceHash } from './simSource.mjs';
 
 const result = await build({
   entryPoints: ['src/main.ts'],
@@ -15,6 +16,7 @@ const result = await build({
   write: false,
   legalComments: 'none',
   loader: { '.mp3': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' },
+  define: { __SIM_SOURCE__: JSON.stringify(simSourceHash()) },
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = await readFile('src/styles.css', 'utf8');
