@@ -8,7 +8,7 @@ import type { LaunchDef, UnitId } from '../../data/units';
 import type { Entity } from '../entity';
 import type { PlayerId, Vec2 } from '../types';
 import type { Burrow, Flight, World } from '../world';
-import { aliveModels, applyHits, currentModelWounds } from './combat';
+import { aliveModels, applyHits, blastHit, currentModelWounds } from './combat';
 import type { Hit } from './combat';
 import { defenseOf, woundsPerShot } from './hitmath';
 import { lifeCap } from './lifespan';
@@ -343,7 +343,7 @@ function landCharge(world: World, f: Flight): void {
     const isMain = mainHit && o === main;
     if (!isMain && (o.pos.x - f.to.x) ** 2 + (o.pos.y - f.to.y) ** 2 > r2) continue;
     const expected = woundsPerShot(c.weapon, defenseOf(world, o)) * (isMain ? 1 : 0.5);
-    if (expected > 0) hits.push({ target: o, wounds: 1, damage: c.damage * expected, attacker: f.owner, src: f.unit });
+    if (expected > 0) hits.push({ target: o, ...blastHit(o, c.damage, expected), attacker: f.owner, src: f.unit });
   }
   applyHits(world, hits);
   world.emit({ type: 'land', owner: f.owner, unit: f.unit, pos: { x: f.to.x, y: f.to.y } });

@@ -6,6 +6,7 @@ import type { Session } from './session';
 import { Portrait } from './portrait';
 import { checkBuild } from '../sim/placement';
 import { BUILDINGS } from '../data/buildings';
+import { RULES } from '../data/rules';
 
 /**
  * Tutorial (25.10. abends): eine echte Runde (Technoclan auf Felsenpass gegen eine wartende KI), in der die Leitstelle
@@ -140,7 +141,7 @@ function hqSelected(c: Ctx): boolean {
 
 function steps(doc: Document): Step[] {
   const key = (cmd: string, fallback: string): string => keyOf(doc, cmd) ?? fallback;
-  return [
+  const all: (Step & { hq?: boolean })[] = [
     {
       text: 'Kommandant, hier {name} von der Leitstelle. Ich zeige dir die Grundlagen – immer einen Handgriff nach dem anderen. Noch steht die Uhr still: Erst bereitest du dein Gelände vor.',
     },
@@ -278,6 +279,7 @@ function steps(doc: Document): Step[] {
       done: (c) => own(c, 'building').some((b) => (b.producer?.level ?? 1) >= 2 || b.producer?.job?.kind === 'level'),
     },
     {
+      hq: true,
       text: 'Auch dein HQ lässt sich ausbauen – in drei Zweigen: Aufklärung, Markt und Gelände. Jede Stufe bringt einen dauerhaften Vorteil. Klick dein HQ an und kauf eine erste Stufe.',
       hint: (c) => (hqSelected(c) ? 'Einen Zweig wählen' : 'Linksklick auf dein HQ'),
       target: (c) => {
@@ -334,6 +336,8 @@ function steps(doc: Document): Step[] {
       text: 'Das sind die Grundlagen. Gelände formen, Forschung und Erdwälle findest du in der Bauleiste, alles zum Nachlesen in der Übersicht (F1) unter Grundlagen. Zerstör das gegnerische HQ – viel Erfolg, Kommandant!',
     },
   ];
+  // 18.11.: HQ-Zweige vorerst abgeschaltet – den Schritt „HQ ausbauen“ dann überspringen (er käme nie ans Ziel).
+  return all.filter((st) => RULES.hqUpgrades || !st.hq);
 }
 
 export class Tutorial {

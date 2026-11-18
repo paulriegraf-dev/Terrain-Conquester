@@ -126,6 +126,24 @@ describe('Upgrade-Pfad v2: Fabrik-Verhalten', () => {
     assert.ok(born[3]!.maxHp > born[0]!.maxHp * 1.9, 'Elite: doppeltes Leben');
   });
 
+  it('Eliteprogramm an der Kaserne III: Linien-Verbände werden Elite, der Nano-Heiler (Beimischung) nie (18.11.)', () => {
+    const world = new World({ map: openMap, seed: 1, rules: { ...smallBases, startEnergy: 400 } });
+    const k = world.addBuilding(0, BUILDINGS.barracks, { x: 3, y: 6, w: 2, h: 2 });
+    k.producer!.level = 3;
+    world.players[0].research.push('barracks-gear-1', 'barracks-elite-1');
+    const born: Entity[] = [];
+    for (let i = 0; i < 12 * 30 * world.tps && born.length < 12; i++) {
+      world.step();
+      for (const e of world.entities) if (e.alive && e.fromBuilding === k.id && !born.includes(e)) born.push(e);
+    }
+    assert.equal(born.length, 12);
+    const medics = born.filter((e) => e.defId === 'nanomedic');
+    assert.ok(medics.length >= 2, `Beimischung kommt (${medics.length})`);
+    assert.ok(medics.every((e) => !e.elite), 'Nano-Heiler nie Elite');
+    const line = born.filter((e) => e.defId !== 'nanomedic');
+    assert.deepEqual(line.map((e) => !!e.elite).slice(0, 8), [false, false, false, true, false, false, false, true], 'jeder 4. Linien-Verband');
+  });
+
   it('Recycling (Werkstatt): fällt ein Werkstatt-Verband, schlüpfen Drohnen', () => {
     const world = new World({ map: openMap, seed: 1, factions: ['myriaden', 'technoclan'], rules: smallBases });
     const ws = world.addBuilding(0, BUILDINGS.workshop, { x: 3, y: 6, w: 2, h: 2 });

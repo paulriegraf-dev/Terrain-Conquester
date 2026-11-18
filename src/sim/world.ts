@@ -49,6 +49,7 @@ import { countTerritory, stampPresence, updateInfluence } from './systems/influe
 import { updateFront } from './systems/front';
 import { updateHeroes } from './systems/hero';
 import { updateFactories, updateResearch } from './systems/factory';
+import { updateRetrofit } from './systems/retrofit';
 import { updateMarket } from './systems/market';
 import type { PartId } from '../data/market';
 import { checkVictory } from './systems/victory';
@@ -631,6 +632,7 @@ export class World {
     updateSites(this);
     updateFactories(this);
     updateResearch(this);
+    updateRetrofit(this);
     updateGates(this);
     updateHeroes(this);
     updateMarket(this);
@@ -776,6 +778,7 @@ export class World {
       vision: def.vision + (fx.vision ?? 0),
       alive: true,
       bornTick: this.tick,
+      fxApplied: fx,
       lifespan: def.lifespan
         ? { start: def.lifespan.start, seconds: def.lifespan.seconds + (fx.lifespan ?? 0), fresh: def.lifespan.fresh ?? 0, frenzy: def.lifespan.frenzy, age: 0 }
         : undefined,
@@ -1071,7 +1074,7 @@ export class World {
   }
 
   /** Summe der erforschten kleinen Upgrades eines Spielers für eine Einheitenart. */
-  upgradeEffects(owner: PlayerId, unit: UnitId): UpgradeEffect {
+  upgradeEffects(owner: PlayerId, unit: UnitId): Required<UpgradeEffect> {
     const p = this.players[owner];
     const fx: Required<UpgradeEffect> = {
       hp: 1, damage: 1, speed: 1, heal: 1, vision: 0, range: 0, splash: 0, strength: 0, ap: 0, hit: 0, toughness: 0, save: 0, lifespan: 0, pierce: 0, store: 0,

@@ -457,3 +457,71 @@ Balance-Runde mit neuer Messung.
 
 Beide Anhänge sind Arbeitsunterlagen zweier Analyse-Läufe dieses Reviews. Die Kernzahlen wurden für diesen Bericht
 übernommen und die Bug-Belege einzeln nachgeprüft; die übrigen Tabellen sind nicht einzeln gegengerechnet.
+
+## 6. Umsetzung der Entscheidungen (18.11., zweite Runde)
+
+Je Entscheidung ein Commit mit Test. Auf Wunsch liefen keine KI-Partien. Belegt ist nur, was die TTK-Matrix
+(`scripts/ttk.ts`) und die Tests zeigen. Die Wirkung im Spiel ist ungemessen.
+
+| # | Entscheidung | Umsetzung | Commit |
+|---|---|---|---|
+| 1 | Eliteprogramm Kaserne III | Elite-Takt zählt nur Linien-Verbände, der Nano-Heiler wird nie Elite | e28c0a4 |
+| 2 | Formel Sprengladung/Kamikaze | `blastHit`: Erwartung × min(Schaden, Leben je Modell). Gegen Einzelmodelle unverändert | 6270f84 |
+| 3 | HQ-Zweige ausblenden | `rules.hqUpgrades = false`: nicht kaufbar, `hqTier` = 0, nicht im HQ-Menü und Info-Schild, keine KI-Käufe, Tutorial-Schritt übersprungen; dazu die an Zweigstufen hängenden Käufe Gegenspionage, Dauerspähen und Vorratskauf | 58b9cd8 |
+| 4 | Schlucht für alle | sofort, Grundpreis 80, eigene Hälfte ×0,67 wie die anderen Böden (54 E, 4 s), kein Aufschlag je weiterer Schlucht, höchstens 2 gleichzeitig (`rules.gorgeBase`) | f12a618 |
+| 5 | Upgrades rückwirkend | System `retrofit`: Verbände ohne Schuss und ohne Treffer seit **5 s** (`rules.retrofit.calmSeconds`) bekommen die Differenz zur aktuellen Forschung; Lebensanteil bleibt | ac60cb2 |
+| 6 | Economy-Schub | Einkommen **×1,3 ab 8:00** (Phasen-Faktor) statt Einmalbonus, weil der Speicher nur 400 E fasst; rund +20 % Gesamtenergie | 216f6e2 |
+| 7 | Schlammwerfer | 2 Schüsse, Treffen 3+, Stärke 5 (vorher 1 / 4+ / 4) | 7cea8c5 |
+| 8 | Nano-Heiler | jeder 3. statt jeder 4. Verband an der Kaserne III | 4bc4247 |
+| 9 | Stufen | Auswahl: „Normal“ (intern `easy`, vorgewählt) und „Paulslike“; altes `normal` bleibt im Code, ist aber nicht wählbar | 6797b93 |
+| 10 | KI-Ausnutzbarkeit | kein Bodenformen gegen Terra-Former (nur Schluchten); Mitte nur halten, solange keine andere Lane bedrängt ist | 41eb0b9 |
+
+### Zahlen vorher / nachher (TTK-Matrix)
+
+| | vorher | nachher |
+|---|---|---|
+| Schlammwerfer: Median-R / Siege je Produktionssekunde | 0,15 / 0 von 10 | 0,46 / 2 von 10 (Katapult 1,46) |
+| Schlammwerfer: Median-TTK als Angreifer | 89 s | 22,5 s |
+| Sprengetopp-Lebensleistung gegen Scharfschützen, Halmläufer, Borkenschützen, Frostwächter | löscht in 8–10 s aus | 67 % |
+| Sprengetopp gegen Hover / Technogunner / Schlammwerfer | löscht aus | 90 % / 98 % / 90 % |
+| Sprengetopp gegen Koloss | 91 % | 91 % (unverändert) |
+| alle 465 Paarungen: Median, Anteil über 40 s | 22,5 s, 163 | 22,4 s, 156 |
+
+### Punkt 11: Haben die Schweren einen kosteneffizienten Konter?
+
+Gerechnet ist R im Duell je Produktionssekunde gegen die Fabrik-Einheiten der anderen Fraktionen; R unter 1 heißt
+gekontert.
+
+- **Koloss:** im Duell keiner. Am knappsten sind Battlesphäre 1,18, Steinwächter 2,0 und Drohnen 3,5.
+  - Über die Armee gibt es einen Konter: Der **Sprengetopp** schafft über seine Lebensdauer 91 % eines Koloss für 4 s
+    Produktionszeit gegen 10,2 s. Das sind etwa 2,3 Kolosse je Koloss-Kosten, wenn er ankommt.
+  - Drohnen mit vollem Schwarm halbieren ihre TTK (155 → 73 s); das ändert R aber nicht unter 1.
+  - Terra-Former: der Frontbrecher (gerufen, keine Fabrikkosten, 27,5 s). Steinwächter auf Geröll bekommen einen
+    Rüstungsbonus, den die Matrix nicht rechnet.
+- **Technogunner:** im Duell keiner. Am knappsten sind Battlesphäre 2,5 und Steinwächter 3,5.
+  - Über die Armee: Sprengetopp 98 % für 4 s gegen 5,6 s, also etwa 1,4.
+  - Terra-Former: Frontbrecher 22,5 s.
+- **Battlesphäre:** gekontert durch Technogunner (0,40) und Koloss (0,85).
+
+Den Terra-Formern fehlt damit gegen Koloss und Technogunner ein Fabrik-Konter. Sie sind auf Frontbrecher und
+Bodenboni angewiesen. Nicht generft, wie entschieden.
+
+### Offene Vorschläge (nicht umgesetzt)
+
+1. **Sprengetopp-Kompensation** (Folge von Punkt 2): Die Ladung trifft gegen Verbände mit mindestens 3 Modellen
+   ×1,5 Modelle, als Flächenexplosion. Das bringt etwa die alten ~100 % gegen weiche Ziele zurück und lässt Schwere
+   unverändert.
+   - Verworfen: 5 statt 4 Ladungen. Das bringt gegen weiche Ziele nur 67 → 75 %, tötet aber Koloss und Technogunner
+     neu in 13,5 s.
+   - Ob die Myriaden ohne Kompensation abfallen, ist **nicht gemessen** (Spiegelpartien liefen nicht).
+2. **Erste Fabriken nach Gegnerposition:** mehr als ein kleiner Fix.
+   - Die Standortwahl (`chooseSite`, simpleAi.ts) kennt nur das gegnerische HQ.
+   - Vorschlag: Zonen nach gesehenen gegnerischen Fabriken und Truppen je Lane gewichten (`world.intel`, `seenByRoute`)
+     und vordere Bauplätze meiden, solange die Lane bedrängt ist.
+   - Aufwand etwa ein halber Tag plus Messung.
+3. **Stufen:** Paulslike gegen das neue Normal (das bisherige Leicht) ist **nicht gemessen**. Bisher stand Paulslike
+   gegen das alte Normal 15 : 11, und das alte Leicht schlug das alte Normal 19 : 8. Paulslike muss also nicht klar
+   stärker sein. Messen mit `npx tsx scripts/spiegelstufen.ts <Fraktion> paulslike easy 6`.
+4. **Schlucht-Preis:** „Preisentwicklung wie die übrigen Böden“ ist als „Rabatt in der eigenen Hälfte, kein Aufschlag
+   je weiterer Schlucht“ umgesetzt. Die Obergrenze von 2 gleichzeitig bleibt, sonst grub die KI früher Dutzende.
+5. Nach allen Punkten stehen der Spiegel-Stufentest und der Paarungslauf aus: `kiLauf.ts`, `spiegelstufen.ts`.

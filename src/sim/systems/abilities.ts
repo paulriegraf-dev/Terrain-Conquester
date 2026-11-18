@@ -405,7 +405,9 @@ export function swapCostAt(world: World, p: PlayerId, x: number, terrain: Terrai
   const base = swapCost(terrain, inOwnHalf(world, p, x) ? world.rules.shaping : undefined);
   if (terrain === 'gorge') {
     // 24.10. abends: Jede weitere Schlucht kostet mehr (stehende und im Bau) – gezielt sperren ja, alles zumauern teuer.
-    return { cost: base.cost + world.rules.gorgeCostStep * gorgeAreas(world, p), buildSeconds: gorgeSeconds(world, p, base.buildSeconds) };
+    // 18.11.: sonst wie die übrigen Böden – eigene Hälfte und Pioniere wirken auch hier (gorgeCostStep steht auf 0).
+    const fg = shapingFactor(world, p);
+    return { cost: Math.round(base.cost * fg) + world.rules.gorgeCostStep * gorgeAreas(world, p), buildSeconds: gorgeSeconds(world, p, base.buildSeconds * fg) };
   }
   const f = shapingFactor(world, p);
   return { cost: Math.round(base.cost * f), buildSeconds: base.buildSeconds * f };

@@ -66,16 +66,16 @@ describe('Fabrikmodell: Beimischung', () => {
     assert.equal(hatched.filter((e) => e.defId === 'drone').length, 5);
   });
 
-  it('Kaserne ab Stufe III: jeder vierte Verband ist ein Nano-Heiler', () => {
+  it('Kaserne ab Stufe III: jeder dritte Verband ist ein Nano-Heiler (18.11., vorher jeder vierte)', () => {
     const world = new World({ map: openMap, seed: 1, rules: rich });
     const k = world.addBuilding(0, BUILDINGS.barracks, { x: 3, y: 0, w: 2, h: 2 });
     k.producer!.level = 3;
-    for (let n = 0; n < 8; n++) {
+    for (let n = 0; n < 9; n++) {
       k.producer!.progress = k.producer!.intervalTicks;
       world.step();
     }
     const units = world.entities.filter((e) => e.alive && e.owner === 0 && e.kind === 'unit');
-    assert.equal(units.filter((e) => e.defId === 'nanomedic').length, 2);
+    assert.equal(units.filter((e) => e.defId === 'nanomedic').length, 3);
     assert.equal(units.filter((e) => e.defId === 'sniper').length, 6);
   });
 

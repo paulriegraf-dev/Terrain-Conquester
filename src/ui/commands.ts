@@ -381,7 +381,7 @@ function terrainCommands(ctx: CommandContext): CommandSet {
       tip: id === 'gorge'
         ? limit === 0
           ? 'Schlucht graben: erst mit dem HQ-Zweig Gelände (Stufe 1 „Schluchtgräber“) – HQ anklicken.'
-          : `Schlucht graben (${far.cost} Energie, ${far.buildSeconds} s): 2×4 Kacheln, R oder Rechtsklick dreht. Dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber; Truppen darauf weichen aus. Darf ganze Routen sperren – nur ein Weg von HQ zu HQ bleibt immer. Höchstens ${limit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten; Terraformer schütten gegnerische Schluchten in ihrer Nähe zu.`
+          : `Schlucht graben (${far.cost} Energie, ${far.buildSeconds.toFixed(0)} s; in deiner Kartenhälfte ${c.cost} Energie, ${c.buildSeconds.toFixed(0)} s): 2×4 Kacheln, R oder Rechtsklick dreht. Dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber; Truppen darauf weichen aus. Darf ganze Routen sperren – nur ein Weg von HQ zu HQ bleibt immer. Höchstens ${limit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten; Terraformer schütten gegnerische Schluchten in ihrer Nähe zu.`
         : `${t.name}: ${t.hint} Formt eine ${SWAP.brush}×${SWAP.brush}-Fläche pro Klick (${far.cost} Energie, ${far.buildSeconds.toFixed(0)} s; in deiner Kartenhälfte ${c.cost} Energie, ${c.buildSeconds.toFixed(0)} s) – auch zum Darüberziehen. Gegrabene Schluchten werden dabei zugeschüttet.`,
       action: 'swap-tool', data: { terrain: id },
     };
@@ -682,7 +682,9 @@ function hqCommands(ctx: CommandContext): CommandSet {
   const secs = (tick: number): number => Math.max(0, Math.ceil((tick - world.tick) / world.tps));
   const me = view.human ?? 0;
   const tiers = world.players[me].hq;
-  const buttons: CommandButton[] = HQ_PATH_IDS.map((id) => {
+  // 18.11.: HQ-Zweige vorerst abgeschaltet (rules.hqUpgrades) – dann weder Zweige noch die Käufe, die an ihnen hängen.
+  const hqOn = world.rules.hqUpgrades;
+  const buttons: CommandButton[] = (hqOn ? HQ_PATH_IDS : []).map((id) => {
     const def = HQ_PATHS[id];
     const t = tiers[id];
     const next = def.tiers[t];
@@ -704,6 +706,7 @@ function hqCommands(ctx: CommandContext): CommandSet {
   // Käufe (Nachtrag G): je ein Klick, zeitlich begrenzt, Preis steigt je Nutzung in 3 min; alle spähbar.
   const b = world.players[me].buys;
   const left = (until: number): string | undefined => (world.tick < until ? `${secs(until)}s` : undefined);
+  if (hqOn) {
   const counter = checkBuy(world, me, 'counter');
   buttons.push({
     id: 'buy-counter', glyph: '◑', label: 'Gegenspionage', key: '4', cost: counter.ok ? counter.cost : undefined,
@@ -725,6 +728,7 @@ function hqCommands(ctx: CommandContext): CommandSet {
     tip: `Vorratskauf (ab Markt 4): Preis eines Bauteils ${world.rules.purchases.stock.seconds} s für deine Fabriken einfrieren; kostet ${Math.round(world.rules.purchases.stock.share * 100)} % des Bauteilpreises × deinem Bedarf.${stock.ok ? '' : ` ${stock.reason}.`}`,
     action: 'menu', data: { menu: 'stock' },
   });
+  }
   const surge = checkBuy(world, me, 'surge');
   buttons.push({
     id: 'buy-surge', glyph: '⇶', label: 'Nachschub', key: '7', cost: surge.ok ? surge.cost : undefined,
@@ -733,7 +737,7 @@ function hqCommands(ctx: CommandContext): CommandSet {
     action: 'buy', data: { kind: 'surge' },
   });
   buttons.push(backButton('Abwählen'));
-  return { title: 'HQ · Zweige und Käufe', buttons };
+  return { title: hqOn ? 'HQ · Zweige und Käufe' : 'HQ · Käufe', buttons };
 }
 
 /** Dauerspähen: Route wählen. */

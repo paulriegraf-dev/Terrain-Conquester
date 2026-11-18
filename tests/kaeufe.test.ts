@@ -13,7 +13,7 @@ import { World } from '../src/sim/world';
 import { classicRules } from '../src/data/rules';
 import { cmd, openMap, smallBases, stepTimes } from './fixtures';
 
-const rich = { ...smallBases, startEnergy: 400, maxEnergy: 3000 };
+const rich = { ...smallBases, startEnergy: 400, maxEnergy: 3000, hqUpgrades: true }; // 18.11.: HQ-Zweige sind standardmäßig aus
 
 /** Nachtrag G (26.10. spät): HQ-Stufen 4/5 als Käufe, Energie-Abflüsse, Stellung. */
 describe('HQ-Zweige 4/5 und Käufe (Nachtrag G)', () => {

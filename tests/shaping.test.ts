@@ -44,13 +44,15 @@ describe('Gelände formen im Zwischenfeld', () => {
 });
 
 describe('Gelände formen in der eigenen Kartenhälfte (großzügiger)', () => {
-  it('kostet dort weniger und geht schneller – jenseits der Mitte der volle Preis, Schluchten immer', () => {
+  it('kostet dort weniger und geht schneller – jenseits der Mitte der volle Preis, Schluchten auch (18.11.)', () => {
     const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
     const home = swapCostAt(world, 0, 8, 'forest');
     const away = swapCostAt(world, 0, world.map.width - 8, 'forest');
     assert.equal(away.cost, swapCost('forest').cost);
     assert.ok(home.cost < away.cost && home.buildSeconds < away.buildSeconds, `eigene Hälfte ${home.cost}/${home.buildSeconds} s`);
-    assert.deepEqual(swapCostAt(world, 0, 8, 'gorge'), swapCost('gorge'), 'Schluchten kosten überall gleich');
+    // 18.11.: Schluchten wie die übrigen Böden – Grundpreis 80, in der eigenen Hälfte günstiger, kein Aufschlag je weiterer.
+    assert.equal(swapCostAt(world, 0, world.map.width - 8, 'gorge').cost, 80);
+    assert.ok(swapCostAt(world, 0, 8, 'gorge').cost < 80, 'eigene Hälfte günstiger');
     const energy = world.players[0].energy;
     world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'forest' })]);
     assert.equal(world.players[0].energy, energy - home.cost);
@@ -65,18 +67,17 @@ describe('Gelände formen in der eigenen Kartenhälfte (großzügiger)', () => {
   });
 });
 
-describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () => {
-  it('erst mit „Schluchtgräber“ am HQ', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
-    const c = checkSwapArea(world, 0, 8, 13, 'gorge');
-    assert.equal(c.ok, false);
-    assert.match(c.ok ? '' : c.reason, /HQ-Zweig Gelände/);
-    world.players[0].hq.terrain = 1;
-    assert.equal(checkSwapArea(world, 0, 8, 13, 'gorge').ok, true);
+describe('Schlucht graben (seit 24.10.: 2×4; seit 18.11. für alle von Beginn an)', () => {
+  it('sofort für alle Fraktionen, ohne HQ-Zweig (18.11.)', () => {
+    for (const f of ['technoclan', 'myriaden', 'terraformer'] as const) {
+      const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 }, factions: [f, 'technoclan'] });
+      assert.equal(world.players[0].hq.terrain, 0);
+      assert.equal(checkSwapArea(world, 0, 8, 13, 'gorge').ok, true, f);
+    }
   });
 
   it('2×4 Kacheln, drehbar, sperrt Bodentruppen – Truppen darauf weichen aus – und lässt sich zuschütten', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 300, hqUpgrades: true } });
     world.players[0].hq.terrain = 1;
     const area = gorgeArea(8, 13, true);
     assert.equal(area.length, 8);
@@ -84,7 +85,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
     assert.deepEqual(new Set(gorgeArea(8, 13, false).map(([, y]) => y)).size, 2, 'quer: 2 hoch');
     const u = world.addUnit(0, UNITS.sniper, { x: 8.5, y: 13.5 }, 'mid');
     u.mover!.speed = 0;
-    const { cost, buildSeconds } = swapCost('gorge');
+    const { cost, buildSeconds } = swapCostAt(world, 0, 8, 'gorge'); // eigene Hälfte: günstiger (18.11.)
     const energy = world.players[0].energy;
     world.step([cmd(0, { type: 'swapTerrain', x: 8, y: 13, terrain: 'gorge', vertical: true })]);
     assert.equal(world.players[0].energy, energy - cost);
@@ -109,7 +110,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
   });
 
   it('so viele gleichzeitig, wie der HQ-Zweig erlaubt – nach dem Zuschütten geht wieder eine', () => {
-    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 400 } });
+    const world = new World({ map: felsenpass, seed: 1, rules: { ...noIncome, startEnergy: 400, hqUpgrades: true } });
     world.players[0].hq.terrain = 1; // Schluchtgräber: 2 gleichzeitig
     const spots: [number, number][] = [[8, 9], [8, 17]];
     for (const [x, y] of spots) {
@@ -134,7 +135,7 @@ describe('Schlucht graben (seit 24.10.: 2×4, mit dem HQ-Zweig Gelände)', () =>
   });
 
   it('schneidet nie den letzten Weg von HQ zu HQ ab', () => {
-    const world = new World({ map: chokeMap, seed: 1, rules: { ...smallBases, startEnergy: 300 } });
+    const world = new World({ map: chokeMap, seed: 1, rules: { ...smallBases, startEnergy: 300, hqUpgrades: true } });
     world.players[0].hq.terrain = 1;
     spotter(world, 4, 3);
     world.grid.setTerrain(world.grid.index(8, 2), TERRAIN_INDEX.mountain); // Engpass: nur noch Zeilen 3–4

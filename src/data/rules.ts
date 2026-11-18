@@ -273,10 +273,16 @@ export interface Rules {
   sellRefund: number;
   /** Schießt das HQ selbst? (Pur-Profil 30.10.: nein.) */
   hqWeapon: boolean;
+  /** HQ-Zweige (Aufklärung, Markt, Gelände) kaufbar und wirksam? 18.11.: vorerst aus – werden neu gemacht; der Code bleibt. */
+  hqUpgrades: boolean;
+  /** Forschung wirkt rückwirkend (18.11.) auf Verbände, die `calmSeconds` lang weder geschossen haben noch getroffen wurden. */
+  retrofit: { on: boolean; calmSeconds: number };
   /** Bauplatz-Sperre (30.10.): So lange (Sekunden) kann nach der Zerstörung einer Fabrik auf ihren Kacheln niemand bauen. */
   siteLockSeconds: number;
   /** Jede weitere eigene Schlucht kostet so viel mehr (24.10. abends). */
   gorgeCostStep: number;
+  /** So viele Schluchten gleichzeitig darf jeder von Beginn an graben (18.11.: ohne HQ-Zweig; vorher 0). */
+  gorgeBase: number;
   /** Flankenangriff: Wer eine gegnerische Schlucht überquert hat, macht so lange mehr Schaden. */
   flank: { seconds: number; damage: number };
   /** Myriaden-Superbrut: zwei Bruten auf höchster Stufe verschmelzen. */
@@ -533,8 +539,12 @@ export const RULES: Rules = {
   // 24.10. abends: 70 % von Bau und Stufen (vorher 50 % nur vom Bau) – Anpassen soll sich lohnen, aber etwas kosten.
   sellRefund: 0.7,
   hqWeapon: false,
+  hqUpgrades: false,
+  retrofit: { on: true, calmSeconds: 5 },
   siteLockSeconds: 60,
-  gorgeCostStep: 30,
+  // 18.11.: kein Aufschlag je weiterer Schlucht mehr – Preis wie die übrigen Böden (Grundpreis, eigene Hälfte günstiger).
+  gorgeCostStep: 0,
+  gorgeBase: 2,
   flank: { seconds: 18, damage: 1.3 },
   // Doppelte Produktion zweier Bruten, dazu +15 % (gilt als eingespielt); Gelege +4; mehr Leben – aber ein Ziel statt zwei.
   superBrood: { cost: 150, seconds: 25, speed: 2.3, clutchBonus: 4, hp: 1.8 },
@@ -543,11 +553,12 @@ export const RULES: Rules = {
   firstSpawnFactor: 0.5,
   visionEvery: 4,
   // Pur-Profil (30.10., Nutzer): keine uhrgesteuerten Hebel mehr – HQ-Schaden ×1 von Anfang an, kein Wachstum, kein Sturm,
-  // Energie ×1 durchgehend. Die Phasen bleiben als Zeitmarken (Belagerungsturm ab 8:00, Hinweise). Alte Werte: classicRules().
+  // Energie ×1 bis 8:00 (seit 18.11. danach ×1,3). Die Phasen bleiben als Zeitmarken (Belagerungsturm ab 8:00, Hinweise). Alte Werte: classicRules().
   phases: [
     { at: 0, name: 'Aufbau', energyMult: 1, hqDamageMult: 1, hint: 'Grenzen ziehen, Gebiet sichern. Zerstörte Fabriken bringen ihren vollen Preis als Beute.' },
-    { at: 480, name: 'Eskalation', energyMult: 1, hqDamageMult: 1, hint: 'Belagerungsturm wirkt ab jetzt.' },
-    { at: 660, name: 'Entscheidung', energyMult: 1, hqDamageMult: 1, hint: 'Wer durchkommt, kann das HQ nehmen – es wehrt sich nicht selbst.' },
+    // 18.11.: Economy-Schub ab 8:00 – Einkommen ×1,3 (statt Einmalbonus: der Speicher fasst nur 400), für Forschung und Schlusssteine.
+    { at: 480, name: 'Eskalation', energyMult: 1.3, hqDamageMult: 1, hint: 'Energie ×1,3 · Belagerungsturm wirkt ab jetzt.' },
+    { at: 660, name: 'Entscheidung', energyMult: 1.3, hqDamageMult: 1, hint: 'Energie ×1,3 · Wer durchkommt, kann das HQ nehmen – es wehrt sich nicht selbst.' },
   ],
   laneGuide: { enabled: true, bandHalf: 3.5, penalty: 6, ignoreOffLane: true, blockRadius: 2.5, defendSpread: 5 },
   influence: {

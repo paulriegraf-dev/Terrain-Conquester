@@ -210,3 +210,15 @@ describe('Lernen aus Partien von Menschen', () => {
     assert.ok(builds.slice(0, 2).includes(plan!.opening[0]!), `${builds.join(', ')} – Plan ${plan!.opening.join(', ')}`);
   });
 });
+
+describe('Stufen-Auswahl (18.11.)', () => {
+  it('Startbildschirm: nur „Normal“ (= intern easy, vorgewählt) und „Paulslike“; das alte Normal ist nicht wählbar', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { AI_LEVEL_CHOICES } = await import('../src/ai/simpleAi');
+    const html = readFileSync('index.html', 'utf8');
+    const radios = [...html.matchAll(/<input type="radio" name="opt-level"[^>]*value="(\w+)"([^>]*)><span>([^<]+)<\/span>/g)].map((m) => ({ level: m[1], checked: /checked/.test(m[2]!), name: m[3] }));
+    assert.deepEqual(radios.map((r) => ({ level: r.level, name: r.name })), AI_LEVEL_CHOICES.map((c) => ({ level: c.level, name: c.name })));
+    assert.deepEqual(radios.filter((r) => r.checked).map((r) => r.level), ['easy']);
+    assert.ok(!radios.some((r) => r.level === 'normal'));
+  });
+});

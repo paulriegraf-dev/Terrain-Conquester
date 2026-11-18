@@ -356,8 +356,8 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDef>> = {
     description: 'Präzision, Reichweite, Reparatur. Wenige, teure Einheiten – tut sich gegen Masse schwer.',
     buildings: {
       // 24.10.: Der Nano-Heiler ist keine eigene Linie mehr, sondern kommt ab Stufe III als Beimischung (jeder vierte Verband –
-      // Wunsch: mindestens jeder vierte).
-      barracks: { name: 'Kaserne', letter: 'K', tiers: ['sniper', 'plasma'], levels: 3, mix: { unit: 'nanomedic', level: 3, every: 4 } },
+      // Wunsch: mindestens jeder vierte). 18.11.: jeder dritte (etwas häufiger).
+      barracks: { name: 'Kaserne', letter: 'K', tiers: ['sniper', 'plasma'], levels: 3, mix: { unit: 'nanomedic', level: 3, every: 3 } },
       workshop: { name: 'Hangar', letter: 'H', tiers: ['hoverscout', 'battery'] },
       foundry: { name: 'Schwerwerk', letter: 'S', tiers: ['gunner', 'colossus'] },
     },

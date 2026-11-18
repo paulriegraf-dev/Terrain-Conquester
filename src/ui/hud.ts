@@ -491,7 +491,7 @@ export class Hud {
         title = e.name;
         const w = HQ.weapon;
         const own = view.human === null || e.owner === view.human;
-        const branches = own
+        const branches = own && world.rules.hqUpgrades
           ? `<p><strong>Zweige</strong> (einer bis Stufe ${HQ_PATH_LIMITS.main}, einer bis ${HQ_PATH_LIMITS.side}): ${HQ_PATH_IDS.map((id) => `${HQ_PATHS[id].name} ${'●'.repeat(world.players[e.owner].hq[id])}${'○'.repeat(HQ_PATHS[id].tiers.length - world.players[e.owner].hq[id])}`).join(' · ')}</p>`
           : '';
         html = `${hpLine(e)}${branches}<p class="muted">${world.rules.hqWeapon ? `Verteidigt sich selbst: ${w.shots} Schüsse alle ${num(w.cooldown, 1)} s (Stärke ${w.strength}, Durchschlag ${w.ap}, Schaden ${w.damage}), Reichweite ${w.range}, Flächenschaden. ` : 'Wehrt sich nicht selbst – Truppen, Erdwälle und Notfallverlegung schützen es. '}Widerstand ${e.toughness}, Rüstung ${e.save}+.</p>${world.hqDamageMult !== 1 || world.rules.phases.some((p) => p.hqDamageGrowth) ? `<p class="muted">Schaden am HQ gerade ×${num(world.hqDamageMult, 1)} – steigt mit den Phasen.</p>` : ''}`;
@@ -730,7 +730,7 @@ export class Hud {
       FACTION_IDS.includes(sel.value as FactionId) ? (sel.value as FactionId) : 'technoclan';
     return {
       mapId: this.el.mapSelect.value,
-      level: level === 'easy' || level === 'paulslike' ? level : 'normal',
+      level: level === 'paulslike' ? 'paulslike' : 'easy', // 18.11.: „Normal“ in der Auswahl = intern easy
       factions: [faction(this.el.factionSelect), faction(this.el.enemyFactionSelect)],
       overtime: OVERTIME_VARIANT_IDS.includes(this.el.overtimeSelect.value as OvertimeVariant) ? (this.el.overtimeSelect.value as OvertimeVariant) : 'off',
       side: this.doc.querySelector<HTMLInputElement>('input[name="opt-side"]:checked')?.value === '1' ? 1 : 0,

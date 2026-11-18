@@ -160,7 +160,8 @@ function producePlayer(world: World, owner: PlayerId): void {
       setMuster(world, u, building, pr.route);
       if (def.former) world.players[owner].stats.formersByLevel[Math.min(2, pr.level - 1)]!++;
       // Eliteprogramm (Technoclan, v2): jeder 4. Verband der Fabrik kommt als Elite.
-      if (u.net && eliteBirth(world, building)) {
+      const elite = eliteBirth(world, building, def.id !== pr.unit); // zählt jeden Linien-Verband, Beimischung nie Elite
+      if (u.net && elite) {
         becomeElite(world, u);
         refreshTech(world, u);
         u.hp = u.maxHp;

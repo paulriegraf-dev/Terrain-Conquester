@@ -47,7 +47,7 @@ export const WALL: WallAbilityDef = {
   hint: 'Hebt einen dauerhaften Wall aus dem Boden: blockiert Weg und Sicht, bis schwere Einheiten oder Artillerie ihn brechen. Eigenes Gebiet und Niemandsland; eine Route von HQ zu HQ bleibt immer offen.',
 };
 
-/** Schlucht (seit 24.10.): 2×4 Kacheln, drehbar; graben erst mit dem HQ-Zweig Gelände. */
+/** Schlucht (seit 24.10.): 2×4 Kacheln, drehbar; seit 18.11. für alle von Beginn an (rules.gorgeBase). */
 export const GORGE_SHAPE = { long: 4, short: 2 } as const;
 
 export interface SwapAbilityDef {
@@ -86,7 +86,8 @@ export const SHAPING_REACH = 6;
  */
 export function swapCost(terrain: TerrainId, home?: { homeCost: number; homeSeconds: number }): { cost: number; buildSeconds: number } {
   const special = SWAP.special[terrain];
-  if (special) return special;
+  // 18.11.: Die Schlucht bekommt in der eigenen Kartenhälfte denselben Nachlass wie die übrigen Böden.
+  if (special) return home ? { cost: Math.round(special.cost * home.homeCost), buildSeconds: special.buildSeconds * home.homeSeconds } : special;
   if (!home) return { cost: SWAP.cost, buildSeconds: SWAP.buildSeconds };
   return { cost: Math.round(SWAP.cost * home.homeCost), buildSeconds: SWAP.buildSeconds * home.homeSeconds };
 }
@@ -106,7 +107,7 @@ export const SWAP: SwapAbilityDef = {
   // 24.10.: 2×4 statt 3×3 Kacheln, 80 statt 100 Energie; wie viele gleichzeitig, bestimmt der HQ-Zweig Gelände
   // (ohne ihn keine). Früher höchstens 3 – ohne Grenze grub die KI im späten Spiel Dutzende Schluchten.
   special: { gorge: { cost: 80, buildSeconds: 6 } },
-  hint: 'Formt eine 2×2-Fläche im eigenen Gebiet, im Niemandsland und bis 6 Kacheln vor die Grenze: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Geröll gegen Räder. Schlucht (2×4, mit dem HQ-Zweig Gelände) als Sperre – nur Schweber kommen drüber.',
+  hint: 'Formt eine 2×2-Fläche im eigenen Gebiet, im Niemandsland und bis 6 Kacheln vor die Grenze: Wald für Deckung, Matsch gegen Fahrzeuge, Wiese für freie Bahn, Schnee als Spurenfalle, Geröll gegen Räder. Schlucht (2×4, höchstens 2 gleichzeitig) als Sperre – nur Schweber kommen drüber.',
 };
 
 /**

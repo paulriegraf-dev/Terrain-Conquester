@@ -77,13 +77,13 @@ describe('Umwidmen', () => {
 });
 
 describe('Schluchten und Flankenangriff (24.10. abends)', () => {
-  it('jede weitere Schlucht kostet 30 mehr', async () => {
+  it('jede weitere Schlucht kostet gleich viel (18.11.: Aufschlag gorgeCostStep abgeschafft)', async () => {
     const { swapCostAt } = await import('../src/sim/systems/abilities');
     const world = new World({ map: openMap, seed: 1, rules: rich, factions: ['technoclan', 'myriaden'] });
     const first = swapCostAt(world, 0, 8, 'gorge').cost;
     // eine fertige eigene Schlucht (8 Kacheln)
     for (let k = 0; k < 8; k++) world.dug[k] = 1;
-    assert.equal(swapCostAt(world, 0, 8, 'gorge').cost, first + 30);
+    assert.equal(swapCostAt(world, 0, 8, 'gorge').cost, first);
   });
 
   it('Schweber über eine gegnerische Schlucht: danach 18 s mehr Schaden, eigene Schluchten zählen nicht', async () => {

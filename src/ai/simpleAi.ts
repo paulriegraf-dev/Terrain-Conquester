@@ -66,8 +66,14 @@ import type { Domain } from './weights';
  */
 
 /** Schwierigkeit (KI-Patch 4, 30.10.): Leicht, Normal, Paulslike – Unterschiede nur in Takt, Schätzfehler, Zweitwahl und Blind-Alter, nie in Energie oder Werten. */
+/**
+ * 18.11.: In der Auswahl stehen nur noch „Normal“ (= intern `easy`, die Stufe gewann im Review 19 : 8 gegen das alte Normal)
+ * und „Paulslike“. Das alte `normal` bleibt im Code (Messläufe, Replays), ist aber nicht mehr wählbar.
+ */
 export type AiLevel = 'easy' | 'normal' | 'paulslike';
 export const AI_LEVELS: readonly AiLevel[] = ['easy', 'normal', 'paulslike'];
+/** Wählbare Stufen im Startbildschirm, mit Anzeigenamen. */
+export const AI_LEVEL_CHOICES: readonly { level: AiLevel; name: string }[] = [{ level: 'easy', name: 'Normal' }, { level: 'paulslike', name: 'Paulslike' }];
 export type AiStrategyId = 'swarm' | 'raid' | 'siege' | 'balanced';
 
 interface StrategyDef {
@@ -448,6 +454,8 @@ export class SimpleAi {
    */
   prepare(world: World): Command[] {
     const me = world.players[this.player];
+    // 18.11.: Gegen Terra-Former kein Boden – jeder formbare Boden ist eine ihrer Linien und stärkt sie (Boden-Bonus).
+    if (this.feedsEnemyGround(world)) return [];
     let left = me.prepLeft;
     const plans: { x: number; y: number; terrain: TerrainId }[] = [];
     const routes = this.rng.shuffled(ROUTES);
@@ -781,7 +789,7 @@ export class SimpleAi {
         if (factories < AI_TUNING.myrPlan.researchAt) return 0; // Patch 7: erst 2–3 Fabriken, dann Forschung und Stufen
         return (world.seconds < this.researchFrom(world) ? 0.5 : 1) * (1 + 0.3 * Math.min(1, units / 30));
       }
-      case 'hq': return AI_TUNING.myrPlan.hqNeed; // Patch 7: HQ-Ausbau nebensächlich, erst Kampfkraft (vorher 0,8)
+      case 'hq': return world.rules.hqUpgrades ? AI_TUNING.myrPlan.hqNeed : 0; // 18.11.: HQ-Zweige vorerst aus // Patch 7: HQ-Ausbau nebensächlich, erst Kampfkraft (vorher 0,8)
       case 'terrain': return 1;
       case 'wall': {
         if (this.funnelStep) return 1.5;
@@ -1678,7 +1686,7 @@ export class SimpleAi {
       if (weak !== strong && bb.lanes[weak].pressure < -T.reinforceAt && bb.lanes[strong].pressure > T.reinforceAt && world.tick - this.reinforceFrom[strong] >= T.reinforceCalm * world.tps) {
         const onStrong = buildings.filter((x) => (x.producer!.pendingRoute ?? x.producer!.route) === strong);
         const b = onStrong.find((x) => !this.planBound(world, x)) ?? (onStrong.length >= 2 ? onStrong[0] : undefined);
-        if (b && !(AI_TUNING.centerRoute && strong === 'mid' && onStrong.length <= 1)) {
+        if (b && !(AI_TUNING.centerRoute && this.centerFree(world) && strong === 'mid' && onStrong.length <= 1)) {
           this.reinforceFrom[strong] = world.tick;
           return this.setRoute(world, b, weak);
         }
@@ -1688,7 +1696,7 @@ export class SimpleAi {
     // 1b. Zentrum (30.10., nach Partien des Nutzers): Wer die Mitte 60 s hält, bekommt sein Schlussstein-Fenster früher – auch vor
     // 10:00. Der Nutzer stellt dafür früh Truppen auf die Mitte (Halten/Sichern) und hält sie. Die KI hält immer mindestens eine
     // Fabrik auf der Mitte (AI_TUNING.centerRoute).
-    if (AI_TUNING.centerRoute && buildings.length >= 2 && !buildings.some((x) => (x.producer!.pendingRoute ?? x.producer!.route) === 'mid')) {
+    if (AI_TUNING.centerRoute && this.centerFree(world) && buildings.length >= 2 && !buildings.some((x) => (x.producer!.pendingRoute ?? x.producer!.route) === 'mid')) {
       const b = buildings.find((x) => !this.planBound(world, x)) ?? buildings[0]!;
       return this.setRoute(world, b, 'mid');
     }
@@ -1770,7 +1778,7 @@ export class SimpleAi {
    * Gekauft wird vom Überschuss, höchstens eine Stufe je 45 s, frühestens ab 2:00. Die Masse-KI baut nichts aus.
    */
   private decideHq(world: World): Command | null {
-    if (this.profileId === 'mass' || world.seconds < 120 || world.tick - this.lastHq < 45 * world.tps) return null;
+    if (!world.rules.hqUpgrades || this.profileId === 'mass' || world.seconds < 120 || world.tick - this.lastHq < 45 * world.tps) return null;
     const [main, side] = hqPlan(this.profileId, world.players[this.player].faction.id);
     const t = world.players[this.player].hq;
     const path: HqPathId | null =
@@ -1855,7 +1863,8 @@ export class SimpleAi {
     const gate = me.gate;
     // 30.10.: Die Mitte zählt ab centerFrom (8:00); wer sie stabil hält, bekommt jedes Fenster früher – also nicht mehr vorrücken,
     // solange man sie hält (andere Lanes dürfen weiter drücken).
-    const keepMid = AI_TUNING.aiCenter && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
+    // 18.11.: nicht stur – die Mitte nur halten, solange keine andere Lane bedrängt ist (centerFree).
+    const keepMid = AI_TUNING.aiCenter && this.centerFree(world) && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
     for (const r of this.rng.shuffled(ROUTES)) {
       if (me.pendingStance[r] || me.stance[r] === 'defend') continue;
       if (keepMid && r === 'mid') continue;
@@ -1933,7 +1942,8 @@ export class SimpleAi {
       }
     }
     const gate = me.gate;
-    const keepMid = AI_TUNING.aiCenter && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
+    // 18.11.: nicht stur – die Mitte nur halten, solange keine andere Lane bedrängt ist (centerFree).
+    const keepMid = AI_TUNING.aiCenter && this.centerFree(world) && ((gate.holdSince >= 0 && world.tick - gate.holdSince >= 30 * world.tps) || this.centerRallyActive(world));
     // Patch 5: Was im Nebel steht, zählt mindestens wie die alte Annahme (Gegner so stark wie man selbst, gleich verteilt) –
     // sonst sieht eine Lane ohne Sicht auf den Gegner nach Übermacht aus und die KI stößt ins Leere.
     const myTotal = mine.top + mine.mid + mine.bottom;
@@ -2141,9 +2151,14 @@ export class SimpleAi {
       if (controllerAt(world, world.grid.index(x, wy)) === this.player) edge = x;
     }
     if (edge < 0) return null;
-    // Schluchten (seit 24.10.): 2×4, erst mit dem HQ-Zweig Gelände; quer über die Route gegraben (hochkant).
+    // Schluchten (seit 24.10.): 2×4, seit 18.11. für alle (rules.gorgeBase); quer über die Route gegraben (hochkant).
     const gLimit = gorgeLimit(world, this.player);
     const gorge = gLimit > 0 && this.spare(world) >= 200 && this.rng.chance(0.35) && gorgeCells(world, this.player) + 8 <= gLimit * 8;
+    // 18.11.: Gegen Terra-Former nur Schluchten – Matsch, Wald, Geröll usw. würden ihre Linien stärken (Boden-Bonus).
+    if (!gorge && this.feedsEnemyGround(world)) {
+      this.lastShape = world.tick - 10 * world.tps;
+      return null;
+    }
     // Felsen-Munition: Katapulte auf dieser Route bekommen Geröll hinter die eigene Linie.
     const rockers = world.entities.some(
       (e) => e.alive && e.owner === this.player && e.mover?.route === route && UNITS[e.defId as UnitId].ammo?.rocks,
@@ -2955,6 +2970,24 @@ export class SimpleAi {
       if (e.lifespan.age > e.lifespan.fresh * world.tps) old += w;
     }
     return all > 0 ? old / all : 0;
+  }
+
+  /**
+   * 18.11.: Würde eigenes Bodenformen den Gegner stärken? Ja gegen Terra-Former (ihr Boden-Bonus gilt auf jedem Boden ihrer
+   * Linien, egal wer ihn geformt hat – und alle formbaren Böden sind Linien), solange man selbst keiner ist.
+   */
+  private feedsEnemyGround(world: World): boolean {
+    return world.players[1 - this.player]!.faction.id === 'terraformer' && world.players[this.player].faction.id !== 'terraformer';
+  }
+
+  /**
+   * 18.11.: Darf die KI an der Kartenmitte festhalten (Mitte halten, Pflicht-Fabrik auf der Mitte)? Nur, solange keine andere
+   * Lane bedrängt ist (Druck unter −reinforceAt oder Gegner nah am HQ) – sonst geht die Mitte der Not nach.
+   */
+  private centerFree(world: World): boolean {
+    const bb = this.boardMem.board;
+    const threat = Math.max(1.5, 3 * armyScale(world));
+    return ROUTES.every((r) => r === 'mid' || (this.baseThreat[r] < threat && (!bb || bb.lanes[r].pressure >= -AI_TUNING.tactic.reinforceAt)));
   }
 
   /** Energie, die für Nebenmittel frei ist. */

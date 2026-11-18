@@ -2,6 +2,7 @@ import type { MoveProfileId } from '../data/movement';
 import type { BuildingId } from '../data/buildings';
 import type { GroundBonus, ProtocolId, UnitId, WeaponDef } from '../data/units';
 import type { TechMods } from '../data/verbund';
+import type { UpgradeEffect } from '../data/factions';
 import type { ArmorClass, CellRect, PlayerId, Route, Vec2 } from './types';
 
 /**
@@ -95,6 +96,8 @@ export interface ProducerState {
   blockedBy: 'none' | 'cap';
   /** So viele Einheiten hat das Gebäude schon losgeschickt (vor der ersten greift ein Marschbefehl sofort). */
   produced: number;
+  /** Eliteprogramm (18.11.): gebaute Verbände ohne Beimischung (Nano-Heiler) – Takt der Elite-Verbände. */
+  lineBirths?: number;
   /** Ab diesem Tick ist wieder ein Eilauftrag möglich. */
   rushReadyTick: number;
   /** Aufgebot (Nachtrag G): Ticks der Käufe an dieser Fabrik (Preis steigt innerhalb von 3 min). */
@@ -127,6 +130,8 @@ export interface Entity {
   flankUntil?: number;
   /** Zuletzt gekämpft (geschossen oder getroffen) – Schildgenerator: Schild nur außerhalb des Kampfes. */
   combatTick?: number;
+  /** Forschungswerte, mit denen der Verband gebaut bzw. zuletzt aufgerüstet wurde (18.11., systems/retrofit.ts). */
+  fxApplied?: Required<UpgradeEffect>;
   /** Schild des Schildgenerators (fängt Schaden zuerst ab) und wann er zuletzt aufgefüllt wurde. */
   stationShield?: number;
   shieldAt?: number;
