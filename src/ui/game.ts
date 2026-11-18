@@ -924,7 +924,16 @@ export class Game {
       return;
     }
     if (this.titleOpen) {
-      if (key === 'enter' || key === ' ') {
+      const onButton = !!(ev.target as HTMLElement | null)?.closest?.('.tp button');
+      if (key === 'arrowdown' || key === 'arrowup') {
+        // Pfeiltasten wandern durch die Knöpfe der offenen Seite (mit Umlauf).
+        ev.preventDefault();
+        const btns = [...this.doc.querySelectorAll<HTMLButtonElement>(`.tp-page[data-page="${this.titlePageId}"] .tp-btn:not(:disabled)`)];
+        const i = btns.indexOf(this.doc.activeElement as HTMLButtonElement);
+        const next = i < 0 ? 0 : (i + (key === 'arrowdown' ? 1 : -1) + btns.length) % btns.length;
+        btns[next]?.focus();
+      } else if ((key === 'enter' || key === ' ') && !onButton) {
+        // Fokus auf einem Knopf: der Browser löst genau diesen aus. Sonst gilt die Abkürzung.
         ev.preventDefault();
         // Enter: Einzelspieler öffnen, dort „Gegen die KI“
         if (this.titlePageId === 'main') this.titlePage('single');
@@ -2135,7 +2144,11 @@ export class Game {
           if (w === m.human) wins++;
           else losses++;
         }
-        rec.textContent = `Bilanz: ${wins} ${wins === 1 ? 'Sieg' : 'Siege'} · ${losses} ${losses === 1 ? 'Niederlage' : 'Niederlagen'}`;
+        const w = `${wins} ${wins === 1 ? 'Sieg' : 'Siege'}`;
+        const l = `${losses} ${losses === 1 ? 'Niederlage' : 'Niederlagen'}`;
+        // Statuszeile: Siege grün mit ▲, Niederlagen rot mit ▼ (Form statt nur Farbe), darunter der Anteil als Balken.
+        rec.innerHTML = `<span class="tp-rec-l">Bilanz</span><span class="tp-rec-w">▲ ${w}</span><span class="tp-rec-x">▼ ${l}</span><i class="tp-rec-bar" style="--won:${wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0}%"></i>`;
+        rec.setAttribute('aria-label', `Bilanz: ${w}, ${l}`);
         rec.hidden = wins + losses === 0;
       }
       const b = this.doc.getElementById('btn-export-matches');
