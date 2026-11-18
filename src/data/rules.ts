@@ -279,6 +279,8 @@ export interface Rules {
   siteLockSeconds: number;
   /** Jede weitere eigene Schlucht kostet so viel mehr (24.10. abends). */
   gorgeCostStep: number;
+  /** So viele Schluchten gleichzeitig darf jeder von Beginn an graben (18.11.: ohne HQ-Zweig; vorher 0). */
+  gorgeBase: number;
   /** Flankenangriff: Wer eine gegnerische Schlucht überquert hat, macht so lange mehr Schaden. */
   flank: { seconds: number; damage: number };
   /** Myriaden-Superbrut: zwei Bruten auf höchster Stufe verschmelzen. */
@@ -537,7 +539,9 @@ export const RULES: Rules = {
   hqWeapon: false,
   hqUpgrades: false,
   siteLockSeconds: 60,
-  gorgeCostStep: 30,
+  // 18.11.: kein Aufschlag je weiterer Schlucht mehr – Preis wie die übrigen Böden (Grundpreis, eigene Hälfte günstiger).
+  gorgeCostStep: 0,
+  gorgeBase: 2,
   flank: { seconds: 18, damage: 1.3 },
   // Doppelte Produktion zweier Bruten, dazu +15 % (gilt als eingespielt); Gelege +4; mehr Leben – aber ein Ziel statt zwei.
   superBrood: { cost: 150, seconds: 25, speed: 2.3, clutchBonus: 4, hp: 1.8 },

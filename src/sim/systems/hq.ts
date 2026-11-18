@@ -110,7 +110,8 @@ export function maxEnergyBonus(_world: World, _p: PlayerId): number {
 
 /** Schluchten gleichzeitig (0 = noch kein Schluchtgräber). */
 export function gorgeLimit(world: World, p: PlayerId): number {
-  return HQ_FX.gorges[hqTier(world, p, 'terrain')] ?? 0;
+  // 18.11.: Schluchten für alle von Beginn an (rules.gorgeBase gleichzeitig); der HQ-Zweig kann nur noch mehr erlauben.
+  return Math.max(world.rules.gorgeBase, HQ_FX.gorges[hqTier(world, p, 'terrain')] ?? 0);
 }
 /** Bauzeit einer Schlucht (Tiefe Gräben: 4 statt 6 s). */
 export function gorgeSeconds(world: World, p: PlayerId, base: number): number {

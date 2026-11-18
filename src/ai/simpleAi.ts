@@ -2141,7 +2141,7 @@ export class SimpleAi {
       if (controllerAt(world, world.grid.index(x, wy)) === this.player) edge = x;
     }
     if (edge < 0) return null;
-    // Schluchten (seit 24.10.): 2×4, erst mit dem HQ-Zweig Gelände; quer über die Route gegraben (hochkant).
+    // Schluchten (seit 24.10.): 2×4, seit 18.11. für alle (rules.gorgeBase); quer über die Route gegraben (hochkant).
     const gLimit = gorgeLimit(world, this.player);
     const gorge = gLimit > 0 && this.spare(world) >= 200 && this.rng.chance(0.35) && gorgeCells(world, this.player) + 8 <= gLimit * 8;
     // Felsen-Munition: Katapulte auf dieser Route bekommen Geröll hinter die eigene Linie.

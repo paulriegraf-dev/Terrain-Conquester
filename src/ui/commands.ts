@@ -381,7 +381,7 @@ function terrainCommands(ctx: CommandContext): CommandSet {
       tip: id === 'gorge'
         ? limit === 0
           ? 'Schlucht graben: erst mit dem HQ-Zweig Gelände (Stufe 1 „Schluchtgräber“) – HQ anklicken.'
-          : `Schlucht graben (${far.cost} Energie, ${far.buildSeconds} s): 2×4 Kacheln, R oder Rechtsklick dreht. Dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber; Truppen darauf weichen aus. Darf ganze Routen sperren – nur ein Weg von HQ zu HQ bleibt immer. Höchstens ${limit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten; Terraformer schütten gegnerische Schluchten in ihrer Nähe zu.`
+          : `Schlucht graben (${far.cost} Energie, ${far.buildSeconds.toFixed(0)} s; in deiner Kartenhälfte ${c.cost} Energie, ${c.buildSeconds.toFixed(0)} s): 2×4 Kacheln, R oder Rechtsklick dreht. Dauerhafte Sperre für alles außer Schwebern, Sicht und Schüsse gehen drüber; Truppen darauf weichen aus. Darf ganze Routen sperren – nur ein Weg von HQ zu HQ bleibt immer. Höchstens ${limit} gleichzeitig (deine: ${dug}). Mit jeder anderen Bodenart wieder zuschütten; Terraformer schütten gegnerische Schluchten in ihrer Nähe zu.`
         : `${t.name}: ${t.hint} Formt eine ${SWAP.brush}×${SWAP.brush}-Fläche pro Klick (${far.cost} Energie, ${far.buildSeconds.toFixed(0)} s; in deiner Kartenhälfte ${c.cost} Energie, ${c.buildSeconds.toFixed(0)} s) – auch zum Darüberziehen. Gegrabene Schluchten werden dabei zugeschüttet.`,
       action: 'swap-tool', data: { terrain: id },
     };
