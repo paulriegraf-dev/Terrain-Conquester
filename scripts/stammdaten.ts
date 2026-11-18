@@ -6,6 +6,7 @@
  *   npx tsx scripts/stammdaten.ts einheiten-stammdaten.csv
  */
 import { writeFileSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import { ARMOR_NAMES, DAMAGE_TYPES } from '../src/data/combat';
 import { FACTIONS, FACTION_IDS } from '../src/data/factions';
 import { MOVE_PROFILES } from '../src/data/movement';
@@ -15,7 +16,13 @@ import { referenceDefense, woundsPerShot } from '../src/sim/systems/hitmath';
 import type { Defense } from '../src/sim/systems/hitmath';
 import { fireGroupWeights } from '../src/sim/systems/combat';
 import type { ArmorClass } from '../src/sim/types';
-import { factionEntries } from '../src/ui/codex';
+
+// Die Übersicht (codex.ts) zieht über die Porträts Sprite-Bilder nach, die nur der Bundler kennt – für den Export
+// genügt ein leerer Platzhalter (sonst bricht Node mit ERR_UNKNOWN_FILE_EXTENSION ab). Deshalb codex erst danach laden.
+registerHooks({
+  load: (url, context, next) => (/\.(webp|png|jpe?g|gif)$/i.test(url) ? { format: 'module', source: 'export default "";', shortCircuit: true } : next(url, context)),
+});
+const { factionEntries } = await import('../src/ui/codex');
 
 const out = process.argv[2] ?? 'einheiten-stammdaten.csv';
 const CLASSES: ArmorClass[] = ['infantry', 'light', 'heavy', 'structure'];

@@ -1447,7 +1447,8 @@ export class SimpleAi {
     const drones = world.entities.filter((e) => e.alive && e.owner === this.player && e.defId === 'drone').length;
     const breaker = choices.find((c) => c.unit === 'drone');
     // Patch 8: Myriaden nehmen den Katapult-Schlussstein vor der Brechstange.
-    const cat = this.myr(world) && AI_TUNING.myrPlan.catapultKeystone ? choices.find((c) => c.unit === 'catapult') : undefined;
+    // Review 18.11.: nur, wenn Katapulte leben oder gebaut werden können – sonst verpuffte der kostenlose Schlussstein.
+    const cat = this.myr(world) && AI_TUNING.myrPlan.catapultKeystone ? choices.find((c) => c.unit === 'catapult' && (c.alive > 0 || c.factory)) : undefined;
     const pick = cat ?? (breaker && drones >= 4 && !(this.myr(world) && AI_TUNING.myrPlan.catapultKeystone) ? breaker : choices[0]!); // choices: meiste lebende Verbände zuerst
     const id = door(pick);
     return checkKeystone(world, this.player, id).ok ? { type: 'research', upgrade: id } : null;
