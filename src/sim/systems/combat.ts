@@ -481,6 +481,10 @@ export function applyHits(world: World, hits: Hit[]): void {
 function throwCharge(world: World, e: Entity, t: Entity, c: NonNullable<UnitDef['charges']>): void {
   e.charges = (e.charges ?? 0) - 1;
   const base = UNITS[e.defId as UnitId].weapon!;
+  // Review 18.11.: die erforschte Waffe des Verbands (Ausrüstung: Stärke, Durchschlag, Schaden ×) statt der Stammdaten –
+  // sonst erreichte die Brut-Ausrüstung die Ladungen nie. Der Ladungsschaden skaliert mit dem Schaden-Faktor der Forschung.
+  const w = e.weapon?.def ?? base;
+  const damage = c.damage * (base.damage > 0 ? w.damage / base.damage : 1);
   world.flights.push({
     owner: e.owner,
     unit: e.defId as UnitId,
@@ -490,7 +494,7 @@ function throwCharge(world: World, e: Entity, t: Entity, c: NonNullable<UnitDef[
     start: world.tick,
     land: world.tick + Math.max(1, Math.round(c.flight * world.tps)),
     route: e.mover?.route ?? 'mid',
-    charge: { target: t.id, damage: c.damage, radius: c.radius, weapon: { ...base, damage: c.damage } },
+    charge: { target: t.id, damage, radius: c.radius, weapon: { ...w, damage } },
   });
   const land = world.tick + Math.max(1, Math.round(c.flight * world.tps));
   world.emit({ type: 'shot', owner: e.owner, from: { x: e.pos.x, y: e.pos.y }, to: { x: t.pos.x, y: t.pos.y }, heavy: true, shooter: e.id, target: t.id, unit: e.defId, group: 0, groups: 1, spawn: world.tick, land });
