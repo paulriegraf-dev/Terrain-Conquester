@@ -1942,3 +1942,9 @@ body.ui-c .counter-board { top: 112px; right: 21px; z-index: 25; background: #1b
 .fc-key { display: inline-grid; place-items: center; min-width: 14px; height: 14px; margin-right: 5px; padding: 0 3px; background: #ffd23f; color: #1a1408; font-family: var(--font-data); font-size: var(--step--3); font-weight: 700; vertical-align: 1px; }
 .fc-pil .fc-up .fc-ut b { justify-content: flex-start; }
 .fc-pil .fc-up .fc-ut b .fc-cost, .fc-pil .fc-up .fc-ut b em { margin-left: auto; }
+/* Übersicht: feste Fenstergröße (Nutzer 18.11.: „Reiter und Fenster gleichmäßig, nichts verschiebt sich“) –
+   gleiche Breite und Höhe für alle Reiter, der Inhalt scrollt innen; die Scrollleiste nimmt immer ihren Platz ein. */
+.codex-card { width: min(1240px, 100%); height: min(860px, calc(100dvh - 24px)); max-height: none; }
+.codex-body { scrollbar-gutter: stable; overflow-y: auto; overflow-x: hidden; }
+.codex-head { flex-wrap: nowrap; }
+.codex-tabs { flex-wrap: nowrap; }

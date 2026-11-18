@@ -329,7 +329,9 @@ export class Hd2dRenderer {
       this.overlayTex.dispose();
       this.overlayTex.needsUpdate = true;
     }
-    this.terrainKey = '';
+    // Boden und Umland hängen nicht vom Zoom ab – nur bei neuem Kartenausschnitt neu bauen (Nutzer 18.11.: starkes
+    // Ruckeln beim Zoomen; jeder Zoomschritt baute vorher das ganze Gelände samt Umland neu, ~0,5–1 s).
+    if (first) this.terrainKey = '';
   }
 
   /** Kamera wie im Mock-up: Abstand, Neigung (64° weit … 34° nah), Brennweite, Nebel und Tilt-Shift je Zoom. */
