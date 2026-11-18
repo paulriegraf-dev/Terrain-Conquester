@@ -296,11 +296,11 @@ function keystoneUpgrade(unit: UnitId): UpgradeDef[] {
 }
 
 /** Ausrüstung I–III je Fabrikart (Säule Kampfwerte, v2): 120 / 180 / 240 Energie, 15 / 22 / 30 s. */
-const gear = (building: BuildingId, name: string): BuildingUpgradeDef[] =>
+const gear = (building: BuildingId, _name: string): BuildingUpgradeDef[] =>
   buildingChain(building, 'gear', [
-    { name: 'Ausrüstung I', description: `alle Einheiten aus ${name}: nächster Angriffs- und Panzerungsschritt`, cost: 120, seconds: 15 },
-    { name: 'Ausrüstung II', description: `alle Einheiten aus ${name}: noch ein Angriffs- und Panzerungsschritt`, cost: 180, seconds: 22 },
-    { name: 'Ausrüstung III', description: `alle Einheiten aus ${name}: dritter Angriffs- und Panzerungsschritt`, cost: 240, seconds: 30 },
+    { name: 'Ausrüstung I', description: 'Angriff und Panzerung +1 Stufe', cost: 120, seconds: 15 },
+    { name: 'Ausrüstung II', description: 'Angriff und Panzerung +1 Stufe (zweite)', cost: 180, seconds: 22 },
+    { name: 'Ausrüstung III', description: 'Angriff und Panzerung +1 Stufe (dritte)', cost: 240, seconds: 30 },
   ]);
 
 /** Ein einzelner Fabrik-Ausbau (Säule Verhalten). */
@@ -309,8 +309,8 @@ const behavior = (building: BuildingId, kind: BuildingUpgradeKind, name: string,
 });
 
 /** Eliteprogramm (Technoclan, v2): jeder 4. Verband der Fabrik kommt als Elite. */
-const elite = (building: BuildingId, name: string): BuildingUpgradeDef =>
-  behavior(building, 'elite', 'Eliteprogramm', `jeder 4. Verband aus ${name} kommt gleich als Elite (sonst erst ab 4 Bausteinen im Netz)`, 200, `${building}-gear-1`);
+const elite = (building: BuildingId, _name: string): BuildingUpgradeDef =>
+  behavior(building, 'elite', 'Eliteprogramm', 'jeder 4. Verband kommt gleich als Elite (sonst erst ab 4 Bausteinen im Netz)', 200, `${building}-gear-1`);
 
 /**
  * Terra-Former fraktionsweit (v2), an jeder Linienfabrik: Wächterkraft (Kampfwerte aller Wächter), Naturkraft (Gerufene),
@@ -318,12 +318,12 @@ const elite = (building: BuildingId, name: string): BuildingUpgradeDef =>
  */
 const tfFaction = (): BuildingUpgradeDef[] => [
   ...buildingChain('meadowhall', 'warden', [
-    { name: 'Wächterkraft I', description: 'alle Wächter: nächster Angriffs- und Panzerungsschritt', cost: 200, seconds: 25 },
-    { name: 'Wächterkraft II', description: 'alle Wächter: noch ein Angriffs- und Panzerungsschritt', cost: 270, seconds: 34 },
-    { name: 'Wächterkraft III', description: 'alle Wächter: dritter Angriffs- und Panzerungsschritt', cost: 340, seconds: 42 },
+    { name: 'Wächterkraft I', description: 'Angriff und Panzerung +1 Stufe', cost: 200, seconds: 25 },
+    { name: 'Wächterkraft II', description: 'Angriff und Panzerung +1 Stufe (zweite)', cost: 270, seconds: 34 },
+    { name: 'Wächterkraft III', description: 'Angriff und Panzerung +1 Stufe (dritte)', cost: 340, seconds: 42 },
   ]).map((u) => ({ ...u, anyBuilding: true })),
   ...buildingChain('meadowhall', 'nature', [
-    { name: 'Naturkraft I', description: 'alle Gerufenen: Stärke +1 und Widerstand +1', cost: 200, seconds: 25 },
+    { name: 'Naturkraft I', description: 'Stärke +1 und Widerstand +1', cost: 200, seconds: 25 },
     { name: 'Naturkraft II', description: 'alle Gerufenen: Durchschlag +1 und Rüstung +1', cost: 270, seconds: 34 },
     { name: 'Naturkraft III', description: 'alle Gerufenen: Schaden +25 % und Leben +20 %', cost: 340, seconds: 42 },
   ]).map((u) => ({ ...u, anyBuilding: true })),

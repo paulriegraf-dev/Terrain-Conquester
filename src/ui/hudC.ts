@@ -213,7 +213,9 @@ export class HudC {
       this.cardFor = e.id;
       this.cardAll = false;
     }
-    const html = factoryCard(world, e, this.d.commands(), this.cardAll, !world.result);
+    // Forschungs-Kurzwahl (Nutzer 18.11.): statt des Knopfrasters dieselbe Karte, nur mit den Upgrades.
+    const research = view.menu === 'research' ? (view.researchFocus ?? { full: true }) : null;
+    const html = factoryCard(world, e, this.d.commands(), this.cardAll, !world.result, research);
     this.ctxEl.hidden = false;
     if (html === this.ctxSig) return;
     this.ctxSig = html;
@@ -221,12 +223,12 @@ export class HudC {
     this.placeCard(world);
   }
 
-  /** Eigene, ausgewählte Fabrik – solange kein Untermenü (Umwidmen, Tarnen, Forschung) offen ist. */
+  /** Eigene, ausgewählte Fabrik – solange kein Untermenü (Umwidmen, Tarnen) offen ist; Forschung zeigt die Karte im Forschungsmodus. */
   private cardEntity(world: World, view: ViewState): Entity | null {
     const sel = view.selected;
     const e = sel?.kind === 'entity' ? world.get(sel.id) : undefined;
     if (!e?.alive || !e.producer || e.kind === 'hq' || view.human === null || e.owner !== view.human) return null;
-    if (view.menu === 'convert' || view.menu === 'disguise' || view.menu === 'research') return null;
+    if (view.menu === 'convert' || view.menu === 'disguise') return null;
     return e;
   }
 
