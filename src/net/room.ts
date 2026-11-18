@@ -1,3 +1,4 @@
+import { Peer } from 'peerjs';
 import type { NetMsg } from './protocol';
 
 /**
@@ -6,7 +7,7 @@ import type { NetMsg } from './protocol';
  * - **Online:** PeerJS (WebRTC, Browser zu Browser). Der Host meldet sich beim öffentlichen
  *   PeerJS-Vermittler unter `terrain-conquester-<CODE>` an, der Gast verbindet sich mit diesem Namen.
  *   Danach laufen die Daten direkt (oder über das TURN-Relais von PeerJS, wenn das Netz das verlangt).
- *   Die Bibliothek wird erst beim Öffnen eines Raums aus dem CDN geladen (feste Version).
+ *   Die Bibliothek (feste Version 1.5.4) ist ins Spiel eingebaut.
  * - **Lokal (Test):** BroadcastChannel – zwei Tabs im selben Browser, ganz ohne Netz.
  */
 export type RoomRole = 'host' | 'guest';
@@ -16,10 +17,6 @@ const RETRY_MS = 2500;
 const RETRY_MAX = 80;
 
 const PEER_PREFIX = 'terrain-conquester-';
-const PEERJS_URLS = [
-  'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
-  'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
-];
 
 /** Nur die Teile von PeerJS, die wir brauchen. */
 interface PeerConn {
@@ -42,29 +39,9 @@ interface PeerLike {
 }
 type PeerCtor = new (id?: string, opts?: Record<string, unknown>) => PeerLike;
 
-let peerLoading: Promise<PeerCtor> | null = null;
-
+/** PeerJS ist fest eingebaut (18.11.) – kein Nachladen aus dem CDN, das Werbeblocker oder Ausfälle verhindern könnten. */
 function loadPeerJs(): Promise<PeerCtor> {
-  const w = window as unknown as { Peer?: PeerCtor; peerjs?: { Peer?: PeerCtor; default?: PeerCtor } };
-  const found = (): PeerCtor | undefined => w.Peer ?? w.peerjs?.Peer ?? w.peerjs?.default;
-  if (found()) return Promise.resolve(found()!);
-  peerLoading ??= new Promise<PeerCtor>((resolve, reject) => {
-    const tryUrl = (i: number): void => {
-      if (i >= PEERJS_URLS.length) {
-        peerLoading = null;
-        reject(new Error('Die Verbindungs-Bibliothek (PeerJS) ließ sich nicht laden – blockiert ein Werbeblocker oder fehlt das Internet?'));
-        return;
-      }
-      const s = document.createElement('script');
-      s.src = PEERJS_URLS[i]!;
-      s.async = true;
-      s.onload = () => (found() ? resolve(found()!) : tryUrl(i + 1));
-      s.onerror = () => tryUrl(i + 1);
-      document.head.appendChild(s);
-    };
-    tryUrl(0);
-  });
-  return peerLoading;
+  return Promise.resolve(Peer as unknown as PeerCtor);
 }
 
 /** Raum-Code: 5 Zeichen ohne leicht verwechselbare (0/O, 1/I/L). */

@@ -1,6 +1,6 @@
 # Online-Modus – Review (18.11.2026)
 
-Branch `online-play`, nicht gepusht. Geprüft wurden der Netzcode (`src/net/*`), `src/ui/session.ts`,
+Branch `online-play`, auf Wunsch des Nutzers nach main veröffentlicht. Geprüft wurden der Netzcode (`src/net/*`), `src/ui/session.ts`,
 der Multiplayer-Teil von `src/ui/game.ts`, `src/sim/hash.ts` und `src/sim/rng.ts`, dazu ein Praxis-Test mit zwei Clients.
 
 ## Kurzfassung
@@ -13,13 +13,15 @@ der Multiplayer-Teil von `src/ui/game.ts`, `src/sim/hash.ts` und `src/sim/rng.ts
   2. Der **Versionsabgleich prüfte nur Spielwerte, nicht den Simulations-Code**. Nach einem Push auf main, der nur
      Sim-Logik ändert, hätten eine alte und eine neue Seite zusammen gespielt, und die Partie wäre garantiert auseinandergelaufen.
   3. Bricht die Leitung **still** ab (WebRTC meldet kein `close`), gab es keinen „Runde beenden“-Knopf, nur „Warte …“ ohne Ende.
+- **PeerJS ist jetzt fest eingebaut** (npm-Paket `peerjs@1.5.4`) statt aus dem CDN nachgeladen (+92 KB). Vermittler bleibt der
+  kostenlose PeerJS-Cloud-Server. Geprüft: Verbindung über `0.peerjs.com`, keine CDN-Anfrage, Partie synchron.
 - Größere Ausbauten (Input-Delay-Anzeige, Desync-Dump, eigener Vermittler) stehen unten als priorisierte Vorschläge.
 
 ## Architektur
 
 | Thema | Umsetzung |
 |---|---|
-| Transport | **PeerJS 1.5.4 (WebRTC-DataChannel, `reliable`, JSON)**, zur Laufzeit aus unpkg/jsDelivr geladen. Daten laufen direkt von Browser zu Browser. |
+| Transport | **PeerJS 1.5.4 (WebRTC-DataChannel, `reliable`, JSON)**, als npm-Paket ins Spiel gebündelt (bis 18.11. zur Laufzeit aus unpkg/jsDelivr geladen). Daten laufen direkt von Browser zu Browser. |
 | Vermittlung (Signalling) | Öffentlicher PeerJS-Cloud-Server (`0.peerjs.com`), betrieben vom PeerJS-Projekt. Kostenlos, **ohne SLA und ohne zugesicherte Limits**. Der Host meldet sich als `terrain-conquester-<CODE>` an. |
 | NAT-Durchgang | STUN (Google) und das öffentliche **TURN-Relais von PeerJS** (Standard-Konfiguration der Bibliothek). Das Relais ist ein Gratisdienst ohne Garantie, hinter strengen NATs (Mobilfunk, Firmen) hängt die Verbindung daran. |
 | Lokaler Test | `LocalRoom` über `BroadcastChannel` (`?lokal=1`): zwei Tabs, kein Netz. |
@@ -131,7 +133,7 @@ regelmäßige Synchron-Prüfung, Pause über einen festen Tick, Replays aus Seed
 | **P2** | **Host-Ablösung bei halbtoter Verbindung:** Meldet sich ein neuer Gast, während der Host die alte Verbindung noch für offen hält, wird er heute als „Raum voll“ abgewiesen, bis das alte `close` kommt (bis ~30 s). Vorschlag: die alte Verbindung ersetzen, wenn über sie seit > 5 s nichts kam. | klein | Schnellerer Wiedereinstieg nach Netzwechsel (WLAN → Mobilfunk). |
 | **P2** | Delay-Glättung: Der Delay springt heute mit jedem Ping-Wert. Besser mit Hysterese (nur bei deutlicher Änderung oder nach mehreren Messungen) und mit Spitzen der RTT statt dem Mittel. | klein | Gleichmäßigeres Spielgefühl bei wackligem WLAN. |
 | **P3** | **Eigener Vermittler/TURN** (z. B. PeerJS-Server oder coturn auf einem kleinen VPS bzw. Cloudflare-TURN), alternativ ein WebSocket-Relay als Fallback. | mittel, laufende Kosten | Der öffentliche PeerJS-Dienst hat keine Garantie; fällt er aus, geht kein Online-Spiel. Für einen Prototyp aber vertretbar. |
-| **P3** | PeerJS selbst bündeln statt aus dem CDN zu laden. | klein | Werbeblocker und CDN-Ausfälle verhindern sonst das Online-Spiel (die Fehlermeldung dazu gibt es schon). |
+| ~~P3~~ | ~~PeerJS selbst bündeln statt aus dem CDN zu laden.~~ **Erledigt (18.11.).** | – | – |
 | **P3** | Online-Replays am Rundenende anbieten (`canReplay: false` bei Aufgabe oder Abbruch). | klein | Hilft bei Balance und Fehlersuche. |
 | **P3** | Matchmaking / öffentliche Lobby. | groß | Erst sinnvoll mit eigenem Server. |
 

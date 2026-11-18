@@ -23,6 +23,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "peerjs": "1.5.4",
     "three": "0.160.0"
   }
 }
