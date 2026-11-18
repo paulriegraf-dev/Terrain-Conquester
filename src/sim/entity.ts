@@ -95,6 +95,8 @@ export interface ProducerState {
   blockedBy: 'none' | 'cap';
   /** So viele Einheiten hat das Gebäude schon losgeschickt (vor der ersten greift ein Marschbefehl sofort). */
   produced: number;
+  /** Eliteprogramm (18.11.): gebaute Verbände ohne Beimischung (Nano-Heiler) – Takt der Elite-Verbände. */
+  lineBirths?: number;
   /** Ab diesem Tick ist wieder ein Eilauftrag möglich. */
   rushReadyTick: number;
   /** Aufgebot (Nachtrag G): Ticks der Käufe an dieser Fabrik (Preis steigt innerhalb von 3 min). */

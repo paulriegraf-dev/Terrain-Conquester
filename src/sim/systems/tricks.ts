@@ -329,10 +329,18 @@ export function lastBite(world: World, e: Entity): void {
 
 // ------------------------------------------------------------------ Fabrik-Verhalten
 
-/** Eliteprogramm: Ist der gerade gebaute Verband dieser Fabrik ein Elite-Verband? (jeder 4.) */
-export function eliteBirth(world: World, building: Entity): boolean {
+/**
+ * Eliteprogramm: Ist der gerade gebaute Verband dieser Fabrik ein Elite-Verband? (jeder 4. Linien-Verband)
+ * 18.11.: Die Beimischung (Nano-Heiler der Kaserne ab Stufe III) zählt nicht mit und wird nie Elite – vorher lagen beide auf
+ * demselben Takt, und an der Kaserne III wurde immer der Nano-Heiler zur Elite. `isMix`: der Verband ist die Beimischung.
+ */
+export function eliteBirth(world: World, building: Entity, isMix = false): boolean {
+  const pr = building.producer;
+  if (!pr || isMix) return false;
+  const n = pr.lineBirths ?? 0;
+  pr.lineBirths = n + 1;
   if (buildingUpgradeLevel(world, building.owner, building.defId as BuildingId, 'elite') <= 0) return false;
-  return (building.producer?.produced ?? 0) % TRICK.elite.every === TRICK.elite.every - 1;
+  return n % TRICK.elite.every === TRICK.elite.every - 1;
 }
 
 /**
