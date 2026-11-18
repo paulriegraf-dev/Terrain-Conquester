@@ -9,10 +9,10 @@ import { World } from '../src/sim/world';
 import { openMap, smallBases } from './fixtures';
 
 describe('Pur-Profil (30.10.)', () => {
-  it('Regeln: HQ-Schaden ×1 ab Start, kein Wachstum, kein Sturm, Energie ×1, keine Heilung, keine Befestigung, Nachschub aus, HQ ohne Waffe', () => {
+  it('Regeln: HQ-Schaden ×1 ab Start, kein Wachstum, kein Sturm, Energie ×1 bis 8:00 und danach ×1,3 (18.11.), keine Heilung, keine Befestigung, Nachschub aus, HQ ohne Waffe', () => {
     for (const p of RULES.phases) {
       assert.equal(p.hqDamageMult, 1);
-      assert.equal(p.energyMult, 1);
+      assert.equal(p.energyMult, p.at < 480 ? 1 : 1.3); // 18.11.: Economy-Schub ab 8:00
       assert.ok(!p.hqDamageGrowth && !p.stormHq);
     }
     assert.equal(RULES.front.regenPerSecond, 0);

@@ -107,3 +107,18 @@ describe('Pacing statt Zeitlimit', () => {
     assert.equal(world.result, null);
   });
 });
+
+describe('Economy-Schub ab 8:00 (18.11.)', () => {
+  it('Einkommen ×1,3 ab der Eskalation, vorher ×1', async () => {
+    const { felsenpass } = await import('../src/data/maps/felsenpass');
+    const { incomePerSecond } = await import('../src/sim/systems/economy');
+    const world = new World({ map: felsenpass, seed: 1 });
+    world.territory[0] = 0; // nur das Grundeinkommen vergleichen
+    const early = incomePerSecond(world, 0);
+    assert.equal(world.phase.energyMult, 1);
+    while (world.seconds <= 480) world.step(); // die Phase wechselt im ersten Schritt ab 8:00
+    world.territory[0] = 0;
+    assert.equal(world.phase.energyMult, 1.3);
+    assert.ok(Math.abs(incomePerSecond(world, 0) - early * 1.3) < 1e-9, `${early} → ${incomePerSecond(world, 0)}`);
+  });
+});
