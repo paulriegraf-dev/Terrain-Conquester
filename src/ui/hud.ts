@@ -730,7 +730,7 @@ export class Hud {
       FACTION_IDS.includes(sel.value as FactionId) ? (sel.value as FactionId) : 'technoclan';
     return {
       mapId: this.el.mapSelect.value,
-      level: level === 'easy' || level === 'paulslike' ? level : 'normal',
+      level: level === 'paulslike' ? 'paulslike' : 'easy', // 18.11.: „Normal“ in der Auswahl = intern easy
       factions: [faction(this.el.factionSelect), faction(this.el.enemyFactionSelect)],
       overtime: OVERTIME_VARIANT_IDS.includes(this.el.overtimeSelect.value as OvertimeVariant) ? (this.el.overtimeSelect.value as OvertimeVariant) : 'off',
       side: this.doc.querySelector<HTMLInputElement>('input[name="opt-side"]:checked')?.value === '1' ? 1 : 0,

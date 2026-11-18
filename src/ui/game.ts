@@ -281,7 +281,7 @@ export class Game {
     this.music.play('menu');
     this.mp = null;
     this.doc.body.classList.add('start-mode');
-    this.session = new Session('demo', pick(MAPS).id, randomSeed(), 'normal', undefined, undefined, 'off', 0, null, 'random');
+    this.session = new Session('demo', pick(MAPS).id, randomSeed(), 'easy', undefined, undefined, 'off', 0, null, 'random');
     // Etwas vorspulen, damit beim Öffnen schon etwas los ist.
     for (let i = 0; i < 100 * this.session.world.tps && !this.session.world.result; i++) this.session.step();
     this.resetView('demo');
@@ -331,7 +331,7 @@ export class Game {
     this.menuOpen = false;
     this.doc.body.classList.remove('start-mode');
     this.music.play('game');
-    this.session = new Session('play', setup.map, randomSeed(), 'normal', setup.factions, undefined, 'off', 0, null, 'main', true);
+    this.session = new Session('play', setup.map, randomSeed(), 'easy', setup.factions, undefined, 'off', 0, null, 'main', true);
     this.resetView('play');
     this.view.prep = false;
     this.view.fog = false; // Test-Box: alles sehen – auch gegnerische Einheiten

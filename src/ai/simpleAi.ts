@@ -66,8 +66,14 @@ import type { Domain } from './weights';
  */
 
 /** Schwierigkeit (KI-Patch 4, 30.10.): Leicht, Normal, Paulslike – Unterschiede nur in Takt, Schätzfehler, Zweitwahl und Blind-Alter, nie in Energie oder Werten. */
+/**
+ * 18.11.: In der Auswahl stehen nur noch „Normal“ (= intern `easy`, die Stufe gewann im Review 19 : 8 gegen das alte Normal)
+ * und „Paulslike“. Das alte `normal` bleibt im Code (Messläufe, Replays), ist aber nicht mehr wählbar.
+ */
 export type AiLevel = 'easy' | 'normal' | 'paulslike';
 export const AI_LEVELS: readonly AiLevel[] = ['easy', 'normal', 'paulslike'];
+/** Wählbare Stufen im Startbildschirm, mit Anzeigenamen. */
+export const AI_LEVEL_CHOICES: readonly { level: AiLevel; name: string }[] = [{ level: 'easy', name: 'Normal' }, { level: 'paulslike', name: 'Paulslike' }];
 export type AiStrategyId = 'swarm' | 'raid' | 'siege' | 'balanced';
 
 interface StrategyDef {
