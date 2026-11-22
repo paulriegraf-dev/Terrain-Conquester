@@ -78,6 +78,44 @@ function pair(latency: (rng: () => number) => number, seed = 11, hidden?: { side
 }
 
 describe('Multiplayer: Lockstep', () => {
+  it('22.11.: Verzögerung steigt bei Ausreißern sofort, sinkt erst nach mehreren ruhigen Messungen', () => {
+    const ls = new Lockstep(0, true, () => {}, 3);
+    let now = 0;
+    const pong = (ms: number): void => {
+      now += 1000;
+      ls.onMessage({ k: 'pong', ts: now - ms }, now);
+    };
+    for (let i = 0; i < 3; i++) pong(40);
+    assert.equal(ls.delay, 3, 'ruhige Leitung: 3 Ticks');
+    pong(400); // ein Ausreißer
+    assert.equal(ls.delay, 6, 'sofort hoch');
+    // Der Ausreißer bleibt 8 Messungen im Spitzenwert, danach 5 ruhige in Folge, bis es wieder runtergeht.
+    const seen: number[] = [];
+    for (let i = 0; i < 14; i++) {
+      pong(40);
+      seen.push(ls.delay);
+    }
+    assert.ok(seen.slice(0, 11).every((d) => d === 6), `hält erst (${seen.join(',')})`);
+    assert.equal(ls.delay, 3, 'dann wieder runter');
+  });
+
+  it('22.11.: eine Abweichung wird mit den betroffenen Bereichen gemeldet (Diagnose)', () => {
+    const p = pair((rng) => 20 + rng() * 60);
+    p.run(10_000);
+    const [a, b] = p.sides;
+    assert.equal(a!.ls.desyncAt, null);
+    // Nur auf Rechner B: Fabrik-Fortschritt minimal verstellen (bewegt noch keine Einheit).
+    const factory = b!.s.world.entities.find((e) => e.alive && e.producer && !e.producer.paused)!;
+    factory.producer!.progress += 1e-6;
+    p.run(3000);
+    for (const side of [a!, b!]) {
+      assert.ok(side.ls.desyncAt !== null, 'Abweichung erkannt');
+      assert.ok(side.ls.desync!.differ.includes('fabriken'), `Bereich genannt: ${side.ls.desync!.differ.join(', ')}`);
+      assert.ok(!side.ls.desync!.differ.includes('gelaende'));
+      assert.equal(side.ls.desync!.theirs!.length, side.ls.desync!.mine.length);
+    }
+  });
+
   it('zwei Rechner mit schwankender Laufzeit bleiben gleich (KI-Befehle über issue)', () => {
     const p = pair((rng) => 20 + rng() * 140);
     p.run(120_000);

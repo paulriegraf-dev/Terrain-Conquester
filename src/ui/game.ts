@@ -15,6 +15,7 @@ import { PROTOCOLS } from '../data/units';
 import type { TimedCommand } from '../sim/commands';
 import type { Entity } from '../sim/entity';
 import { hashWorld } from '../sim/hash';
+import type { HashPart } from '../sim/hash';
 import { dist, rectContains } from '../sim/math';
 import { checkSwapArea, checkWall } from '../sim/systems/abilities';
 import { checkRally } from '../sim/systems/rally';
@@ -93,6 +94,21 @@ const FLOW_CYCLE: (MoveProfileId | null)[] = [null, 'foot', 'wheels', 'tracks', 
  * Verbindet alles: Spielschleife (feste Ticks, flüssige Darstellung),
  * Eingabe, HUD und Lagebericht. Die Simulation selbst steckt in src/sim.
  */
+
+/** Online: So lange (s) wird auf einen Mitspieler ohne Verbindung gewartet, dann endet die Runde als Abbruch. */
+const ONLINE_GIVE_UP_SECONDS = 60;
+
+/** Bereiche des Fingerabdrucks in Worten (Desync-Meldung). */
+const HASH_PART_NAMES: Record<HashPart, string> = {
+  spieler: 'Energie/Forschung',
+  einheiten: 'Einheiten',
+  fabriken: 'Fabriken',
+  stationen: 'Stationen',
+  einfluss: 'Gebiet',
+  gelaende: 'Gelände',
+  zufall: 'Zufall',
+};
+
 export class Game {
   private session!: Session;
   private view: ViewState = createView('demo');
@@ -145,6 +161,9 @@ export class Game {
   private lastPing = 0;
   private stalledSince = 0;
   private desyncShown = false;
+  /** Online-Abweichung (22.11.): Diagnose-Datei und wann sie entstand (Hinweis mit Knopf für 30 s). */
+  private desyncReport: SavedMatch | null = null;
+  private desyncAtMs = 0;
   /** Multiplayer-Runde außerhalb der Simulation beendet (Aufgabe, Verbindungsabbruch). */
   private onlineEnded = false;
   private shownWorld: World | null = null;
@@ -1284,9 +1303,10 @@ export class Game {
         this.startOnline();
         break;
       case 'mp-stop-wait':
-        this.reconnectSince = 0;
-        this.leaveRoom();
-        this.endOnline('Verbindung verloren', 'Dein Mitspieler ist nicht zurückgekommen.', null);
+        this.stopWaiting('Dein Mitspieler ist nicht zurückgekommen.');
+        break;
+      case 'mp-desync-dump':
+        if (this.desyncReport) downloadJson(`terrain-conquester-abweichung-${this.desyncReport.date.slice(0, 16).replace(/[:T]/g, '-')}.json`, this.desyncReport);
         break;
       case 'mp-resume':
         if (this.mp?.host) this.session.lockstep?.resume();
@@ -1743,40 +1763,75 @@ export class Game {
     }
     let text = '';
     let giveUp = false;
+    let waited = 0;
     const cu = this.session.catchUp;
     if (cu) {
       text = `Hole die laufende Runde auf … ${Math.floor((this.session.world.tick / Math.max(1, cu.total)) * 100)} %`;
     } else if (ls && this.reconnectSince && !this.onlineEnded && !this.session.world.result) {
       const secs = Math.floor((now - this.reconnectSince) / 1000);
-      text = `Verbindung unterbrochen – warte auf deinen Mitspieler (${clock(secs)}). Lädt er die Seite mit dem Raum-Link neu, geht es hier weiter.`;
+      waited = secs;
+      text = `Verbindung unterbrochen – warte auf deinen Mitspieler (${clock(secs)}). Lädt er die Seite mit dem Raum-Link neu, geht es hier weiter.${secs >= 20 ? ` Ohne ihn endet die Runde in ${ONLINE_GIVE_UP_SECONDS - secs} s.` : ''}`;
       giveUp = secs >= 20;
     } else if (ls && !this.onlineEnded && !this.session.world.result) {
       if (this.session.prepActive && this.session.myPrepDone) text = 'Warte, bis dein Gegner bereit ist …';
       else if (this.stalledSince && now - this.stalledSince > 1200) {
         // Bricht die Leitung still ab (kein „close“), bleibt es hier – nach 20 s auch dann aufgeben können.
         const secs = Math.floor((now - this.stalledSince) / 1000);
-        text = secs >= 20 ? `Keine Eingaben von deinem Mitspieler seit ${clock(secs)}.` : 'Warte auf deinen Mitspieler … (Verbindung langsam)';
+        waited = secs;
+        text = secs >= 20 ? `Keine Eingaben von deinem Mitspieler seit ${clock(secs)} – die Runde endet in ${ONLINE_GIVE_UP_SECONDS - secs} s.` : 'Warte auf deinen Mitspieler … (Verbindung langsam)';
         giveUp = secs >= 20;
       }
       if (ls.desyncAt !== null && !this.desyncShown) {
         this.desyncShown = true;
-        this.hud.log(this.session.world.seconds, `Achtung: Die Spielstände beider Rechner weichen ab (seit ${clock(ls.desyncAt / this.session.world.tps)}). Bitte melden – das Replay hilft beim Suchen.`, 'bad');
+        this.onDesync(now);
       }
     }
-    const key = `${giveUp ? 'b' : ''}|${text}`;
+    // 22.11.: Wer 60 s auf seinen Mitspieler wartet, dessen Runde endet als Abbruch (wie der Disconnect-Timer in SC2).
+    if (waited >= ONLINE_GIVE_UP_SECONDS && !this.onlineEnded && !this.session.world.result) {
+      this.stopWaiting(`Nach ${clock(ONLINE_GIVE_UP_SECONDS)} ohne Verbindung automatisch beendet.`);
+      return;
+    }
+    let dump = false;
+    if (!text && this.desyncReport && now - this.desyncAtMs < 30_000) {
+      text = 'Die Spielstände weichen ab – die Runde läuft weiter, aber nicht mehr verlässlich.';
+      dump = true;
+    }
+    const key = `${giveUp ? 'b' : ''}${dump ? 'd' : ''}|${text}`;
     if (net.dataset.key !== key) {
       net.dataset.key = key;
       net.textContent = text;
-      if (giveUp) {
+      const button = (action: string, label: string): void => {
         const btn = this.doc.createElement('button');
         btn.type = 'button';
         btn.className = 'btn-mini';
-        btn.dataset.action = 'mp-stop-wait';
-        btn.textContent = 'Runde beenden';
+        btn.dataset.action = action;
+        btn.textContent = label;
         net.append(' ', btn);
-      }
+      };
+      if (giveUp) button('mp-stop-wait', 'Runde beenden');
+      if (dump) button('mp-desync-dump', 'Diagnose speichern');
     }
     net.hidden = !text;
+    this.updateNetStat(now);
+  }
+
+  /** Ping und Eingabeverzögerung im Spiel (22.11.) – wer verzögert spielt, sieht warum. */
+  private updateNetStat(now: number): void {
+    const el = this.doc.getElementById('net-stat');
+    if (!el) return;
+    const ls = this.session.lockstep;
+    const show = !!ls && !this.onlineEnded && !this.session.world.result && !this.session.catchUp;
+    el.hidden = !show;
+    if (!show) return;
+    const waiting = !!this.reconnectSince || (!!this.stalledSince && now - this.stalledSince > 1200);
+    const rtt = Math.round(Math.max(ls.rtt, ls.remoteRtt));
+    const delayMs = Math.round((ls.delay * 1000) / this.session.world.tps);
+    const text = waiting ? 'wartet auf Gegner' : `Ping ${rtt} ms`;
+    const q = waiting || rtt >= 250 ? 'bad' : rtt >= 120 ? 'warn' : 'good';
+    const title = `Laufzeit hin und zurück: eigene ${Math.round(ls.rtt)} ms, Gegner ${Math.round(ls.remoteRtt)} ms. Deine Befehle wirken nach ${delayMs} ms (${ls.delay} Ticks Eingabeverzögerung).`;
+    if (el.textContent !== text) el.textContent = text;
+    if (el.dataset.q !== q) el.dataset.q = q;
+    if (el.title !== title) el.title = title;
   }
 
   private toggleOnlinePause(): void {
@@ -2143,7 +2198,15 @@ export class Game {
     const s = this.session;
     const world = s.world;
     if (s.mode !== 'play' || world.tick < 20 * world.tps) return; // ganz kurze Runden nicht
-    const m: SavedMatch = {
+    const m = this.matchRecord(winner, reason);
+    this.lastSaved = m;
+    void saveMatch(m).then(() => this.syncSavedCount());
+  }
+
+  private matchRecord(winner: PlayerId | null, reason: string): SavedMatch {
+    const s = this.session;
+    const world = s.world;
+    return {
       id: `${Date.now()}-${s.seed}`,
       date: new Date().toISOString(),
       version: gameVersion(),
@@ -2159,9 +2222,28 @@ export class Game {
       log: [...world.log],
       hash: hashWorld(world),
       snapshots: [...this.snapshots, snapshotOf(world)],
+      ...(s.lockstep?.desync ? { desync: s.lockstep.desync } : {}),
     };
-    this.lastSaved = m;
+  }
+
+  /** Online-Abweichung: Diagnose sofort speichern (Browser) und zum Herunterladen anbieten. */
+  private onDesync(now: number): void {
+    const ls = this.session.lockstep!;
+    const world = this.session.world;
+    const m = this.matchRecord(null, 'abweichung');
+    m.id = `${m.id}-abweichung`;
+    this.desyncReport = m;
+    this.desyncAtMs = now;
     void saveMatch(m).then(() => this.syncSavedCount());
+    const where = ls.desync ? ls.desync.differ.map((k) => HASH_PART_NAMES[k]).join(', ') : 'unbekannt';
+    this.hud.log(world.seconds, `Achtung: Die Spielstände beider Rechner weichen ab (seit ${clock((ls.desyncAt ?? 0) / world.tps)}, Bereich: ${where}). Die Diagnose-Datei ist gespeichert – bitte melden.`, 'bad');
+  }
+
+  /** Warten aufgeben: Raum verlassen, Runde als Abbruch beenden. */
+  private stopWaiting(summary: string): void {
+    this.reconnectSince = 0;
+    this.leaveRoom();
+    this.endOnline('Verbindung verloren', summary, null);
   }
 
   /** Zahl der gespeicherten Partien auf dem Knopf im Titelbild. */

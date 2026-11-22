@@ -1,3 +1,4 @@
+import { sq } from './math';
 import type { StationKind } from '../data/stations';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../data/terrain';
 import type { Rules } from '../data/rules';
@@ -321,7 +322,7 @@ export function laneMultiplier(map: ParsedMap, route: Route, bandHalf: number, p
   for (let y = 0; y < map.height; y++) {
     if (Math.abs(y + 0.5 - wy) <= bandHalf) continue;
     for (let x = 0; x < map.width; x++) {
-      if (hqs.some((h) => (x + 0.5 - h.x) ** 2 + (y + 0.5 - h.y) ** 2 <= freeRadius * freeRadius)) continue;
+      if (hqs.some((h) => sq(x + 0.5 - h.x) + sq(y + 0.5 - h.y) <= freeRadius * freeRadius)) continue;
       out[y * map.width + x] = penalty;
     }
   }

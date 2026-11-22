@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { TRICK, hasTrick, noteJump, onTerraHit, trickSpeed } from './tricks';
 import { sensorCovers } from './sites';
 import { TERRAIN_INDEX, TERRAIN_LIST } from '../../data/terrain';
@@ -185,7 +186,7 @@ export function camouflageRange(world: World, e: Entity): number | null {
   const camo = e.tf.gb?.camouflage ?? synergyCamouflage(world, e);
   if (camo === null || camo === undefined) return null;
   // Technoclan-Elite mit Weitsicht (25.10.): entdeckt Getarnte in ihrer Sicht.
-  for (const d of world.detectors[e.owner === 0 ? 1 : 0]) if ((d.x - e.pos.x) ** 2 + (d.y - e.pos.y) ** 2 <= d.r * d.r) return null;
+  for (const d of world.detectors[e.owner === 0 ? 1 : 0]) if (sq(d.x - e.pos.x) + sq(d.y - e.pos.y) <= d.r * d.r) return null;
   // Sensorstation (Station): entdeckt Getarnte in ihrem Abschnitt.
   if (sensorCovers(world, e.owner === 0 ? 1 : 0, e.pos.x, e.pos.y)) return null;
   return camo;
@@ -516,7 +517,7 @@ function nearestEnemyGorge(world: World, e: Entity, radius: number): number | nu
       const i = g.index(x, y);
       if (!enemyGorge(world, i, p)) continue;
       if (!push && controllerAt(world, i) === enemy) continue;
-      const d = (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2;
+      const d = sq(x + 0.5 - e.pos.x) + sq(y + 0.5 - e.pos.y);
       if (d < bestD - 1e-9 || (Math.abs(d - bestD) < 1e-9 && i < best)) {
         bestD = d;
         best = i;
@@ -602,7 +603,7 @@ function cautionOf(world: World, e: Entity): { x: number; y: number; until: numb
   let best: { x: number; y: number; d: number } | null = null;
   for (const o of world.entities) {
     if (!o.alive || o.owner === e.owner || o.kind !== 'unit' || !o.weapon) continue;
-    const d = Math.sqrt((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2);
+    const d = Math.sqrt(sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y));
     if (d > r || (best && d >= best.d) || !world.isVisibleTo(e.owner, o) || coveredByWard(world, e, o)) continue;
     best = { x: o.pos.x, y: o.pos.y, d };
   }
@@ -616,7 +617,7 @@ function cautionOf(world: World, e: Entity): { x: number; y: number; until: numb
 function tooClose(world: World, c: { x: number; y: number } | null, x: number, y: number, slack = 1): boolean {
   if (!c) return false;
   const s = world.rules.terraform.standoff - slack;
-  return (x - c.x) ** 2 + (y - c.y) ** 2 < s * s;
+  return sq(x - c.x) + sq(y - c.y) < s * s;
 }
 
 /**
@@ -631,7 +632,7 @@ function retreatTarget(world: World, e: Entity): Vec2 | null {
   const threatened = (x: number, y: number): boolean => {
     for (const o of world.entities) {
       if (!o.alive || o.owner === p || o.kind !== 'unit') continue;
-      if ((o.pos.x - x) ** 2 + (o.pos.y - y) ** 2 <= r.retreatRadius * r.retreatRadius) return true;
+      if (sq(o.pos.x - x) + sq(o.pos.y - y) <= r.retreatRadius * r.retreatRadius) return true;
     }
     return false;
   };
@@ -639,7 +640,7 @@ function retreatTarget(world: World, e: Entity): Vec2 | null {
   let bestD = Infinity;
   const consider = (x: number, y: number): void => {
     if ((e.pos.x - x) * dir < -0.5) return; // nie weiter nach vorn
-    const d = (x - e.pos.x) ** 2 + (y - e.pos.y) ** 2;
+    const d = sq(x - e.pos.x) + sq(y - e.pos.y);
     if (d < 4 || d >= bestD || threatened(x, y)) return;
     best = { x, y };
     bestD = d;
@@ -654,7 +655,7 @@ function retreatTarget(world: World, e: Entity): Vec2 | null {
     let n = 0;
     let sx = 0;
     let sy = 0;
-    for (const o of wards) if ((o.pos.x - w.pos.x) ** 2 + (o.pos.y - w.pos.y) ** 2 <= 9) { n++; sx += o.pos.x; sy += o.pos.y; }
+    for (const o of wards) if (sq(o.pos.x - w.pos.x) + sq(o.pos.y - w.pos.y) <= 9) { n++; sx += o.pos.x; sy += o.pos.y; }
     if (n >= r.retreatGroup) consider(sx / n - dir * 1.0, sy / n);
   }
   return best;
@@ -669,7 +670,7 @@ function evadeTarget(world: World, e: Entity): Vec2 | null {
   const r = world.rules.terraform;
   const dir = forward(world, e.owner);
   const foes: Entity[] = [];
-  for (const o of world.entities) if (o.alive && o.owner !== e.owner && o.kind === 'unit' && o.weapon && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= 16 * 16) foes.push(o);
+  for (const o of world.entities) if (o.alive && o.owner !== e.owner && o.kind === 'unit' && o.weapon && sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= 16 * 16) foes.push(o);
   if (foes.length === 0) return null;
   const profile = MOVE_PROFILES[e.mover!.profile];
   const midY = world.map.height / 2;
@@ -683,7 +684,7 @@ function evadeTarget(world: World, e: Entity): Vec2 | null {
       if ((x - e.pos.x) * dir > 0.5) continue; // nie nach vorn
       if (!world.grid.isPassable(Math.floor(x), Math.floor(y), profile) || !lineClear(world, e.pos, { x, y }, profile, e.owner)) continue;
       let near = Infinity;
-      for (const o of foes) near = Math.min(near, Math.sqrt((o.pos.x - x) ** 2 + (o.pos.y - y) ** 2));
+      for (const o of foes) near = Math.min(near, Math.sqrt(sq(o.pos.x - x) + sq(o.pos.y - y)));
       if (near <= r.retreatRadius + 1) continue;
       const score = near + 0.25 * Math.abs(y - midY);
       if (score > bestScore) { bestScore = score; best = { x, y }; }
@@ -706,7 +707,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   // Vorsicht (31.10.): alle 10 Ticks nach sichtbaren Gegnern schauen.
   if ((world.tick + e.id) % 10 === 0 || tf.caution === undefined) tf.caution = cautionOf(world, e);
   const caution = tf.caution ?? null;
-  const cd = caution ? Math.sqrt((e.pos.x - caution.x) ** 2 + (e.pos.y - caution.y) ** 2) : Infinity;
+  const cd = caution ? Math.sqrt(sq(e.pos.x - caution.x) + sq(e.pos.y - caution.y)) : Infinity;
   // Gegner zu nah: Ritual abbrechen, auf Abstand gehen (Rückzug bleibt der letzte Ausweg bei retreatRadius).
   if (caution && cd < rules.standoff) {
     tf.block = null;
@@ -830,7 +831,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
     }
   }
   if (tf.retreat) {
-    const d2 = (e.pos.x - tf.retreat.x) ** 2 + (e.pos.y - tf.retreat.y) ** 2;
+    const d2 = sq(e.pos.x - tf.retreat.x) + sq(e.pos.y - tf.retreat.y);
     if (d2 > 0.6 * 0.6 && world.tick < tf.retreat.until) {
       m.goal = tf.retreat;
       return;
@@ -840,7 +841,7 @@ function updateFormer(world: World, e: Entity, def: UnitDef): void {
   }
   // Schritt nach dem Ruf: erst ankommen, dann weiter nach Prüfreihenfolge.
   if (tf.stepTo) {
-    const d2 = (e.pos.x - tf.stepTo.x) ** 2 + (e.pos.y - tf.stepTo.y) ** 2;
+    const d2 = sq(e.pos.x - tf.stepTo.x) + sq(e.pos.y - tf.stepTo.y);
     if (d2 > 0.5 * 0.5 && world.tick < (tf.stepUntil ?? 0)) {
       m.goal = tf.stepTo;
       return;
@@ -1135,7 +1136,7 @@ function rootsJump(world: World, e: Entity, r: { every: number; chance: number; 
     const y = Math.floor(i / g.width);
     const r2 = laneOfRow(world, y);
     if (r2 !== laneOfRow(world, Math.floor(e.pos.y))) continue; // v2: Wurzelnetz nur innerhalb der eigenen Lane
-    if ((i % g.width + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2 < 9) continue; // kein Hüpfer auf der Stelle
+    if (sq(i % g.width + 0.5 - e.pos.x) + sq(y + 0.5 - e.pos.y) < 9) continue; // kein Hüpfer auf der Stelle
     const x = i % g.width;
     const call = world.entities.some((o) => o.alive && o.kind === 'unit' && o.owner !== e.owner && Math.abs(o.pos.x - x - 0.5) <= 2 && Math.abs(o.pos.y - y - 0.5) <= 2);
     patches.push({ cell: i, route: r2, call });

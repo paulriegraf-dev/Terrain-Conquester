@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { immovable, packSpeed } from './keystone';
 import { MOVE_PROFILES } from '../../data/movement';
 import type { MoveProfile } from '../../data/movement';
@@ -561,8 +562,8 @@ function nearestNear(world: World, e: Entity, near: SpatialGrid, center: Vec2, r
   let bestD = Infinity;
   near.forEachNear(center.x, center.y, r, (o) => {
     if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) return;
-    if ((o.prev.x - center.x) ** 2 + (o.prev.y - center.y) ** 2 > r * r || !world.isVisibleTo(e.owner, o)) return;
-    const d2 = (o.prev.x - e.pos.x) ** 2 + (o.prev.y - e.pos.y) ** 2;
+    if (sq(o.prev.x - center.x) + sq(o.prev.y - center.y) > r * r || !world.isVisibleTo(e.owner, o)) return;
+    const d2 = sq(o.prev.x - e.pos.x) + sq(o.prev.y - e.pos.y);
     if (d2 < bestD || (d2 === bestD && best && o.id < best.id)) {
       best = o;
       bestD = d2;

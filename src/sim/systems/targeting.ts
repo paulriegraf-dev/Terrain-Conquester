@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { SLIT } from './visibility';
 import { secureAnchor } from './sites';
 import type { Entity, EntityKind } from '../entity';
@@ -106,7 +107,7 @@ export function fireBlocked(world: World, e: Entity, t: Entity): boolean {
     if (x0 === x1 && y0 === y1) return false;
     const owner = world.wallOwner[g.index(x0, y0)];
     if (!owner) continue;
-    if (owner === e.owner + 1 && (e.kind !== 'unit' || (x0 + 0.5 - e.pos.x) ** 2 + (y0 + 0.5 - e.pos.y) ** 2 <= SLIT * SLIT)) continue;
+    if (owner === e.owner + 1 && (e.kind !== 'unit' || sq(x0 + 0.5 - e.pos.x) + sq(y0 + 0.5 - e.pos.y) <= SLIT * SLIT)) continue;
     return true;
   }
   return false;
@@ -116,7 +117,7 @@ export function fireBlocked(world: World, e: Entity, t: Entity): boolean {
 function treeShot(world: World, e: Entity, t: Entity): boolean {
   if (e.defId !== 'wardForest' || t.kind !== 'unit' || !hasKeystone(world, e.owner, 'wardForest') || !onOwn(world, e, TERRAIN_INDEX.forest)) return false;
   if (camouflageRange(world, t) !== null) return false;
-  return (t.pos.x - e.pos.x) ** 2 + (t.pos.y - e.pos.y) ** 2 <= e.vision * e.vision;
+  return sq(t.pos.x - e.pos.x) + sq(t.pos.y - e.pos.y) <= e.vision * e.vision;
 }
 
 /** Grasnarbe: Halmläufer mit Schlussstein steht seit mindestens 1 s still auf Wiese. */
@@ -284,7 +285,7 @@ export function updateTargeting(world: World): void {
       if (t.kind === 'wall') return d <= range + slack; // Wälle nur, was in Reichweite liegt – niemand jagt ihnen nach
       if (d <= range || !holding) return true;
       // Sichern: Gegner an der Station der Lane (bis contestRadius + 2) dürfen gestellt werden.
-      if (secureSite && (t.pos.x - secureSite.pos.x) ** 2 + (t.pos.y - secureSite.pos.y) ** 2 <= (world.rules.sites.contestRadius + 2) ** 2) return true;
+      if (secureSite && sq(t.pos.x - secureSite.pos.x) + sq(t.pos.y - secureSite.pos.y) <= sq(world.rules.sites.contestRadius + 2)) return true;
       // Haltende Truppen verfolgen nur Gegner im eigenen oder umkämpften Gebiet – kein Nachsetzen übers Niemandsland.
       // Haltende Artillerie rückt an Bauwerke heran, solange sie dafür im eigenen Gebiet bleibt.
       if (siege && t.kind !== 'unit') return siegeSpotOk(world, e, t, range);

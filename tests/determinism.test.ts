@@ -94,6 +94,8 @@ describe('Architektur-Wächter', () => {
     [/Math\.random/, 'Math.random (nur Rng aus sim/rng.ts)'],
     [/Date\.now|new Date|performance\.now/, 'Uhrzeit (Simulation zählt Ticks)'],
     [/Math\.(sin|cos|tan|atan2?|hypot|pow|exp|log)\b/, 'Math-Funktionen, die je nach Browser abweichen können'],
+    // 22.11.: `**` ist Math.pow – in Safari nicht garantiert gleich. Quadrat: sq() aus sim/math.ts.
+    [/[\w)\]]\s*\*\*=?\s*[\w(.+-]/, 'Potenz-Operator ** (wie Math.pow; statt x ** 2 bitte sq(x))'],
     [/\b(document|window)\./, 'DOM (Simulation kennt keinen Bildschirm)'],
     [/from ['"](\.\.\/)+(ai|render|ui)\//, 'Import aus ai/render/ui'],
   ];

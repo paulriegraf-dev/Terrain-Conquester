@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { UNITS } from '../../data/units';
 import type { UnitId } from '../../data/units';
 import { MOVE_PROFILES } from '../../data/movement';
@@ -21,7 +22,7 @@ function nearestRoute(world: World, x: number, y: number): Route {
   let bestD = Infinity;
   for (const r of ROUTES) {
     const wp = world.map.waypoints[r];
-    const d = (wp.x - x) ** 2 + (wp.y - y) ** 2;
+    const d = sq(wp.x - x) + sq(wp.y - y);
     if (d < bestD) {
       bestD = d;
       best = r;

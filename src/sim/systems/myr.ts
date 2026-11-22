@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { TRICK, hasTrick } from './tricks';
 import { hasKeystone, secondThrow, underPressure, updatePack } from './keystone';
 import { landLeap, updateBreakers } from './breaker';
@@ -293,7 +294,7 @@ function nearestPassable(world: World, pos: Vec2, profile: (typeof MOVE_PROFILES
 function burrowPod(world: World, f: Flight, pos: Vec2, b: NonNullable<Flight['burrow']>): void {
   const r2 = b.radius * b.radius;
   const pod = { unit: f.unit, models: f.models, pos: { x: pos.x, y: pos.y } };
-  const group = world.burrows.find((g) => g.owner === f.owner && (g.pos.x - pos.x) ** 2 + (g.pos.y - pos.y) ** 2 <= r2);
+  const group = world.burrows.find((g) => g.owner === f.owner && sq(g.pos.x - pos.x) + sq(g.pos.y - pos.y) <= r2);
   if (!group) {
     world.burrows.push({ owner: f.owner, pos: { x: pos.x, y: pos.y }, route: f.route, pods: [pod], first: world.tick, breakAt: world.tick + Math.round(b.seconds * world.tps), refreshes: 0 });
     world.emit({ type: 'land', owner: f.owner, unit: f.unit, pos: { x: pos.x, y: pos.y } });
@@ -337,11 +338,11 @@ function landCharge(world: World, f: Flight): void {
   const hits: Hit[] = [];
   const r2 = c.radius * c.radius;
   const main = world.get(c.target);
-  const mainHit = !!main && main.alive && (main.pos.x - f.to.x) ** 2 + (main.pos.y - f.to.y) ** 2 <= (c.radius + main.radius) ** 2;
+  const mainHit = !!main && main.alive && sq(main.pos.x - f.to.x) + sq(main.pos.y - f.to.y) <= sq(c.radius + main.radius);
   for (const o of world.entities) {
     if (!o.alive || o.owner === f.owner || (o.kind !== 'unit' && o !== main)) continue;
     const isMain = mainHit && o === main;
-    if (!isMain && (o.pos.x - f.to.x) ** 2 + (o.pos.y - f.to.y) ** 2 > r2) continue;
+    if (!isMain && sq(o.pos.x - f.to.x) + sq(o.pos.y - f.to.y) > r2) continue;
     const expected = woundsPerShot(c.weapon, defenseOf(world, o)) * (isMain ? 1 : 0.5);
     if (expected > 0) hits.push({ target: o, ...blastHit(o, c.damage, expected), attacker: f.owner, src: f.unit });
   }
@@ -361,7 +362,7 @@ function damageFields(world: World): void {
     const r2 = field.radius * field.radius;
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
-      if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 > r2) continue;
+      if (sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) > r2) continue;
       hits.push({ target: o, wounds: 1, damage: field.dps, attacker: e.owner, src: e.defId });
     }
     e.hp -= field.selfDps;
@@ -387,7 +388,7 @@ export function rushFactor(world: World, e: Entity): number {
     let best = Infinity;
     for (const o of world.entities) {
       if (!o.alive || o.owner !== e.owner || (o.kind !== 'building' && o.kind !== 'hq')) continue;
-      const d = (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2;
+      const d = sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y);
       if (d < best) best = d;
     }
     const d = Math.sqrt(best);
@@ -398,7 +399,7 @@ export function rushFactor(world: World, e: Entity): number {
       let n = 0;
       for (const o of world.entities) {
         if (!o.alive || o.owner !== e.owner || o.defId !== e.defId || !o.weapon?.targetId) continue;
-        if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= r2) n++;
+        if (sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= r2) n++;
       }
       if (n >= r.squads) {
         st.until = world.tick + Math.round(r.seconds * world.tps);

@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { surgeFactor } from './purchases';
 import { RING16 } from '../math';
 import { MOVE_PROFILES } from '../../data/movement';
@@ -222,7 +223,7 @@ function siegeGatherPoint(world: World, p: PlayerId, profile: MoveProfile): Vec2
   let fx = 0, fy = 0, n = 0;
   for (const e of world.entities) {
     if (!e.alive || e.kind !== 'unit' || e.owner === p) continue;
-    if ((e.pos.x - c.x) ** 2 + (e.pos.y - c.y) ** 2 > 14 * 14) continue;
+    if (sq(e.pos.x - c.x) + sq(e.pos.y - c.y) > 14 * 14) continue;
     fx += e.pos.x; fy += e.pos.y; n++;
   }
   // Ohne Angreifer in der Nähe: weg von der Kartenmitte.
@@ -233,7 +234,7 @@ function siegeGatherPoint(world: World, p: PlayerId, profile: MoveProfile): Vec2
     const x = c.x + ux * reach;
     const y = c.y + uy * reach;
     if (x < 0 || y < 0 || x >= world.map.width || y >= world.map.height || !world.grid.isPassable(Math.floor(x), Math.floor(y), profile)) continue;
-    const d = (x - foe.x) ** 2 + (y - foe.y) ** 2;
+    const d = sq(x - foe.x) + sq(y - foe.y);
     if (d > bestD) { bestD = d; best = { x, y }; }
   }
   return best;

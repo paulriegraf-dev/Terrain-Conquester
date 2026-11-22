@@ -1,3 +1,4 @@
+import { sq } from '../math';
 /**
  * Schlusssteine (26.10.): Regeln der Terra-Former- und Myriaden-Einheiten nach der letzten Forschung.
  * Die Zahlen stehen in rules.keystone, die Texte in data/keystones.ts. Hier: Zustand und Ablauf; die Wirkungen im
@@ -95,7 +96,7 @@ function homecoming(world: World, e: Entity): void {
     }
     if (world.tick > (ks.retreatUntil ?? 0)) return end();
     m.goal = ks.retreat;
-    const d2 = (e.pos.x - ks.retreat.x) ** 2 + (e.pos.y - ks.retreat.y) ** 2;
+    const d2 = sq(e.pos.x - ks.retreat.x) + sq(e.pos.y - ks.retreat.y);
     if (d2 <= 0.6 * 0.6 && onOwn(world, e, TERRAIN_INDEX.meadow)) {
       ks.healStart = world.tick;
       ks.healFrom = e.hp;
@@ -128,7 +129,7 @@ function homeSpot(world: World, e: Entity, radius: number): { x: number; y: numb
       if (world.formed[i] !== e.owner + 1 || g.terrain[i] !== meadow || g.structure[i] !== 0) continue;
       if (controllerAt(world, i) !== e.owner) continue;
       if ((x + 0.5 - e.pos.x) * dir > 0.5) continue; // nicht nach vorn
-      const d = (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2;
+      const d = sq(x + 0.5 - e.pos.x) + sq(y + 0.5 - e.pos.y);
       if (d < bestD - 1e-9) {
         bestD = d;
         best = { x: x + 0.5, y: y + 0.5 };
@@ -162,7 +163,7 @@ export function rootGrip(world: World, e: Entity): void {
   let bestD = 16;
   for (const o of world.entities) {
     if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
-    const d = (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2;
+    const d = sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y);
     if (d < bestD || (d === bestD && best && o.id < best.id)) {
       bestD = d;
       best = o;
@@ -186,7 +187,7 @@ export function keystoneDeath(world: World, e: Entity, killer: PlayerId): void {
   if (e.defId === 'taunter' && e.thrownBy !== undefined && hasKeystone(world, e.owner, 'catapult')) {
     const c = world.get(e.thrownBy);
     const def = UNITS.catapult.launch!;
-    if (c && c.alive && (c.pos.x - e.pos.x) ** 2 + (c.pos.y - e.pos.y) ** 2 <= def.range * def.range) {
+    if (c && c.alive && sq(c.pos.x - e.pos.x) + sq(c.pos.y - e.pos.y) <= def.range * def.range) {
       const ks = (c.ks ??= {});
       if (world.tick >= (ks.nextBluff ?? 0)) {
         ks.nextBluff = world.tick + Math.round(r.bluffCooldown * world.tps);
@@ -198,15 +199,15 @@ export function keystoneDeath(world: World, e: Entity, killer: PlayerId): void {
   // Nachzünder: Stirbt der Sprengetopp nahe seinem Ziel, explodiert er mit halber Wirkung an Ort und Stelle.
   if (e.defId === 'bomber' && hasKeystone(world, e.owner, 'bomber') && e.weapon) {
     const t = e.weapon.targetId ? world.get(e.weapon.targetId) : undefined;
-    if (t && t.alive && (t.pos.x - e.pos.x) ** 2 + (t.pos.y - e.pos.y) ** 2 <= r.afterRadius * r.afterRadius) {
+    if (t && t.alive && sq(t.pos.x - e.pos.x) + sq(t.pos.y - e.pos.y) <= r.afterRadius * r.afterRadius) {
       const def = UNITS.bomber;
       const w = e.weapon.baseDef;
       const factor = (def.charges ? def.charges.kamikazeFactor : 1) * r.afterShare;
       const hits: Hit[] = [];
       for (const o of world.entities) {
         if (!o.alive || o.kind !== 'unit' || o.owner === e.owner) continue;
-        if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 > 1.5 * 1.5 && o !== t) continue;
-        if (o === t && (t.pos.x - e.pos.x) ** 2 + (t.pos.y - e.pos.y) ** 2 > 1.5 * 1.5) continue;
+        if (sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) > 1.5 * 1.5 && o !== t) continue;
+        if (o === t && sq(t.pos.x - e.pos.x) + sq(t.pos.y - e.pos.y) > 1.5 * 1.5) continue;
         const expected = woundsPerShot(w, defenseOf(world, o));
         if (expected > 0) hits.push({ target: o, wounds: 1, damage: w.damage * factor * expected, attacker: e.owner, src: 'bomber' });
       }
@@ -245,8 +246,8 @@ export function secondThrow(world: World, c: Entity, t: Entity): void {
   let bestD = Infinity;
   for (const o of world.entities) {
     if (!o.alive || o.kind !== 'unit' || o.owner === c.owner || o === t) continue;
-    if ((o.pos.x - t.pos.x) ** 2 + (o.pos.y - t.pos.y) ** 2 < min * min) continue;
-    const d = (o.pos.x - c.pos.x) ** 2 + (o.pos.y - c.pos.y) ** 2;
+    if (sq(o.pos.x - t.pos.x) + sq(o.pos.y - t.pos.y) < min * min) continue;
+    const d = sq(o.pos.x - c.pos.x) + sq(o.pos.y - c.pos.y);
     if (d > def.range * def.range || !world.isVisibleTo(c.owner, o)) continue;
     if (d < bestD || (d === bestD && best && o.id < best.id)) {
       bestD = d;
@@ -309,7 +310,7 @@ export function tryPressure(world: World, e: Entity, consumed: Map<Entity, numbe
   if (world.tick < (ks.pressureUntil ?? 0) || world.tick < (ks.nextPressure ?? 0)) return;
   const take = UNITS.myrcannon.launch!.take!;
   const squads = world.entities
-    .filter((o) => o.alive && o.owner === e.owner && o.defId === 'drone' && o.fuse === undefined && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= 9)
+    .filter((o) => o.alive && o.owner === e.owner && o.defId === 'drone' && o.fuse === undefined && sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= 9)
     .filter((o) => Math.ceil(o.hp / o.modelWounds - 1e-9) - (consumed.get(o) ?? 0) >= 1)
     .sort((a, b) => a.id - b.id)
     .slice(0, 2);

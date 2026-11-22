@@ -44,3 +44,11 @@ export function rectContains(r: CellRect, cx: number, cy: number): boolean {
 export const RING16: readonly (readonly [number, number])[] = [
   [1.0, 0.0], [0.92388, 0.382683], [0.707107, 0.707107], [0.382683, 0.92388], [0.0, 1.0], [-0.382683, 0.92388], [-0.707107, 0.707107], [-0.92388, 0.382683], [-1.0, 0.0], [-0.92388, -0.382683], [-0.707107, -0.707107], [-0.382683, -0.92388], [-0.0, -1.0], [0.382683, -0.92388], [0.707107, -0.707107], [0.92388, -0.382683],
 ];
+
+/**
+ * Quadrat (22.11., Online-Modus): statt `x ** 2`. `**` ist `Math.pow` und von ECMAScript nicht exakt
+ * vorgeschrieben (Safari nutzt die System-pow) – `x * x` ist nach IEEE-754 überall gleich.
+ */
+export function sq(x: number): number {
+  return x * x;
+}

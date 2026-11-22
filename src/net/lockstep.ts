@@ -1,5 +1,6 @@
 import type { Command, PlayerCommand } from '../sim/commands';
-import { hashWorld } from '../sim/hash';
+import { HASH_PARTS, combineParts, hashParts } from '../sim/hash';
+import type { HashPart } from '../sim/hash';
 import type { PlayerId } from '../sim/types';
 import { otherPlayer } from '../sim/types';
 import type { World } from '../sim/world';
@@ -21,13 +22,21 @@ import type { LockstepSnapshot, NetMsg } from './protocol';
 export class Lockstep {
   /** Eigene Eingabeverzögerung in Ticks. */
   delay: number;
-  /** Laufzeit hin und zurück (ms), eigene Messung und die des Gegners. */
+  /** Laufzeit hin und zurück (ms): eigene geglättete Messung und der Spitzenwert, den der Gegner meldet. */
   rtt = 0;
   remoteRtt = 0;
+  /** Letzte eigene Einzelmessungen (für den Spitzenwert). */
+  private readonly samples: number[] = [];
+  /** So viele Messungen in Folge wollten eine kleinere Verzögerung (Hysterese). */
+  private lowerVotes = 0;
+  static readonly PEAK_SAMPLES = 8;
+  static readonly LOWER_AFTER = 5;
   /** Gemeinsame Pause (vom Host) – nach diesem Tick angehalten. */
   pausedAt: number | null = null;
   /** Abweichung entdeckt: nach diesem Tick unterschiedliche Fingerabdrücke. */
   desyncAt: number | null = null;
+  /** Diagnose dazu (22.11.): Teil-Fingerabdrücke beider Seiten und welche Bereiche abweichen. */
+  desync: DesyncInfo | null = null;
 
   private sentUpTo: number;
   private remoteUpTo: number;
@@ -45,8 +54,8 @@ export class Lockstep {
   private readonly resumeLog = new Set<number>();
   /** Zuletzt gerechneter Tick. */
   private lastTaken = -1;
-  private readonly myHashes = new Map<number, string>();
-  private readonly theirHashes = new Map<number, string>();
+  private readonly myHashes = new Map<number, string[]>();
+  private readonly theirHashes = new Map<number, { h: string; p?: string[] }>();
 
   static readonly HASH_EVERY = 40;
 
@@ -86,10 +95,35 @@ export class Lockstep {
     this.send({ k: 'resume', at });
   }
 
-  /** Verzögerung aus der langsameren Laufzeit (halbe Laufzeit in Ticks + 2 Puffer, 2–15). */
+  /** Spitzenwert der eigenen letzten Messungen – Ausreißer zählen, damit die Verzögerung sie abfängt. */
+  get peakRtt(): number {
+    return this.samples.length ? Math.max(...this.samples) : this.rtt;
+  }
+
+  /** Verzögerung aus der langsameren Laufzeit (halbe Spitzen-Laufzeit in Ticks + 2 Puffer, 2–15). */
   wantedDelay(): number {
-    const worst = Math.max(this.rtt, this.remoteRtt);
+    const worst = Math.max(this.peakRtt, this.remoteRtt);
     return Math.max(2, Math.min(15, Math.ceil(worst / 2 / this.tickMs) + 2));
+  }
+
+  /**
+   * Verzögerung nachführen (22.11.: mit Hysterese): Steigt der Bedarf, sofort hoch – sonst stockt das Spiel.
+   * Runter erst, wenn LOWER_AFTER Messungen in Folge weniger wollen; so springt sie bei wackligem WLAN nicht.
+   */
+  private updateDelay(): void {
+    const want = this.wantedDelay();
+    if (want > this.delay) {
+      this.delay = want;
+      this.lowerVotes = 0;
+    } else if (want < this.delay) {
+      this.lowerVotes++;
+      if (this.lowerVotes >= Lockstep.LOWER_AFTER) {
+        this.delay = want;
+        this.lowerVotes = 0;
+      }
+    } else {
+      this.lowerVotes = 0;
+    }
   }
 
   /** Eigene Eingaben bis (tick + delay) verschicken. Darf beliebig oft gerufen werden. */
@@ -98,7 +132,9 @@ export class Lockstep {
     if (this.sentUpTo >= want) return;
     const a = this.sentUpTo + 1;
     for (let t = a; t < want; t++) this.local.set(t, []);
-    const c = this.pending;
+    // 22.11.: einmal durch JSON wie die Befehle des Gegners – sonst führte dieser Rechner z. B. -0,
+    // undefined-Felder oder NaN anders aus als der andere (dort kommen sie als 0, fehlend, null an).
+    const c = this.pending.length ? (JSON.parse(JSON.stringify(this.pending)) as Command[]) : [];
     this.pending = [];
     this.local.set(want, c);
     if (c.length) this.sentLog.set(want, c);
@@ -136,9 +172,10 @@ export class Lockstep {
   /** Nach dem Rechnen von `tick`: Fingerabdruck, Pause. */
   afterStep(tick: number, world: World): void {
     if (tick > 0 && tick % Lockstep.HASH_EVERY === 0) {
-      const h = hashWorld(world);
-      this.myHashes.set(tick, h);
-      this.send({ k: 'hash', t: tick, h });
+      const parts = hashParts(world);
+      const p = HASH_PARTS.map((k) => parts[k]);
+      this.myHashes.set(tick, p);
+      this.send({ k: 'hash', t: tick, h: combineParts(p), p });
       this.compare(tick);
     }
     if (this.pauseTicks.has(tick)) {
@@ -174,18 +211,20 @@ export class Lockstep {
         if (this.pausedAt === m.at) this.pausedAt = null;
         break;
       case 'hash':
-        this.theirHashes.set(m.t, m.h);
+        this.theirHashes.set(m.t, { h: m.h, p: m.p });
         this.compare(m.t);
         break;
       case 'ping':
         this.remoteRtt = m.rtt;
         this.send({ k: 'pong', ts: m.ts });
-        this.delay = this.wantedDelay();
+        this.updateDelay();
         break;
       case 'pong': {
         const sample = Math.max(0, now - m.ts);
         this.rtt = this.rtt === 0 ? sample : this.rtt * 0.7 + sample * 0.3;
-        this.delay = this.wantedDelay();
+        this.samples.push(sample);
+        if (this.samples.length > Lockstep.PEAK_SAMPLES) this.samples.shift();
+        this.updateDelay();
         break;
       }
       default:
@@ -241,7 +280,7 @@ export class Lockstep {
 
   /** Laufzeit messen (etwa jede Sekunde). */
   ping(now: number): void {
-    this.send({ k: 'ping', ts: now, rtt: Math.round(this.rtt) });
+    this.send({ k: 'ping', ts: now, rtt: Math.round(this.peakRtt) });
   }
 
   private compare(t: number): void {
@@ -250,6 +289,20 @@ export class Lockstep {
     if (a === undefined || b === undefined) return;
     this.myHashes.delete(t);
     this.theirHashes.delete(t);
-    if (a !== b && this.desyncAt === null) this.desyncAt = t;
+    if (combineParts(a) === b.h || this.desyncAt !== null) return;
+    this.desyncAt = t;
+    const differ = b.p ? HASH_PARTS.filter((_, i) => a[i] !== b.p![i]) : [...HASH_PARTS];
+    this.desync = { tick: t, mine: a, theirs: b.p ?? null, differ };
   }
+}
+
+/** Was bei einer Abweichung festgehalten wird (für die Diagnose-Datei). */
+export interface DesyncInfo {
+  /** Erster Prüf-Tick mit unterschiedlichem Fingerabdruck. */
+  tick: number;
+  /** Teil-Fingerabdrücke (Reihenfolge HASH_PARTS) – eigene und die des Gegners. */
+  mine: string[];
+  theirs: string[] | null;
+  /** Bereiche, die abweichen. */
+  differ: HashPart[];
 }

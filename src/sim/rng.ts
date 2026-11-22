@@ -10,6 +10,11 @@ export class Rng {
     this.state = seed >>> 0 || 0x9e3779b9;
   }
 
+  /** Innerer Zustand (für den Fingerabdruck, src/sim/hash.ts). */
+  get current(): number {
+    return this.state;
+  }
+
   /** Zahl in [0, 1). */
   next(): number {
     this.state = (this.state + 0x6d2b79f5) >>> 0;

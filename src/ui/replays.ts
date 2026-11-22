@@ -2,6 +2,7 @@ import type { TimedCommand } from '../sim/commands';
 import type { World } from '../sim/world';
 import type { PlayerId } from '../sim/types';
 import { UNIT_IDS } from '../data/units';
+import type { DesyncInfo } from '../net/lockstep';
 
 /**
  * Gespeicherte Partien (24.10. abends, Wunsch des Nutzers): Jede eigene Partie – gegen die KI oder im
@@ -37,6 +38,12 @@ export interface SavedMatch {
   log: TimedCommand[];
   hash: string;
   snapshots: Snapshot[];
+  /**
+   * Online-Abweichung (22.11.): erster Prüf-Tick, Teil-Fingerabdrücke beider Seiten (Reihenfolge
+   * HASH_PARTS aus src/sim/hash.ts) und die abweichenden Bereiche. Beide Rechner speichern ihre Datei –
+   * mit beiden lässt sich vergleichen, ob die Befehle oder die Rechnung auseinanderliefen.
+   */
+  desync?: DesyncInfo;
 }
 
 const DB = 'terrain-conquester-replays';

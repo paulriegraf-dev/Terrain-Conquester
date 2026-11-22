@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { stepPrice } from './purchases';
 import type { BuildingUpgradeDef, BuildingUpgradeKind, FactionDef, UpgradeDef } from '../../data/factions';
 import { BUILDINGS } from '../../data/buildings';
@@ -305,7 +306,7 @@ export function mergePartner(world: World, e: Entity): Entity | null {
   let bestD = Infinity;
   for (const o of world.entities) {
     if (o === e || o.owner !== e.owner || o.defId !== e.defId || !mergeReady(world, o)) continue;
-    const d = (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2;
+    const d = sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y);
     if (d < bestD || (d === bestD && best && o.id < best.id)) {
       bestD = d;
       best = o;
