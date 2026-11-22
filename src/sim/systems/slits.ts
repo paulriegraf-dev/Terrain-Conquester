@@ -1,3 +1,4 @@
+import { sq } from '../math';
 /**
  * Scharten-Automatik (28.10., Wunsch des Nutzers): Haltende Fernkämpfer mit direkter Waffe (Reichweite ≥ MIN_RANGE = 4)
  * rücken an eine freie Kachel direkt am eigenen Erdwall (Schießscharte, bis SLIT Kacheln vom Wall), wenn dahinter ein
@@ -34,14 +35,14 @@ export function updateSlits(world: World): void {
     }
     const range = e.weapon!.def.range;
     const foes = world.entities.filter((o) => o.alive && o.kind === 'unit' && o.owner !== e.owner &&
-      (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= (range + REACH + 1) ** 2);
+      sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= sq(range + REACH + 1));
     // Bewusst ohne Sichtprüfung: Hinter dem eigenen Wall sieht man erst von der Scharte aus – der Gegner dort ist hörbar nah.
     if (foes.length === 0) {
       e.mover.slit = null;
       continue;
     }
     // Schon gut stehend (trifft jemanden direkt)? Dann bleiben.
-    if (foes.some((o) => (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= range * range && !fireBlocked(world, e, o))) {
+    if (foes.some((o) => sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= range * range && !fireBlocked(world, e, o))) {
       if (e.mover.slit) taken.add(g.index(Math.floor(e.mover.slit.x), Math.floor(e.mover.slit.y)));
       continue;
     }
@@ -67,7 +68,7 @@ export function updateSlits(world: World): void {
         if (!near) continue;
         e.pos.x = x + 0.5;
         e.pos.y = y + 0.5;
-        const hits = foes.some((o) => (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= range * range && !fireBlocked(world, e, o));
+        const hits = foes.some((o) => sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= range * range && !fireBlocked(world, e, o));
         e.pos.x = save.x;
         e.pos.y = save.y;
         if (!hits) continue;

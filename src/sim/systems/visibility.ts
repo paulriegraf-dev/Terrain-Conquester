@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import type { BuildingId } from '../../data/buildings';
 import { seesThroughDisguise, structureVisionBonus } from './hq';
 import { UNITS } from '../../data/units';
@@ -24,7 +25,7 @@ export function wallPass(world: World, e: Entity): ((x: number, y: number) => bo
     if (hover) return true;
     if (owner !== e.owner + 1) return false;
     if (e.kind !== 'unit') return true;
-    return (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2 <= SLIT * SLIT;
+    return sq(x + 0.5 - e.pos.x) + sq(y + 0.5 - e.pos.y) <= SLIT * SLIT;
   };
 }
 

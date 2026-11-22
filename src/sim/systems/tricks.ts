@@ -1,3 +1,4 @@
+import { sq } from '../math';
 /**
  * Upgrade-Pfad v2 (16.11., mit dem Nutzer): Kniffe der Säule „Spezialisierung“, die Fabrik-Verhalten Eliteprogramm und
  * Recycling sowie die Schlusssteine des Technoclans (eine Regel je Einheit statt zweier Türen).
@@ -71,7 +72,7 @@ export function hasTrick(world: World, p: PlayerId, id: TrickId): boolean {
 
 const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
 const forward = (world: World, p: PlayerId): number => (world.map.hq[p].x < world.map.width / 2 ? 1 : -1);
-const d2 = (a: Vec2, b: Vec2): number => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+const d2 = (a: Vec2, b: Vec2): number => sq(a.x - b.x) + sq(a.y - b.y);
 
 /** Stillstand mitzählen (für Ruhige Hand, Granitkern, Schienenschuss, Sperrfeuer, Feldstellung). */
 function track(world: World, e: Entity): NonNullable<Entity['trk']> {
@@ -271,7 +272,7 @@ export function graniteSave(world: World, t: Entity): number {
 export function trickSpeed(world: World, e: Entity): number {
   if (e.defId === 'bomber' && e.weapon && e.weapon.targetId && hasTrick(world, e.owner, 'dash')) {
     const t = world.get(e.weapon.targetId);
-    if (t && t.alive && d2(t.pos, e.pos) <= TRICK.dash.reach ** 2) return TRICK.dash.speed;
+    if (t && t.alive && d2(t.pos, e.pos) <= sq(TRICK.dash.reach)) return TRICK.dash.speed;
   }
   if ((e.defId === 'wardMeadow' || e.defId === 'specialMeadow') && hasTrick(world, e.owner, 'meadowWay') && onOwnTerrain(world, e, TERRAIN_INDEX.meadow)) return TRICK.meadowWay.speed;
   return 1;
@@ -308,7 +309,7 @@ export function onTerraHit(world: World, shooter: Entity, target: Entity): void 
     const G = TRICK.graniteCore;
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === shooter.owner || o === target) continue;
-      if (d2(o.pos, target.pos) > G.splinterRadius ** 2) continue;
+      if (d2(o.pos, target.pos) > sq(G.splinterRadius)) continue;
       o.dot = { until: world.tick + G.splinterSeconds * world.tps, dps: G.splinterDps, owner: shooter.owner };
     }
   }
@@ -400,7 +401,7 @@ function targetInRange(world: World, e: Entity): Entity | null {
   if (!w || !w.targetId) return null;
   const t = world.get(w.targetId);
   if (!t || !t.alive || t.kind !== 'unit') return null;
-  return d2(t.pos, e.pos) <= (w.def.range + t.radius) ** 2 ? t : null;
+  return d2(t.pos, e.pos) <= sq(w.def.range + t.radius) ? t : null;
 }
 
 /** Schienenschuss (Scharfschützen): ein Schuss durch alle Gegner auf einer Linie. */
@@ -461,7 +462,7 @@ function landBarrages(world: World): void {
   for (const b of due) {
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === b.owner) continue;
-      if (!b.points.some((p) => d2(o.pos, p) <= (B.radius + o.radius) ** 2)) continue;
+      if (!b.points.some((p) => d2(o.pos, p) <= sq(B.radius + o.radius))) continue;
       hits.push({ target: o, wounds: B.wounds, damage: b.damage, attacker: b.owner, src: b.src });
     }
   }
@@ -504,11 +505,11 @@ function roller(world: World, e: Entity): void {
     if (o.kind === 'wall' && o.rect) {
       const cx = Math.max(o.rect.x, Math.min(e.pos.x, o.rect.x + o.rect.w));
       const cy = Math.max(o.rect.y, Math.min(e.pos.y, o.rect.y + o.rect.h));
-      if ((cx - e.pos.x) ** 2 + (cy - e.pos.y) ** 2 <= (R.reach + e.radius) ** 2) {
+      if (sq(cx - e.pos.x) + sq(cy - e.pos.y) <= sq(R.reach + e.radius)) {
         world.destroy(o, e.owner);
         fired = true;
       }
-    } else if (o.kind === 'unit' && o.armor === 'infantry' && o.mover && d2(o.pos, e.pos) <= (R.reach + e.radius) ** 2) {
+    } else if (o.kind === 'unit' && o.armor === 'infantry' && o.mover && d2(o.pos, e.pos) <= sq(R.reach + e.radius)) {
       const side = o.pos.y >= e.pos.y ? 1 : -1;
       const ny = o.pos.y + side * R.push;
       if (world.grid.isPassable(Math.floor(o.pos.x), Math.floor(ny), MOVE_PROFILES[o.mover.profile])) {

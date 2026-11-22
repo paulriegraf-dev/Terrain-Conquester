@@ -22,8 +22,8 @@ export type NetMsg =
   | { k: 'f'; a: number; b: number; c: Command[]; p?: 1 }
   /** Host setzt die Pause nach Tick `at` fort. */
   | { k: 'resume'; at: number }
-  /** Fingerabdruck des Spielzustands nach Tick t (Synchron-Prüfung). */
-  | { k: 'hash'; t: number; h: string }
+  /** Fingerabdruck des Spielzustands nach Tick t (Synchron-Prüfung); p = Teil-Fingerabdrücke nach HASH_PARTS (22.11.). */
+  | { k: 'hash'; t: number; h: string; p?: string[] }
   /** Laufzeit messen; `rtt` = eigene gemessene Laufzeit (damit beide den langsameren kennen). */
   | { k: 'ping'; ts: number; rtt: number }
   | { k: 'pong'; ts: number }

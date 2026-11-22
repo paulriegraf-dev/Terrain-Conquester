@@ -1,3 +1,4 @@
+import { sq } from '../math';
 /**
  * Myr-Brechstange (28.10. abends, Drohnen-Schlussstein statt „Letzter Flug“).
  *
@@ -56,7 +57,7 @@ function tryFuse(world: World, p: PlayerId): void {
   if (still.length < r.minSquads) return;
   const r2 = r.gatherRadius * r.gatherRadius;
   for (const c of still) {
-    const group = still.filter((o) => (o.pos.x - c.pos.x) ** 2 + (o.pos.y - c.pos.y) ** 2 <= r2);
+    const group = still.filter((o) => sq(o.pos.x - c.pos.x) + sq(o.pos.y - c.pos.y) <= r2);
     if (group.length < r.minSquads) continue;
     const models = group.reduce((n, o) => n + aliveModels(o), 0);
     if (models < r.minModels) continue;
@@ -193,11 +194,11 @@ function burst(world: World, owner: PlayerId, pos: Vec2, radius: number, models:
     if (o.rect) {
       const nx = Math.max(o.rect.x, Math.min(pos.x, o.rect.x + o.rect.w));
       const ny = Math.max(o.rect.y, Math.min(pos.y, o.rect.y + o.rect.h));
-      if ((nx - pos.x) ** 2 + (ny - pos.y) ** 2 > radius * radius) continue;
+      if (sq(nx - pos.x) + sq(ny - pos.y) > radius * radius) continue;
       if (buildingShare <= 0) continue;
       hits.push({ target: o, wounds: models, damage: perModel * buildingShare, attacker: owner, src: 'breaker' });
     } else {
-      if (o.kind !== 'unit' || (o.pos.x - pos.x) ** 2 + (o.pos.y - pos.y) ** 2 > (radius + o.radius) ** 2) continue;
+      if (o.kind !== 'unit' || sq(o.pos.x - pos.x) + sq(o.pos.y - pos.y) > sq(radius + o.radius)) continue;
       hits.push({ target: o, wounds: models, damage: perModel, attacker: owner, src: 'breaker' });
       if (o.armor === 'heavy') {
         const c = o.corrosion && world.tick < o.corrosion.until ? o.corrosion : { shots: 0, level: 0, until: 0 };

@@ -144,3 +144,19 @@ regelmäßige Synchron-Prüfung, Pause über einen festen Tick, Replays aus Seed
 - `scripts/simSource.mjs` (+ `.d.mts`), `scripts/build.mjs`, `scripts/dev.mjs`: `__SIM_SOURCE__` einsetzen
 - `tests/lockstep.test.ts`: Hintergrund-Tab-Modell und Test
 - `tests/version.test.ts`: neu
+
+## Umgesetzt am 22.11.2026 (Prio 1 und 2)
+
+| Vorschlag | Umsetzung | Test |
+|---|---|---|
+| Desync-Diagnose | Der Fingerabdruck besteht jetzt aus 7 Teilen (`hashParts`: Spieler, Einheiten, Fabriken, Stationen, Gebiet, Gelände, Zufall). Beide Seiten schicken die Teile mit. Bei einer Abweichung nennt der Lagebericht den Bereich, die Diagnose-Datei (Seed, Befehle, Lagebilder, Teil-Fingerabdrücke beider Seiten) landet sofort in den gespeicherten Partien, und 30 s lang gibt es den Knopf „Diagnose speichern“. | `lockstep.test.ts` „Abweichung … mit den betroffenen Bereichen“ |
+| Ping im Spiel | Neben der Uhr: „Ping … ms“ (grün < 120, gelb < 250, rot) bzw. „wartet auf Gegner“. Der Tooltip zeigt eigene und gegnerische Laufzeit und die Eingabeverzögerung. | nur Typecheck (UI) |
+| Abbruch-Regel | Nach 60 s ohne Verbindung oder ohne Eingaben endet die Runde automatisch als Abbruch. Ab 20 s steht der Countdown im Hinweis, „Runde beenden“ geht sofort. | nur Typecheck (UI) |
+| `x ** 2` | 125 Stellen in `src/sim` → `sq(x)` (`src/sim/math.ts`). Der Architektur-Wächter verbietet `**`. Replay-Fingerabdrücke vorher/nachher Bit für Bit gleich. | `determinism.test.ts` |
+| Befehle normalisieren | `Lockstep.pump` schickt eigene Befehle einmal durch JSON, wie die des Gegners. | vorhandene Lockstep-Tests |
+| Fingerabdruck erweitert | Zufallszustand (`Rng.current`), Fabrik-Fortschritt, Umbau, Einheit, Forschung. | s. o. |
+| Delay-Glättung | Spitzenwert der letzten 8 Messungen statt Mittelwert. Hoch sofort, runter erst nach 5 ruhigen Messungen in Folge. | `lockstep.test.ts` „Verzögerung steigt … sinkt erst …“ |
+| Halbtote Verbindung | Host: Kam über die alte Verbindung > 5 s nichts, ersetzt ein neu anklopfender Gast sie (kein „Raum voll“ mehr). Gast: nach 8 s ohne Daten selbst neu verbinden. `LocalRoom` ebenso. `Room`/`LocalRoom` liegen jetzt in `src/net/roomBase.ts` (ohne PeerJS testbar). | `raum.test.ts` |
+
+Nicht im Browser geprüft: Ping-Anzeige, Countdown und Diagnose-Knopf. Die Headless-Vorschau rendert das HD-2D-Bild in Software zu
+langsam für einen Zwei-Tab-Test. Bitte bei der nächsten Online-Partie kurz darauf achten.

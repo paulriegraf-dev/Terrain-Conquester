@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import type { TechMods } from '../../data/verbund';
 import { UNITS } from '../../data/units';
 import type { ProtocolId, UnitId, WeaponDef } from '../../data/units';
@@ -34,7 +35,7 @@ export function updateVerbund(world: World): void {
   for (const { e, amount } of heals) {
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner !== e.owner || o === e || o.hp >= o.maxHp) continue;
-      if ((o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 > 4) continue;
+      if (sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) > 4) continue;
       o.hp = Math.min(o.maxHp, o.hp + amount);
     }
   }
@@ -135,7 +136,7 @@ export function refreshTech(world: World, e: Entity): void {
     guardOn: false,
   });
   // Ansitz: seit wann steht er still?
-  if ((e.pos.x - t.lastPos.x) ** 2 + (e.pos.y - t.lastPos.y) ** 2 > 0.01) t.still = world.tick;
+  if (sq(e.pos.x - t.lastPos.x) + sq(e.pos.y - t.lastPos.y) > 0.01) t.still = world.tick;
   t.lastPos = { x: e.pos.x, y: e.pos.y };
 
   const protocols = e.net.protocols;
@@ -181,7 +182,7 @@ export function refreshTech(world: World, e: Entity): void {
   t.mods = mods;
   t.eliteFx = fx;
   // Schutz (Deckungsfeuer, Geleitschutz, Aufklärungspanzer): steht eine eigene Einheit der Art nah genug?
-  t.guardOn = !!mods.guard && world.entities.some((o) => o.alive && o.owner === e.owner && o.defId === mods.guard!.near && (o.pos.x - e.pos.x) ** 2 + (o.pos.y - e.pos.y) ** 2 <= mods.guard!.radius ** 2);
+  t.guardOn = !!mods.guard && world.entities.some((o) => o.alive && o.owner === e.owner && o.defId === mods.guard!.near && sq(o.pos.x - e.pos.x) + sq(o.pos.y - e.pos.y) <= sq(mods.guard!.radius));
 
   // Werte setzen (immer von den Grundwerten aus)
   const maxHp = t.base.maxHp * (mods.hp ?? 1);
@@ -219,7 +220,7 @@ function burnFields(world: World): void {
     const r2 = f.radius * f.radius;
     for (const o of world.entities) {
       if (!o.alive || o.kind !== 'unit' || o.owner === f.owner) continue;
-      if ((o.pos.x - f.pos.x) ** 2 + (o.pos.y - f.pos.y) ** 2 > r2) continue;
+      if (sq(o.pos.x - f.pos.x) + sq(o.pos.y - f.pos.y) > r2) continue;
       if (f.acid) {
         // Säuregeschoss (Myr-Kanone): 1 Rüstung weniger, solange man in der Säure steht.
         const c = o.corrosion && world.tick < o.corrosion.until ? o.corrosion : { shots: 0, level: 0, until: 0 };

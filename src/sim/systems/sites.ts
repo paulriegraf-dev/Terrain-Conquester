@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { STATIONS } from '../../data/stations';
 import type { StationKind } from '../../data/stations';
 import { UNITS } from '../../data/units';
@@ -157,7 +158,7 @@ function updateStations(world: World): void {
     if (active) {
       for (const e of world.entities) {
         if (!e.alive || e.kind !== 'unit' || e.owner === st.owner) continue;
-        if ((e.pos.x - site.pos.x) ** 2 + (e.pos.y - site.pos.y) ** 2 <= r2) {
+        if (sq(e.pos.x - site.pos.x) + sq(e.pos.y - site.pos.y) <= r2) {
           active = false;
           break;
         }
@@ -205,7 +206,7 @@ function updateFlak(world: World): void {
       const span = Math.max(1, fl.land - fl.start);
       const t = Math.min(1, Math.max(0, (world.tick - fl.start) / span));
       const pos: Vec2 = { x: fl.from.x + (fl.to.x - fl.from.x) * t, y: fl.from.y + (fl.to.y - fl.from.y) * t };
-      if ((pos.x - site.pos.x) ** 2 + (pos.y - site.pos.y) ** 2 > r2) continue;
+      if (sq(pos.x - site.pos.x) + sq(pos.y - site.pos.y) > r2) continue;
       world.flights.splice(k, 1);
       st.flakReady = world.tick + Math.round(f.cooldown * world.tps);
       world.players[owner].stats.flakKills = (world.players[owner].stats.flakKills ?? 0) + 1;
@@ -217,7 +218,7 @@ function updateFlak(world: World): void {
     let bestScore = Infinity;
     for (const e of world.entities) {
       if (!e.alive || e.kind !== 'unit' || e.owner === owner || !e.mover) continue;
-      const d2 = (e.pos.x - site.pos.x) ** 2 + (e.pos.y - site.pos.y) ** 2;
+      const d2 = sq(e.pos.x - site.pos.x) + sq(e.pos.y - site.pos.y);
       if (d2 > r2) continue;
       const score = (e.mover.profile === 'hover' ? 0 : 1000) + d2;
       if (score < bestScore || (score === bestScore && best && e.id < best.id)) {
@@ -242,7 +243,7 @@ export function barrierSlow(world: World, e: Entity): number {
     const owner = world.siteStates[i]!.owner;
     if (owner === null || owner === e.owner) continue;
     const r = world.rules.sites.barrier.radius;
-    if ((e.pos.x - s.pos.x) ** 2 + (e.pos.y - s.pos.y) ** 2 <= r * r) return world.rules.sites.barrier.slow;
+    if (sq(e.pos.x - s.pos.x) + sq(e.pos.y - s.pos.y) <= r * r) return world.rules.sites.barrier.slow;
   }
   return 1;
 }

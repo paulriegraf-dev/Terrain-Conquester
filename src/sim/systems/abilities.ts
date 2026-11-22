@@ -1,3 +1,4 @@
+import { sq } from '../math';
 import { GORGE_SHAPE, SHAPING_REACH, SWAP, WALL, swapCost } from '../../data/abilities';
 import { MOVE_PROFILES } from '../../data/movement';
 import { UNITS } from '../../data/units';
@@ -88,7 +89,7 @@ export function displaceUnits(world: World, cells: ReadonlySet<number>): void {
       for (let y = cy - r; y <= cy + r; y++) {
         for (let x = cx - r; x <= cx + r; x++) {
           if (!grid.inBounds(x, y) || cells.has(grid.index(x, y)) || !grid.isPassable(x, y, profile)) continue;
-          const d = (x + 0.5 - e.pos.x) ** 2 + (y + 0.5 - e.pos.y) ** 2;
+          const d = sq(x + 0.5 - e.pos.x) + sq(y + 0.5 - e.pos.y);
           if (d < bestD - 1e-9) {
             bestD = d;
             best = { x: x + 0.5, y: y + 0.5 };
