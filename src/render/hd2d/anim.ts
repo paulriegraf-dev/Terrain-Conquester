@@ -82,6 +82,24 @@ export function frameAt(t: number, dur: number, frames: number): number {
 }
 
 /** Zoomstufen der Kamera (Tasten 1–4 im Mock-up). */
+import * as THREE from 'three';
+
+/**
+ * Gespiegelte Textur (Nutzer 25.11.: Blickrichtung kam nie auf dem Bildschirm an). THREE.Sprite ignoriert ein negatives
+ * scale.x – der Sprite-Shader nimmt length(modelMatrix[0]), also den Betrag. Spiegeln geht deshalb nur über die Textur:
+ * repeat.x = −1 und offset.x = 1 lesen das Bild von rechts nach links (u → 1 − u). Ein Klon je Ausgangstextur, gecacht.
+ */
+export function mirroredTexture(tex: THREE.Texture, cache: WeakMap<THREE.Texture, THREE.Texture>): THREE.Texture {
+  const hit = cache.get(tex);
+  if (hit) return hit;
+  const m = tex.clone();
+  m.repeat.x = -1;
+  m.offset.x = 1;
+  m.needsUpdate = true;
+  cache.set(tex, m);
+  return m;
+}
+
 export type ZoomLevel = 'near' | 'mid' | 'lanes' | 'map';
 
 /**

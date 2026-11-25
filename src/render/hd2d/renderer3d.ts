@@ -27,7 +27,7 @@ import { gearLevel } from '../../sim/systems/factory';
 import { ELITE_FX, eliteFxCanvas } from './eliteFx';
 import { abseits, bayer, noise2, paintPatches, umlandHeight, type Field } from './umland';
 import { BUILDING_FX, FX_COLOR, FX_PARTS, fxCanvas, type BuildingFx } from './buildingFx';
-import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, projectileShown, returnTimeline } from './anim';
+import { AWAY_HUE, MIRROR_COLORS, attackTime, facing, mirroredTexture, projectileShown, returnTimeline } from './anim';
 import type { ZoomLevel } from './anim';
 import { PROJECTILES, UNIT_SPRITES, figureGlobal, spriteFor } from './sprites';
 import type { UnitSprite } from './sprites';
@@ -815,6 +815,12 @@ export class Hd2dRenderer {
 
   private umland: THREE.Group | null = null;
   private readonly wholeTexCache = new Map<string, THREE.Texture>();
+  private readonly mirrorCache = new WeakMap<THREE.Texture, THREE.Texture>();
+
+  /** Gespiegelte Textur (s. anim.ts mirroredTexture): Sprites spiegeln nur über die Textur, nie über negatives scale.x. */
+  private mirrored(tex: THREE.Texture): THREE.Texture {
+    return mirroredTexture(tex, this.mirrorCache);
+  }
 
   /** Ganzes Bild als Textur (Pixelgrafik, Nearest); null, solange es lädt. */
   private wholeTex(src: string): THREE.Texture | null {
@@ -972,9 +978,9 @@ export class Hd2dRenderer {
       const tx = this.wholeTex(KULISSE[key]);
       if (!tx) return;
       const img = tx.image as HTMLImageElement;
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, alphaTest: 0.5 }));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: flip ? this.mirrored(tx) : tx, alphaTest: 0.5 }));
       const k = scale / 64; // Kacheln je Bildpunkt (wie im Tower Defense: pixel_size = Maßstab / 64)
-      sp.scale.set(img.width * k * (flip ? -1 : 1), img.height * k, 1);
+      sp.scale.set(img.width * k, img.height * k, 1);
       sp.center.set(0.5, 1 - foot / img.height);
       sp.position.set(x, groundY(x, z), z);
       const dk = Math.max(0.75, Math.min(1, 1 - abseits(f, x, z) * 0.03));
@@ -1023,9 +1029,9 @@ export class Hd2dRenderer {
       const k = TREES[Math.floor(hash(i, 404) * TREES.length)]!;
       const tt = this.frame(TILESETS.tiles2, k * 64, 32, 64);
       if (!tt) continue;
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tt, alphaTest: 0.5 }));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hash(i, 606) < 0.5 ? this.mirrored(tt) : tt, alphaTest: 0.5 }));
       const sc = (64 / 36) * (0.85 + hash(i, 505) * 0.45);
-      sp.scale.set(hash(i, 606) < 0.5 ? -sc : sc, sc, 1);
+      sp.scale.set(sc, sc, 1);
       sp.center.set(0.5, 0.06);
       sp.position.set(x, groundY(x, z), z);
       const dk = Math.max(0.55, Math.min(1, 1 - d * 0.035));
@@ -1350,11 +1356,11 @@ export class Hd2dRenderer {
     // Zellen 96 px (16.11.: Hain, Steinbruch, Wiesenhof, Schwerwerk nach oben/seitlich ergänzt; Bild unten bündig, 8 px Rand je Seite).
     const tex = this.frame(BUILDINGS_SHEET, idx * 96, 0, 96, false, away);
     if (!tex) return null;
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: e.owner === 1 ? this.mirrored(tex) : tex, alphaTest: 0.5 }));
     // Bild passend zum Fundament (Nutzer 06.11.): kaum breiter als die Grundfläche, damit man sieht, wo das Gebäude
     // endet und wie weit Truppen davor stehen (vorher 2,5 Kacheln für 2×2, HQ 3,9 für 3×3).
     const size = r.w * (e.kind === 'hq' ? 1.15 : 1.1) * (96 / 80);
-    s.scale.set(e.owner === 1 ? -size : size, size, 1);
+    s.scale.set(size, size, 1);
     s.center.set(0.5, 0.1);
     s.position.set(cx, 0.02, cy + r.h * 0.25);
     // Ins Gelände einarbeiten (Nutzer 16.11.): weicher Kontaktschatten und ein Saum aus Kleinkram am Fuß, der die
@@ -1476,13 +1482,13 @@ export class Hd2dRenderer {
       const i = list[Math.floor(h1 * list.length)]!;
       const tex = this.frame(TILESETS.tiles2, (i % 32) * 32, 96 + Math.floor(i / 32) * 32, 32);
       if (!tex) continue;
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5 }));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: h2 < 0.5 ? this.mirrored(tex) : tex, alphaTest: 0.5 }));
       // Vorderkante (Unterkante des Bilds) und Ecken: x über die Breite, y knapp vor der Bildkante
       const front = k < n * 0.7;
       const x = front ? r.x + 0.05 + (k / (n * 0.7)) * (r.w - 0.1) + (h2 - 0.5) * 0.3 : (h2 < 0.5 ? r.x - 0.05 : r.x + r.w + 0.05) + (h3 - 0.5) * 0.2;
       const y = front ? r.y + r.h * (0.78 + h3 * 0.18) : r.y + r.h * (0.35 + h3 * 0.4);
       const sc = 0.38 + h3 * 0.22;
-      sp.scale.set(h2 < 0.5 ? -sc : sc, sc, 1);
+      sp.scale.set(sc, sc, 1);
       sp.center.set(0.5, 0.15);
       sp.position.set(x, 0.02, y);
       out.push(sp);
@@ -1665,12 +1671,14 @@ export class Hd2dRenderer {
           frame = Math.floor(now / 3.3 + i * 2) % spr.frames.idle;
         }
         const sheet = UNIT_SHEETS[spr.sheet];
-        const tex = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell, liftFor(spr), !!team) : null;
+        const base = sheet ? this.frame(sheet, frame * spr.cell, row * spr.cell, spr.cell, liftFor(spr), !!team) : null;
+        // Blickrichtung über die Textur spiegeln (negatives scale.x wirkt bei Sprites nicht, s. mirrored()).
+        const tex = base && dir * (spr.flip ? -1 : 1) < 0 ? this.mirrored(base) : base;
         if (tex && (s.material as THREE.SpriteMaterial).map !== tex) {
           (s.material as THREE.SpriteMaterial).map = tex;
           (s.material as THREE.SpriteMaterial).needsUpdate = true;
         }
-        s.scale.set(size * dir * (spr.flip ? -1 : 1), size, 1);
+        s.scale.set(size, size, 1);
         const proto = e.elite ? e.tech?.eliteFx?.dominant : undefined;
         if (proto && level !== 'map') this.placeEliteFx(sq, i, s, proto, size, dir, now / world.tps + e.id * 0.37 + i * 0.9);
       }
@@ -2206,8 +2214,8 @@ export class Hd2dRenderer {
       sq.lastShot[idx] = now;
       sq.shots[idx] = (sq.shots[idx] ?? 0) + 1;
       if (model) {
-        // Blickrichtung des Modells (gespiegelte Sheets zählen umgekehrt)
-        const dir = (Math.sign(model.scale.x) || 1) * (spr.flip ? -1 : 1);
+        // Blickrichtung des Verbands (scale.x ist seit der Textur-Spiegelung immer positiv)
+        const dir = sq.dir !== 0 ? sq.dir : right ? -1 : 1;
         const hi = ((sq.shots[idx] ?? 1) - 1) % Math.max(1, spr.attack.muzzles.length);
         const m = spr.attack.muzzles[hi] ?? [0.5, 0.5];
         from = model.position.clone().add(new THREE.Vector3(m[0] * dir * spr.scale, m[1] * spr.scale, 0));
@@ -2343,16 +2351,18 @@ export class Hd2dRenderer {
     const d = PFX[use.name];
     const frames = this.pfxFrames.get(use.name);
     if (!frames) return false;
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: frames[0], transparent: true, depthWrite: false }));
+    // Spiegeln über die Texturen (s. mirrored()); der Bezugspunkt wandert dabei mit auf die andere Seite.
+    const shown = flip ? frames.map((f) => this.mirrored(f)) : frames;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: shown[0], transparent: true, depthWrite: false }));
     const k = use.scale ?? 1;
-    s.center.set(d.px / d.fw, 1 - d.py / d.fh);
-    s.scale.set((d.fw / 32) * k * (flip ? -1 : 1), (d.fh / 32) * k, 1);
+    s.center.set(flip ? 1 - d.px / d.fw : d.px / d.fw, 1 - d.py / d.fh);
+    s.scale.set((d.fw / 32) * k, (d.fh / 32) * k, 1);
     s.position.copy(pos);
     s.position.y -= (use.lift / 32) * k;
     s.renderOrder = 9;
     this.scene.add(s);
     const rate = d.fps / this.tps;
-    this.fx.push({ obj: s, start: now, life: d.n / rate, grow: 0, frames, rate });
+    this.fx.push({ obj: s, start: now, life: d.n / rate, grow: 0, frames: shown, rate });
     return true;
   }
 

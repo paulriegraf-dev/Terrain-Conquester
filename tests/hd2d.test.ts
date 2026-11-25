@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { UNIT_IDS, UNITS } from '../src/data/units';
-import { attackTime, facing, frameAt, projectileShown, returnTimeline } from '../src/render/hd2d/anim';
+import * as THREE from 'three';
+import { attackTime, facing, frameAt, mirroredTexture, projectileShown, returnTimeline } from '../src/render/hd2d/anim';
 import { PROJECTILES, UNIT_SPRITES } from '../src/render/hd2d/sprites';
 
 /** HD-2D-Vorbereitung (05.11.): Daten vollständig, Regeln der Darstellung wie mit dem Nutzer festgelegt. */
@@ -79,5 +80,30 @@ describe('HD-2D: Geschossdichte, Blickrichtung', () => {
     assert.equal(facing(true), -1);
     assert.equal(facing(true, { targetDx: 3 }), 1);
     assert.equal(facing(false, { moveDx: -0.5 }), -1);
+  });
+});
+
+/** Blickrichtung (Nutzer 25.11.): Spiegeln muss über die Textur laufen – THREE.Sprite ignoriert negatives scale.x. */
+describe('HD-2D: Spiegelung über die Textur', () => {
+  it('three.js-Sprite-Shader nimmt den Betrag der Skalierung (darum wirkt negatives scale.x nicht)', () => {
+    const glsl = readFileSync('node_modules/three/src/renderers/shaders/ShaderLib/sprite.glsl.js', 'utf8');
+    assert.match(glsl, /scale\.x = length\(/);
+  });
+  it('mirroredTexture liest das Bild von rechts nach links und cacht je Ausgangstextur', () => {
+    const cache = new WeakMap<THREE.Texture, THREE.Texture>();
+    const tex = new THREE.Texture();
+    const m = mirroredTexture(tex, cache);
+    assert.notEqual(m, tex);
+    // u' = u · repeat + offset: linker Rand → 1, rechter Rand → 0
+    assert.equal(0 * m.repeat.x + m.offset.x, 1);
+    assert.equal(1 * m.repeat.x + m.offset.x, 0);
+    assert.equal(mirroredTexture(tex, cache), m);
+    assert.equal(tex.repeat.x, 1, 'Ausgangstextur bleibt unverändert');
+  });
+  it('renderer3d spiegelt kein Sprite mehr über negatives scale.x', () => {
+    const src = readFileSync('src/render/hd2d/renderer3d.ts', 'utf8');
+    const bad = src.split('\n').filter((l) => /scale\.set\(/.test(l) && /(\? -1 : 1\)|\? -[a-z]+ : [a-z]+,|\* dir\b|-size\b)/.test(l));
+    assert.deepEqual(bad, []);
+    assert.doesNotMatch(src, /Math\.sign\(model\.scale\.x\)/);
   });
 });
