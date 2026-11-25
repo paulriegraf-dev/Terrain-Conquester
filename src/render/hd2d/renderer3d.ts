@@ -89,6 +89,10 @@ interface Squad {
   backward: boolean;
   /** Gleitender Mittelwert der Querbewegung (Blickrichtung auch bei langsamen Einheiten, z. B. Schwere im Matsch). */
   accX: number;
+  /** Summe der Wegstrecke (gleich gedämpft wie accX) – trennt echtes Laufen vom Hin-und-her-Wuseln. */
+  accAbs: number;
+  /** Ticks in Folge, die der Verband von der Gegnerseite weg läuft. */
+  away: number;
   /** Übergang Knien ↔ Stehen (UnitSprite.rise): Startzeit in Ticks (−1 = keiner), Richtung, letzter Laufzustand. */
   riseStart: number;
   riseUp: boolean;
@@ -1582,24 +1586,31 @@ export class Hd2dRenderer {
         // Nutzer 16.11.: Gunner, Steinwächter, Frontbrecher, Hainhüter schauten beim Zurückgehen falsch – sie bewegen sich
         // langsamer als die alte Schwelle je Tick. Jetzt zählt die Bewegung über die letzten ~10 Ticks.
         sq.accX = still ? 0 : sq.accX * 0.9 + moveDx;
+        sq.accAbs = still ? 0 : sq.accAbs * 0.9 + Math.hypot(moveDx, e.pos.y - e.prev.y);
         const tgt = e.weapon?.targetId ? world.get(e.weapon.targetId) : undefined;
         // Ziel in Reichweite (Nutzer 15.11.: gegnerische Scharfschützen schauten weg): immer zum Ziel – auch wenn das
         // Gedränge den Verband leicht schiebt oder er nebenbei weitermarschiert.
         const tdx = tgt ? tgt.pos.x - e.pos.x : 0;
         const inRange = !!tgt && !!e.weapon && Math.hypot(tdx, tgt.pos.y - e.pos.y) <= e.weapon.def.range + (tgt.radius ?? 0) + 0.8;
-        // Deutliches Laufen (über ~10 Ticks, Gedränge-Schieben bleibt darunter) geht vor: wer abzieht, dreht sich um.
-        if (Math.abs(sq.accX) > 0.2) {
-          sq.dir = sq.accX > 0 ? 1 : -1;
+        // Laufen = Netto-Weg über ~10 Ticks; Wuseln am Haltepunkt hat kaum Netto-Weg und zählt nicht.
+        const walking = !still && (Math.abs(sq.accX) > 0.2 || (Math.abs(sq.accX) > 0.012 && Math.abs(sq.accX) > 0.6 * sq.accAbs));
+        const walkDir: 1 | -1 = sq.accX > 0 ? 1 : -1;
+        // Nutzer 25.11.: Gegner schauten im Stand und beim Gehen nach hinten. Kurzes Zurückrücken (in die Linie, zum
+        // Haltepunkt) geschieht mit Blick nach vorn; erst wer länger als ~2 s abzieht, dreht sich um (Nutzer 16.11.).
+        sq.away = walking && walkDir !== enemyDir ? sq.away + 1 : 0;
+        if (walking && walkDir === enemyDir) {
+          sq.dir = walkDir;
+          sq.back = 0;
+        } else if (walking && sq.away > 2 * world.tps) {
+          sq.dir = walkDir;
           sq.back = 0;
         } else if (inRange && Math.abs(tdx) > 0.05) {
           sq.dir = tdx > 0 ? 1 : -1;
           sq.back = 0;
-        } else if (!still && Math.abs(sq.accX) > 0.012) {
-          sq.dir = sq.accX > 0 ? 1 : -1;
-          sq.back = 0;
-        } else if (still) {
-          if (tgt && Math.abs(tgt.pos.x - e.pos.x) > 0.05) sq.dir = tgt.pos.x > e.pos.x ? 1 : -1;
-          else if (++sq.back > 8) sq.dir = enemyDir;
+        } else if (tgt && Math.abs(tgt.pos.x - e.pos.x) > 0.05) {
+          sq.dir = tgt.pos.x > e.pos.x ? 1 : -1;
+        } else if (++sq.back > 8) {
+          sq.dir = enemyDir;
         }
         sq.backward = false;
       }
@@ -1743,7 +1754,7 @@ export class Hd2dRenderer {
     badge.renderOrder = 7;
     badge.visible = false;
     this.scene.add(back, hp, icon, badge);
-    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false, fx: [] };
+    return { sprites: [], shadows: [], hp, hpBack: back, salvos: 0, lastShot: [], shots: [], walk: 0, seen: 0, icon, badge, iconKey: '', badgeKey: '', dir: 0, back: 0, accX: 0, accAbs: 0, away: 0, backward: false, tick: -1, riseStart: -1, riseUp: false, wasMoving: false, fx: [] };
   }
 
   private readonly iconTex = new Map<string, THREE.CanvasTexture>();

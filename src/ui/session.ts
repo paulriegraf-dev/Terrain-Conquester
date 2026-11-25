@@ -208,6 +208,6 @@ export class Session {
     this.pending = [];
     if (!this.aiHold) for (const ai of this.ais) for (const cmd of ai.think(this.world)) commands.push({ player: ai.player, cmd });
     this.world.step(commands);
-    if (this.sandbox) sandboxTick(this.world);
+    if (this.sandbox) sandboxTick(this.world, this.aiHold ? this.human : undefined);
   }
 }

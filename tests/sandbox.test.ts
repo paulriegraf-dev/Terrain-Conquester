@@ -72,4 +72,20 @@ describe('Test-Box', () => {
     assert.equal(hq.hp, hq.maxHp);
     assert.ok(w.players[0].energy > 10000);
   });
+
+  it('Gegner übernimmt die Front-Haltung, solange die KI wartet (25.11.)', () => {
+    const w = world(true);
+    assert.ok(applyCommand(w, 0, { type: 'setStance', route: 'mid', stance: 'push' }).ok);
+    sandboxTick(w, 0);
+    assert.equal(w.players[1].pendingStance.mid?.stance, 'push');
+    w.players[0].stance.mid = 'push';
+    w.players[0].pendingStance.mid = null;
+    sandboxTick(w, 0);
+    assert.equal(w.players[1].stance.mid, 'push');
+    assert.equal(w.players[1].stance.top, 'hold');
+    // KI an: keine Übernahme
+    w.players[0].stance.top = 'defend';
+    sandboxTick(w);
+    assert.equal(w.players[1].stance.top, 'hold');
+  });
 });

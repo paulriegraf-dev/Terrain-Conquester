@@ -66,8 +66,21 @@ export function sandboxClear(world: World, owner?: PlayerId): CommandResult {
   return { ok: true };
 }
 
-/** Je Schritt: volle Energie, laufende Stufen/Umbauten/Forschung/Bodenumbau sofort fertig, HQs unverwundbar. */
-export function sandboxTick(world: World): void {
+/**
+ * Je Schritt: volle Energie, laufende Stufen/Umbauten/Forschung/Bodenumbau sofort fertig, HQs unverwundbar.
+ * `mirrorFrom` (Nutzer 25.11.): solange die KI wartet, übernimmt die andere Seite die Front-Haltung dieses Spielers je
+ * Lane – stößt du vor, stößt auch der Gegner vor, und die Gefechte laufen von selbst.
+ */
+export function sandboxTick(world: World, mirrorFrom?: PlayerId): void {
+  if (mirrorFrom !== undefined) {
+    const src = world.players[mirrorFrom];
+    const dst = world.players[mirrorFrom === 0 ? 1 : 0];
+    for (const r of ROUTES) {
+      dst.stance[r] = src.stance[r];
+      const pend = src.pendingStance[r];
+      dst.pendingStance[r] = pend ? { ...pend } : null;
+    }
+  }
   for (const p of world.players) {
     p.energy = 99999;
     for (const lab of p.labs) lab.doneTick = Math.min(lab.doneTick, world.tick);
